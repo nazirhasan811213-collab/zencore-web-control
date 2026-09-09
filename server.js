@@ -7,6 +7,7 @@ let latest = null;
 let history = [];
 let webhookPosts = 0;
 let lastWebhookError = null;
+const sseClients = new Set();
 
 function send(res, code, body, type="application/json; charset=utf-8") {
   res.writeHead(code, {
@@ -18,18 +19,55 @@ function send(res, code, body, type="application/json; charset=utf-8") {
   res.end(body);
 }
 
-function saveFeed(data) {
-  latest = {...data, receivedAt: Date.now()};
+function broadcast(data) {
+  const packet = `data: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try { client.write(packet); } catch (_) { sseClients.delete(client); }
+  }
+}
+
+function saveFeed(data, feedType = "LIVE") {
+  latest = {...data, feedType, receivedAt: Date.now()};
   history.unshift(latest);
-  history = history.slice(0, 100);
+  history = history.slice(0, 300);
+  broadcast(latest);
+}
+
+function webhookStatus() {
+  return {
+    ok: true,
+    status: latest ? "DATA_RECEIVED" : "WAITING_FOR_TRADINGVIEW",
+    webhookPosts,
+    lastWebhookError,
+    connectedDashboards: sseClients.size,
+    historyCount: history.length,
+    lastReceivedAt: latest ? latest.receivedAt : null,
+    lastSymbol: latest ? latest.symbol || null : null,
+    lastTimeframe: latest ? latest.timeframe || null : null,
+    feedType: latest ? latest.feedType || null : null
+  };
 }
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathname = url.pathname;
-  console.log(`[HTTP] ${req.method} ${pathname}`);
 
   if (req.method === "OPTIONS") return send(res, 204, "");
+
+  if (req.method === "GET" && pathname === "/events") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Accel-Buffering": "no"
+    });
+    res.write(": ZenCore SSE connected\n\n");
+    sseClients.add(res);
+    if (latest) res.write(`data: ${JSON.stringify(latest)}\n\n`);
+    req.on("close", () => sseClients.delete(res));
+    return;
+  }
 
   if (req.method === "POST" && pathname === "/webhook") {
     webhookPosts += 1;
@@ -45,7 +83,7 @@ const server = http.createServer((req, res) => {
         }
 
         lastWebhookError = null;
-        saveFeed(data);
+        saveFeed(data, "LIVE");
         console.log(`[ZenCore] ${latest.symbol || ""} ${latest.timeframe || ""} ${latest.action || ""}`);
         return send(res, 200, JSON.stringify({ok:true, receivedAt:latest.receivedAt}));
       } catch (e) {
@@ -59,25 +97,22 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && pathname === "/webhook") {
     return send(res, 200, JSON.stringify({
-      ok:true,
-      endpoint:"/webhook",
-      methodRequired:"POST",
-      status: latest ? "DATA_RECEIVED" : "WAITING_FOR_TRADINGVIEW",
-      webhookPosts,
-      lastWebhookError,
-      lastReceivedAt: latest ? latest.receivedAt : null,
-      lastSymbol: latest ? latest.symbol || null : null,
-      note:"Opening this URL in a browser uses GET. TradingView must send POST."
+      ...webhookStatus(),
+      endpoint: "/webhook",
+      methodRequired: "POST",
+      note: "TradingView sends POST. Browser opening this URL uses GET."
     }, null, 2));
   }
 
   if (req.method === "GET" && pathname === "/debug/test-feed") {
+    const now = Date.now();
     const sample = {
       source:"ZenCore AI Dashboard Pro + Alerts",
       symbol:"XAUUSD",
+      tickerid:"OANDA:XAUUSD",
       timeframe:"1",
       tradeMode:"Scalping",
-      time:Date.now(),
+      time:now,
       close:3500.25,
       action:"BUY",
       barStatus:"TEST FEED",
@@ -121,13 +156,15 @@ const server = http.createServer((req, res) => {
       sop4:true,
       sop5:true
     };
-    saveFeed(sample);
-    console.log("[Debug] Test feed injected");
+    saveFeed(sample, "TEST");
     return send(res, 200, JSON.stringify({ok:true, message:"Test feed injected", receivedAt:latest.receivedAt}));
   }
 
   if (req.method === "GET" && pathname === "/health")
-    return send(res, 200, JSON.stringify({ok:true, service:"zencore-web-control", status:latest?"DATA_RECEIVED":"WAITING_FOR_TRADINGVIEW", webhookPosts, lastWebhookError}));
+    return send(res, 200, JSON.stringify({ok:true, service:"zencore-web-control", ...webhookStatus()}));
+
+  if (req.method === "GET" && pathname === "/api/status")
+    return send(res, 200, JSON.stringify(webhookStatus()));
 
   if (req.method === "GET" && pathname === "/api/latest")
     return send(res, 200, JSON.stringify(latest || {}));
@@ -147,6 +184,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`ZenCore Web Control running on port ${PORT}`);
+  console.log(`ZenCore Total Analysis Web running on port ${PORT}`);
   console.log(`Webhook endpoint: /webhook`);
 });
