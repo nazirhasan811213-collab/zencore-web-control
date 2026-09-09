@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZenCore Total Analysis Terminal V3</title>
+<title>ZenCore Real Trading Terminal V4</title>
 <link rel="stylesheet" href="/style-v3.css">
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE TOTAL ANALYSIS TERMINAL V3</h1><div class="sub">TradingView Pine intelligence • live chart • entry zone • risk & journal</div></div></div>
+    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE REAL TRADING TERMINAL V4</h1><div class="sub">Real-time market chart • Pine intelligence • entry zone • risk • journal</div></div></div>
     <div class="statuses">
       <span class="pill"><span class="dot off" id="dot"></span><span id="feed">WAITING FOR PINE</span></span>
       <span class="pill" id="feedType">NO DATA</span>
@@ -31,12 +31,50 @@
   <main class="main">
     <section class="panel chartpanel">
       <div class="charthead">
-        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">Waiting for live history…</div></div>
-        <div class="chips"><span class="chip">OHLC CANDLES</span><span class="chip">ENTRY ZONE</span><span class="chip">SL/TP</span><span class="chip">S/R</span><span class="chip">ORDER BLOCK</span><span class="chip">SSE LIVE</span></div>
+        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">Live market + ZenCore execution map</div></div>
+        <div class="chips"><span class="chip">REAL-TIME MARKET</span><span class="chip">OHLC</span><span class="chip">ENTRY ZONE</span><span class="chip">SL/TP</span><span class="chip">S/R</span><span class="chip">ORDER BLOCK</span><span class="chip">SSE LIVE</span></div>
       </div>
-      <div class="chartwrap">
-        <div class="chartlegend"><span class="lg good">Bull candle</span><span class="lg bad">Bear candle</span><span class="lg warn">Entry zone</span><span class="lg cyan">Support</span><span class="lg blue">Resistance</span></div>
-        <svg id="chart" viewBox="0 0 1200 560" preserveAspectRatio="none"></svg>
+
+      <div class="charttabs">
+        <button class="charttab active" data-target="liveMarketPane">LIVE MARKET</button>
+        <button class="charttab" data-target="zenMapPane">ZENCORE MAP</button>
+      </div>
+
+      <div id="liveMarketPane" class="chartpane active">
+        <div class="tvchartwrap">
+          <div class="tradingview-widget-container" style="height:100%;width:100%">
+            <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+            {
+              "autosize": true,
+              "symbol": "OANDA:XAUUSD",
+              "interval": "1",
+              "timezone": "Asia/Kuala_Lumpur",
+              "theme": "dark",
+              "backgroundColor": "rgba(5, 8, 14, 1)",
+              "gridColor": "rgba(255, 255, 255, 0.05)",
+              "style": "1",
+              "locale": "en",
+              "allow_symbol_change": true,
+              "withdateranges": true,
+              "hide_side_toolbar": false,
+              "save_image": false,
+              "calendar": false,
+              "details": true,
+              "hotlist": false,
+              "support_host": "https://www.tradingview.com"
+            }
+            </script>
+          </div>
+        </div>
+        <div class="notice" style="margin-top:8px">LIVE MARKET uses TradingView's embedded market chart. ZenCore signals, entry, SL and TP continue to come from your Pine webhook.</div>
+      </div>
+
+      <div id="zenMapPane" class="chartpane">
+        <div class="chartwrap">
+          <div class="chartlegend"><span class="lg good">Bull candle</span><span class="lg bad">Bear candle</span><span class="lg warn">Entry zone</span><span class="lg cyan">Support</span><span class="lg blue">Resistance</span></div>
+          <svg id="chart" viewBox="0 0 1200 560" preserveAspectRatio="none"></svg>
+        </div>
       </div>
     </section>
 
@@ -104,27 +142,35 @@
         <div class="field" style="grid-column:1/-1"><label>USD value for 1.00 price move per 1 lot</label><input id="valuePerMove" type="number" value="100" min="0.01" step="1"></div>
       </div>
       <div class="calc"><div class="calcrow"><span>Risk amount</span><b id="riskAmount">—</b></div><div class="calcrow"><span>Stop distance</span><b id="stopDistance">—</b></div><div class="calcrow"><span>Estimated lot size</span><b id="lotSize">—</b></div><div class="calcrow"><span>R:R to TP3</span><b id="calcRR">—</b></div></div>
-      <div class="notice" style="margin-top:9px">Check your broker contract specification before using lot-size output. For many XAUUSD standard-lot contracts, a 1.00 price move is about USD100 per 1 lot, but broker specifications can differ.</div>
+      <div class="notice" style="margin-top:9px">Check your broker contract specification before using lot-size output. XAUUSD contract values differ by broker.</div>
       <div class="title" style="margin-top:14px">High-Impact News Guard</div>
-      <div class="notice"><b class="warn">CALENDAR FEED NOT CONNECTED</b><br>Module slot is ready. A reliable economic-calendar API requires credentials/subscription; unverified news data is not inserted into trading decisions.</div>
+      <div class="notice"><b class="warn">CALENDAR FEED NOT CONNECTED</b><br>Module slot is ready for a verified economic-calendar feed.</div>
     </section>
 
     <section class="panel sec">
       <div class="title">Trade Journal / Signal History</div>
       <div class="scroll"><table class="journal"><thead><tr><th>Time</th><th>Symbol</th><th>Action</th><th>Entry</th><th>SL</th><th>TP1</th><th>Prob.</th><th>Grade</th></tr></thead><tbody id="journalBody"><tr><td colspan="8" class="muted">Waiting for signals…</td></tr></tbody></table></div>
-      <div class="notice" style="margin-top:9px">Journal currently stores BUY/SELL webhook signals in server memory. A database can be added later for permanent history across Render restarts.</div>
+      <div class="notice" style="margin-top:9px">Journal currently stores BUY/SELL webhook signals in server memory.</div>
     </section>
 
     <section class="panel sec">
       <div class="title">Live Pine Alert Tape</div>
       <div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Waiting for runner/trailing alerts…</div></div>
-      <div class="notice" style="margin-top:9px">Text alerts such as trailing management, runner status and partial-close messages are captured here separately from the JSON market snapshot.</div>
+      <div class="notice" style="margin-top:9px">Trailing, runner management, partial-close, TP and SL alerts appear here.</div>
     </section>
   </section>
 
-  <div class="foot">ZenCore V3 • TradingView webhook analysis terminal • informational decision support only</div>
+  <div class="foot">ZenCore V4 • Real-time market view + Pine decision engine • analysis terminal</div>
 </div>
 <script src="/app-v3.js"></script>
 <script src="/alerts-v3.js"></script>
+<script>
+  document.querySelectorAll('.charttab').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('.charttab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.chartpane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+  }));
+</script>
 </body>
 </html>
