@@ -106,7 +106,7 @@
       <div class="calc"><div class="calcrow"><span>Risk amount</span><b id="riskAmount">—</b></div><div class="calcrow"><span>Stop distance</span><b id="stopDistance">—</b></div><div class="calcrow"><span>Estimated lot size</span><b id="lotSize">—</b></div><div class="calcrow"><span>R:R to TP3</span><b id="calcRR">—</b></div></div>
       <div class="notice" style="margin-top:9px">Check your broker contract specification before using lot-size output. For many XAUUSD standard-lot contracts, a 1.00 price move is about USD100 per 1 lot, but broker specifications can differ.</div>
       <div class="title" style="margin-top:14px">High-Impact News Guard</div>
-      <div class="notice"><b class="warn">CALENDAR FEED NOT CONNECTED</b><br>Module slot is ready. A reliable economic-calendar API requires credentials/subscription; I have not inserted unverified news data into trading decisions.</div>
+      <div class="notice"><b class="warn">CALENDAR FEED NOT CONNECTED</b><br>Module slot is ready. A reliable economic-calendar API requires credentials/subscription; unverified news data is not inserted into trading decisions.</div>
     </section>
 
     <section class="panel sec">
@@ -114,10 +114,17 @@
       <div class="scroll"><table class="journal"><thead><tr><th>Time</th><th>Symbol</th><th>Action</th><th>Entry</th><th>SL</th><th>TP1</th><th>Prob.</th><th>Grade</th></tr></thead><tbody id="journalBody"><tr><td colspan="8" class="muted">Waiting for signals…</td></tr></tbody></table></div>
       <div class="notice" style="margin-top:9px">Journal currently stores BUY/SELL webhook signals in server memory. A database can be added later for permanent history across Render restarts.</div>
     </section>
+
+    <section class="panel sec">
+      <div class="title">Live Pine Alert Tape</div>
+      <div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Waiting for runner/trailing alerts…</div></div>
+      <div class="notice" style="margin-top:9px">Text alerts such as trailing management, runner status and partial-close messages are captured here separately from the JSON market snapshot.</div>
+    </section>
   </section>
 
   <div class="foot">ZenCore V3 • TradingView webhook analysis terminal • informational decision support only</div>
 </div>
 <script src="/app-v3.js"></script>
+<script src="/alerts-v3.js"></script>
 </body>
 </html>
