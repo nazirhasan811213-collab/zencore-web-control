@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZenCore Web Control</title>
+<style>
+:root{--bg:#06090f;--panel:#0d131d;--line:#202a3a;--text:#eff5ff;--muted:#8190a7;--green:#2cde87;--red:#ff5c6c;--orange:#ffae42;--blue:#4ea6ff;--purple:#9a7cff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -20%,#102746 0,transparent 35%),var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--text)}
+.wrap{max-width:1500px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:15px 17px;border:1px solid var(--line);background:#0a1019e8;border-radius:18px;position:sticky;top:10px;z-index:4;backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-weight:900;background:linear-gradient(135deg,var(--blue),var(--purple))}
+h1{font-size:17px;margin:0}.sub{color:var(--muted);font-size:11px;margin-top:3px}.live{font-size:12px;color:#bff6d8}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green);margin-right:7px}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:16px}.panel{background:linear-gradient(180deg,#101722,#0a0f17);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 55px #0005}
+.chart{min-height:665px;padding:16px}.head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.sym{font-size:28px;font-weight:850}.price{font-size:20px;margin-top:6px}.chip{padding:5px 8px;border:1px solid var(--line);border-radius:999px;font-size:10px;color:#c6d2e5}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.canvas{height:500px;margin-top:16px;border:1px solid #1d2735;border-radius:14px;position:relative;overflow:hidden;background:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px),#070c13;background-size:100% 55px,75px 100%}
+svg{width:100%;height:100%}.side{display:flex;flex-direction:column;gap:16px}.section{padding:14px}.title{font-size:12px;letter-spacing:.8px;font-weight:800;text-transform:uppercase;margin-bottom:12px}
+.bias{display:flex;justify-content:space-between;align-items:center;border:1px solid #2cde8738;background:#2cde8710;border-radius:14px;padding:13px}.big{font-size:23px;font-weight:900}.label{font-size:10px;color:var(--muted)}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.m{border:1px solid var(--line);border-radius:11px;background:#090e16;padding:10px}.m b{display:block;margin-top:4px;font-size:13px}.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--orange)}
+.level{display:grid;grid-template-columns:65px 1fr 95px;align-items:center;gap:8px;margin:8px 0;font-size:11px}.rail{height:6px;background:#1a2230;border-radius:10px;overflow:hidden}.rail i{display:block;height:100%}
+.sop{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 2px;font-size:12px}.coach{font-size:12px;line-height:1.6;padding:11px;border:1px solid #ffae4230;background:#ffae420d;border-radius:11px}
+.bottom{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px;margin-top:16px}.tbl{width:100%;border-collapse:collapse;font-size:12px}.tbl td,.tbl th{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tbl th{color:var(--muted)}
+.raw{max-height:210px;overflow:auto;font-family:ui-monospace,monospace;font-size:10px;white-space:pre-wrap;color:#a8b6ca}.foot{text-align:center;color:#5f6e85;font-size:10px;padding:18px}
+@media(max-width:1050px){.grid{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr}.bottom{grid-template-columns:1fr}}
+@media(max-width:700px){.wrap{padding:9px}.top{position:static}.grid,.bottom{gap:9px}.side{grid-template-columns:1fr}.canvas{height:390px}.sym{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE AI WEB CONTROL</h1><div class="sub">Powered by your TradingView Pine Script</div></div></div>
+    <div class="live"><span class="dot"></span><span id="feed">WAITING FOR WEBHOOK</span></div>
+  </div>
+
+  <div class="grid">
+    <section class="panel chart">
+      <div class="head">
+        <div><div class="sym"><span id="symbol">—</span> <span style="color:#75839a;font-weight:500" id="tf">—</span></div><div class="price" id="price">—</div></div>
+        <div class="chips"><span class="chip">PINE ENGINE</span><span class="chip">HEMA</span><span class="chip">MTF</span><span class="chip">WAVETREND</span><span class="chip">RVOL</span></div>
+      </div>
+      <div class="canvas"><svg id="chart" viewBox="0 0 1000 500" preserveAspectRatio="none"></svg></div>
+    </section>
+
+    <aside class="side">
+      <section class="panel section">
+        <div class="title">Trade Execution</div>
+        <div class="bias"><div><span class="label">ACTION</span><div class="big" id="action">—</div></div><div style="text-align:right"><span class="label">SETUP PROB.</span><div class="big" id="prob">—</div></div></div>
+        <div class="metrics">
+          <div class="m"><span class="label">Structure</span><b id="structure">—</b></div>
+          <div class="m"><span class="label">Risk</span><b id="risk">—</b></div>
+          <div class="m"><span class="label">Whales</span><b id="whales">—</b></div>
+          <div class="m"><span class="label">Market Power</span><b id="power">—</b></div>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <div class="title">Fibo / Fixed R:R Plan</div>
+        <div class="level"><span>TP3</span><div class="rail"><i style="width:100%;background:var(--green)"></i></div><b id="tp3">—</b></div>
+        <div class="level"><span>TP2</span><div class="rail"><i style="width:82%;background:var(--green)"></i></div><b id="tp2">—</b></div>
+        <div class="level"><span>TP1</span><div class="rail"><i style="width:66%;background:var(--green)"></i></div><b id="tp1">—</b></div>
+        <div class="level"><span>ENTRY</span><div class="rail"><i style="width:52%;background:var(--orange)"></i></div><b id="entry">—</b></div>
+        <div class="level"><span>SL</span><div class="rail"><i style="width:32%;background:var(--red)"></i></div><b id="sl">—</b></div>
+      </section>
+
+      <section class="panel section"><div class="title">Multi-Timeframe Sync</div><div class="metrics">
+        <div class="m"><span class="label">MTF 1</span><b id="mtf1">—</b></div><div class="m"><span class="label">MTF 2</span><b id="mtf2">—</b></div>
+        <div class="m"><span class="label">MTF 3</span><b id="mtf3">—</b></div><div class="m"><span class="label">Overall</span><b id="mtfo">—</b></div>
+      </div></section>
+
+      <section class="panel section"><div class="title">SOP Entry Checklist</div><div id="sop"></div></section>
+      <section class="panel section"><div class="title">AI Coach</div><div class="coach" id="tip">Waiting for Pine data…</div></section>
+    </aside>
+  </div>
+
+  <div class="bottom">
+    <section class="panel section"><div class="title">Core Intelligence</div><table class="tbl">
+      <tr><th>Metric</th><th>Value</th><th>Metric</th><th>Value</th></tr>
+      <tr><td>HEMA</td><td id="hema">—</td><td>Momentum</td><td id="momentum">—</td></tr>
+      <tr><td>Chop</td><td id="chop">—</td><td>RVol</td><td id="rvol">—</td></tr>
+      <tr><td>DXY</td><td id="dxy">—</td><td>S&amp;D</td><td id="sd">—</td></tr>
+      <tr><td>Forecast</td><td id="forecast">—</td><td>Trade Mode</td><td id="mode">—</td></tr>
+    </table></section>
+
+    <section class="panel section"><div class="title">Position State</div><table class="tbl">
+      <tr><td>Active</td><td id="active">—</td></tr>
+      <tr><td>TP1 Hit</td><td id="h1">—</td></tr>
+      <tr><td>TP2 Hit</td><td id="h2">—</td></tr>
+      <tr><td>TP3 Hit</td><td id="h3">—</td></tr>
+      <tr><td>SL Hit</td><td id="hsl">—</td></tr>
+    </table></section>
+
+    <section class="panel section"><div class="title">Raw Pine Webhook</div><div class="raw" id="raw">{}</div></section>
+  </div>
+  <div class="foot">ZenCore Web Control • Values shown here come from the supplied Pine Script webhook payload.</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const hist=[];
+const f=v=>v==null?"—":(typeof v==="number"?v.toLocaleString(undefined,{maximumFractionDigits:5}):v);
+function cls(v){return String(v).includes("Bull")||String(v).includes("LONG")||String(v).includes("BUY")?"good":String(v).includes("Bear")||String(v).includes("SHORT")||String(v).includes("SELL")?"bad":""}
+function bool(v){return v?'<span class="good">✅</span>':'<span class="bad">❌</span>'}
+function plot(){
+  const svg=$("chart"); svg.innerHTML=""; if(hist.length<2)return;
+  const vals=hist.map(x=>+x.close).filter(Number.isFinite); if(vals.length<2)return;
+  const min=Math.min(...vals),max=Math.max(...vals),range=(max-min)||1;
+  const pts=vals.map((v,i)=>`${20+i/(vals.length-1)*960},${30+(max-v)/range*420}`).join(" ");
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="#4ea6ff" stroke-width="3"/><line x1="20" y1="450" x2="980" y2="450" stroke="#263247"/>`;
+}
+function render(d){
+  if(!d||!Object.keys(d).length)return;
+  $("feed").textContent="PINE FEED LIVE";
+  $("symbol").textContent=d.symbol||"—"; $("tf").textContent=d.timeframe||"—"; $("price").textContent=f(d.close);
+  $("action").textContent=d.action||"—"; $("action").className="big "+cls(d.action);
+  $("prob").textContent=d.setupProbability!=null?d.setupProbability+"%":"—";
+  $("structure").textContent=d.marketStructure||"—"; $("risk").textContent=d.riskState||"—"; $("whales").textContent=d.whaleState||"—"; $("power").textContent=d.powerText||"—";
+  ["entry","sl","tp1","tp2","tp3"].forEach(k=>$(k).textContent=f(d[k]));
+  ["mtf1","mtf2","mtf3"].forEach(k=>$(k).innerHTML=(d[k]>0?'<span class="good">UP 🟢</span>':'<span class="bad">DOWN 🔴</span>')); $("mtfo").textContent=d.mtfOverall||"—";
+  $("sop").innerHTML=[1,2,3,4,5].map(n=>`<div class="sop"><span>${n}. SOP Confirmation</span><b>${bool(d["sop"+n])}</b></div>`).join("");
+  $("tip").textContent=d.proTip||"—";
+  $("hema").textContent=d.hemaTrend||"—"; $("momentum").textContent=d.momentum||"—"; $("chop").textContent=d.chopIndex!=null?d.chopIndex+"%":"—"; $("rvol").textContent=d.relativeVolume!=null?d.relativeVolume+"x":"—";
+  $("dxy").textContent=d.dxyStatus||"—"; $("sd").textContent=d.sdClearance||"—"; $("forecast").textContent=d.forecast3Bars||"—"; $("mode").textContent=d.tradeMode||"—";
+  $("active").innerHTML=bool(d.tradeActive); $("h1").innerHTML=bool(d.tp1Hit); $("h2").innerHTML=bool(d.tp2Hit); $("h3").innerHTML=bool(d.tp3Hit); $("hsl").innerHTML=bool(d.slHit);
+  $("raw").textContent=JSON.stringify(d,null,2);
+  hist.push(d); if(hist.length>80)hist.shift(); plot();
+}
+async function poll(){try{const r=await fetch("/api/latest",{cache:"no-store"});const d=await r.json();render(d)}catch(e){$("feed").textContent="SERVER OFFLINE"}}
+setInterval(poll,1000);poll();
+</script>
+</body></html>

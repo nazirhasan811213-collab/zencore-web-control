@@ -1,0 +1,1398 @@
+//@version=6
+indicator('ZenCore AI Dashboard Pro + Alerts', overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+
+// ==========================================
+// 1. User Inputs & UI Settings
+// ==========================================
+grpMode = "Trading Style Mode"
+tradeMode = input.string("Scalping", "Pilih Trading Style", options=["Scalping", "Intraday"], group=grpMode)
+
+grp_vis   = "Visibility Settings"
+dashOn    = input.bool(false, 'Dashboard On (Main)', group=grp_vis) 
+colorBar  = input.bool(false, "Color Bars via HEMA (Asal)", group=grp_vis)
+afibOn    = input.bool(false, "Auto Fibonacci", group=grp_vis)
+voidLines = input.bool(false, "Void Lines (StDev)", group=grp_vis)
+
+grp_dash  = "Dashboard Settings"
+dashSizeStr = input.string("Small", "Dashboard Size", options=["Tiny", "Small", "Normal"], group=grp_dash)
+dashBgColor = input.color(color.new(#0b0e14, 15), 'Dashboard Background', group=grp_dash)
+use_dxy_filter = input.bool(false, "Aktifkan Penapis DXY (Tutup utk All Pairs)", group=grp_dash)
+dashSize    = dashSizeStr == "Tiny" ? size.tiny : dashSizeStr == "Small" ? size.small : size.normal
+
+grpTM = "Fibo Plan (Kotak Entry)"
+TRADE_MODEL_ON = input.bool(true, "Buka Fibo Plan (Kotak Entry)", group=grpTM)
+// --- HIDDEN SECURE SETTINGS ---
+keepSetups = 1 
+extendBars = 20
+
+grpColors = "Warna & Pengurusan Risiko"
+tpModeStr = input.string("Fixed R:R", "Mod Sasaran TP", options=["Fibonacci", "Fixed R:R"], group=grpColors)
+// --- HIDDEN SECURE SETTINGS ---
+rrTP1     = 1.0 
+rrTP2     = 2.0 
+rrTP3     = 3.0 
+colSL     = input.color(color.new(color.red, 0),     "Warna Stoploss", group=grpColors)
+colEntry  = input.color(color.new(color.orange, 0),  "Warna Garisan Entry", group=grpColors)
+colTP1    = input.color(color.new(color.lime, 0),    "Warna TP1", group=grpColors)
+colTP2    = input.color(color.new(color.lime, 0),    "Warna TP2", group=grpColors)
+colTP3    = input.color(color.new(color.lime, 0),    "Warna TP3", group=grpColors)
+colZoneBg = input.color(color.new(color.yellow, 85), "Warna Dalam Kotak", group=grpColors)
+colZoneBd = input.color(color.new(color.yellow, 40), "Warna Border Kotak", group=grpColors)
+
+// ==========================================
+// 1.1 ZENCORE V2 CANDLE COLOR SETTINGS
+// ==========================================
+grp_v2 = "Zencore V2 Candle Colors"
+v2_useCol    = input.bool  (true,          "Aktifkan V2 Candle Colors", group=grp_v2)
+v2_strat     = input.string("Bj Reversal", "Select a Strategy", options=["Bj Reversal", "MA", "TRM", "RSI Color"], group=grp_v2)
+v2_src       = input.source(close,         "MA source", group=grp_v2)
+
+v2_tsistrat  = input.string("Fast",        "TRM Speed Control", options=["Fast", "Slow"], group=grp_v2)
+v2_rsistrat  = input.string("Slow",        "RSI Bar Color Speed Control", options=["Slow", "Fast"], group=grp_v2)
+
+// --- HIDDEN SECURE SETTINGS ---
+v2_alphaInput= 0.5 
+v2_aLength   = 5
+v2_Length    = 8
+v2_hemaslow  = 5
+v2_hemaslow2 = 9
+v2_hemaslow3 = 21
+
+v2_bullcol   = input.color (#64b5f6,       "Bull Trend Color", group=grp_v2)
+v2_bearcol   = input.color (#ef5350,       "Bear Trend Color", group=grp_v2)
+v2_bullrev   = input.color (#fff176,       "Bullish Reversal Color", group=grp_v2)
+v2_bearrev   = input.color (#fff176,       "Bearish Reversal Color", group=grp_v2)
+
+v2_hemabull  = input.color (#64b5f6,       "MA Bull Color", group=grp_v2)
+v2_hemabear  = input.color (#e91e63,       "MA Bear Color", group=grp_v2)
+v2_hemahold  = input.color (#b2b5be,       "MA Hold Color", group=grp_v2)
+
+v2_trmbull   = input.color (#3BB3E4,       "TRM Buy", group=grp_v2)
+v2_trmbear   = input.color (#ffeb3b,       "TRM Sell", group=grp_v2)
+v2_trmhold   = input.color (#b2b5be,       "TRM Hold", group=grp_v2)
+
+grp_v2_rsi = "Zencore V2 RSI Colors"
+v2_rsi5      = input.color (#17ff00, "RSI 0-5", group=grp_v2_rsi)
+v2_rsi10     = input.color (#17ff00, "RSI 5-10", group=grp_v2_rsi)
+v2_rsi15     = input.color (#ffffff, "RSI 10-15", group=grp_v2_rsi)
+v2_rsi20     = input.color (#ffffff, "RSI 15-20", group=grp_v2_rsi)
+v2_rsi25     = input.color (#ffffff, "RSI 20-25", group=grp_v2_rsi)
+v2_rsi30     = input.color (#ffffff, "RSI 25-30", group=grp_v2_rsi)
+v2_rsi35     = input.color (#ffffff, "RSI 30-35", group=grp_v2_rsi)
+v2_rsi40     = input.color (#ffffff, "RSI 35-40", group=grp_v2_rsi)
+v2_rsi45     = input.color (#ffffff, "RSI 40-45", group=grp_v2_rsi)
+v2_rsi50     = input.color (#ffffff, "RSI 45-50", group=grp_v2_rsi)
+v2_rsi55     = input.color (#2196f3, "RSI 50-55", group=grp_v2_rsi)
+v2_rsi60     = input.color (#2196f3, "RSI 55-60", group=grp_v2_rsi)
+v2_rsi65     = input.color (#2196f3, "RSI 60-65", group=grp_v2_rsi)
+v2_rsi70     = input.color (#2196f3, "RSI 65-70", group=grp_v2_rsi)
+v2_rsi75     = input.color (#2196f3, "RSI 70-75", group=grp_v2_rsi)
+v2_rsi80     = input.color (#2196f3, "RSI 75-80", group=grp_v2_rsi)
+v2_rsi85     = input.color (#9c27b0, "RSI 80-85", group=grp_v2_rsi)
+v2_rsi90     = input.color (#9c27b0, "RSI 85-90", group=grp_v2_rsi)
+v2_rsi95     = input.color (#ff0000, "RSI 90-95", group=grp_v2_rsi)
+v2_rsi100    = input.color (#ff0000, "RSI 95-100", group=grp_v2_rsi)
+
+// ==========================================
+// 1.2 ALERT TOGGLE SETTINGS
+// ==========================================
+grpAlerts = "🔔 ALERTS: SELECT YOUR NOTIFICATIONS"
+en_alert_primary = input.bool(true, "Primary Entry Alerts (Buy/Sell)", group=grpAlerts)
+en_alert_reentry = input.bool(true, "Re-Entry Opportunity Alerts", group=grpAlerts)
+en_alert_mom     = input.bool(true, "Momentum Continuation Alerts", group=grpAlerts)
+en_alert_tp      = input.bool(true, "Take Profit (TP) Hit Alerts", group=grpAlerts)
+en_alert_sl      = input.bool(true, "Stop Loss (SL) Hit Alerts", group=grpAlerts)
+en_alert_adv     = input.bool(true, "AI Advisory Alerts (Partial/Close All)", group=grpAlerts)
+en_alert_trail   = input.bool(true, "Trailing Runner Status Alerts", group=grpAlerts)
+
+// ==========================================
+// 1.5 Fibo & Garbage Collection Helpers 
+// ==========================================
+f_x2(int _bars) => bar_index + _bars
+f_priceFromRatio(float _sl, float _entry, float _ratio) => _sl + (_entry - _sl) * _ratio
+f_lbl(string _name, float _price) => str.format("{0} : {1,number,#.###}", _name, _price)
+
+var line[]  tmLines  = array.new_line()
+var label[] tmLabels = array.new_label()
+var box[]   tmBoxes  = array.new_box()
+
+var line[]  tpLines  = array.new_line()
+var label[] tpLabels = array.new_label()
+
+var label[] mgmtLabels = array.new_label() 
+
+f_trimTradeModels() =>
+    int maxLines  = keepSetups * 2 
+    int maxLabels = keepSetups * 2
+    int maxBoxes  = keepSetups
+    while array.size(tmLines) > maxLines
+        line.delete(array.shift(tmLines))
+    while array.size(tmLabels) > maxLabels
+        label.delete(array.shift(tmLabels))
+    while array.size(tmBoxes) > maxBoxes
+        box.delete(array.shift(tmBoxes))
+
+f_addLineLabel(float _y, int _x1, int _x2, color _col, string _txt) =>
+    line ln = line.new(_x1, _y, _x2, _y, xloc=xloc.bar_index, color=_col, width=2)
+    label lb = label.new(_x2, _y, _txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=color.black, color=_col, size=size.normal)
+    array.push(tmLines, ln)
+    array.push(tmLabels, lb)
+
+f_addTPLineLabel(float _y, int _x1, int _x2, color _col, string _txt) =>
+    line ln = line.new(_x1, _y, _x2, _y, xloc=xloc.bar_index, color=_col, width=2)
+    label lb = label.new(_x2, _y, _txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=color.black, color=_col, size=size.normal)
+    array.push(tpLines, ln)
+    array.push(tpLabels, lb)
+
+f_addMgmtLabel(int x, float y, string txt, string style, color col, color textcol, string sz) =>
+    label lb = label.new(x, y, txt, style=style, color=col, textcolor=textcol, size=sz)
+    array.push(mgmtLabels, lb)
+    if array.size(mgmtLabels) > 400 
+        label.delete(array.shift(mgmtLabels))
+    lb
+
+// ==========================================
+// 2. Core Scalping Calculations 
+// ==========================================
+ema9    = ta.ema(close, 9)
+ema20   = ta.ema(close, 20)
+ema50   = ta.ema(close, 50)
+atr     = ta.atr(14)
+rsi_val = ta.rsi(close, 14)
+basis   = ta.sma(close, 20)
+
+float current_vol = nz(volume, 0)
+float vol_sma = nz(ta.sma(current_vol, 20), 1) 
+bool has_volume = vol_sma > 1
+
+float rvol = has_volume ? (current_vol / vol_sma) : 0
+
+esa  = ta.ema(hlc3, 10)
+d_wt = ta.ema(math.abs(hlc3 - esa), 10)
+ci   = (hlc3 - esa) / (0.015 * d_wt)
+
+wt1 = ta.ema(ci, 15)
+wt2 = ta.sma(wt1, 4)
+string mom_state = wt1 > wt2 ? "Bullish 🟢" : "Bearish 🔴"
+
+buySig  = ta.crossover(wt1, wt2)
+sellSig = ta.crossunder(wt1, wt2)
+atr50   = ta.atr(50) 
+
+string mkt_struct = "Sideways 〰️"
+if close > ema50 and ema20 > ema50
+    mkt_struct := "Uptrend 📈"
+else if close < ema50 and ema20 < ema50
+    mkt_struct := "Downtrend 📉"
+
+vwma_20 = ta.vwma(close, 20)
+sma_20 = ta.sma(close, 20)
+string demand_state = has_volume ? (vwma_20 > sma_20 ? "Buyers Pushing" : vwma_20 < sma_20 ? "Sellers Pushing" : "Neutral") : "No Vol Data"
+
+// ==========================================
+// 3. HEMA Ribbon & Dynamic Zone Transition
+// ==========================================
+f_hema(_src, _len) =>
+    len_half = int(math.max(1, math.round(_len / 2)))
+    len_sqrt = int(math.max(1, math.round(math.sqrt(_len))))
+    ema1 = ta.ema(_src, len_half)
+    ema2 = ta.ema(_src, _len)
+    ta.ema(2 * ema1 - ema2, len_sqrt)
+
+he1 = f_hema(close, 20)
+he2 = f_hema(close, 40)
+bullC = #00ffbb
+bearC = #ff1100
+
+p_he1 = plot(he1, color=color.new(he1 > he2 ? bullC : bearC, 70), title="HEMA 1")
+p_he2 = plot(he2, color=color.new(he1 > he2 ? bullC : bearC, 70), title="HEMA 2")
+fill(p_he1, p_he2, color=color.new(he1 > he2 ? bullC : bearC, 70), title="HEMA Fill")
+
+bool is_hema_bull = he1 > he2
+bool is_hema_bear = he1 < he2
+
+// ==========================================
+// --- NEW PURPLE LINE ENTRY LOGIC ---
+// ==========================================
+bool is_zone_turn_green = ta.crossover(close, basis)
+bool is_zone_turn_red   = ta.crossunder(close, basis)
+
+var line transition_line = na
+var float saved_entry_price = na 
+var label entry_label = na
+
+float point_offset = 2 * syminfo.mintick
+
+if is_zone_turn_green
+    if not na(transition_line)
+        line.set_extend(transition_line, extend.none)
+        line.set_x2(transition_line, bar_index - 1)
+    
+    saved_entry_price := close + point_offset 
+    transition_line := line.new(x1=bar_index - 1, y1=saved_entry_price, x2=bar_index, y2=saved_entry_price, color=color.green, style=line.style_dashed, width=2, extend=extend.right)
+    
+    if not na(entry_label)
+        label.delete(entry_label)
+    entry_label := label.new(x=bar_index, y=saved_entry_price, text="Entry BUY: " + str.tostring(saved_entry_price, format.mintick), color=color.new(color.green, 80), textcolor=color.black, style=label.style_label_lower_left, size=size.normal)
+
+if is_zone_turn_red
+    if not na(transition_line)
+        line.set_extend(transition_line, extend.none)
+        line.set_x2(transition_line, bar_index - 1)
+        
+    saved_entry_price := close - point_offset
+    transition_line := line.new(x1=bar_index - 1, y1=saved_entry_price, x2=bar_index, y2=saved_entry_price, color=color.red, style=line.style_dashed, width=2, extend=extend.right)
+    
+    if not na(entry_label)
+        label.delete(entry_label)
+    entry_label := label.new(x=bar_index, y=saved_entry_price, text="Entry SELL: " + str.tostring(saved_entry_price, format.mintick), color=color.new(color.red, 80), textcolor=color.black, style=label.style_label_upper_left, size=size.normal)
+
+if not na(entry_label)
+    label.set_x(entry_label, bar_index + 2)
+
+// --- VARIABLES FOR TP TRACKER & RECOVERY ---
+var bool  curr_isBuy     = false
+var float curr_entry     = na
+var float curr_tp1       = na
+var float curr_tp2       = na
+var float curr_tp3       = na
+var float curr_sl        = na
+var bool  curr_active    = false
+var bool  curr_triggered = false
+var bool  curr_tp1_hit   = false
+var bool  curr_tp2_hit   = false
+var bool  curr_tp3_hit   = false
+var int   curr_setup_bar = na
+var bool  curr_sl_hit    = false 
+var int   max_alert_level= 0 
+var label runner_lbl     = na 
+
+price_cross_ema9_up    = ta.crossover(close, ema9)
+price_cross_ema9_down  = ta.crossunder(close, ema9)
+price_cross_entry_up   = ta.crossover(close, curr_entry)
+price_cross_entry_down = ta.crossunder(close, curr_entry)
+
+// --- INTEGRATED FIBO & FIXED R:R PLAN DRAWING LOGIC ---
+if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
+    bool isBuy = is_zone_turn_green
+    
+    float ENTRY = saved_entry_price
+    float SL = isBuy ? ENTRY - atr : ENTRY + atr
+
+    if ENTRY != SL
+        int x1 = bar_index
+        int x2 = f_x2(extendBars)
+        float z1 = f_priceFromRatio(SL, ENTRY, 0.786)
+        float z2 = f_priceFromRatio(SL, ENTRY, 0.236)
+        
+        box bx = box.new(x1, math.max(z1, z2), x2, math.min(z1, z2), xloc=xloc.bar_index, border_color=colZoneBd, bgcolor=colZoneBg)
+        array.push(tmBoxes, bx)
+        
+        f_addLineLabel(SL,    x1, x2, colSL,    f_lbl("🛑 Stoploss", SL))
+        f_addLineLabel(ENTRY, x1, x2, colEntry, f_lbl("🎯 Entry", ENTRY))
+        
+        float initial_risk = math.abs(ENTRY - SL)
+        float tp1 = 0.0
+        float tp2 = 0.0
+        float tp3 = 0.0
+        
+        if tpModeStr == "Fibonacci"
+            tp1 := f_priceFromRatio(SL, ENTRY, 1.618)
+            tp2 := f_priceFromRatio(SL, ENTRY, 2.618)
+            tp3 := f_priceFromRatio(SL, ENTRY, 4.236)
+        else
+            tp1 := isBuy ? ENTRY + (initial_risk * rrTP1) : ENTRY - (initial_risk * rrTP1)
+            tp2 := isBuy ? ENTRY + (initial_risk * rrTP2) : ENTRY - (initial_risk * rrTP2)
+            tp3 := isBuy ? ENTRY + (initial_risk * rrTP3) : ENTRY - (initial_risk * rrTP3)
+        
+        while array.size(tpLines) > 0
+            line.delete(array.shift(tpLines))
+        while array.size(tpLabels) > 0
+            label.delete(array.shift(tpLabels))
+            
+        f_addTPLineLabel(tp1, x1, x2, colTP1, f_lbl("✅ TP 1", tp1))
+        f_addTPLineLabel(tp2, x1, x2, colTP2, f_lbl("✅ TP 2", tp2))
+        f_addTPLineLabel(tp3, x1, x2, colTP3, f_lbl("🚀 TP 3", tp3))
+        
+        f_trimTradeModels()
+
+        curr_isBuy     := isBuy
+        curr_entry     := ENTRY
+        curr_tp1       := tp1
+        curr_tp2       := tp2
+        curr_tp3       := tp3
+        curr_sl        := SL
+        curr_active    := true
+        curr_triggered := false 
+        curr_tp1_hit   := false
+        curr_tp2_hit   := false
+        curr_tp3_hit   := false
+        curr_setup_bar := bar_index
+        
+        curr_sl_hit    := false
+        max_alert_level:= 0
+        runner_lbl     := na 
+
+if curr_active
+    int tmL_size = array.size(tmLines)
+    int tmKb_size = array.size(tmLabels)
+    int tpL_size = array.size(tpLines)
+    int tpKb_size = array.size(tpLabels)
+    int target_x = bar_index + 5 
+
+    if tmL_size >= 2
+        line active_ln1 = array.get(tmLines, tmL_size - 1)
+        line active_ln2 = array.get(tmLines, tmL_size - 2)
+        if target_x > line.get_x2(active_ln1)
+            line.set_x2(active_ln1, target_x)
+            line.set_x2(active_ln2, target_x)
+    if tmKb_size >= 2
+        label active_lb1 = array.get(tmLabels, tmKb_size - 1)
+        label active_lb2 = array.get(tmLabels, tmKb_size - 2)
+        if target_x > label.get_x(active_lb1)
+            label.set_x(active_lb1, target_x)
+            label.set_x(active_lb2, target_x)
+            
+    if tpL_size >= 3
+        line active_tp1 = array.get(tpLines, tpL_size - 1)
+        line active_tp2 = array.get(tpLines, tpL_size - 2)
+        line active_tp3 = array.get(tpLines, tpL_size - 3)
+        if target_x > line.get_x2(active_tp1)
+            line.set_x2(active_tp1, target_x)
+            line.set_x2(active_tp2, target_x)
+            line.set_x2(active_tp3, target_x)
+    if tpKb_size >= 3
+        label active_tlb1 = array.get(tpLabels, tpKb_size - 1)
+        label active_tlb2 = array.get(tpLabels, tpKb_size - 2)
+        label active_tlb3 = array.get(tpLabels, tpKb_size - 3)
+        if target_x > label.get_x(active_tlb1)
+            label.set_x(active_tlb1, target_x)
+            label.set_x(active_tlb2, target_x)
+            label.set_x(active_tlb3, target_x)
+
+    if TRADE_MODEL_ON and array.size(tmBoxes) > 0
+        box active_box = array.get(tmBoxes, array.size(tmBoxes) - 1)
+        if target_x > box.get_right(active_box)
+            box.set_right(active_box, target_x)
+
+// ==========================================
+// 4. Intelliboard Engine & MTF Consolidation
+// ==========================================
+f_sym_dir(sym) =>
+    request.security(sym, "60", close > ta.sma(close, 21) ? "UP" : "DOWN", ignore_invalid_symbol = true)
+
+string dxy_dir = "N/A (Tutup)"
+string dxy_raw = "DOWN"
+if use_dxy_filter
+    dxy_raw := f_sym_dir("TVC:DXY")
+    dxy_dir := dxy_raw == "UP" ? "🔴 Strong" : "🟢 Weak"
+
+float chop_atr_sum = math.sum(ta.tr, 14)
+float chop_high = ta.highest(high, 14)
+float chop_low = ta.lowest(low, 14)
+float chop_val = 100 * (math.log10(chop_atr_sum / (chop_high - chop_low)) / math.log10(14))
+bool is_sideways_chop = chop_val > 61.8 
+
+float recent_supply = ta.highest(high, 50)
+float recent_demand = ta.lowest(low, 50)  
+float dist_to_supply = recent_supply - close
+float dist_to_demand = close - recent_demand
+
+bool safe_supply_clearance = dist_to_supply > (atr * 1.0)
+bool safe_demand_clearance = dist_to_demand > (atr * 1.0)
+
+// ==========================================
+// 5. Whales Tracker 
+// ==========================================
+float body_size = math.abs(close - open)
+float candle_size = high - low
+float body_percent = candle_size > 0 ? (body_size / candle_size) : 0
+float upper_wick = high - math.max(close, open)
+float lower_wick = math.min(close, open) - low
+
+string whale_state = "Quiet 💤"
+color whale_col = color.gray
+string rvol_display = "0.00x"
+
+if not has_volume
+    whale_state := "NO DATA 🚫"
+    whale_col := color.red
+    rvol_display := "N/A"
+else
+    rvol_display := str.tostring(rvol, "#.00") + "x"
+    if rvol >= 1.8 
+        if body_percent < 0.35 
+            if lower_wick > upper_wick 
+                whale_state := "Absorb Buy 🛡️🟢"
+                whale_col := color.new(#00ffbb, 0)
+            else 
+                whale_state := "Absorb Sell 🛡️🔴"
+                whale_col := color.orange
+        else if close > open
+            whale_state := "Bulls Pushing 🐋🟢"
+            whale_col := color.green
+        else
+            whale_state := "Bears Pushing 🐋🔴"
+            whale_col := color.red
+    else if rvol >= 1.2 or body_size > (atr * 1.5)
+        whale_state := "Active 🌊"
+        whale_col := color.white
+
+// ==========================================
+// 6. Dynamic Multi-Timeframe & MTF AI SUMMARY
+// ==========================================
+string tf_1 = "15"
+string tf_2 = "30"
+string tf_3 = "60"
+
+if tradeMode == "Scalping"
+    tf_1 := timeframe.period == "1" ? "5" : "15"
+    tf_2 := timeframe.period == "1" ? "15" : "30"
+    tf_3 := timeframe.period == "1" ? "30" : "60"
+else 
+    tf_1 := "60"
+    tf_2 := "240"
+    tf_3 := "D"
+
+f_mtf_data() => [close, ta.ema(close, 20)]
+
+f_mtf(tf) => 
+    [c, b] = request.security(syminfo.tickerid, tf, f_mtf_data(), barmerge.gaps_off, barmerge.lookahead_off)
+    na(c) or na(b) ? 0 : (c > b ? 1 : -1)
+
+mtf_1 = f_mtf(tf_1)
+mtf_2 = f_mtf(tf_2)
+mtf_3 = f_mtf(tf_3)
+
+local_trend = close > ema20 ? 1 : -1
+global_trend = local_trend + mtf_1 + mtf_2 + mtf_3
+
+int conf_stars = 0
+conf_stars := (global_trend >= 2 or global_trend <= -2) ? conf_stars + 1 : conf_stars 
+conf_stars := (has_volume and current_vol > vol_sma) ? conf_stars + 1 : conf_stars            
+conf_stars := ((global_trend > 0 and rsi_val < 65) or (global_trend < 0 and rsi_val > 35)) ? conf_stars + 1 : conf_stars 
+conf_stars := ((global_trend > 0 and wt1 > wt2) or (global_trend < 0 and wt1 < wt2)) ? conf_stars + 1 : conf_stars 
+conf_stars := ((global_trend > 0 and close > ema9) or (global_trend < 0 and close < ema9)) ? conf_stars + 1 : conf_stars 
+
+float success_prob = 20 + (conf_stars * 13)
+
+string next_3_forecast = "Sideways 〰️"
+color forecast_col = color.gray
+if global_trend > 0 and wt1 > wt2
+    next_3_forecast := "Bullish 📈"
+    forecast_col := color.green
+else if global_trend < 0 and wt1 < wt2
+    next_3_forecast := "Bearish 📉"
+    forecast_col := color.red
+else if global_trend > 0 and wt1 < wt2
+    next_3_forecast := "Pullback ↘️"
+    forecast_col := color.orange
+else if global_trend < 0 and wt1 > wt2
+    next_3_forecast := "Bounce ↗️"
+    forecast_col := color.lime
+
+int mtf_total = mtf_1 + mtf_2 + mtf_3
+
+string mtf_word = ""
+color mtf_word_col = color.gray
+string mtf_summary_txt = ""
+color mtf_summary_col = color.white
+
+if mtf_total == 3
+    mtf_word := "Strong Bull 🟢"
+    mtf_word_col := color.green
+    mtf_summary_txt := "🔥 RUMUSAN AI: TF Sepakat NAIK. Fokus HANYA BUY/LONG."
+    mtf_summary_col := color.green
+else if mtf_total == -3
+    mtf_word := "Strong Bear 🔴"
+    mtf_word_col := color.red
+    mtf_summary_txt := "🩸 RUMUSAN AI: TF Sepakat TURUN. Fokus HANYA SELL/SHORT."
+    mtf_summary_col := color.red
+else if mtf_total > 0
+    mtf_word := "Mild Bull 🟡"
+    mtf_word_col := color.yellow
+    mtf_summary_txt := "⚠️ RUMUSAN AI: Bias NAIK tapi TF Bercampur. Sila guna SAIZ LOT KECIL."
+    mtf_summary_col := color.yellow
+else if mtf_total < 0
+    mtf_word := "Mild Bear 🟠"
+    mtf_word_col := color.orange
+    mtf_summary_txt := "⚠️ RUMUSAN AI: Bias TURUN tapi TF Bercampur. Sila guna SAIZ LOT KECIL."
+    mtf_summary_col := color.orange
+else
+    mtf_word := "Choppy / Flat ⚪"
+    mtf_word_col := color.gray
+    mtf_summary_txt := "🛑 RUMUSAN AI: CHOPPY. Pasaran BERISIKO. Sila JAGA MODAL."
+    mtf_summary_col := color.gray
+
+// ==========================================
+// 7. Trading Projections & Guides
+// ==========================================
+float active_entry = na(saved_entry_price) ? close : saved_entry_price
+string entry_zone_str = str.tostring(active_entry, format.mintick)
+
+string bar_status = barstate.isconfirmed ? "✅ Confirmed" : "⏳ Live Bar"
+color bar_stat_col = barstate.isconfirmed ? color.green : color.orange
+
+string risk_lvl = atr > atr50 * 1.5 ? "High (Volatile)" : "Normal"
+
+[bb_mid, bb_upper, bb_lower] = ta.bb(close, 20, 2)
+
+string pro_tip = "Wait for better alignment."
+if not has_volume
+    pro_tip := "⚠️ Broker tiada data Volume."
+else if conf_stars >= 4
+    pro_tip := "🔥 Setup Padu! Entry pada harga zon."
+else if whale_state == "Absorption 🛡️" or whale_state == "Absorb Buy 🛡️🟢" or whale_state == "Absorb Sell 🛡️🔴"
+    pro_tip := "⚠️ Heavy Absorption! Awas reversal."
+else if rsi_val > 75 or rsi_val < 25
+    pro_tip := "🛑 Extreme RSI. Tunggu reset."
+else if (global_trend > 0 and close > bb_upper) or (global_trend < 0 and close < bb_lower)
+    pro_tip := "⚠️ Harga luar BB. Tunggu Pullback."
+
+string snd_clearance_str = "Clear 🛣️"
+if not safe_supply_clearance and global_trend > 0
+    snd_clearance_str := "Near Res ⚠️"
+if not safe_demand_clearance and global_trend < 0
+    snd_clearance_str := "Near Sup ⚠️"
+if not safe_supply_clearance and not safe_demand_clearance
+    snd_clearance_str := "Trapped 📦"
+
+string star_str = ""
+for i = 1 to 5
+    star_str += (i <= conf_stars ? "⭐" : "▪️")
+
+// ==========================================
+// 8. INTELBOARD RECOMMENDATION
+// ==========================================
+string ai_coach = ""
+if is_sideways_chop or mkt_struct == "Sideways 〰️"
+    ai_coach := "• [PASARAN]: SIDEWAYS (" + str.tostring(chop_val, "#.0") + "% Chop).\n"
+    ai_coach += "• [MOMENTUM]: Mendatar. Jerung tengah berehat.\n"
+    ai_coach += "• [INFO]: Pasaran SANGAT BERISIKO sekarang.\n"
+    ai_coach += "• [NASIHAT]: 🛑 JAGA MODAL. JANGAN TRADE!"
+else if global_trend > 0
+    ai_coach := "• [TREND]: NAIK (BULLISH). " 
+    ai_coach += (mtf_total >= 2 ? "TF Besar SOKONG.\n" : "TF lain TAK NGAM.\n")
+    ai_coach += "• [MOMENTUM]: " 
+    ai_coach += (wt1 > wt2 ? "Kuat tolak ke atas. " : "Mula perlahan. ")
+    ai_coach += (rsi_val > 70 ? "⚠️ OVERBOUGHT!\n" : "RSI cantik.\n")
+    ai_coach += "• [HALANGAN]: " 
+    ai_coach += (not safe_supply_clearance ? "🚨 DEKAT RESISTANCE!\n" : "Laluan CLEAR.\n")
+    ai_coach += "• [WHALES]: " + whale_state + "\n"
+    ai_coach += "• [NASIHAT]: " 
+    ai_coach += (conf_stars >= 4 ? "🔥 SETUP CANTIK!" : "❌ SETUP KURANG PADU.")
+else if global_trend < 0
+    ai_coach := "• [TREND]: TURUN (BEARISH). " 
+    ai_coach += (mtf_total <= -2 ? "TF Besar SOKONG.\n" : "TF lain TAK NGAM.\n")
+    ai_coach += "• [MOMENTUM]: " 
+    ai_coach += (wt1 < wt2 ? "Kuat tekan ke bawah. " : "Mula perlahan. ")
+    ai_coach += (rsi_val < 30 ? "⚠️ OVERSOLD!\n" : "RSI cantik.\n")
+    ai_coach += "• [HALANGAN]: " 
+    ai_coach += (not safe_demand_clearance ? "🚨 DEKAT SUPPORT!\n" : "Laluan CLEAR.\n")
+    ai_coach += "• [WHALES]: " + whale_state + "\n"
+    ai_coach += "• [NASIHAT]: " 
+    ai_coach += (conf_stars >= 4 ? "🩸 SETUP CANTIK!" : "❌ SETUP KURANG PADU.")
+
+// ==========================================
+// 8.5 UPGRADED: 10-CANDLE MARKET POWER ENGINE
+// ==========================================
+bool score_alignment_bull = close > ema9 and ema9 > ema20 and ema20 > ema50
+bool score_alignment_bear = close < ema9 and ema9 < ema20 and ema20 < ema50
+float score_trend = score_alignment_bull or score_alignment_bear ? 30.0 : (close > ema20 and ema20 > ema50) or (close < ema20 and ema20 < ema50) ? 15.0 : 5.0
+
+float wt_gap = math.abs(wt1 - wt2)
+float max_wt_gap = ta.highest(math.abs(wt1 - wt2), 20)
+float score_mom = max_wt_gap > 0 ? (wt_gap / max_wt_gap) * 30.0 : 15.0
+
+float bb_width = bb_upper - bb_lower
+float bb_width_sma = ta.sma(bb_width, 20)
+float score_volatility = bb_width > bb_width_sma ? 20.0 : (bb_width > bb_width_sma * 0.8 ? 10.0 : 5.0)
+
+float score_vol_driver = has_volume ? math.min((rvol / 1.5) * 20.0, 20.0) : 10.0
+
+float market_power = math.round(score_trend + score_mom + score_volatility + score_vol_driver)
+
+string forecast_direction = "NEUTRAL 💤"
+if global_trend > 0 and wt1 > wt2 and not is_sideways_chop
+    forecast_direction := "BULLISH 🚀"
+else if global_trend < 0 and wt1 < wt2 and not is_sideways_chop
+    forecast_direction := "BEARISH 🩸"
+else if is_sideways_chop
+    forecast_direction := "CHOPPY 🛑"
+
+string power_txt = forecast_direction + " (" + str.tostring(market_power) + "%)"
+color power_col = color.gray
+color power_bg = color.new(color.gray, 85)
+
+if market_power >= 75
+    power_col := forecast_direction == "BULLISH 🚀" ? color.lime : forecast_direction == "BEARISH 🩸" ? color.red : color.orange
+    power_bg  := color.new(power_col, 85)
+else if market_power >= 45
+    power_col := color.orange
+    power_bg  := color.new(color.orange, 85)
+else
+    power_col := color.red
+    power_bg  := color.new(color.red, 85)
+
+// ==========================================
+// 9. PROFESSIONAL DASHBOARD UI (MAIN)
+// ==========================================
+color exec_bg = global_trend > 0 ? color.new(#1b5e20, 20) : global_trend < 0 ? color.new(#b71c1c, 20) : color.new(#424242, 20)
+
+var table dash_main = na
+
+if dashOn
+    if barstate.isfirst or na(dash_main)
+        dash_main := table.new(position.top_right, 4, 20, bgcolor = dashBgColor, border_width = 1, border_color = color.new(#2a2e39, 40))
+        table.merge_cells(dash_main, 0, 0, 3, 0)
+        table.merge_cells(dash_main, 0, 1, 3, 1) 
+        table.merge_cells(dash_main, 0, 5, 3, 5) 
+        table.merge_cells(dash_main, 0, 9, 3, 9) 
+        table.merge_cells(dash_main, 0, 13, 3, 13) 
+        table.merge_cells(dash_main, 0, 16, 3, 16) 
+        table.merge_cells(dash_main, 1, 17, 3, 17) 
+        table.merge_cells(dash_main, 0, 18, 3, 18) 
+        table.merge_cells(dash_main, 0, 19, 3, 19) 
+
+    if barstate.islast
+        table.cell(dash_main, 0, 0, "⚡ ZENCORE PRO FUSION", text_color = color.white, bgcolor = color.new(#0d47a1, 10), text_size=dashSize)
+        table.cell(dash_main, 0, 1, "📊 MARKET OVERVIEW", text_color = color.white, bgcolor = color.new(#1e222d, 20), text_size=dashSize)
+        table.cell(dash_main, 2, 2, "Bar Status:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 2, bar_status, text_color = bar_stat_col, text_halign=text.align_left, text_size=dashSize)
+        
+        table.cell(dash_main, 0, 3, "Structure:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 3, mkt_struct, text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 3, "Movement:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 3, mom_state, text_color = wt1>wt2?color.green:color.red, text_halign=text.align_left, text_size=dashSize)
+        
+        table.cell(dash_main, 0, 4, "Demand:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 4, demand_state, text_color = vwma_20 > sma_20 ? color.green : color.red, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 4, "Volume:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 4, has_volume ? (current_vol > vol_sma ? "High 💥" : "Low 💤") : "N/A", text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 5, "⚙️ CORE INTELLIGENCE", text_color = color.white, bgcolor = color.new(#006064, 20), text_size=dashSize)
+        table.cell(dash_main, 0, 6, "HEMA Trend:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 6, is_hema_bull ? "Bullish 🟢" : is_hema_bear ? "Bearish 🔴" : "Flat", text_color = is_hema_bull ? color.green : is_hema_bear ? color.red : color.gray, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 6, "Chop Index:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 6, str.tostring(chop_val, "#.0") + "%", text_color = is_sideways_chop ? color.orange : color.green, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 7, "DXY Status:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 7, dxy_dir, text_color = dxy_raw == "UP" ? color.red : color.green, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 7, "S&D Clear:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 7, snd_clearance_str, text_color = safe_supply_clearance and safe_demand_clearance ? color.green : color.orange, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 8, "Whales:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 8, whale_state, text_color = whale_col, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 8, "Rel Vol:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 8, rvol_display, text_color = rvol >= 1.8 ? color.yellow : color.white, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 9, "⚔️ TRADE EXECUTION", text_color = color.white, bgcolor = exec_bg, text_size=dashSize)
+        table.cell(dash_main, 0, 10, "Action Bias:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 10, global_trend > 0 ? "LONG 🟢" : global_trend < 0 ? "SHORT 🔴" : "WAIT 〰️", text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 10, "Setup Prob:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 10, str.tostring(success_prob, "#") + "%", text_color = color.from_gradient(success_prob, 20, 85, color.red, color.green), text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 11, "Entry Price:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 11, entry_zone_str, text_color = color.yellow, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 11, "Confluence:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 11, star_str, text_color = color.yellow, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 12, "Risk State:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 12, risk_lvl, text_color = risk_lvl == "Normal" ? color.green : color.red, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 12, "Volatility:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 12, str.tostring(atr, format.mintick), text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 13, "⏱️ MULTI-TIMEFRAME SYNC", text_color = color.white, bgcolor = color.new(#4a148c, 20), text_size=dashSize)
+        
+        table.cell(dash_main, 0, 14, "Overall MTF:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 14, mtf_word, text_color = mtf_word_col, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 14, "MTF Score:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 14, str.tostring(mtf_total), text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 15, "Next 3 Bars:", text_color = color.yellow, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 15, next_3_forecast, text_color = forecast_col, text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 15, "", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 15, "", text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+
+        table.cell(dash_main, 0, 16, "🧑‍🏫 AI COACH & INSIGHTS", text_color = color.white, bgcolor = color.new(#e65100, 20), text_size=dashSize)
+        table.cell(dash_main, 0, 17, "💡 TIP:", text_color = color.yellow, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 1, 17, pro_tip, text_color = color.white, text_halign=text.align_left, text_size=dashSize)
+        
+        table.cell(dash_main, 0, 18, mtf_summary_txt, text_color = mtf_summary_col, bgcolor = color.new(color.black, 40), text_halign=text.align_center, text_size=dashSize)
+        table.cell(dash_main, 0, 19, ai_coach, text_color = color.white, text_halign = text.align_left, text_size=dashSize)
+else
+    if not na(dash_main)
+        table.delete(dash_main)
+        dash_main := na
+
+// ==========================================
+// 10. Auto Fibonacci & Void Lines (Core Engine)
+// ==========================================
+var color[] gradient_palette = array.from(color.new(#FF0000, 80), color.new(#FF9800, 80), color.new(#FFE500, 80), color.new(#00FF00, 80), color.new(#4985E7, 80), color.new(#7A2BCE, 80), color.new(#faf600, 0))
+var int k = 0
+k := (k + 1) % 7
+color dynamic_c = array.get(gradient_palette, k)
+
+float threshold_multiplier = 3.0
+bool reverse        = false
+bool extendLeft     = false
+bool extendRight    = true
+bool prices         = true
+bool levels         = true
+string levelsFormat = 'Percent'
+string labelsPosition = 'Right'
+
+dev_threshold = atr / close * 100 * threshold_multiplier
+depth = 10
+
+var string extending = extend.none
+if extendLeft and extendRight
+    extending := extend.both
+else if extendLeft
+    extending := extend.left
+else if extendRight
+    extending := extend.right
+
+var line lineLast = na
+var int iLast = 0
+var float pLast = 0.0
+var bool isHighLast = false
+
+pivots(src, length, isHigh) =>
+    l2 = length * 2
+    c2 = nz(src[length])
+    ok = true
+    for i = 0 to l2
+        if (isHigh and src[i] > c2) or (not isHigh and src[i] < c2)
+            ok := false
+            break
+    if ok
+        [bar_index[length], c2]
+    else
+        [int(na), float(na)]
+
+[iH, pH] = pivots(high, int(depth / 2), true)
+[iL, pL] = pivots(low, int(depth / 2), false)
+
+pivotFound(dev, isHigh, index, price) =>
+    if isHighLast == isHigh and not na(lineLast)
+        if (isHighLast ? price > pLast : price < pLast)
+            line.set_xy2(lineLast, index, price)
+            [lineLast, isHighLast]
+        else
+            [line(na), bool(na)]
+    else
+        if math.abs(dev) > dev_threshold
+            id = line.new(iLast, pLast, index, price, color = na, style = line.style_dashed)
+            [id, isHigh]
+        else
+            [line(na), bool(na)]
+
+if not na(iH)
+    [id_H, isHigh_H] = pivotFound(100 * (pH - pLast) / pH, true, iH, pH)
+    if not na(id_H)
+        if id_H != lineLast 
+            line.delete(lineLast)
+        lineLast := id_H
+        isHighLast := isHigh_H
+        iLast := iH
+        pLast := pH
+else if not na(iL)
+    [id_L, isHigh_L] = pivotFound(100 * (pL - pLast) / pL, false, iL, pL)
+    if not na(id_L)
+        if id_L != lineLast 
+            line.delete(lineLast)
+        lineLast := id_L
+        isHighLast := isHigh_L
+        iLast := iL
+        pLast := pL
+
+_draw_fib_ui(price, m, col) =>
+    if afibOn and not na(lineLast)
+        string l_txt = ""
+        if levels
+            l_txt := levelsFormat == 'Values' ? str.tostring(m) + ' ' : str.tostring(m * 100) + '% '
+        if prices
+            l_txt := l_txt + "(" + str.tostring(price, '#.##') + ")"
+        
+        line.new(line.get_x1(lineLast), price, bar_index, price, color = col, width = 2, extend = extending)
+        label_style = labelsPosition == 'Left' ? label.style_label_right : label.style_label_left
+        label.new(labelsPosition == 'Left' ? line.get_x1(lineLast) : bar_index, price, l_txt, textcolor = color.black, style = label_style, color = col, size=size.normal)
+
+if barstate.islast
+    sP = reverse ? line.get_y1(lineLast) : pLast
+    eP = reverse ? pLast : line.get_y1(lineLast)
+    diff = (sP > eP ? -1 : 1) * math.abs(sP - eP)
+    
+    _draw_fib_ui(sP + diff * 0, 0, #787b86)
+    _draw_fib_ui(sP + diff * 0.236, 0.236, #f44336)
+    _draw_fib_ui(sP + diff * 0.5, 0.5, #4caf50)
+    _draw_fib_ui(sP + diff * 0.618, 0.618, #009688)
+    _draw_fib_ui(sP + diff * 1, 1, #787b86)
+
+dev2 = 2 * ta.stdev(close, 20)
+dev3 = 3 * ta.stdev(close, 20)
+
+upper3 = basis + dev2
+lower3 = basis - dev2
+upper4 = basis + dev3
+lower4 = basis - dev3
+
+plot(voidLines ? basis : na, 'Basis', color.purple, 1)
+p5 = plot(voidLines ? upper3 : na, 'U 200%', dynamic_c)
+p6 = plot(voidLines ? lower3 : na, 'L 200%', dynamic_c)
+p7 = plot(voidLines ? upper4 : na, 'U 300%', dynamic_c)
+p8 = plot(voidLines ? lower4 : na, 'L 300%', dynamic_c)
+fill(p7, p5, color = color.new(color.teal, 75))
+fill(p8, p6, color = color.new(color.purple, 75))
+
+// ==========================================
+// 11. DYNAMIC TRADE MANAGER & RECOVERY
+// ==========================================
+bool float_negative = curr_isBuy ? (close <= curr_entry) : (close >= curr_entry)
+bool post_sl_buy   = curr_sl_hit and curr_isBuy and (price_cross_entry_up or (close > curr_entry and buySig)) and close > ema9
+bool post_sl_sell  = curr_sl_hit and not curr_isBuy and (price_cross_entry_down or (close < curr_entry and sellSig)) and close < ema9
+bool pullback_buy  = curr_active and curr_isBuy and price_cross_ema9_up and wt1 > wt2 and close > ema20 and not float_negative
+bool pullback_sell = curr_active and not curr_isBuy and price_cross_ema9_down and wt1 < wt2 and close < ema20 and not float_negative
+
+bool universal_reentry_buy = is_hema_bull and not curr_active and price_cross_ema9_up and wt1 > wt2
+bool universal_reentry_sell = is_hema_bear and not curr_active and price_cross_ema9_down and wt1 < wt2
+
+var int last_reentry_bar = 0
+bool trigger_reentry = (post_sl_buy or post_sl_sell or pullback_buy or pullback_sell or universal_reentry_buy or universal_reentry_sell) and (bar_index - last_reentry_bar > 5)
+
+if trigger_reentry
+    string re_strength = ""
+    color re_bg_col = na
+    color re_txt_col = color.black
+    
+    bool is_strong = (curr_isBuy and mtf_total >= 2 and conf_stars >= 3 and rvol > 1.0) or (not curr_isBuy and mtf_total <= -2 and conf_stars >= 3 and rvol > 1.0)
+    bool is_weak = (curr_isBuy and mtf_total <= 0) or (not curr_isBuy and mtf_total >= 0) or conf_stars <= 2
+
+    if is_strong
+        re_strength := "🔥 STRONG Re-Entry\n(High Prob)"
+        re_bg_col := color.new(color.lime, 10)
+    else if is_weak
+        re_strength := "⚠️ WEAK Re-Entry\n(Risky - Low Lot)"
+        re_bg_col := color.new(color.orange, 10)
+    else
+        re_strength := "⚡ NORMAL Re-Entry\n(Jaga MM)"
+        re_bg_col := color.new(color.blue, 10)
+        re_txt_col := color.white
+        
+    float re_y = curr_isBuy ? low - (atr * 0.8) : high + (atr * 0.8)
+    string re_style = curr_isBuy ? label.style_label_up : label.style_label_down
+    
+    f_addMgmtLabel(bar_index, re_y, re_strength, re_style, re_bg_col, re_txt_col, size.small)
+    
+    // --- TRIGGER ALERT: RE-ENTRY ---
+    string re_alert_dir = (post_sl_buy or pullback_buy or universal_reentry_buy) ? "BUY 🟢" : "SELL 🔴"
+    if en_alert_reentry
+        alert("⚡ [ZENCORE] RE-ENTRY OPPORTUNITY | Direction: " + re_alert_dir + " | Type: " + re_strength + " | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
+
+    last_reentry_bar := bar_index
+    curr_active      := true
+    curr_sl_hit      := false
+    curr_triggered   := true
+    max_alert_level  := 1
+    curr_entry       := close 
+
+bool is_strong_bull_candle = (close - open) > (atr * 1.2) and rvol > 1.2
+bool is_strong_bear_candle = (open - close) > (atr * 1.2) and rvol > 1.2
+
+bool continuation_buy  = is_hema_bull and is_strong_bull_candle and close > ema9
+bool continuation_sell = is_hema_bear and is_strong_bear_candle and close < ema9
+
+var int last_continuation_bar = 0
+if (continuation_buy or continuation_sell) and (bar_index - last_continuation_bar > 5)
+    string dir_txt = continuation_buy ? "🚀 Momentum Buy!\n(Peluang Entry)" : "🩸 Momentum Sell!\n(Peluang Entry)"
+    color lbl_col = continuation_buy ? color.blue : color.red
+    float y_pos = continuation_buy ? low - (atr * 1.2) : high + (atr * 1.2)
+    string style_lbl = continuation_buy ? label.style_label_up : label.style_label_down
+    f_addMgmtLabel(bar_index, y_pos, dir_txt, style_lbl, color.new(lbl_col, 0), color.white, size.small)
+    
+    // --- TRIGGER ALERT: CONTINUATION ---
+    if en_alert_mom
+        alert("🚀 [ZENCORE] MOMENTUM CONTINUATION | Alert: " + dir_txt + " | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
+    
+    last_continuation_bar := bar_index
+
+if curr_active
+    if not curr_triggered
+        if curr_isBuy and close > curr_entry
+            curr_triggered := true
+        else if not curr_isBuy and close < curr_entry
+            curr_triggered := true
+
+    if curr_triggered
+        if curr_isBuy
+            if low <= curr_sl
+                curr_active := false 
+                curr_sl_hit := true  
+                // --- TRIGGER ALERT: SL HIT ---
+                if en_alert_sl
+                    alert("🛑 [ZENCORE EXIT] STOPLOSS HIT | Long Position Closed at " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
+            else
+                if high >= curr_tp1 and not curr_tp1_hit
+                    curr_tp1_hit := true
+                    float prof = math.abs(curr_tp1 - curr_entry)
+                    f_addMgmtLabel(bar_index, high, "🥳 TP 1\n+" + str.tostring(prof, "#.##"), label.style_label_down, color.lime, color.black, size.small)
+                    // --- TRIGGER ALERT: TP1 ---
+                    if en_alert_tp
+                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 1 HIT | Long position reached: " + str.tostring(curr_tp1, format.mintick), alert.freq_once_per_bar)
+                if high >= curr_tp2 and not curr_tp2_hit
+                    curr_tp2_hit := true
+                    float prof = math.abs(curr_tp2 - curr_entry)
+                    f_addMgmtLabel(bar_index, high, "🥳 TP 2\n+" + str.tostring(prof, "#.##"), label.style_label_down, color.lime, color.black, size.small)
+                    // --- TRIGGER ALERT: TP2 ---
+                    if en_alert_tp
+                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 2 HIT | Long position reached: " + str.tostring(curr_tp2, format.mintick), alert.freq_once_per_bar)
+                if high >= curr_tp3 and not curr_tp3_hit
+                    curr_tp3_hit := true
+                    float prof = math.abs(curr_tp3 - curr_entry)
+                    f_addMgmtLabel(bar_index, high, "🥳 TP 3\n+" + str.tostring(prof, "#.##"), label.style_label_down, color.lime, color.black, size.small)
+                    // --- TRIGGER ALERT: TP3 ---
+                    if en_alert_tp
+                        alert("🚀 [ZENCORE PROFIT] TARGET PROFIT 3 HIT | Long position reached: " + str.tostring(curr_tp3, format.mintick), alert.freq_once_per_bar)
+        else
+            if high >= curr_sl
+                curr_active := false 
+                curr_sl_hit := true  
+                // --- TRIGGER ALERT: SL HIT ---
+                if en_alert_sl
+                    alert("🛑 [ZENCORE EXIT] STOPLOSS HIT | Short Position Closed at " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
+            else
+                if low <= curr_tp1 and not curr_tp1_hit
+                    curr_tp1_hit := true
+                    float prof = math.abs(curr_entry - curr_tp1)
+                    f_addMgmtLabel(bar_index, low, "🥳 TP 1\n+" + str.tostring(prof, "#.##"), label.style_label_up, color.lime, color.black, size.small)
+                    // --- TRIGGER ALERT: TP1 ---
+                    if en_alert_tp
+                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 1 HIT | Short position reached: " + str.tostring(curr_tp1, format.mintick), alert.freq_once_per_bar)
+                if low <= curr_tp2 and not curr_tp2_hit
+                    curr_tp2_hit := true
+                    float prof = math.abs(curr_entry - curr_tp2)
+                    f_addMgmtLabel(bar_index, low, "🥳 TP 2\n+" + str.tostring(prof, "#.##"), label.style_label_up, color.lime, color.black, size.small)
+                    // --- TRIGGER ALERT: TP2 ---
+                    if en_alert_tp
+                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 2 HIT | Short position reached: " + str.tostring(curr_tp2, format.mintick), alert.freq_once_per_bar)
+                if low <= curr_tp3 and not curr_tp3_hit
+                    curr_tp3_hit := true
+                    float prof = math.abs(curr_entry - curr_tp3)
+                    f_addMgmtLabel(bar_index, low, "🥳 TP 3\n+" + str.tostring(prof, "#.##"), label.style_label_up, color.lime, color.black, size.small)
+                    // --- TRIGGER ALERT: TP3 ---
+                    if en_alert_tp
+                        alert("🚀 [ZENCORE PROFIT] TARGET PROFIT 3 HIT | Short position reached: " + str.tostring(curr_tp3, format.mintick), alert.freq_once_per_bar)
+
+if curr_active and curr_triggered
+    int current_condition = 0
+    bool is_in_profit = curr_isBuy ? (close > curr_entry) : (close < curr_entry)
+        
+    if not trigger_reentry
+        if curr_isBuy
+            if close < basis 
+                current_condition := 3
+            else if is_in_profit and (sellSig or rsi_val >= 75) 
+                current_condition := 2
+            else if is_in_profit and wt1 > wt2 and close > basis
+                current_condition := 1
+        else 
+            if close > basis
+                current_condition := 3
+            else if is_in_profit and (buySig or rsi_val <= 25)
+                current_condition := 2
+            else if is_in_profit and wt1 < wt2 and close < basis
+                current_condition := 1
+
+        if current_condition > max_alert_level
+            if current_condition == 3
+                float pips_diff = (curr_isBuy ? (close - curr_entry) : (curr_entry - close)) / syminfo.mintick
+                string pips_txt = pips_diff >= 0 ? "+" + str.tostring(pips_diff, "#") + " Pts" : str.tostring(pips_diff, "#") + " Pts"
+                float y_pos = curr_isBuy ? high + (atr*0.8) : low - (atr*0.8)
+                string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
+                f_addMgmtLabel(bar_index, y_pos, "🚨 CLOSE ALL\n" + pips_txt, l_style, color.new(color.red, 10), color.white, size.small)
+                
+                // --- TRIGGER ALERT: EMERGENCY CLOSE ALL ---
+                if en_alert_adv
+                    alert("🚨 [ZENCORE RISK] AI EMERGENCY EXIT: CLOSE ALL POSITIONS IMMEDIATELY! | Current Pnl: " + pips_txt + " | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar)
+                
+                curr_active := false 
+                curr_sl_hit := true 
+            else if current_condition == 2
+                float y_pos = curr_isBuy ? high + (atr*0.5) : low - (atr*0.5)
+                string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
+                f_addMgmtLabel(bar_index, y_pos, "⚠️ CLOSE SEPARUH", l_style, color.new(color.orange, 10), color.black, size.small)
+                
+                // --- TRIGGER ALERT: PARTIAL CLOSE ---
+                if en_alert_adv
+                    alert("⚠️ [ZENCORE RISK] AI ADVISORY: TAKE PARTIAL PROFITS NOW (CLOSE HALF) | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar)
+            else if current_condition == 1
+                float y_pos = curr_isBuy ? low - (atr*0.5) : high + (atr*0.5)
+                string l_style = curr_isBuy ? label.style_label_up : label.style_label_down
+                f_addMgmtLabel(bar_index, y_pos, "🚀 Solid Entry", l_style, color.new(color.lime, 10), color.black, size.small)
+            
+            max_alert_level := current_condition
+
+if curr_tp3_hit and curr_active
+    float pips_run = (curr_isBuy ? (close - curr_entry) : (curr_entry - close)) / syminfo.mintick
+    if pips_run > 0
+        string hold_stat = ""
+        color hold_c = color.gray
+        
+        if curr_isBuy
+            if close > ema9 and wt1 > wt2
+                hold_stat := "🔥 Hold Position"
+                hold_c := color.lime
+            else
+                hold_stat := "⚠️ Close Separuh"
+                hold_c := color.orange
+        else
+            if close < ema9 and wt1 < wt2
+                hold_stat := "🔥 Hold Position"
+                hold_c := color.lime
+            else
+                hold_stat := "⚠️ Close Separuh"
+                hold_c := color.orange
+                
+        string r_txt = "🥷 FIGHTER: +" + str.tostring(pips_run, "#") + " Pts\n" + hold_stat
+        float y_pos = curr_isBuy ? high + (atr * 1.5) : low - (atr * 1.5)
+        string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
+        
+        if na(runner_lbl)
+            runner_lbl := label.new(bar_index, y_pos, r_txt, style=l_style, color=hold_c, textcolor=color.black, size=size.small)
+        else
+            label.set_xy(runner_lbl, bar_index, y_pos)
+            label.set_text(runner_lbl, r_txt)
+            label.set_color(runner_lbl, hold_c)
+            label.set_style(runner_lbl, l_style)
+            
+        // --- TRIGGER ALERT: FIGHTER RUNNER STATUS ---
+        if en_alert_trail
+            alert("🥷 [ZENCORE TRAILING] RUNNER MANAGEMENT | Profit: +" + str.tostring(pips_run, "#") + " Pts | Status: " + hold_stat, alert.freq_once_per_bar_close)
+
+// ==========================================
+// 12. CURRENT TF SOLID SIGNAL GUIDE (HIDDEN)
+// ==========================================
+
+// ==========================================
+// 13. ZENCORE V2 CANDLE COLOR LOGIC ENGINE
+// ==========================================
+f_v2_gd(src, length, alpha) => ta.ema(src, length) * (1 + alpha) - ta.ema(ta.ema(src, length), length) * alpha
+f_v2_t3(src, length, alpha) => f_v2_gd(f_v2_gd(f_v2_gd(src, length, alpha), length, alpha), length, alpha)
+
+var float v2_o = na
+float v2_c = (open + high + low + close) / 4
+v2_o := na(v2_o[1]) ? (open + close) / 2 : (nz(v2_o[1]) + nz(v2_c[1])) / 2
+float v2_h = math.max(high, math.max(v2_o, v2_c))
+float v2_l = math.min(low, math.min(v2_o, v2_c))
+
+v2_anT3Average = f_v2_t3(v2_src, v2_aLength, v2_alphaInput)
+v2_nT3Average  = f_v2_t3(v2_src, v2_Length, v2_alphaInput)
+v2_uc = (v2_anT3Average >= v2_nT3Average) and (close > v2_nT3Average) 
+v2_dc = (v2_anT3Average <= v2_nT3Average) and (close < v2_nT3Average)   
+v2_dr = (v2_anT3Average >= v2_nT3Average) and (close < v2_nT3Average)  
+v2_ur = (v2_anT3Average <= v2_nT3Average) and (close > v2_nT3Average)
+
+v2_bjhemaslow  = ta.ema(v2_o, v2_hemaslow)
+v2_bjhemaslow2 = ta.ema(v2_o, v2_hemaslow2)
+v2_hemauc = (close > v2_bjhemaslow) and (close > v2_bjhemaslow2)
+v2_hemadc = (close < v2_bjhemaslow) and (close < v2_bjhemaslow2)
+
+v2_shortvar  = v2_tsistrat == "Fast" ? 5 : 13
+v2_longvar   = v2_tsistrat == "Fast" ? 25 : 25
+v2_signalvar = v2_tsistrat == "Fast" ? 14 : 13
+v2_rsilen    = v2_rsistrat == "Fast" ? 5 : 14
+
+v2_tsi = ta.tsi(close, v2_shortvar, v2_longvar)
+v2_tsl = ta.ema(v2_tsi, v2_signalvar)
+v2_rsi = ta.rsi(close, v2_rsilen)
+
+v2_buy  = v2_tsi > v2_tsl and v2_rsi > 50
+v2_sell = v2_tsi < v2_tsl and v2_rsi < 50 
+
+color v2_bjrevcol = v2_uc ? v2_bullcol : v2_dc ? v2_bearcol : v2_dr ? v2_bearrev : v2_ur ? v2_bullrev : na
+color v2_trmcolor = v2_buy ? v2_trmbull : v2_sell ? v2_trmbear : v2_trmhold
+color v2_hemabar  = v2_hemauc ? v2_hemabull : v2_hemadc ? v2_hemabear : v2_hemahold
+
+color v2_rsicon = v2_rsi > 0 and v2_rsi <= 5 ? v2_rsi5 : v2_rsi > 5 and v2_rsi <= 10 ? v2_rsi10 : v2_rsi > 10 and v2_rsi <= 15 ? v2_rsi15 : v2_rsi > 15 and v2_rsi <= 20 ? v2_rsi20 : v2_rsi > 20 and v2_rsi <= 25 ? v2_rsi25 : v2_rsi > 25 and v2_rsi <= 30 ? v2_rsi30 : v2_rsi > 30 and v2_rsi <= 35 ? v2_rsi35 : v2_rsi > 35 and v2_rsi <= 40 ? v2_rsi40 : v2_rsi > 40 and v2_rsi <= 45 ? v2_rsi45 : v2_rsi > 45 and v2_rsi <= 50 ? v2_rsi50 : v2_rsi > 50 and v2_rsi <= 55 ? v2_rsi55 : v2_rsi > 55 and v2_rsi <= 60 ? v2_rsi60 : v2_rsi > 60 and v2_rsi <= 65 ? v2_rsi65 : v2_rsi > 65 and v2_rsi <= 70 ? v2_rsi70 : v2_rsi > 70 and v2_rsi <= 75 ? v2_rsi75 : v2_rsi > 75 and v2_rsi <= 80 ? v2_rsi80 : v2_rsi > 80 and v2_rsi <= 85 ? v2_rsi85 : v2_rsi > 85 and v2_rsi <= 90 ? v2_rsi90 : v2_rsi > 90 and v2_rsi <= 95 ? v2_rsi95 : v2_rsi > 95 and v2_rsi <= 100? v2_rsi100: na
+
+color v2_barColor = v2_strat == "TRM" ? v2_trmcolor : v2_strat == "Bj Reversal" ? v2_bjrevcol : v2_strat == "RSI Color" ? v2_rsicon : v2_strat == "MA" ? v2_hemabar : na
+
+color v1_bar_c = color.new(color.gray, 50)
+if close > he1 and he1 > he2
+    v1_bar_c := color.new(bullC, 50)
+else if close < he1 and he1 < he2
+    v1_bar_c := color.new(bearC, 50)
+
+// ==========================================
+// 14. FINAL BAR COLOR RENDERER
+// ==========================================
+color final_chart_color = v2_useCol ? v2_barColor : (colorBar ? v1_bar_c : na)
+barcolor(final_chart_color)
+
+// ==========================================
+// 15. SOP ENTRY CHECKLIST DASHBOARD
+// ==========================================
+grp_sop = "SOP Dashboard Settings"
+show_sop = input.bool(true, "Buka SOP Dashboard (Bottom Right)", group=grp_sop)
+
+string htf_sop = timeframe.period == "1" ? "3" : timeframe.period == "3" ? "5" : timeframe.period == "5" ? "15" : timeframe.period == "15" ? "30" : timeframe.period == "30" ? "60" : timeframe.period == "60" ? "240" : timeframe.period == "240" ? "D" : "W"
+
+f_htf_ribbon_state() =>
+    h1 = f_hema(close, 20)
+    h2 = f_hema(close, 40)
+    [h1 > h2, h1 < h2]
+
+[htf_hema_bull, htf_hema_bear] = request.security(syminfo.tickerid, htf_sop, f_htf_ribbon_state())
+
+bool is_sop_buy = curr_active ? curr_isBuy : is_hema_bull
+string target_mode_str = is_sop_buy ? "BUY / LONG" : "SELL / SHORT"
+color target_mode_col = is_sop_buy ? color.lime : color.red
+
+bool sop1_pass = is_sop_buy ? wt1 > wt2 : wt1 < wt2
+bool sop2_pass = is_sop_buy ? close > basis : close < basis
+bool sop3_pass = is_sop_buy ? is_hema_bull : is_hema_bear
+
+bool is_bar_bullish = false
+bool is_bar_bearish = false
+
+if v2_useCol
+    if v2_strat == "Bj Reversal"
+        is_bar_bullish := v2_uc 
+        is_bar_bearish := v2_dc 
+    else if v2_strat == "MA"
+        is_bar_bullish := v2_hemauc
+        is_bar_bearish := v2_hemadc
+    else if v2_strat == "TRM"
+        is_bar_bullish := v2_buy
+        is_bar_bearish := v2_sell
+    else if v2_strat == "RSI Color"
+        is_bar_bullish := v2_rsi >= 55
+        is_bar_bearish := v2_rsi <= 45
+else
+    is_bar_bullish := close > he1 and he1 > he2
+    is_bar_bearish := close < he1 and he1 < he2
+
+bool sop4_pass = is_sop_buy ? is_bar_bullish : is_bar_bearish
+bool sop5_pass = is_sop_buy ? htf_hema_bull : htf_hema_bear
+
+// --- TRIGGER ALERTS: BASE ZONE CROSSOVERS ---
+if is_zone_turn_green and en_alert_primary
+    alert("🟢 [ZENCORE SIGNAL] PRIMARY BUY ENTRY CONFIRMED | Entry Price: " + str.tostring(saved_entry_price, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
+
+if is_zone_turn_red and en_alert_primary
+    alert("🔴 [ZENCORE SIGNAL] PRIMARY SELL ENTRY CONFIRMED | Entry Price: " + str.tostring(saved_entry_price, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
+
+// ------------------------------------------
+// Render Table (SOP Dashboard)
+// ------------------------------------------
+var table sop_table = na
+if show_sop
+    if barstate.isfirst or na(sop_table)
+        sop_table := table.new(position.bottom_right, 2, 8, bgcolor=dashBgColor, border_width=1, border_color=color.new(#2a2e39, 40))
+        table.merge_cells(sop_table, 0, 0, 1, 0)
+    
+    if barstate.islast
+        table.cell(sop_table, 0, 0, "📋 SOP ENTRY CHECKLIST", text_color=color.white, bgcolor=color.new(#4a148c, 20), text_size=dashSize)
+        
+        table.cell(sop_table, 0, 1, "Mode Target:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 1, target_mode_str, text_color=target_mode_col, text_size=dashSize, text_halign=text.align_left)
+        
+        table.cell(sop_table, 0, 2, "1. Signal Solid Buy/Sell:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 2, sop1_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
+        
+        table.cell(sop_table, 0, 3, "2. Close vs Entry Line:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 3, sop2_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
+        
+        table.cell(sop_table, 0, 4, "3. Trend Color (HEMA):", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 4, sop3_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
+        
+        table.cell(sop_table, 0, 5, "4. Bottom Bar Color:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 5, sop4_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
+        
+        table.cell(sop_table, 0, 6, "5. HTF HEMA ("+htf_sop+"): ", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 6, sop5_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
+
+        table.cell(sop_table, 0, 7, "🔮 10-Candle Forecast:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 1, 7, power_txt, text_color=power_col, bgcolor=power_bg, text_size=dashSize, text_halign=text.align_center)
+else
+    if not na(sop_table)
+        table.delete(sop_table)
+        sop_table := na
+
+// ==========================================
+// 16. AI SMART ORDER BLOCKS (DYNAMIC PRICE ACTION OVERRIDE)
+// ==========================================
+grp_ob = "Smart Order Blocks (OB)"
+show_ai_pred = input.bool(true, "Aktifkan AI OB Prediction", group=grp_ob)
+ob_vol_filter = input.float(-1.0, "Minimum RVol for Valid OB", group=grp_ob)
+
+// Variables to store the most recent OB zones
+var float bull_ob_top = na
+var float bull_ob_bot = na
+var float bear_ob_top = na
+var float bear_ob_bot = na
+
+// --- Detect Bullish OB ---
+is_down_candle = close < open
+is_strong_up = close > open and (close - open) > (atr * 1.0) and rvol > ob_vol_filter and close > high[1]
+
+if is_down_candle[1] and is_strong_up
+    bull_ob_top := high[1]
+    bull_ob_bot := low[1]
+
+// --- Detect Bearish OB ---
+is_up_candle = close > open
+is_strong_down = close < open and (open - close) > (atr * 1.0) and rvol > ob_vol_filter and close < low[1]
+
+if is_up_candle[1] and is_strong_down
+    bear_ob_top := high[1]
+    bear_ob_bot := low[1]
+
+// --- Invalidate / Clear Broken (Mitigated) OB Zones ---
+if not na(bear_ob_top) and close > bear_ob_top
+    bear_ob_top := na
+    bear_ob_bot := na
+
+if not na(bull_ob_bot) and close < bull_ob_bot
+    bull_ob_top := na
+    bull_ob_bot := na
+
+// --- AI AUTO-PREDICTION: REAL-TIME PRICE ACTION OVERRIDE ---
+tap_bull_ob = not na(bull_ob_top) and low <= bull_ob_top and high >= bull_ob_bot
+tap_bear_ob = not na(bear_ob_top) and high >= bear_ob_bot and low <= bear_ob_top
+
+var label pred_lbl = na
+
+float c_range = high - low
+bool rejection_wick_bull = (close - low) > (c_range * 0.4) 
+bool rejection_wick_bear = (high - close) > (c_range * 0.4) 
+bool heavy_bear_close = (close < open) and (close - low) < (c_range * 0.25) 
+bool heavy_bull_close = (close > open) and (high - close) < (c_range * 0.25) 
+bool is_red_drop = close < open and (open - close) > (atr * 0.5)
+bool is_green_pump = close > open and (close - open) > (atr * 0.5)
+
+// --- Evaluate Bullish OB (Support Zone) ---
+if tap_bull_ob and show_ai_pred
+    // Real-time candle dump overrides background trend bias
+    if is_red_drop or heavy_bear_close or (wt1 < wt2 and close < ema9)
+        string pred_txt = "⚠️ AI PREDICT: BREAKOUT (Support Fails / Heavy Sell)"
+        color pred_col = color.red
+        
+        if na(pred_lbl)
+            pred_lbl := label.new(bar_index, bull_ob_bot, pred_txt, style=label.style_label_up, color=pred_col, textcolor=color.white, size=size.small)
+        else
+            label.set_xy(pred_lbl, bar_index, bull_ob_bot)
+            label.set_text(pred_lbl, pred_txt)
+            label.set_color(pred_lbl, pred_col)
+            label.set_textcolor(pred_lbl, color.white)
+    else if rejection_wick_bull or (close > open and wt1 > wt2)
+        string pred_txt = "🟢 AI PREDICT: SCALP BOUNCE (Buy Zone)"
+        color pred_col = color.lime
+        
+        if na(pred_lbl)
+            pred_lbl := label.new(bar_index, bull_ob_bot, pred_txt, style=label.style_label_up, color=pred_col, textcolor=color.black, size=size.small)
+        else
+            label.set_xy(pred_lbl, bar_index, bull_ob_bot)
+            label.set_text(pred_lbl, pred_txt)
+            label.set_color(pred_lbl, pred_col)
+            label.set_textcolor(pred_lbl, color.black)
+
+// --- Evaluate Bearish OB (Resistance Zone) ---
+if tap_bear_ob and show_ai_pred
+    // Real-time candle pump overrides background trend bias
+    if is_green_pump or heavy_bull_close or (wt1 > wt2 and close > ema9)
+        string pred_txt = "🚀 AI PREDICT: BREAKOUT (Resistance Fails / Heavy Buy)"
+        color pred_col = color.lime
+        
+        if na(pred_lbl)
+            pred_lbl := label.new(bar_index, bear_ob_top, pred_txt, style=label.style_label_down, color=pred_col, textcolor=color.black, size=size.small)
+        else
+            label.set_xy(pred_lbl, bar_index, bear_ob_top)
+            label.set_text(pred_lbl, pred_txt)
+            label.set_color(pred_lbl, pred_col)
+            label.set_textcolor(pred_lbl, color.black)
+    else if rejection_wick_bear or (close < open and wt1 < wt2)
+        string pred_txt = "🔴 AI PREDICT: SCALP REJECT (Sell Zone)"
+        color pred_col = color.red
+        
+        if na(pred_lbl)
+            pred_lbl := label.new(bar_index, bear_ob_top, pred_txt, style=label.style_label_down, color=pred_col, textcolor=color.white, size=size.small)
+        else
+            label.set_xy(pred_lbl, bar_index, bear_ob_top)
+            label.set_text(pred_lbl, pred_txt)
+            label.set_color(pred_lbl, pred_col)
+            label.set_textcolor(pred_lbl, color.white)
+
+// ==========================================
+// 17. ZENCORE WEB DASHBOARD BRIDGE
+// Added for external web dashboard integration.
+// This section DOES NOT change the existing ZenCore signal calculations.
+// ==========================================
+grp_web = "🌐 WEB DASHBOARD BRIDGE"
+web_enabled = input.bool(true, "Enable Web Dashboard Feed", group=grp_web)
+web_every_bar = input.bool(true, "Send Snapshot Every Confirmed Bar", group=grp_web)
+web_secret = input.string("CHANGE_ME", "Webhook Secret", group=grp_web)
+
+f_web_num(float _v) =>
+    na(_v) ? "null" : str.tostring(_v, format.mintick)
+
+f_web_bool(bool _v) =>
+    _v ? "true" : "false"
+
+if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green or is_zone_turn_red)
+    string web_action = is_zone_turn_green ? "BUY" : is_zone_turn_red ? "SELL" : global_trend > 0 ? "LONG_BIAS" : global_trend < 0 ? "SHORT_BIAS" : "WAIT"
+
+    string web_payload = "{"
+    web_payload += "\"secret\":\"" + web_secret + "\","
+    web_payload += "\"source\":\"ZenCore AI Dashboard Pro + Alerts\","
+    web_payload += "\"symbol\":\"" + syminfo.ticker + "\","
+    web_payload += "\"tickerid\":\"" + syminfo.tickerid + "\","
+    web_payload += "\"timeframe\":\"" + timeframe.period + "\","
+    web_payload += "\"tradeMode\":\"" + tradeMode + "\","
+    web_payload += "\"time\":" + str.tostring(time) + ","
+    web_payload += "\"close\":" + f_web_num(close) + ","
+    web_payload += "\"action\":\"" + web_action + "\","
+    web_payload += "\"barStatus\":\"" + bar_status + "\","
+    web_payload += "\"marketStructure\":\"" + mkt_struct + "\","
+    web_payload += "\"momentum\":\"" + mom_state + "\","
+    web_payload += "\"demand\":\"" + demand_state + "\","
+    web_payload += "\"hemaTrend\":\"" + (is_hema_bull ? "Bullish" : is_hema_bear ? "Bearish" : "Flat") + "\","
+    web_payload += "\"chopIndex\":" + str.tostring(chop_val, "#.0") + ","
+    web_payload += "\"dxyStatus\":\"" + dxy_dir + "\","
+    web_payload += "\"sdClearance\":\"" + snd_clearance_str + "\","
+    web_payload += "\"whaleState\":\"" + whale_state + "\","
+    web_payload += "\"relativeVolume\":" + str.tostring(rvol, "#.00") + ","
+    web_payload += "\"globalTrend\":" + str.tostring(global_trend) + ","
+    web_payload += "\"setupProbability\":" + str.tostring(success_prob, "#") + ","
+    web_payload += "\"confluenceStars\":" + str.tostring(conf_stars) + ","
+    web_payload += "\"riskState\":\"" + risk_lvl + "\","
+    web_payload += "\"atr\":" + f_web_num(atr) + ","
+    web_payload += "\"entry\":" + f_web_num(curr_entry) + ","
+    web_payload += "\"sl\":" + f_web_num(curr_sl) + ","
+    web_payload += "\"tp1\":" + f_web_num(curr_tp1) + ","
+    web_payload += "\"tp2\":" + f_web_num(curr_tp2) + ","
+    web_payload += "\"tp3\":" + f_web_num(curr_tp3) + ","
+    web_payload += "\"tradeActive\":" + f_web_bool(curr_active) + ","
+    web_payload += "\"tradeIsBuy\":" + f_web_bool(curr_isBuy) + ","
+    web_payload += "\"tp1Hit\":" + f_web_bool(curr_tp1_hit) + ","
+    web_payload += "\"tp2Hit\":" + f_web_bool(curr_tp2_hit) + ","
+    web_payload += "\"tp3Hit\":" + f_web_bool(curr_tp3_hit) + ","
+    web_payload += "\"slHit\":" + f_web_bool(curr_sl_hit) + ","
+    web_payload += "\"mtf1\":" + str.tostring(mtf_1) + ","
+    web_payload += "\"mtf2\":" + str.tostring(mtf_2) + ","
+    web_payload += "\"mtf3\":" + str.tostring(mtf_3) + ","
+    web_payload += "\"mtfTotal\":" + str.tostring(mtf_total) + ","
+    web_payload += "\"mtfOverall\":\"" + mtf_word + "\","
+    web_payload += "\"forecast3Bars\":\"" + next_3_forecast + "\","
+    web_payload += "\"marketPower\":" + str.tostring(market_power, "#") + ","
+    web_payload += "\"powerText\":\"" + power_txt + "\","
+    web_payload += "\"proTip\":\"" + pro_tip + "\","
+    web_payload += "\"sop1\":" + f_web_bool(sop1_pass) + ","
+    web_payload += "\"sop2\":" + f_web_bool(sop2_pass) + ","
+    web_payload += "\"sop3\":" + f_web_bool(sop3_pass) + ","
+    web_payload += "\"sop4\":" + f_web_bool(sop4_pass) + ","
+    web_payload += "\"sop5\":" + f_web_bool(sop5_pass)
+    web_payload += "}"
+
+    alert(web_payload, alert.freq_once_per_bar_close)

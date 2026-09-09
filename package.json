@@ -1,0 +1,12 @@
+{
+  "name": "zencore-web-control",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZenCore TradingView Pine Script webhook dashboard",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
