@@ -1,17 +1,19 @@
 #property strict
-#property version   "1.00"
+#property version   "1.01"
 #property description "ZenCore Web -> MT5 execution bridge. Manual-confirm web orders only."
 
 #include <Trade/Trade.mqh>
 CTrade trade;
 
-input string BridgeBaseUrl   = "https://zencore-web-control.onrender.com";
-input string BridgeToken     = "PASTE_BRIDGE_TOKEN_HERE";
-input int    PollSeconds     = 2;
-input bool   AllowLiveTrading= false;
-input double MaxVolume       = 1.00;
-input ulong  MagicNumber     = 56001;
-input int    DeviationPoints = 30;
+input string BridgeBaseUrl    = "https://zencore-web-control.onrender.com";
+input string BridgeToken      = "PASTE_BRIDGE_TOKEN_HERE";
+input int    PollSeconds      = 2;
+input bool   AllowLiveTrading = false;
+input double MaxVolume        = 1.00;
+input ulong  MagicNumber      = 56001;
+input int    DeviationPoints  = 30;
+input string SymbolMapFrom    = "XAUUSD";
+input string SymbolMapTo      = ""; // Example: XAUUSDm, GOLD, XAUUSD.a
 
 int heartbeatCounter = 0;
 
@@ -22,6 +24,13 @@ string JsonEscape(string s)
    StringReplace(s,"\r"," ");
    StringReplace(s,"\n"," ");
    return s;
+}
+
+string MapSymbol(string source)
+{
+   if(SymbolMapTo!="" && source==SymbolMapFrom)
+      return SymbolMapTo;
+   return source;
 }
 
 int HttpGet(string url,string &response)
@@ -111,7 +120,8 @@ void ProcessCommand(string line)
 
    string id=p[0];
    string side=p[1];
-   string symbol=p[2];
+   string sourceSymbol=p[2];
+   string symbol=MapSymbol(sourceSymbol);
    double volume=StringToDouble(p[3]);
    double sl=StringToDouble(p[4]);
    double tp=StringToDouble(p[5]);
@@ -133,7 +143,7 @@ void ProcessCommand(string line)
    }
    if(!SymbolSelect(symbol,true))
    {
-      ReportResult(id,"REJECTED","SymbolSelect failed");
+      ReportResult(id,"REJECTED","SymbolSelect failed for mapped symbol: "+symbol);
       return;
    }
 
@@ -154,6 +164,8 @@ void ProcessCommand(string line)
    }
 
    string msg=trade.ResultRetcodeDescription();
+   if(sourceSymbol!=symbol)
+      msg="Mapped "+sourceSymbol+" -> "+symbol+" | "+msg;
    if(ok)
       ReportResult(id,"FILLED",msg);
    else
@@ -179,7 +191,7 @@ int OnInit()
    }
    EventSetTimer(MathMax(1,PollSeconds));
    SendHeartbeat();
-   Print("ZenCore MT5 Bridge started. AllowLiveTrading=",AllowLiveTrading);
+   Print("ZenCore MT5 Bridge started. AllowLiveTrading=",AllowLiveTrading," SymbolMap=",SymbolMapFrom," -> ",SymbolMapTo);
    return(INIT_SUCCEEDED);
 }
 
