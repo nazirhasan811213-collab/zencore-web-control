@@ -3,8 +3,6 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 8080;
-const WEBHOOK_SECRET = process.env.ZENCORE_SECRET || "CHANGE_ME";
-const WEBHOOK_TOKEN = process.env.ZENCORE_WEBHOOK_TOKEN || "";
 let latest = null;
 let history = [];
 
@@ -30,12 +28,9 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       try {
         const data = JSON.parse(body);
-        const tokenFromUrl = url.searchParams.get("token") || "";
-        const tokenOk = WEBHOOK_TOKEN && tokenFromUrl === WEBHOOK_TOKEN;
-        const legacySecretOk = WEBHOOK_SECRET !== "CHANGE_ME" && data.secret === WEBHOOK_SECRET;
 
-        if (!tokenOk && !legacySecretOk) {
-          return send(res, 401, JSON.stringify({ok:false, error:"Unauthorized webhook"}));
+        if (data.source !== "ZenCore AI Dashboard Pro + Alerts") {
+          return send(res, 401, JSON.stringify({ok:false, error:"Invalid ZenCore source"}));
         }
 
         latest = {...data, receivedAt: Date.now()};
