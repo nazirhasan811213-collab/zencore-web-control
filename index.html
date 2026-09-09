@@ -1,129 +1,159 @@
 <!doctype html>
-<html lang="ms">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZenCore Web Control</title>
+<title>ZenCore Total Analysis Terminal</title>
 <style>
-:root{--bg:#06090f;--panel:#0d131d;--line:#202a3a;--text:#eff5ff;--muted:#8190a7;--green:#2cde87;--red:#ff5c6c;--orange:#ffae42;--blue:#4ea6ff;--purple:#9a7cff}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -20%,#102746 0,transparent 35%),var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--text)}
-.wrap{max-width:1500px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:15px 17px;border:1px solid var(--line);background:#0a1019e8;border-radius:18px;position:sticky;top:10px;z-index:4;backdrop-filter:blur(12px)}
-.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-weight:900;background:linear-gradient(135deg,var(--blue),var(--purple))}
-h1{font-size:17px;margin:0}.sub{color:var(--muted);font-size:11px;margin-top:3px}.live{font-size:12px;color:#bff6d8}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green);margin-right:7px}
-.grid{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:16px}.panel{background:linear-gradient(180deg,#101722,#0a0f17);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 55px #0005}
-.chart{min-height:665px;padding:16px}.head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.sym{font-size:28px;font-weight:850}.price{font-size:20px;margin-top:6px}.chip{padding:5px 8px;border:1px solid var(--line);border-radius:999px;font-size:10px;color:#c6d2e5}
-.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.canvas{height:500px;margin-top:16px;border:1px solid #1d2735;border-radius:14px;position:relative;overflow:hidden;background:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px),#070c13;background-size:100% 55px,75px 100%}
-svg{width:100%;height:100%}.side{display:flex;flex-direction:column;gap:16px}.section{padding:14px}.title{font-size:12px;letter-spacing:.8px;font-weight:800;text-transform:uppercase;margin-bottom:12px}
-.bias{display:flex;justify-content:space-between;align-items:center;border:1px solid #2cde8738;background:#2cde8710;border-radius:14px;padding:13px}.big{font-size:23px;font-weight:900}.label{font-size:10px;color:var(--muted)}
-.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.m{border:1px solid var(--line);border-radius:11px;background:#090e16;padding:10px}.m b{display:block;margin-top:4px;font-size:13px}.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--orange)}
-.level{display:grid;grid-template-columns:65px 1fr 95px;align-items:center;gap:8px;margin:8px 0;font-size:11px}.rail{height:6px;background:#1a2230;border-radius:10px;overflow:hidden}.rail i{display:block;height:100%}
-.sop{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 2px;font-size:12px}.coach{font-size:12px;line-height:1.6;padding:11px;border:1px solid #ffae4230;background:#ffae420d;border-radius:11px}
-.bottom{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px;margin-top:16px}.tbl{width:100%;border-collapse:collapse;font-size:12px}.tbl td,.tbl th{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tbl th{color:var(--muted)}
-.raw{max-height:210px;overflow:auto;font-family:ui-monospace,monospace;font-size:10px;white-space:pre-wrap;color:#a8b6ca}.foot{text-align:center;color:#5f6e85;font-size:10px;padding:18px}
-@media(max-width:1050px){.grid{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr}.bottom{grid-template-columns:1fr}}
-@media(max-width:700px){.wrap{padding:9px}.top{position:static}.grid,.bottom{gap:9px}.side{grid-template-columns:1fr}.canvas{height:390px}.sym{font-size:22px}}
+:root{--bg:#05080e;--panel:#0b111a;--panel2:#0f1723;--line:#1e2a3b;--text:#eef5ff;--muted:#7f91aa;--green:#32e38d;--red:#ff6172;--amber:#ffb84a;--blue:#55aaff;--purple:#9d7cff;--cyan:#4de2e2}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at 15% -15%,#0e315a 0,transparent 34%),radial-gradient(circle at 85% 0,#27194c55 0,transparent 28%),var(--bg)}
+.wrap{max-width:1680px;margin:auto;padding:14px}.top{position:sticky;top:8px;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 16px;border:1px solid var(--line);background:#08101bdc;backdrop-filter:blur(14px);border-radius:16px;box-shadow:0 12px 45px #0007}.brand{display:flex;gap:11px;align-items:center}.logo{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;font-weight:900;background:linear-gradient(135deg,var(--blue),var(--purple))}.brand h1{font-size:16px;margin:0;letter-spacing:.4px}.sub{font-size:10px;color:var(--muted);margin-top:3px}.statusrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.pill{border:1px solid var(--line);background:#0a111b;padding:7px 9px;border-radius:999px;font-size:10px;color:#b8c5d8}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--green);box-shadow:0 0 10px var(--green)}.dot.bad{background:var(--red);box-shadow:0 0 10px var(--red)}
+.summary{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:12px}.card,.panel{border:1px solid var(--line);background:linear-gradient(180deg,#0f1723,#090e16);border-radius:16px;box-shadow:0 16px 45px #0005}.card{padding:11px 12px}.k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.65px}.v{font-size:15px;font-weight:800;margin-top:5px}.good{color:var(--green)!important}.badc{color:var(--red)!important}.warn{color:var(--amber)!important}.blue{color:var(--blue)!important}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:12px;margin-top:12px}.chartpanel{padding:14px}.charthead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.symbol{font-size:27px;font-weight:900}.price{font-size:20px;margin-top:4px}.micro{font-size:10px;color:var(--muted);margin-top:4px}.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.chip{font-size:9px;padding:5px 7px;border:1px solid var(--line);border-radius:999px;color:#c4d3e7}.chartwrap{position:relative;height:530px;margin-top:12px;border:1px solid #1a2636;border-radius:14px;overflow:hidden;background:linear-gradient(#ffffff07 1px,transparent 1px),linear-gradient(90deg,#ffffff07 1px,transparent 1px),#060b12;background-size:100% 58px,80px 100%}.chartwrap svg{width:100%;height:100%;display:block}.legend{position:absolute;left:11px;top:10px;display:flex;gap:7px;flex-wrap:wrap;z-index:2}.lg{font-size:9px;border:1px solid #ffffff14;background:#060b12cc;border-radius:7px;padding:5px 7px}.chartnote{position:absolute;right:12px;bottom:10px;color:#6f8199;font-size:9px}
+.stack{display:flex;flex-direction:column;gap:12px}.sec{padding:13px}.title{font-size:11px;font-weight:850;letter-spacing:.8px;text-transform:uppercase;margin-bottom:11px}.decision{border:1px solid #ffffff13;background:#0a121c;border-radius:13px;padding:12px}.decisiontop{display:flex;align-items:end;justify-content:space-between;gap:10px}.action{font-size:27px;font-weight:950}.grade{font-size:28px;font-weight:950;text-align:right}.bar{height:7px;background:#182233;border-radius:999px;overflow:hidden;margin-top:9px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));width:0}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.mini{padding:9px;border:1px solid var(--line);border-radius:10px;background:#080d14}.mini b{display:block;margin-top:4px;font-size:12px}.entrybox{border:1px solid #ffb84a44;background:#ffb84a0b;border-radius:13px;padding:11px}.zonebig{font-size:18px;font-weight:900;color:var(--amber);margin-top:4px}.levels{margin-top:10px}.level{display:grid;grid-template-columns:52px 1fr 90px;gap:7px;align-items:center;margin:7px 0;font-size:10px}.rail{height:5px;background:#182233;border-radius:99px;overflow:hidden}.rail i{height:100%;display:block}.mtf{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mt{padding:10px;border:1px solid var(--line);border-radius:10px;background:#080d14}.mt b{display:block;font-size:12px;margin-top:3px}.soprow{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #ffffff0b;font-size:11px}.coach{padding:10px;border-radius:10px;border:1px solid #55aaff30;background:#55aaff0c;font-size:11px;line-height:1.55}
+.lower{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px;margin-top:12px}.matrix{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.metric{padding:9px;border:1px solid var(--line);border-radius:10px;background:#080d14}.metric b{display:block;font-size:12px;margin-top:4px}.posrow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ffffff0b;font-size:11px}.raw{font:10px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;color:#9eb0c8;max-height:245px;overflow:auto}.foot{text-align:center;color:#52647d;font-size:9px;padding:16px}.disclaimer{font-size:9px;color:#63758c;margin-top:9px;line-height:1.4}
+@media(max-width:1180px){.summary{grid-template-columns:repeat(3,1fr)}.main{grid-template-columns:1fr}.stack{display:grid;grid-template-columns:repeat(2,1fr)}.lower{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.wrap{padding:7px}.top{position:static}.statusrow{justify-content:flex-start}.summary{grid-template-columns:repeat(2,1fr)}.stack,.lower{grid-template-columns:1fr}.chartwrap{height:420px}.symbol{font-size:22px}.main{gap:8px}.card,.panel{border-radius:13px}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top">
-    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE AI WEB CONTROL</h1><div class="sub">Powered by your TradingView Pine Script</div></div></div>
-    <div class="live"><span class="dot"></span><span id="feed">WAITING FOR WEBHOOK</span></div>
-  </div>
+  <header class="top">
+    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE TOTAL ANALYSIS TERMINAL</h1><div class="sub">TradingView Pine intelligence • live webhook analysis</div></div></div>
+    <div class="statusrow">
+      <span class="pill"><span class="dot" id="dot"></span><span id="feed">WAITING FOR PINE</span></span>
+      <span class="pill" id="feedType">NO DATA</span>
+      <span class="pill" id="fresh">Last update —</span>
+      <span class="pill" id="session">Session —</span>
+    </div>
+  </header>
 
-  <div class="grid">
-    <section class="panel chart">
-      <div class="head">
-        <div><div class="sym"><span id="symbol">—</span> <span style="color:#75839a;font-weight:500" id="tf">—</span></div><div class="price" id="price">—</div></div>
-        <div class="chips"><span class="chip">PINE ENGINE</span><span class="chip">HEMA</span><span class="chip">MTF</span><span class="chip">WAVETREND</span><span class="chip">RVOL</span></div>
+  <section class="summary">
+    <div class="card"><div class="k">Symbol / TF</div><div class="v" id="sumSymbol">—</div></div>
+    <div class="card"><div class="k">Signal</div><div class="v" id="sumAction">—</div></div>
+    <div class="card"><div class="k">Setup Probability</div><div class="v" id="sumProb">—</div></div>
+    <div class="card"><div class="k">Setup Grade</div><div class="v" id="sumGrade">—</div></div>
+    <div class="card"><div class="k">R:R to TP3</div><div class="v" id="sumRR">—</div></div>
+    <div class="card"><div class="k">Entry Zone Status</div><div class="v" id="sumZone">—</div></div>
+  </section>
+
+  <main class="main">
+    <section class="panel chartpanel">
+      <div class="charthead">
+        <div><div class="symbol"><span id="symbol">—</span> <span style="color:#6e8199;font-weight:600" id="tf">—</span></div><div class="price" id="price">—</div><div class="micro" id="chartMeta">Waiting for webhook history…</div></div>
+        <div class="chips"><span class="chip">LIVE PUSH</span><span class="chip">ENTRY ZONE</span><span class="chip">SL/TP MAP</span><span class="chip">MTF</span><span class="chip">HEMA</span><span class="chip">RVOL</span></div>
       </div>
-      <div class="canvas"><svg id="chart" viewBox="0 0 1000 500" preserveAspectRatio="none"></svg></div>
+      <div class="chartwrap">
+        <div class="legend"><span class="lg">Price</span><span class="lg" style="color:var(--amber)">Entry Zone</span><span class="lg" style="color:var(--red)">SL</span><span class="lg" style="color:var(--green)">TP</span></div>
+        <svg id="chart" viewBox="0 0 1100 520" preserveAspectRatio="none"></svg>
+        <div class="chartnote">Webhook chart updates whenever TradingView alert sends a new snapshot.</div>
+      </div>
     </section>
 
-    <aside class="side">
-      <section class="panel section">
-        <div class="title">Trade Execution</div>
-        <div class="bias"><div><span class="label">ACTION</span><div class="big" id="action">—</div></div><div style="text-align:right"><span class="label">SETUP PROB.</span><div class="big" id="prob">—</div></div></div>
-        <div class="metrics">
-          <div class="m"><span class="label">Structure</span><b id="structure">—</b></div>
-          <div class="m"><span class="label">Risk</span><b id="risk">—</b></div>
-          <div class="m"><span class="label">Whales</span><b id="whales">—</b></div>
-          <div class="m"><span class="label">Market Power</span><b id="power">—</b></div>
+    <aside class="stack">
+      <section class="panel sec">
+        <div class="title">Decision Engine</div>
+        <div class="decision">
+          <div class="decisiontop"><div><div class="k">Pine Action</div><div class="action" id="action">—</div></div><div><div class="k" style="text-align:right">Grade</div><div class="grade" id="grade">—</div></div></div>
+          <div class="bar"><i id="probBar"></i></div>
+          <div class="twocol"><div class="mini"><span class="k">Probability</span><b id="prob">—</b></div><div class="mini"><span class="k">Confluence</span><b id="stars">—</b></div><div class="mini"><span class="k">Market Power</span><b id="power">—</b></div><div class="mini"><span class="k">Risk State</span><b id="risk">—</b></div></div>
         </div>
       </section>
 
-      <section class="panel section">
-        <div class="title">Fibo / Fixed R:R Plan</div>
-        <div class="level"><span>TP3</span><div class="rail"><i style="width:100%;background:var(--green)"></i></div><b id="tp3">—</b></div>
-        <div class="level"><span>TP2</span><div class="rail"><i style="width:82%;background:var(--green)"></i></div><b id="tp2">—</b></div>
-        <div class="level"><span>TP1</span><div class="rail"><i style="width:66%;background:var(--green)"></i></div><b id="tp1">—</b></div>
-        <div class="level"><span>ENTRY</span><div class="rail"><i style="width:52%;background:var(--orange)"></i></div><b id="entry">—</b></div>
-        <div class="level"><span>SL</span><div class="rail"><i style="width:32%;background:var(--red)"></i></div><b id="sl">—</b></div>
+      <section class="panel sec">
+        <div class="title">Entry Zone & Trade Map</div>
+        <div class="entrybox"><div class="k">Smart Entry Zone</div><div class="zonebig" id="zoneRange">—</div><div class="micro" id="zoneStatus">Waiting for Entry + ATR</div></div>
+        <div class="levels">
+          <div class="level"><span>TP3</span><div class="rail"><i style="width:100%;background:var(--green)"></i></div><b id="tp3">—</b></div>
+          <div class="level"><span>TP2</span><div class="rail"><i style="width:82%;background:var(--green)"></i></div><b id="tp2">—</b></div>
+          <div class="level"><span>TP1</span><div class="rail"><i style="width:64%;background:var(--green)"></i></div><b id="tp1">—</b></div>
+          <div class="level"><span>ENTRY</span><div class="rail"><i style="width:49%;background:var(--amber)"></i></div><b id="entry">—</b></div>
+          <div class="level"><span>SL</span><div class="rail"><i style="width:29%;background:var(--red)"></i></div><b id="sl">—</b></div>
+        </div>
+        <div class="twocol"><div class="mini"><span class="k">Risk Distance</span><b id="riskDist">—</b></div><div class="mini"><span class="k">R:R TP1</span><b id="rr1">—</b></div><div class="mini"><span class="k">R:R TP3</span><b id="rr3">—</b></div><div class="mini"><span class="k">ATR</span><b id="atr">—</b></div></div>
       </section>
 
-      <section class="panel section"><div class="title">Multi-Timeframe Sync</div><div class="metrics">
-        <div class="m"><span class="label">MTF 1</span><b id="mtf1">—</b></div><div class="m"><span class="label">MTF 2</span><b id="mtf2">—</b></div>
-        <div class="m"><span class="label">MTF 3</span><b id="mtf3">—</b></div><div class="m"><span class="label">Overall</span><b id="mtfo">—</b></div>
-      </div></section>
+      <section class="panel sec">
+        <div class="title">Multi-Timeframe Sync</div>
+        <div class="mtf"><div class="mt"><span class="k">MTF 1</span><b id="mtf1">—</b></div><div class="mt"><span class="k">MTF 2</span><b id="mtf2">—</b></div><div class="mt"><span class="k">MTF 3</span><b id="mtf3">—</b></div><div class="mt"><span class="k">Overall</span><b id="mtfo">—</b></div></div>
+      </section>
 
-      <section class="panel section"><div class="title">SOP Entry Checklist</div><div id="sop"></div></section>
-      <section class="panel section"><div class="title">AI Coach</div><div class="coach" id="tip">Waiting for Pine data…</div></section>
+      <section class="panel sec">
+        <div class="title">SOP Entry Score <span id="sopScore" style="float:right;color:var(--cyan)">—</span></div>
+        <div id="sop"></div>
+      </section>
+
+      <section class="panel sec"><div class="title">AI Coach / Pro Tip</div><div class="coach" id="tip">Waiting for ZenCore Pine data…</div><div class="disclaimer">Analysis shown here mirrors your Pine calculations and is not a guarantee of execution outcome.</div></section>
     </aside>
-  </div>
+  </main>
 
-  <div class="bottom">
-    <section class="panel section"><div class="title">Core Intelligence</div><table class="tbl">
-      <tr><th>Metric</th><th>Value</th><th>Metric</th><th>Value</th></tr>
-      <tr><td>HEMA</td><td id="hema">—</td><td>Momentum</td><td id="momentum">—</td></tr>
-      <tr><td>Chop</td><td id="chop">—</td><td>RVol</td><td id="rvol">—</td></tr>
-      <tr><td>DXY</td><td id="dxy">—</td><td>S&amp;D</td><td id="sd">—</td></tr>
-      <tr><td>Forecast</td><td id="forecast">—</td><td>Trade Mode</td><td id="mode">—</td></tr>
-    </table></section>
+  <section class="lower">
+    <section class="panel sec"><div class="title">Market Intelligence Matrix</div><div class="matrix">
+      <div class="metric"><span class="k">Market Structure</span><b id="structure">—</b></div>
+      <div class="metric"><span class="k">HEMA Trend</span><b id="hema">—</b></div>
+      <div class="metric"><span class="k">Momentum</span><b id="momentum">—</b></div>
+      <div class="metric"><span class="k">Forecast 3 Bars</span><b id="forecast">—</b></div>
+      <div class="metric"><span class="k">Whale State</span><b id="whales">—</b></div>
+      <div class="metric"><span class="k">Relative Volume</span><b id="rvol">—</b></div>
+      <div class="metric"><span class="k">DXY Filter</span><b id="dxy">—</b></div>
+      <div class="metric"><span class="k">S&D Clearance</span><b id="sd">—</b></div>
+      <div class="metric"><span class="k">Chop Index</span><b id="chop">—</b></div>
+      <div class="metric"><span class="k">Trade Mode</span><b id="mode">—</b></div>
+    </div></section>
 
-    <section class="panel section"><div class="title">Position State</div><table class="tbl">
-      <tr><td>Active</td><td id="active">—</td></tr>
-      <tr><td>TP1 Hit</td><td id="h1">—</td></tr>
-      <tr><td>TP2 Hit</td><td id="h2">—</td></tr>
-      <tr><td>TP3 Hit</td><td id="h3">—</td></tr>
-      <tr><td>SL Hit</td><td id="hsl">—</td></tr>
-    </table></section>
+    <section class="panel sec"><div class="title">Position & Execution State</div>
+      <div class="posrow"><span>Trade Active</span><b id="active">—</b></div>
+      <div class="posrow"><span>Trade Direction</span><b id="direction">—</b></div>
+      <div class="posrow"><span>TP1 Hit</span><b id="h1">—</b></div>
+      <div class="posrow"><span>TP2 Hit</span><b id="h2">—</b></div>
+      <div class="posrow"><span>TP3 Hit</span><b id="h3">—</b></div>
+      <div class="posrow"><span>SL Hit</span><b id="hsl">—</b></div>
+      <div class="posrow"><span>Feed Source</span><b id="source">—</b></div>
+      <div class="posrow"><span>Last Pine Timestamp</span><b id="pineTime">—</b></div>
+    </section>
 
-    <section class="panel section"><div class="title">Raw Pine Webhook</div><div class="raw" id="raw">{}</div></section>
-  </div>
-  <div class="foot">ZenCore Web Control • Values shown here come from the supplied Pine Script webhook payload.</div>
+    <section class="panel sec"><div class="title">Raw Pine Snapshot</div><div class="raw" id="raw">{}</div></section>
+  </section>
+
+  <div class="foot">ZenCore Total Analysis Terminal • live webhook intelligence from your TradingView Pine Script.</div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const hist=[];
-const f=v=>v==null?"—":(typeof v==="number"?v.toLocaleString(undefined,{maximumFractionDigits:5}):v);
-function cls(v){return String(v).includes("Bull")||String(v).includes("LONG")||String(v).includes("BUY")?"good":String(v).includes("Bear")||String(v).includes("SHORT")||String(v).includes("SELL")?"bad":""}
-function bool(v){return v?'<span class="good">✅</span>':'<span class="bad">❌</span>'}
-function plot(){
-  const svg=$("chart"); svg.innerHTML=""; if(hist.length<2)return;
-  const vals=hist.map(x=>+x.close).filter(Number.isFinite); if(vals.length<2)return;
-  const min=Math.min(...vals),max=Math.max(...vals),range=(max-min)||1;
-  const pts=vals.map((v,i)=>`${20+i/(vals.length-1)*960},${30+(max-v)/range*420}`).join(" ");
-  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="#4ea6ff" stroke-width="3"/><line x1="20" y1="450" x2="980" y2="450" stroke="#263247"/>`;
+let hist=[];
+let last=null;
+let lastKey="";
+const fmt=(v,d=3)=>v==null||v===""||!Number.isFinite(+v)?"—":Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+const text=v=>v==null||v===""?"—":String(v);
+const posClass=v=>/bull|buy|long|up|strong|accum|demand/i.test(String(v))?"good":/bear|sell|short|down|weak|distrib|supply/i.test(String(v))?"badc":"";
+const yes=v=>v?'<span class="good">YES ✓</span>':'<span class="badc">NO ✕</span>';
+function grade(p,stars){p=+p||0;stars=+stars||0;const s=p+stars*4;return s>=96?"A+":s>=88?"A":s>=78?"B+":s>=68?"B":s>=56?"C":"D"}
+function rr(entry,sl,tp){const r=Math.abs((+entry)-(+sl)),rw=Math.abs((+tp)-(+entry));return r>0&&Number.isFinite(rw)?rw/r:null}
+function zone(d){const e=+d.entry,a=+d.atr;if(!Number.isFinite(e)||!Number.isFinite(a)||a<=0)return null;const half=a*.18;return {lo:e-half,hi:e+half,half}}
+function session(){const h=new Date().getUTCHours(),s=[];if(h>=0&&h<9)s.push("ASIA");if(h>=7&&h<16)s.push("LONDON");if(h>=12&&h<21)s.push("NEW YORK");return s.length?s.join(" + "):"OFF HOURS"}
+function tfExpected(tf){const n=+tf;if(Number.isFinite(n)&&n>0)return n*60000;if(tf==="D")return 86400000;if(tf==="W")return 604800000;return 60000}
+function freshness(){if(!last||!last.receivedAt)return;const age=Date.now()-last.receivedAt;const sec=Math.max(0,Math.floor(age/1000));const stale=age>Math.max(120000,tfExpected(last.timeframe)*2.5);$("fresh").textContent=`Last update ${sec}s ago`;$("feed").textContent=stale?"PINE FEED STALE":"PINE FEED LIVE";$("dot").className="dot"+(stale?" bad":"");$("feedType").textContent=last.feedType==="TEST"?"TEST FEED":"LIVE PINE";$("feedType").className="pill "+(last.feedType==="TEST"?"warn":"good")}
+function draw(){const svg=$("chart");svg.innerHTML="";const rows=hist.filter(x=>Number.isFinite(+x.close)).slice(-120);if(!rows.length)return;const d=last||rows[rows.length-1],z=zone(d);let vals=rows.map(x=>+x.close);[d.entry,d.sl,d.tp1,d.tp2,d.tp3,z?.lo,z?.hi].forEach(v=>{if(Number.isFinite(+v))vals.push(+v)});let mn=Math.min(...vals),mx=Math.max(...vals);let pad=(mx-mn)*.12||1;mn-=pad;mx+=pad;const W=1100,H=520,L=20,R=85,T=30,B=28;const y=v=>T+(mx-v)/(mx-mn)*(H-T-B);const x=i=>L+(rows.length===1?.5:i/(rows.length-1))*(W-L-R);
+  for(let i=0;i<6;i++){const yy=T+i*(H-T-B)/5;svg.insertAdjacentHTML("beforeend",`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#ffffff0b"/><text x="${W-R+8}" y="${yy+3}" fill="#64758d" font-size="10">${fmt(mx-i*(mx-mn)/5,2)}</text>`)}
+  if(z){const y1=y(z.hi),y2=y(z.lo);svg.insertAdjacentHTML("beforeend",`<rect x="${L}" y="${Math.min(y1,y2)}" width="${W-L-R}" height="${Math.abs(y2-y1)}" fill="#ffb84a18" stroke="#ffb84a77" stroke-dasharray="5 5"/><text x="${L+8}" y="${Math.min(y1,y2)+14}" fill="#ffb84a" font-size="10">ENTRY ZONE ${fmt(z.lo)} - ${fmt(z.hi)}</text>`)}
+  const levels=[['SL',d.sl,'#ff6172'],['ENTRY',d.entry,'#ffb84a'],['TP1',d.tp1,'#32e38d'],['TP2',d.tp2,'#32e38d'],['TP3',d.tp3,'#32e38d']];for(const [n,v,c] of levels){if(!Number.isFinite(+v))continue;const yy=y(+v);svg.insertAdjacentHTML("beforeend",`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="${c}" stroke-width="1.1" stroke-dasharray="7 6" opacity=".72"/><text x="${W-R-54}" y="${yy-4}" fill="${c}" font-size="9">${n}</text>`)}
+  if(rows.length>1){const pts=rows.map((r,i)=>`${x(i)},${y(+r.close)}`).join(" ");svg.insertAdjacentHTML("beforeend",`<polyline points="${pts}" fill="none" stroke="#55aaff" stroke-width="2.4" vector-effect="non-scaling-stroke"/>`)}
+  const lv=+rows[rows.length-1].close,xx=x(rows.length-1),yy=y(lv);svg.insertAdjacentHTML("beforeend",`<circle cx="${xx}" cy="${yy}" r="4.5" fill="#55aaff"/><text x="${Math.min(xx+8,W-R-60)}" y="${yy-8}" fill="#b9d9ff" font-size="10">${fmt(lv,2)}</text>`)
 }
-function render(d){
-  if(!d||!Object.keys(d).length)return;
-  $("feed").textContent="PINE FEED LIVE";
-  $("symbol").textContent=d.symbol||"—"; $("tf").textContent=d.timeframe||"—"; $("price").textContent=f(d.close);
-  $("action").textContent=d.action||"—"; $("action").className="big "+cls(d.action);
-  $("prob").textContent=d.setupProbability!=null?d.setupProbability+"%":"—";
-  $("structure").textContent=d.marketStructure||"—"; $("risk").textContent=d.riskState||"—"; $("whales").textContent=d.whaleState||"—"; $("power").textContent=d.powerText||"—";
-  ["entry","sl","tp1","tp2","tp3"].forEach(k=>$(k).textContent=f(d[k]));
-  ["mtf1","mtf2","mtf3"].forEach(k=>$(k).innerHTML=(d[k]>0?'<span class="good">UP 🟢</span>':'<span class="bad">DOWN 🔴</span>')); $("mtfo").textContent=d.mtfOverall||"—";
-  $("sop").innerHTML=[1,2,3,4,5].map(n=>`<div class="sop"><span>${n}. SOP Confirmation</span><b>${bool(d["sop"+n])}</b></div>`).join("");
-  $("tip").textContent=d.proTip||"—";
-  $("hema").textContent=d.hemaTrend||"—"; $("momentum").textContent=d.momentum||"—"; $("chop").textContent=d.chopIndex!=null?d.chopIndex+"%":"—"; $("rvol").textContent=d.relativeVolume!=null?d.relativeVolume+"x":"—";
-  $("dxy").textContent=d.dxyStatus||"—"; $("sd").textContent=d.sdClearance||"—"; $("forecast").textContent=d.forecast3Bars||"—"; $("mode").textContent=d.tradeMode||"—";
-  $("active").innerHTML=bool(d.tradeActive); $("h1").innerHTML=bool(d.tp1Hit); $("h2").innerHTML=bool(d.tp2Hit); $("h3").innerHTML=bool(d.tp3Hit); $("hsl").innerHTML=bool(d.slHit);
-  $("raw").textContent=JSON.stringify(d,null,2);
-  hist.push(d); if(hist.length>80)hist.shift(); plot();
+function render(d,add=true){if(!d||!Object.keys(d).length)return;last=d;const key=String(d.receivedAt||d.time||"")+"|"+String(d.close);if(add&&key!==lastKey){hist.push(d);if(hist.length>300)hist.shift();lastKey=key}
+  const g=grade(d.setupProbability,d.confluenceStars),r1=rr(d.entry,d.sl,d.tp1),r3=rr(d.entry,d.sl,d.tp3),z=zone(d),c=+d.close;let zstat="—";if(z&&Number.isFinite(c)){zstat=c>=z.lo&&c<=z.hi?"IN ENTRY ZONE":c<z.lo?`BELOW ZONE ${fmt(z.lo-c,2)}`:`ABOVE ZONE ${fmt(c-z.hi,2)}`}
+  $("symbol").textContent=text(d.symbol);$("tf").textContent=text(d.timeframe);$("price").textContent=fmt(d.close,5);$("chartMeta").textContent=`${text(d.tradeMode)} • ${hist.length} snapshots • ${text(d.barStatus)}`;
+  $("sumSymbol").textContent=`${text(d.symbol)} / ${text(d.timeframe)}`;$("sumAction").textContent=text(d.action);$("sumAction").className="v "+posClass(d.action);$("sumProb").textContent=d.setupProbability!=null?`${d.setupProbability}%`:"—";$("sumGrade").textContent=g;$("sumRR").textContent=r3?`1:${r3.toFixed(2)}`:"—";$("sumZone").textContent=zstat;$("sumZone").className="v "+(zstat==="IN ENTRY ZONE"?"warn":"blue");
+  $("action").textContent=text(d.action);$("action").className="action "+posClass(d.action);$("grade").textContent=g;$("prob").textContent=d.setupProbability!=null?`${d.setupProbability}%`:"—";$("stars").textContent=d.confluenceStars!=null?`${d.confluenceStars} / 5 ★`:"—";$("power").textContent=d.powerText||((d.marketPower!=null)?`${d.marketPower}%`:"—");$("risk").textContent=text(d.riskState);$("probBar").style.width=`${Math.max(0,Math.min(100,+d.setupProbability||0))}%`;
+  $("zoneRange").textContent=z?`${fmt(z.lo)}  →  ${fmt(z.hi)}`:"—";$("zoneStatus").textContent=zstat;["entry","sl","tp1","tp2","tp3"].forEach(k=>$(k).textContent=fmt(d[k]));const riskD=Number.isFinite(+d.entry)&&Number.isFinite(+d.sl)?Math.abs(+d.entry-(+d.sl)):null;$("riskDist").textContent=riskD!=null?fmt(riskD):"—";$("rr1").textContent=r1?`1:${r1.toFixed(2)}`:"—";$("rr3").textContent=r3?`1:${r3.toFixed(2)}`:"—";$("atr").textContent=fmt(d.atr);
+  [1,2,3].forEach(n=>{const v=d[`mtf${n}`],el=$(`mtf${n}`);el.innerHTML=v>0?'<span class="good">UP ●</span>':v<0?'<span class="badc">DOWN ●</span>':'<span>FLAT</span>'});$("mtfo").textContent=text(d.mtfOverall);$("mtfo").className=posClass(d.mtfOverall);
+  let passed=0;$("sop").innerHTML=[1,2,3,4,5].map(n=>{const ok=!!d[`sop${n}`];if(ok)passed++;return `<div class="soprow"><span>${n}. SOP Confirmation</span><b>${ok?'<span class="good">PASS ✓</span>':'<span class="badc">FAIL ✕</span>'}</b></div>`}).join("");$("sopScore").textContent=`${passed}/5`;
+  $("tip").textContent=text(d.proTip);const fields={structure:d.marketStructure,hema:d.hemaTrend,momentum:d.momentum,forecast:d.forecast3Bars,whales:d.whaleState,rvol:d.relativeVolume!=null?`${d.relativeVolume}x`:null,dxy:d.dxyStatus,sd:d.sdClearance,chop:d.chopIndex!=null?`${d.chopIndex}%`:null,mode:d.tradeMode};for(const [id,v] of Object.entries(fields)){$(id).textContent=text(v);$(id).className=posClass(v)}
+  $("active").innerHTML=yes(d.tradeActive);$("direction").textContent=d.tradeActive?(d.tradeIsBuy?"BUY / LONG":"SELL / SHORT"):"NO ACTIVE TRADE";$("direction").className=d.tradeActive?(d.tradeIsBuy?"good":"badc"):"";$("h1").innerHTML=yes(d.tp1Hit);$("h2").innerHTML=yes(d.tp2Hit);$("h3").innerHTML=yes(d.tp3Hit);$("hsl").innerHTML=yes(d.slHit);$("source").textContent=d.feedType==="TEST"?"SERVER TEST":"TRADINGVIEW PINE";$("pineTime").textContent=d.time?new Date(+d.time).toLocaleString():"—";$("raw").textContent=JSON.stringify(d,null,2);$("session").textContent=`Session ${session()}`;freshness();draw()
 }
-async function poll(){try{const r=await fetch("/api/latest",{cache:"no-store"});const d=await r.json();render(d)}catch(e){$("feed").textContent="SERVER OFFLINE"}}
-setInterval(poll,1000);poll();
+async function load(){try{const r=await fetch('/api/history',{cache:'no-store'}),a=await r.json();hist=(Array.isArray(a)?a:[]).slice().reverse();if(hist.length){lastKey="";render(hist[hist.length-1],false)}else{const q=await fetch('/api/latest',{cache:'no-store'}),d=await q.json();render(d)}}catch(e){$("feed").textContent="SERVER OFFLINE";$("dot").className="dot bad"}}
+function connect(){try{const es=new EventSource('/events');es.onopen=()=>{$("feed").textContent="PINE FEED LIVE"};es.onmessage=e=>{try{render(JSON.parse(e.data),true)}catch(_){}};es.onerror=()=>{$("feed").textContent="RECONNECTING…";$("dot").className="dot bad"}}catch(_){}}
+setInterval(freshness,1000);setInterval(()=>{$("session").textContent=`Session ${session()}`},60000);load().then(connect);
 </script>
-</body></html>
+</body>
+</html>
