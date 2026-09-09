@@ -4,6 +4,7 @@ const path = require("path");
 
 const PORT = process.env.PORT || 8080;
 const WEBHOOK_SECRET = process.env.ZENCORE_SECRET || "CHANGE_ME";
+const WEBHOOK_TOKEN = process.env.ZENCORE_WEBHOOK_TOKEN || "";
 let latest = null;
 let history = [];
 
@@ -29,9 +30,14 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       try {
         const data = JSON.parse(body);
-        if (WEBHOOK_SECRET !== "CHANGE_ME" && data.secret !== WEBHOOK_SECRET) {
-          return send(res, 401, JSON.stringify({ok:false, error:"Invalid secret"}));
+        const tokenFromUrl = url.searchParams.get("token") || "";
+        const tokenOk = WEBHOOK_TOKEN && tokenFromUrl === WEBHOOK_TOKEN;
+        const legacySecretOk = WEBHOOK_SECRET !== "CHANGE_ME" && data.secret === WEBHOOK_SECRET;
+
+        if (!tokenOk && !legacySecretOk) {
+          return send(res, 401, JSON.stringify({ok:false, error:"Unauthorized webhook"}));
         }
+
         latest = {...data, receivedAt: Date.now()};
         history.unshift(latest);
         history = history.slice(0, 100);
