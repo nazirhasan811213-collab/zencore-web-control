@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZenCore Real Trading Terminal V4</title>
-<link rel="stylesheet" href="/style-v3.css">
+<title>ZenCore Real Trading Terminal V5</title>
+<link rel="stylesheet" href="/style-v5.css">
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE REAL TRADING TERMINAL V4</h1><div class="sub">Real-time market chart • Pine intelligence • entry zone • risk • journal</div></div></div>
+    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE REAL TRADING TERMINAL V5</h1><div class="sub">ZenCore overlay • live market • entry/SL/TP zones • MT5 bridge • risk • journal</div></div></div>
     <div class="statuses">
       <span class="pill"><span class="dot off" id="dot"></span><span id="feed">WAITING FOR PINE</span></span>
       <span class="pill" id="feedType">NO DATA</span>
       <span class="pill" id="fresh">Last —</span>
       <span class="pill" id="session">Session —</span>
+      <span class="pill"><span class="dot off" id="mt5Dot"></span><span id="mt5Conn">MT5 NOT CONNECTED</span></span>
     </div>
   </header>
 
@@ -26,21 +27,48 @@
     <div class="card"><div class="k">R:R to TP3</div><div class="v" id="sumRR">—</div></div>
     <div class="card"><div class="k">Entry Zone Status</div><div class="v" id="sumZone">—</div></div>
     <div class="card"><div class="k">Position</div><div class="v" id="position">—</div></div>
+    <div class="card"><div class="k">MT5 Bridge</div><div class="v" id="sumMt5">OFFLINE</div></div>
   </section>
 
   <main class="main">
     <section class="panel chartpanel">
       <div class="charthead">
-        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">Live market + ZenCore execution map</div></div>
-        <div class="chips"><span class="chip">REAL-TIME MARKET</span><span class="chip">OHLC</span><span class="chip">ENTRY ZONE</span><span class="chip">SL/TP</span><span class="chip">S/R</span><span class="chip">ORDER BLOCK</span><span class="chip">SSE LIVE</span></div>
+        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">ZenCore interactive execution overlay</div></div>
+        <div class="chips"><span class="chip">ZENCORE OVERLAY</span><span class="chip">BUY/SELL MARKERS</span><span class="chip">ENTRY ZONE</span><span class="chip">RISK/PROFIT ZONE</span><span class="chip">SL/TP</span><span class="chip">EMA/HEMA</span><span class="chip">ORDER BLOCK</span></div>
       </div>
 
       <div class="charttabs">
-        <button class="charttab active" data-target="liveMarketPane">LIVE MARKET</button>
-        <button class="charttab" data-target="zenMapPane">ZENCORE MAP</button>
+        <button class="charttab active" data-target="zenMapPane">ZENCORE OVERLAY</button>
+        <button class="charttab" data-target="liveMarketPane">LIVE MARKET</button>
       </div>
 
-      <div id="liveMarketPane" class="chartpane active">
+      <div id="zenMapPane" class="chartpane active">
+        <div class="charttoolbar">
+          <label class="toggle"><input id="showTradeZones" type="checkbox" checked> Entry / Risk / Profit zones</label>
+          <label class="toggle"><input id="showSignals" type="checkbox" checked> BUY / SELL markers</label>
+          <label class="toggle"><input id="showTrendLines" type="checkbox" checked> EMA / HEMA</label>
+          <label class="toggle"><input id="showOrderBlocks" type="checkbox" checked> Order blocks</label>
+          <label class="toggle"><input id="showSR" type="checkbox" checked> Support / resistance</label>
+          <span class="muted">Move pointer for OHLC • click chart to lock tooltip</span>
+        </div>
+        <div class="chartwrap">
+          <div class="chartlegend"><span class="lg good">Bull candle</span><span class="lg bad">Bear candle</span><span class="lg warn">Entry zone</span><span class="lg bad">Risk zone</span><span class="lg good">Profit zone</span><span class="lg cyan">Support</span><span class="lg blue">Resistance</span></div>
+          <svg id="chart" viewBox="0 0 1200 560" preserveAspectRatio="none"></svg>
+          <div id="chartTooltip" class="tooltip"></div>
+        </div>
+        <div class="executionstrip">
+          <div class="execbox"><span class="k">Live Price</span><b id="execPrice">—</b></div>
+          <div class="execbox"><span class="k">Entry</span><b class="warn" id="execEntry">—</b></div>
+          <div class="execbox"><span class="k">SL</span><b class="bad" id="execSl">—</b></div>
+          <div class="execbox"><span class="k">TP1</span><b class="good" id="execTp1">—</b></div>
+          <div class="execbox"><span class="k">TP2</span><b class="good" id="execTp2">—</b></div>
+          <div class="execbox"><span class="k">TP3</span><b class="good" id="execTp3">—</b></div>
+          <div class="execbox"><span class="k">Distance to Entry</span><b id="execDistance">—</b></div>
+          <div class="execbox"><span class="k">R:R TP3</span><b id="execRR">—</b></div>
+        </div>
+      </div>
+
+      <div id="liveMarketPane" class="chartpane">
         <div class="tvchartwrap">
           <div class="tradingview-widget-container" style="height:100%;width:100%">
             <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
@@ -67,14 +95,7 @@
             </script>
           </div>
         </div>
-        <div class="notice" style="margin-top:8px">LIVE MARKET uses TradingView's embedded market chart. ZenCore signals, entry, SL and TP continue to come from your Pine webhook.</div>
-      </div>
-
-      <div id="zenMapPane" class="chartpane">
-        <div class="chartwrap">
-          <div class="chartlegend"><span class="lg good">Bull candle</span><span class="lg bad">Bear candle</span><span class="lg warn">Entry zone</span><span class="lg cyan">Support</span><span class="lg blue">Resistance</span></div>
-          <svg id="chart" viewBox="0 0 1200 560" preserveAspectRatio="none"></svg>
-        </div>
+        <div class="notice" style="margin-top:8px">TradingView's public embedded chart cannot load your private/custom Pine script inside the iframe. Use <b>ZENCORE OVERLAY</b> for the combined ZenCore indicator, signals and execution zones; use LIVE MARKET for independent real-time market viewing.</div>
       </div>
     </section>
 
@@ -102,74 +123,56 @@
       </section>
 
       <section class="panel sec">
-        <div class="title">Multi-Timeframe Sync</div>
-        <div class="grid2"><div class="mini"><span class="k">MTF 1</span><b id="mtf1">—</b></div><div class="mini"><span class="k">MTF 2</span><b id="mtf2">—</b></div><div class="mini"><span class="k">MTF 3</span><b id="mtf3">—</b></div><div class="mini"><span class="k">Overall</span><b id="mtfo">—</b></div></div>
+        <div class="title">MT5 Live Execution</div>
+        <div class="mt5box">
+          <div class="mt5head"><div><span class="dot off" id="mt5Dot2"></span><b id="mt5Conn2">Bridge status follows header</b></div><span class="pill">MANUAL CONFIRM</span></div>
+          <div class="mt5grid">
+            <div class="mini"><span class="k">Broker / Server</span><b id="mt5Broker">—</b></div>
+            <div class="mini"><span class="k">Account</span><b id="mt5Login">—</b></div>
+            <div class="mini"><span class="k">Balance</span><b id="mt5Balance">—</b></div>
+            <div class="mini"><span class="k">Equity</span><b id="mt5Equity">—</b></div>
+            <div class="mini"><span class="k">Open Positions</span><b id="mt5Positions">—</b></div>
+            <div class="mini"><span class="k">Last Result</span><b id="mt5Last">—</b></div>
+          </div>
+          <div class="notice" style="margin-top:8px"><b>Eligible ZenCore entry:</b> <span id="mt5Signal">No recent exact entry</span></div>
+          <div class="grid2">
+            <div class="field"><label>Volume / Lot</label><input id="mt5Lot" type="number" min="0.01" max="1" step="0.01" value="0.01"></div>
+            <div class="field"><label>Take Profit target</label><select id="mt5TpTarget"><option value="tp1">TP1</option><option value="tp2">TP2</option><option value="tp3">TP3</option></select></div>
+          </div>
+          <div class="field tradepin"><label>Trade PIN</label><input id="tradePin" type="password" autocomplete="off" placeholder="Enter PIN only when placing order"></div>
+          <div class="tradeactions"><button id="mt5Buy" class="tradebtn buy" disabled>BUY — WAIT ZENCORE</button><button id="mt5Sell" class="tradebtn sell" disabled>SELL — WAIT ZENCORE</button></div>
+          <div id="mt5Message" class="mt5message muted">MT5 order buttons activate only for a recent exact ZenCore BUY or SELL signal.</div>
+        </div>
       </section>
 
+      <section class="panel sec"><div class="title">Multi-Timeframe Sync</div><div class="grid2"><div class="mini"><span class="k">MTF 1</span><b id="mtf1">—</b></div><div class="mini"><span class="k">MTF 2</span><b id="mtf2">—</b></div><div class="mini"><span class="k">MTF 3</span><b id="mtf3">—</b></div><div class="mini"><span class="k">Overall</span><b id="mtfo">—</b></div></div></section>
       <section class="panel sec"><div class="title">SOP Entry Score <span class="cyan" id="sopScore" style="float:right">—</span></div><div id="sop"></div></section>
       <section class="panel sec"><div class="title">AI Coach</div><div class="coach" id="tip">Waiting for ZenCore data…</div></section>
     </aside>
   </main>
 
   <section class="lower">
-    <section class="panel sec">
-      <div class="title">Market Intelligence Matrix</div>
-      <div class="matrix">
-        <div class="metric"><span class="k">Structure</span><b id="structure">—</b></div>
-        <div class="metric"><span class="k">HEMA</span><b id="hema">—</b></div>
-        <div class="metric"><span class="k">Momentum</span><b id="momentum">—</b></div>
-        <div class="metric"><span class="k">Forecast</span><b id="forecast">—</b></div>
-        <div class="metric"><span class="k">Whales</span><b id="whales">—</b></div>
-        <div class="metric"><span class="k">RVol</span><b id="rvol">—</b></div>
-        <div class="metric"><span class="k">DXY</span><b id="dxy">—</b></div>
-        <div class="metric"><span class="k">S&D Clearance</span><b id="sd">—</b></div>
-        <div class="metric"><span class="k">Chop</span><b id="chop">—</b></div>
-        <div class="metric"><span class="k">RSI</span><b id="rsi">—</b></div>
-        <div class="metric"><span class="k">WaveTrend</span><b id="wt">—</b></div>
-        <div class="metric"><span class="k">EMA 9/20/50</span><b id="ema">—</b></div>
-        <div class="metric"><span class="k">Support 20 bars</span><b id="support">—</b></div>
-        <div class="metric"><span class="k">Resistance 20 bars</span><b id="resistance">—</b></div>
-        <div class="metric"><span class="k">Order Blocks</span><b id="ob">—</b></div>
-        <div class="metric"><span class="k">TP/SL Hits</span><b id="hits">—</b></div>
-      </div>
-    </section>
+    <section class="panel sec"><div class="title">Market Intelligence Matrix</div><div class="matrix">
+      <div class="metric"><span class="k">Structure</span><b id="structure">—</b></div><div class="metric"><span class="k">HEMA</span><b id="hema">—</b></div><div class="metric"><span class="k">Momentum</span><b id="momentum">—</b></div><div class="metric"><span class="k">Forecast</span><b id="forecast">—</b></div><div class="metric"><span class="k">Whales</span><b id="whales">—</b></div><div class="metric"><span class="k">RVol</span><b id="rvol">—</b></div><div class="metric"><span class="k">DXY</span><b id="dxy">—</b></div><div class="metric"><span class="k">S&D Clearance</span><b id="sd">—</b></div><div class="metric"><span class="k">Chop</span><b id="chop">—</b></div><div class="metric"><span class="k">RSI</span><b id="rsi">—</b></div><div class="metric"><span class="k">WaveTrend</span><b id="wt">—</b></div><div class="metric"><span class="k">EMA 9/20/50</span><b id="ema">—</b></div><div class="metric"><span class="k">Support 20 bars</span><b id="support">—</b></div><div class="metric"><span class="k">Resistance 20 bars</span><b id="resistance">—</b></div><div class="metric"><span class="k">Order Blocks</span><b id="ob">—</b></div><div class="metric"><span class="k">TP/SL Hits</span><b id="hits">—</b></div>
+    </div></section>
 
-    <section class="panel sec">
-      <div class="title">Position Size / Risk Calculator</div>
-      <div class="riskgrid">
-        <div class="field"><label>Account balance (USD)</label><input id="balance" type="number" value="10000" step="100"></div>
-        <div class="field"><label>Risk per trade (%)</label><input id="riskPct" type="number" value="1" min="0.1" step="0.1"></div>
-        <div class="field" style="grid-column:1/-1"><label>USD value for 1.00 price move per 1 lot</label><input id="valuePerMove" type="number" value="100" min="0.01" step="1"></div>
-      </div>
-      <div class="calc"><div class="calcrow"><span>Risk amount</span><b id="riskAmount">—</b></div><div class="calcrow"><span>Stop distance</span><b id="stopDistance">—</b></div><div class="calcrow"><span>Estimated lot size</span><b id="lotSize">—</b></div><div class="calcrow"><span>R:R to TP3</span><b id="calcRR">—</b></div></div>
-      <div class="notice" style="margin-top:9px">Check your broker contract specification before using lot-size output. XAUUSD contract values differ by broker.</div>
-      <div class="title" style="margin-top:14px">High-Impact News Guard</div>
-      <div class="notice"><b class="warn">CALENDAR FEED NOT CONNECTED</b><br>Module slot is ready for a verified economic-calendar feed.</div>
-    </section>
+    <section class="panel sec"><div class="title">Position Size / Risk Calculator</div><div class="riskgrid"><div class="field"><label>Account balance (USD)</label><input id="balance" type="number" value="10000" step="100"></div><div class="field"><label>Risk per trade (%)</label><input id="riskPct" type="number" value="1" min="0.1" step="0.1"></div><div class="field" style="grid-column:1/-1"><label>USD value for 1.00 price move per 1 lot</label><input id="valuePerMove" type="number" value="100" min="0.01" step="1"></div></div><div class="calc"><div class="calcrow"><span>Risk amount</span><b id="riskAmount">—</b></div><div class="calcrow"><span>Stop distance</span><b id="stopDistance">—</b></div><div class="calcrow"><span>Estimated lot size</span><b id="lotSize">—</b></div><div class="calcrow"><span>R:R to TP3</span><b id="calcRR">—</b></div></div><div class="notice" style="margin-top:9px">Check your broker contract specification before using lot-size output. XAUUSD contract values differ by broker.</div></section>
 
-    <section class="panel sec">
-      <div class="title">Trade Journal / Signal History</div>
-      <div class="scroll"><table class="journal"><thead><tr><th>Time</th><th>Symbol</th><th>Action</th><th>Entry</th><th>SL</th><th>TP1</th><th>Prob.</th><th>Grade</th></tr></thead><tbody id="journalBody"><tr><td colspan="8" class="muted">Waiting for signals…</td></tr></tbody></table></div>
-      <div class="notice" style="margin-top:9px">Journal currently stores BUY/SELL webhook signals in server memory.</div>
-    </section>
+    <section class="panel sec"><div class="title">Trade Journal / Signal History</div><div class="scroll"><table class="journal"><thead><tr><th>Time</th><th>Symbol</th><th>Action</th><th>Entry</th><th>SL</th><th>TP1</th><th>Prob.</th><th>Grade</th></tr></thead><tbody id="journalBody"><tr><td colspan="8" class="muted">Waiting for signals…</td></tr></tbody></table></div><div class="notice" style="margin-top:9px">Journal stores ZenCore BUY/SELL webhook signals in server memory.</div></section>
 
-    <section class="panel sec">
-      <div class="title">Live Pine Alert Tape</div>
-      <div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Waiting for runner/trailing alerts…</div></div>
-      <div class="notice" style="margin-top:9px">Trailing, runner management, partial-close, TP and SL alerts appear here.</div>
-    </section>
+    <section class="panel sec"><div class="title">Live Pine Alert Tape</div><div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Waiting for runner/trailing alerts…</div></div><div class="notice" style="margin-top:9px">Trailing, runner management, partial-close, TP, SL and MT5 execution results appear here.</div></section>
   </section>
 
-  <div class="foot">ZenCore V4 • Real-time market view + Pine decision engine • analysis terminal</div>
+  <div class="foot">ZenCore V5 • Pine decision engine + interactive execution overlay + optional MT5 bridge. Live trading requires MT5 terminal/EA and explicit order confirmation.</div>
 </div>
-<script src="/app-v3.js"></script>
+<script src="/app-v5.js"></script>
 <script src="/alerts-v3.js"></script>
 <script>
   document.querySelectorAll('.charttab').forEach(btn=>btn.addEventListener('click',()=>{
     document.querySelectorAll('.charttab').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.chartpane').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(btn.dataset.target).classList.add('active');
+    btn.classList.add('active'); document.getElementById(btn.dataset.target).classList.add('active');
+    if(btn.dataset.target==='zenMapPane' && window.zcChartState) setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
   }));
 </script>
 </body>
