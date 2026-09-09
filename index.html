@@ -1,69 +1,91 @@
 <!doctype html>
-<html lang="en">
+<html lang="ms">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZenCore Real Trading Terminal V5</title>
+<title>ZenCore V6 — Decision & AI Coach Terminal</title>
 <link rel="stylesheet" href="/style-v5.css">
+<style>
+.v6-head{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:10px;margin-top:10px}.v6-decision{padding:16px;border:1px solid #27394f;background:linear-gradient(135deg,#0c1724,#081019);border-radius:16px;position:relative;overflow:hidden}.v6-decision:before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:#7c8ea7}.v6-decision.ready:before{background:var(--green)}.v6-decision.sell:before,.v6-decision.stop:before{background:var(--red)}.v6-decision.wait:before{background:var(--amber)}.v6-decision.manage:before{background:var(--blue)}.v6-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}.v6-main-decision{font-size:34px;font-weight:950;letter-spacing:.3px;margin-top:5px}.v6-sub{margin-top:5px;color:#b7c6da;font-size:12px;line-height:1.5}.v6-scorebox{padding:16px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#0f1722,#080d14);display:grid;grid-template-columns:1fr 1fr;gap:10px}.v6-big{font-size:32px;font-weight:950;margin-top:3px}.v6-scorebar{grid-column:1/-1;height:9px;background:#152132;border-radius:99px;overflow:hidden}.v6-scorebar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--amber),var(--green));transition:width .35s ease}.v6-note{grid-column:1/-1;font-size:9px;color:var(--muted);line-height:1.45}.v6-grid{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(360px,.82fr);gap:10px;margin-top:10px}.v6-side{display:flex;flex-direction:column;gap:10px}.gate-list{display:flex;flex-direction:column;gap:7px}.gate{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:9px;border:1px solid var(--line);border-radius:10px;background:#080d14}.gate-num{width:29px;height:29px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:900;background:#111c2a;color:#98aac1}.gate-name{font-size:11px;font-weight:800}.gate-desc{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.35}.gate-status{font-size:9px;font-weight:900;padding:5px 7px;border-radius:999px;border:1px solid var(--line)}.gate.pass .gate-status{color:var(--green);border-color:#32e38d55;background:#32e38d0b}.gate.warn .gate-status{color:var(--amber);border-color:#ffb74b55;background:#ffb74b0b}.gate.fail .gate-status{color:var(--red);border-color:#ff607055;background:#ff60700b}.coach-v6{padding:14px;border:1px solid #51a8ff36;background:linear-gradient(135deg,#0b1724,#08101a);border-radius:13px}.coach-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.coach-title{font-size:16px;font-weight:900}.coach-status{font-size:9px;padding:5px 7px;border-radius:999px;border:1px solid #51a8ff55;color:#8ec8ff}.coach-summary{font-size:13px;line-height:1.55;margin-top:10px;font-weight:700}.coach-section{margin-top:12px;padding-top:10px;border-top:1px solid #ffffff0d}.coach-section h4{font-size:10px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.7px;color:#8fa3bd}.coach-section ul{margin:0;padding-left:17px;color:#c4d1e2;font-size:10px;line-height:1.6}.coach-action{padding:10px;border-radius:10px;background:#51a8ff0b;border:1px solid #51a8ff2c;font-size:11px;line-height:1.55}.coach-avoid{padding:10px;border-radius:10px;background:#ffb74b08;border:1px solid #ffb74b28;font-size:10px;line-height:1.55;color:#d8c39f}.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.plan-item{padding:9px;border:1px solid var(--line);border-radius:9px;background:#070d14}.plan-item b{display:block;font-size:12px;margin-top:3px}.signal-banner{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:8px}.signal-chip{padding:9px;border:1px solid var(--line);border-radius:10px;background:#080d14}.signal-chip b{display:block;margin-top:3px;font-size:12px}.focus-note{padding:10px;border:1px solid #32e38d2d;background:#32e38d08;border-radius:10px;font-size:10px;line-height:1.5}.phase-pill{font-size:9px;border:1px solid #ffffff18;border-radius:999px;padding:5px 8px;color:#899bb2}.performance-later{opacity:.72}.summary{grid-template-columns:repeat(7,1fr)}.summary .card:nth-child(8){display:none}.side .mt5box{display:none}.auto-later{padding:10px;border:1px dashed #ffffff22;border-radius:10px;color:var(--muted);font-size:10px;line-height:1.45}.charttoolbar{gap:8px}.charttoolbar .muted{margin-left:auto}.coach-old{font-size:10px;line-height:1.55;color:#a9bad0}.v6-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.market-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:8px}.market-strip .mini{min-width:0}.market-strip b{white-space:normal}.decision-explain{font-size:10px;color:#9fb0c5;line-height:1.45;margin-top:8px}@media(max-width:1250px){.v6-head,.v6-grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(4,1fr)}}@media(max-width:760px){.v6-main-decision{font-size:27px}.v6-scorebox{grid-template-columns:1fr 1fr}.summary{grid-template-columns:repeat(2,1fr)}.market-strip{grid-template-columns:1fr 1fr}.gate{grid-template-columns:32px 1fr}.gate-status{grid-column:2}.plan-grid{grid-template-columns:1fr}.signal-banner{grid-template-columns:1fr}.charttoolbar .muted{margin-left:0}}
+</style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE REAL TRADING TERMINAL V5</h1><div class="sub">ZenCore overlay • live market • entry/SL/TP zones • MT5 bridge • risk • journal</div></div></div>
+    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE V6 — DECISION & AI COACH TERMINAL</h1><div class="sub">Analisis jelas • saringan setup • zon entry • AI Coach Bahasa Malaysia • auto trade belum diaktifkan</div></div></div>
     <div class="statuses">
-      <span class="pill"><span class="dot off" id="dot"></span><span id="feed">WAITING FOR PINE</span></span>
-      <span class="pill" id="feedType">NO DATA</span>
-      <span class="pill" id="fresh">Last —</span>
-      <span class="pill" id="session">Session —</span>
-      <span class="pill"><span class="dot off" id="mt5Dot"></span><span id="mt5Conn">MT5 NOT CONNECTED</span></span>
+      <span class="pill"><span class="dot off" id="dot"></span><span id="feed">MENUNGGU DATA PINE</span></span>
+      <span class="pill" id="feedType">TIADA DATA</span>
+      <span class="pill" id="fresh">Kemaskini —</span>
+      <span class="pill" id="session">Sesi —</span>
+      <span class="phase-pill">V6: DECISION ENGINE</span>
     </div>
   </header>
 
+  <section class="v6-head">
+    <div id="v6DecisionCard" class="v6-decision wait">
+      <div class="v6-label">Keputusan ZenCore Sekarang</div>
+      <div id="v6Decision" class="v6-main-decision warn">MENUNGGU ANALISIS</div>
+      <div id="v6DecisionSub" class="v6-sub">ZenCore sedang menunggu data pasaran untuk menentukan sama ada setup layak dipertimbangkan.</div>
+      <div class="signal-banner">
+        <div class="signal-chip"><span class="k">Arah Pasaran</span><b id="v6MarketState">—</b></div>
+        <div class="signal-chip"><span class="k">Status Entry</span><b id="v6EntryState">—</b></div>
+        <div class="signal-chip"><span class="k">Jenis Signal</span><b id="v6SignalType">—</b></div>
+      </div>
+    </div>
+    <div class="v6-scorebox">
+      <div><div class="v6-label">Skor Kualiti Setup</div><div id="v6Score" class="v6-big">—</div></div>
+      <div><div class="v6-label">Gred V6</div><div id="v6Grade" class="v6-big">—</div></div>
+      <div class="v6-scorebar"><i id="v6ScoreBar"></i></div>
+      <div id="v6ScoreNote" class="v6-note">Skor ini menggabungkan data Pine, saringan arah, MTF, momentum, lokasi entry dan R:R. Ia bukan jaminan profit.</div>
+    </div>
+  </section>
+
   <section class="summary">
-    <div class="card"><div class="k">Symbol / TF</div><div class="v" id="sumSymbol">—</div></div>
-    <div class="card"><div class="k">Signal</div><div class="v" id="sumAction">—</div></div>
-    <div class="card"><div class="k">Setup Probability</div><div class="v" id="sumProb">—</div></div>
-    <div class="card"><div class="k">Setup Grade</div><div class="v" id="sumGrade">—</div></div>
-    <div class="card"><div class="k">R:R to TP3</div><div class="v" id="sumRR">—</div></div>
-    <div class="card"><div class="k">Entry Zone Status</div><div class="v" id="sumZone">—</div></div>
-    <div class="card"><div class="k">Position</div><div class="v" id="position">—</div></div>
+    <div class="card"><div class="k">Simbol / TF</div><div class="v" id="sumSymbol">—</div></div>
+    <div class="card"><div class="k">Signal Pine</div><div class="v" id="sumAction">—</div></div>
+    <div class="card"><div class="k">Probability Pine</div><div class="v" id="sumProb">—</div></div>
+    <div class="card"><div class="k">Gred Pine</div><div class="v" id="sumGrade">—</div></div>
+    <div class="card"><div class="k">R:R ke TP3</div><div class="v" id="sumRR">—</div></div>
+    <div class="card"><div class="k">Status Zon Entry</div><div class="v" id="sumZone">—</div></div>
+    <div class="card"><div class="k">Posisi</div><div class="v" id="position">—</div></div>
     <div class="card"><div class="k">MT5 Bridge</div><div class="v" id="sumMt5">OFFLINE</div></div>
   </section>
 
-  <main class="main">
+  <section class="v6-grid">
     <section class="panel chartpanel">
       <div class="charthead">
-        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">ZenCore interactive execution overlay</div></div>
-        <div class="chips"><span class="chip">ZENCORE OVERLAY</span><span class="chip">BUY/SELL MARKERS</span><span class="chip">ENTRY ZONE</span><span class="chip">RISK/PROFIT ZONE</span><span class="chip">SL/TP</span><span class="chip">EMA/HEMA</span><span class="chip">ORDER BLOCK</span></div>
+        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">Carta ZenCore dengan Entry / SL / TP dan overlay indikator</div></div>
+        <div class="chips"><span class="chip">ZENCORE</span><span class="chip">ENTRY ZONE</span><span class="chip">SL / TP</span><span class="chip">EMA / HEMA</span><span class="chip">ORDER BLOCK</span><span class="chip">S/R</span></div>
       </div>
 
       <div class="charttabs">
-        <button class="charttab active" data-target="zenMapPane">ZENCORE OVERLAY</button>
+        <button class="charttab active" data-target="zenMapPane">CARTA ZENCORE</button>
         <button class="charttab" data-target="liveMarketPane">LIVE MARKET</button>
       </div>
 
       <div id="zenMapPane" class="chartpane active">
         <div class="charttoolbar">
-          <label class="toggle"><input id="showTradeZones" type="checkbox" checked> Entry / Risk / Profit zones</label>
-          <label class="toggle"><input id="showSignals" type="checkbox" checked> BUY / SELL markers</label>
+          <label class="toggle"><input id="showTradeZones" type="checkbox" checked> Zon Entry / Risiko / Profit</label>
+          <label class="toggle"><input id="showSignals" type="checkbox" checked> Marker BUY / SELL</label>
           <label class="toggle"><input id="showTrendLines" type="checkbox" checked> EMA / HEMA</label>
-          <label class="toggle"><input id="showOrderBlocks" type="checkbox" checked> Order blocks</label>
-          <label class="toggle"><input id="showSR" type="checkbox" checked> Support / resistance</label>
-          <span class="muted">Move pointer for OHLC • click chart to lock tooltip</span>
+          <label class="toggle"><input id="showOrderBlocks" type="checkbox" checked> Order Block</label>
+          <label class="toggle"><input id="showSR" type="checkbox" checked> Support / Resistance</label>
+          <span class="muted">Gerakkan pointer untuk OHLC • klik untuk kunci tooltip</span>
         </div>
         <div class="chartwrap">
-          <div class="chartlegend"><span class="lg good">Bull candle</span><span class="lg bad">Bear candle</span><span class="lg warn">Entry zone</span><span class="lg bad">Risk zone</span><span class="lg good">Profit zone</span><span class="lg cyan">Support</span><span class="lg blue">Resistance</span></div>
+          <div class="chartlegend"><span class="lg good">Bull</span><span class="lg bad">Bear</span><span class="lg warn">Entry</span><span class="lg bad">Risiko</span><span class="lg good">Profit</span><span class="lg cyan">Support</span><span class="lg blue">Resistance</span></div>
           <svg id="chart" viewBox="0 0 1200 560" preserveAspectRatio="none"></svg>
           <div id="chartTooltip" class="tooltip"></div>
         </div>
         <div class="executionstrip">
-          <div class="execbox"><span class="k">Live Price</span><b id="execPrice">—</b></div>
+          <div class="execbox"><span class="k">Harga Live</span><b id="execPrice">—</b></div>
           <div class="execbox"><span class="k">Entry</span><b class="warn" id="execEntry">—</b></div>
           <div class="execbox"><span class="k">SL</span><b class="bad" id="execSl">—</b></div>
           <div class="execbox"><span class="k">TP1</span><b class="good" id="execTp1">—</b></div>
           <div class="execbox"><span class="k">TP2</span><b class="good" id="execTp2">—</b></div>
           <div class="execbox"><span class="k">TP3</span><b class="good" id="execTp3">—</b></div>
-          <div class="execbox"><span class="k">Distance to Entry</span><b id="execDistance">—</b></div>
+          <div class="execbox"><span class="k">Jarak ke Entry</span><b id="execDistance">—</b></div>
           <div class="execbox"><span class="k">R:R TP3</span><b id="execRR">—</b></div>
         </div>
       </div>
@@ -95,23 +117,26 @@
             </script>
           </div>
         </div>
-        <div class="notice" style="margin-top:8px">TradingView's public embedded chart cannot load your private/custom Pine script inside the iframe. Use <b>ZENCORE OVERLAY</b> for the combined ZenCore indicator, signals and execution zones; use LIVE MARKET for independent real-time market viewing.</div>
+        <div class="notice" style="margin-top:8px">Gunakan <b>CARTA ZENCORE</b> untuk signal, Entry, SL, TP, HEMA dan saringan ZenCore. LIVE MARKET ialah carta TradingView berasingan untuk melihat pergerakan pasaran.</div>
       </div>
     </section>
 
-    <aside class="side">
+    <aside class="v6-side">
       <section class="panel sec">
-        <div class="title">Decision Engine</div>
-        <div class="decision">
-          <div class="decisiontop"><div><div class="k">Pine Action</div><div class="action" id="action">—</div></div><div><div class="k">Grade</div><div class="grade" id="grade">—</div></div></div>
-          <div class="bar"><i id="probBar"></i></div>
-          <div class="grid2"><div class="mini"><span class="k">Probability</span><b id="prob">—</b></div><div class="mini"><span class="k">Confluence</span><b id="stars">—</b></div><div class="mini"><span class="k">Market Power</span><b id="power">—</b></div><div class="mini"><span class="k">Risk State</span><b id="risk">—</b></div></div>
+        <div class="v6-section-title"><div class="title" style="margin:0">5 Saringan Wajib V6</div><span id="v6GateScore" class="pill">0 / 5 LULUS</span></div>
+        <div id="v6GateList" class="gate-list" style="margin-top:10px">
+          <div class="gate warn"><div class="gate-num">1</div><div><div class="gate-name">Trend & Struktur</div><div class="gate-desc">Menunggu data.</div></div><span class="gate-status">TUNGGU</span></div>
+          <div class="gate warn"><div class="gate-num">2</div><div><div class="gate-name">Multi-Timeframe</div><div class="gate-desc">Menunggu data.</div></div><span class="gate-status">TUNGGU</span></div>
+          <div class="gate warn"><div class="gate-num">3</div><div><div class="gate-name">Momentum & Market Power</div><div class="gate-desc">Menunggu data.</div></div><span class="gate-status">TUNGGU</span></div>
+          <div class="gate warn"><div class="gate-num">4</div><div><div class="gate-name">Lokasi Entry</div><div class="gate-desc">Menunggu data.</div></div><span class="gate-status">TUNGGU</span></div>
+          <div class="gate warn"><div class="gate-num">5</div><div><div class="gate-name">Risiko & R:R</div><div class="gate-desc">Menunggu data.</div></div><span class="gate-status">TUNGGU</span></div>
         </div>
+        <div id="v6GateExplain" class="decision-explain">V6 hanya menaikkan status setup apabila beberapa faktor utama selari. Satu indikator sahaja tidak mencukupi.</div>
       </section>
 
       <section class="panel sec">
-        <div class="title">Smart Entry Zone & Trade Map</div>
-        <div class="entrybox"><div class="k">Derived Entry Zone</div><div class="zone" id="zoneRange">—</div><div class="muted" id="zoneStatus">Waiting for Entry + ATR</div><div class="field" style="margin-top:8px"><label>Zone half-width (% of ATR)</label><input id="zonePct" type="number" value="15" min="1" max="100" step="1"></div></div>
+        <div class="title">Zon Entry & Pelan Trade</div>
+        <div class="entrybox"><div class="k">Zon Entry</div><div class="zone" id="zoneRange">—</div><div class="muted" id="zoneStatus">Menunggu Entry + ATR</div><div class="field" style="margin-top:8px"><label>Lebar zon (% ATR)</label><input id="zonePct" type="number" value="15" min="1" max="100" step="1"></div></div>
         <div class="levels">
           <div class="level"><span>TP3</span><div class="rail"><i style="width:100%;background:var(--green)"></i></div><b id="tp3">—</b></div>
           <div class="level"><span>TP2</span><div class="rail"><i style="width:82%;background:var(--green)"></i></div><b id="tp2">—</b></div>
@@ -119,61 +144,214 @@
           <div class="level"><span>ENTRY</span><div class="rail"><i style="width:50%;background:var(--amber)"></i></div><b id="entry">—</b></div>
           <div class="level"><span>SL</span><div class="rail"><i style="width:30%;background:var(--red)"></i></div><b id="sl">—</b></div>
         </div>
-        <div class="grid2"><div class="mini"><span class="k">Risk Distance</span><b id="riskDist">—</b></div><div class="mini"><span class="k">R:R TP1</span><b id="rr1">—</b></div><div class="mini"><span class="k">R:R TP3</span><b id="rr3">—</b></div><div class="mini"><span class="k">ATR</span><b id="atr">—</b></div></div>
+        <div class="grid2"><div class="mini"><span class="k">Jarak Risiko</span><b id="riskDist">—</b></div><div class="mini"><span class="k">R:R TP1</span><b id="rr1">—</b></div><div class="mini"><span class="k">R:R TP3</span><b id="rr3">—</b></div><div class="mini"><span class="k">ATR</span><b id="atr">—</b></div></div>
       </section>
 
       <section class="panel sec">
-        <div class="title">MT5 Live Execution</div>
-        <div class="mt5box">
-          <div class="mt5head"><div><span class="dot off" id="mt5Dot2"></span><b id="mt5Conn2">Bridge status follows header</b></div><span class="pill">MANUAL CONFIRM</span></div>
-          <div class="mt5grid">
-            <div class="mini"><span class="k">Broker / Server</span><b id="mt5Broker">—</b></div>
-            <div class="mini"><span class="k">Account</span><b id="mt5Login">—</b></div>
-            <div class="mini"><span class="k">Balance</span><b id="mt5Balance">—</b></div>
-            <div class="mini"><span class="k">Equity</span><b id="mt5Equity">—</b></div>
-            <div class="mini"><span class="k">Open Positions</span><b id="mt5Positions">—</b></div>
-            <div class="mini"><span class="k">Last Result</span><b id="mt5Last">—</b></div>
-          </div>
-          <div class="notice" style="margin-top:8px"><b>Eligible ZenCore entry:</b> <span id="mt5Signal">No recent exact entry</span></div>
-          <div class="grid2">
-            <div class="field"><label>Volume / Lot</label><input id="mt5Lot" type="number" min="0.01" max="1" step="0.01" value="0.01"></div>
-            <div class="field"><label>Take Profit target</label><select id="mt5TpTarget"><option value="tp1">TP1</option><option value="tp2">TP2</option><option value="tp3">TP3</option></select></div>
-          </div>
-          <div class="field tradepin"><label>Trade PIN</label><input id="tradePin" type="password" autocomplete="off" placeholder="Enter PIN only when placing order"></div>
-          <div class="tradeactions"><button id="mt5Buy" class="tradebtn buy" disabled>BUY — WAIT ZENCORE</button><button id="mt5Sell" class="tradebtn sell" disabled>SELL — WAIT ZENCORE</button></div>
-          <div id="mt5Message" class="mt5message muted">MT5 order buttons activate only for a recent exact ZenCore BUY or SELL signal.</div>
-        </div>
+        <div class="title">Multi-Timeframe</div>
+        <div class="grid2"><div class="mini"><span class="k">MTF 1</span><b id="mtf1">—</b></div><div class="mini"><span class="k">MTF 2</span><b id="mtf2">—</b></div><div class="mini"><span class="k">MTF 3</span><b id="mtf3">—</b></div><div class="mini"><span class="k">Keseluruhan</span><b id="mtfo">—</b></div></div>
       </section>
 
-      <section class="panel sec"><div class="title">Multi-Timeframe Sync</div><div class="grid2"><div class="mini"><span class="k">MTF 1</span><b id="mtf1">—</b></div><div class="mini"><span class="k">MTF 2</span><b id="mtf2">—</b></div><div class="mini"><span class="k">MTF 3</span><b id="mtf3">—</b></div><div class="mini"><span class="k">Overall</span><b id="mtfo">—</b></div></div></section>
-      <section class="panel sec"><div class="title">SOP Entry Score <span class="cyan" id="sopScore" style="float:right">—</span></div><div id="sop"></div></section>
-      <section class="panel sec"><div class="title">AI Coach</div><div class="coach" id="tip">Waiting for ZenCore data…</div></section>
+      <section class="panel sec"><div class="title">SOP Entry <span class="cyan" id="sopScore" style="float:right">—</span></div><div id="sop"></div></section>
+      <section class="auto-later"><b>AUTO TRADE / MT5</b><br>Belum diaktifkan dalam fokus V6 ini. Kita sambung selepas Decision Engine dan Performance Engine stabil.</section>
     </aside>
-  </main>
-
-  <section class="lower">
-    <section class="panel sec"><div class="title">Market Intelligence Matrix</div><div class="matrix">
-      <div class="metric"><span class="k">Structure</span><b id="structure">—</b></div><div class="metric"><span class="k">HEMA</span><b id="hema">—</b></div><div class="metric"><span class="k">Momentum</span><b id="momentum">—</b></div><div class="metric"><span class="k">Forecast</span><b id="forecast">—</b></div><div class="metric"><span class="k">Whales</span><b id="whales">—</b></div><div class="metric"><span class="k">RVol</span><b id="rvol">—</b></div><div class="metric"><span class="k">DXY</span><b id="dxy">—</b></div><div class="metric"><span class="k">S&D Clearance</span><b id="sd">—</b></div><div class="metric"><span class="k">Chop</span><b id="chop">—</b></div><div class="metric"><span class="k">RSI</span><b id="rsi">—</b></div><div class="metric"><span class="k">WaveTrend</span><b id="wt">—</b></div><div class="metric"><span class="k">EMA 9/20/50</span><b id="ema">—</b></div><div class="metric"><span class="k">Support 20 bars</span><b id="support">—</b></div><div class="metric"><span class="k">Resistance 20 bars</span><b id="resistance">—</b></div><div class="metric"><span class="k">Order Blocks</span><b id="ob">—</b></div><div class="metric"><span class="k">TP/SL Hits</span><b id="hits">—</b></div>
-    </div></section>
-
-    <section class="panel sec"><div class="title">Position Size / Risk Calculator</div><div class="riskgrid"><div class="field"><label>Account balance (USD)</label><input id="balance" type="number" value="10000" step="100"></div><div class="field"><label>Risk per trade (%)</label><input id="riskPct" type="number" value="1" min="0.1" step="0.1"></div><div class="field" style="grid-column:1/-1"><label>USD value for 1.00 price move per 1 lot</label><input id="valuePerMove" type="number" value="100" min="0.01" step="1"></div></div><div class="calc"><div class="calcrow"><span>Risk amount</span><b id="riskAmount">—</b></div><div class="calcrow"><span>Stop distance</span><b id="stopDistance">—</b></div><div class="calcrow"><span>Estimated lot size</span><b id="lotSize">—</b></div><div class="calcrow"><span>R:R to TP3</span><b id="calcRR">—</b></div></div><div class="notice" style="margin-top:9px">Check your broker contract specification before using lot-size output. XAUUSD contract values differ by broker.</div></section>
-
-    <section class="panel sec"><div class="title">Trade Journal / Signal History</div><div class="scroll"><table class="journal"><thead><tr><th>Time</th><th>Symbol</th><th>Action</th><th>Entry</th><th>SL</th><th>TP1</th><th>Prob.</th><th>Grade</th></tr></thead><tbody id="journalBody"><tr><td colspan="8" class="muted">Waiting for signals…</td></tr></tbody></table></div><div class="notice" style="margin-top:9px">Journal stores ZenCore BUY/SELL webhook signals in server memory.</div></section>
-
-    <section class="panel sec"><div class="title">Live Pine Alert Tape</div><div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Waiting for runner/trailing alerts…</div></div><div class="notice" style="margin-top:9px">Trailing, runner management, partial-close, TP, SL and MT5 execution results appear here.</div></section>
   </section>
 
-  <div class="foot">ZenCore V5 • Pine decision engine + interactive execution overlay + optional MT5 bridge. Live trading requires MT5 terminal/EA and explicit order confirmation.</div>
+  <section class="panel sec" style="margin-top:10px">
+    <div class="coach-v6">
+      <div class="coach-head"><div><div class="k">AI Coach — Panduan Analisis Sekarang</div><div class="coach-title">Apa trader perlu faham sekarang?</div></div><span id="v6CoachBadge" class="coach-status">MENUNGGU DATA</span></div>
+      <div id="v6CoachSummary" class="coach-summary">AI Coach akan menterjemahkan bacaan ZenCore kepada panduan ringkas dalam Bahasa Malaysia.</div>
+      <div class="coach-section"><h4>Apa yang ZenCore nampak</h4><ul id="v6CoachNow"><li>Menunggu data pasaran.</li></ul></div>
+      <div class="coach-section"><h4>Tindakan yang lebih disiplin</h4><div id="v6CoachAction" class="coach-action">Tunggu sehingga data mencukupi sebelum membuat keputusan.</div></div>
+      <div class="coach-section"><h4>Apa yang perlu dielakkan</h4><div id="v6CoachAvoid" class="coach-avoid">Elakkan entry berdasarkan satu indikator sahaja dan elakkan mengejar harga di luar zon entry.</div></div>
+      <div class="coach-section"><h4>Pelan ZenCore</h4><div id="v6Plan" class="plan-grid"><div class="plan-item"><span class="k">Entry</span><b>—</b></div><div class="plan-item"><span class="k">Invalidation / SL</span><b>—</b></div><div class="plan-item"><span class="k">Target</span><b>—</b></div><div class="plan-item"><span class="k">R:R</span><b>—</b></div></div></div>
+      <div class="coach-section"><h4>Nota Pine Coach</h4><div id="tip" class="coach-old">Menunggu nota daripada Pine ZenCore…</div></div>
+    </div>
+  </section>
+
+  <section class="lower">
+    <section class="panel sec">
+      <div class="title">Analisis Pasaran Utama</div>
+      <div class="market-strip">
+        <div class="mini"><span class="k">Structure</span><b id="structure">—</b></div>
+        <div class="mini"><span class="k">HEMA</span><b id="hema">—</b></div>
+        <div class="mini"><span class="k">Momentum</span><b id="momentum">—</b></div>
+        <div class="mini"><span class="k">Forecast</span><b id="forecast">—</b></div>
+        <div class="mini"><span class="k">Market Power</span><b id="power">—</b></div>
+      </div>
+      <div class="matrix" style="margin-top:8px">
+        <div class="metric"><span class="k">Whales</span><b id="whales">—</b></div><div class="metric"><span class="k">RVol</span><b id="rvol">—</b></div><div class="metric"><span class="k">DXY</span><b id="dxy">—</b></div><div class="metric"><span class="k">S&D Clearance</span><b id="sd">—</b></div><div class="metric"><span class="k">Chop</span><b id="chop">—</b></div><div class="metric"><span class="k">RSI</span><b id="rsi">—</b></div><div class="metric"><span class="k">WaveTrend</span><b id="wt">—</b></div><div class="metric"><span class="k">EMA 9/20/50</span><b id="ema">—</b></div><div class="metric"><span class="k">Support 20 Bar</span><b id="support">—</b></div><div class="metric"><span class="k">Resistance 20 Bar</span><b id="resistance">—</b></div><div class="metric"><span class="k">Order Block</span><b id="ob">—</b></div><div class="metric"><span class="k">TP / SL Hit</span><b id="hits">—</b></div>
+      </div>
+      <div style="display:none"><span id="action"></span><span id="grade"></span><span id="prob"></span><span id="stars"></span><span id="risk"></span><i id="probBar"></i></div>
+    </section>
+
+    <section class="panel sec">
+      <div class="title">Pengurusan Risiko</div>
+      <div class="riskgrid"><div class="field"><label>Baki Akaun (USD)</label><input id="balance" type="number" value="10000" step="100"></div><div class="field"><label>Risiko setiap trade (%)</label><input id="riskPct" type="number" value="1" min="0.1" step="0.1"></div><div class="field" style="grid-column:1/-1"><label>Nilai USD bagi pergerakan harga 1.00 untuk 1 lot</label><input id="valuePerMove" type="number" value="100" min="0.01" step="1"></div></div>
+      <div class="calc"><div class="calcrow"><span>Jumlah risiko</span><b id="riskAmount">—</b></div><div class="calcrow"><span>Jarak SL</span><b id="stopDistance">—</b></div><div class="calcrow"><span>Anggaran lot</span><b id="lotSize">—</b></div><div class="calcrow"><span>R:R TP3</span><b id="calcRR">—</b></div></div>
+      <div class="focus-note" style="margin-top:9px"><b>Fokus V6:</b> saiz posisi mesti ikut risiko, bukan ikut keyakinan signal. Semak contract specification broker sebelum guna anggaran lot.</div>
+    </section>
+
+    <section class="panel sec performance-later">
+      <div class="v6-section-title"><div class="title" style="margin:0">Sejarah Signal</div><span class="phase-pill">PERFORMANCE ENGINE: NEXT</span></div>
+      <div class="scroll" style="margin-top:9px"><table class="journal"><thead><tr><th>Masa</th><th>Simbol</th><th>Signal</th><th>Entry</th><th>SL</th><th>TP1</th><th>Prob.</th><th>Gred</th></tr></thead><tbody id="journalBody"><tr><td colspan="8" class="muted">Menunggu signal…</td></tr></tbody></table></div>
+      <div class="notice" style="margin-top:9px">Performance Engine penuh — win rate, expectancy, profit factor dan prestasi mengikut gred/sesi — akan dibina selepas V6 Decision Engine stabil.</div>
+    </section>
+
+    <section class="panel sec"><div class="title">Aktiviti ZenCore Live</div><div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Menunggu signal / TP / trailing…</div></div><div class="notice" style="margin-top:9px">Signal, TP, SL, runner management dan close separuh akan muncul di sini.</div></section>
+  </section>
+
+  <div class="foot">ZenCore V6 • Decision Engine + AI Coach Bahasa Malaysia. Skor dan panduan ialah alat analisis; tiada setup yang menjamin profit.</div>
 </div>
 <script src="/app-v5.js"></script>
 <script src="/alerts-v3.js"></script>
 <script>
+(function(){
+  const zc = id => document.getElementById(id);
+  const num = v => Number.isFinite(+v) ? +v : null;
+  const cap = (v,a,b) => Math.max(a,Math.min(b,v));
+  const has = (v,words) => words.some(w=>String(v||'').toUpperCase().includes(w));
+  const bull = v => has(v,['BULL','BUY','LONG','UPTREND','UP ','STRONG BULL']);
+  const bear = v => has(v,['BEAR','SELL','SHORT','DOWNTREND','DOWN ','STRONG BEAR']);
+  const fmtV = (v,d=3) => num(v)==null?'—':num(v).toLocaleString(undefined,{maximumFractionDigits:d});
+  const setText = (id,text,cls='') => {const e=zc(id);if(!e)return;e.textContent=text;if(cls)e.className=cls};
+
+  function direction(d){
+    const a=String(d.action||'').toUpperCase();
+    if(a==='BUY'||a.includes('LONG'))return'BUY';
+    if(a==='SELL'||a.includes('SHORT'))return'SELL';
+    if(num(d.globalTrend)>0)return'BUY';
+    if(num(d.globalTrend)<0)return'SELL';
+    if(num(d.mtfTotal)>0)return'BUY';
+    if(num(d.mtfTotal)<0)return'SELL';
+    return'WAIT';
+  }
+
+  function sameDir(v,dir){return dir==='BUY'?bull(v):dir==='SELL'?bear(v):false}
+  function oppDir(v,dir){return dir==='BUY'?bear(v):dir==='SELL'?bull(v):false}
+  function rr3(d){const e=num(d.entry),sl=num(d.sl),tp=num(d.tp3);if([e,sl,tp].some(v=>v==null))return null;const r=Math.abs(e-sl);return r?Math.abs(tp-e)/r:null}
+
+  function entryQuality(d,dir){
+    const e=num(d.entry),a=num(d.atr),c=num(d.close);if(e==null||a==null||c==null)return{status:'warn',label:'TUNGGU',desc:'Data Entry / ATR belum lengkap.',state:'BELUM TERSEDIA',inZone:false,near:false,chase:false};
+    const pct=(num(zc('zonePct')?.value)||15)/100,lo=e-a*pct,hi=e+a*pct;
+    const inZone=c>=lo&&c<=hi;
+    const dist=c<lo?lo-c:c>hi?c-hi:0;
+    const near=!inZone&&dist<=a*.25;
+    const chase=dir==='BUY'?c>hi+a*.45:dir==='SELL'?c<lo-a*.45:false;
+    if(inZone)return{status:'pass',label:'LULUS',desc:`Harga berada dalam zon ${fmtV(lo,3)} – ${fmtV(hi,3)}.`,state:'DALAM ZON ENTRY',inZone:true,near:false,chase:false,lo,hi};
+    if(near)return{status:'warn',label:'HAMPIR',desc:`Harga hampir zon entry. Tunggu reaksi / confirmation.`,state:'HAMPIR ZON ENTRY',inZone:false,near:true,chase:false,lo,hi};
+    if(chase)return{status:'fail',label:'GAGAL',desc:'Harga sudah terlalu jauh daripada zon entry. Jangan kejar.',state:'JANGAN KEJAR HARGA',inZone:false,near:false,chase:true,lo,hi};
+    return{status:'warn',label:'TUNGGU',desc:'Harga belum berada pada lokasi entry yang ideal.',state:'TUNGGU ZON ENTRY',inZone:false,near:false,chase:false,lo,hi};
+  }
+
+  function buildDecision(d){
+    const dir=direction(d),prob=cap(num(d.setupProbability)||0,0,100),stars=cap(num(d.confluenceStars)||0,0,5),r=rr3(d),chop=num(d.chopIndex),risk=String(d.riskState||'').toUpperCase();
+    const structureGood=sameDir(d.marketStructure,dir)||sameDir(d.barStatus,dir),hemaGood=sameDir(d.hemaTrend,dir),structureBad=oppDir(d.marketStructure,dir)||oppDir(d.hemaTrend,dir);
+    const trendPass=dir!=='WAIT'&&structureGood&&hemaGood;
+    const trendWarn=dir!=='WAIT'&&!structureBad&&(structureGood||hemaGood);
+
+    const vals=[num(d.mtf1),num(d.mtf2),num(d.mtf3)].filter(v=>v!=null);const aligned=vals.filter(v=>dir==='BUY'?v>0:dir==='SELL'?v<0:false).length;
+    const mtfPass=dir!=='WAIT'&&aligned>=2,mtfStrong=aligned===3;
+
+    const momentumAligned=sameDir(d.momentum,dir)||sameDir(d.powerText,dir);const marketPower=num(d.marketPower)||0;const chopBad=chop!=null&&chop>=62;
+    const momPass=dir!=='WAIT'&&!chopBad&&(momentumAligned||marketPower>=60);const momWarn=dir!=='WAIT'&&!chopBad&&(marketPower>=50||!oppDir(d.momentum,dir));
+
+    const eq=entryQuality(d,dir);
+    const riskHigh=has(risk,['HIGH','EXTREME','DANGER']);const riskPass=r!=null&&r>=2&&!riskHigh;const riskWarn=r!=null&&r>=1.5&&!riskHigh;
+
+    const gates=[
+      {name:'Trend & Struktur',status:trendPass?'pass':trendWarn?'warn':'fail',label:trendPass?'LULUS':trendWarn?'SEPARA':'GAGAL',desc:trendPass?`Struktur dan HEMA selari untuk ${dir}.`:trendWarn?`Arah ada, tetapi struktur / HEMA belum selari sepenuhnya.`:'Trend dan struktur tidak cukup selari.'},
+      {name:'Multi-Timeframe',status:mtfPass?'pass':aligned===1?'warn':'fail',label:mtfPass?'LULUS':aligned===1?'SEPARA':'GAGAL',desc:mtfPass?`${aligned}/3 timeframe selari${mtfStrong?' — alignment kuat.':'.'}`:`Hanya ${aligned}/3 timeframe selari dengan arah setup.`},
+      {name:'Momentum & Market Power',status:momPass?'pass':momWarn?'warn':'fail',label:momPass?'LULUS':momWarn?'SEPARA':'GAGAL',desc:chopBad?`Chop ${fmtV(chop,1)} — pasaran berisiko ranging.`:momPass?`Momentum / market power menyokong arah ${dir}.`:'Momentum belum cukup jelas.'},
+      {name:'Lokasi Entry',status:eq.status,label:eq.label,desc:eq.desc},
+      {name:'Risiko & R:R',status:riskPass?'pass':riskWarn?'warn':'fail',label:riskPass?'LULUS':riskWarn?'SEPARA':'GAGAL',desc:r==null?'R:R belum tersedia.':riskHigh?`Risk state ${risk} — elakkan tambah risiko.`:`R:R TP3 ${r.toFixed(2)}R${r>=2?' memenuhi saringan.':' masih rendah.'}`}
+    ];
+
+    const pass=gates.filter(g=>g.status==='pass').length,warn=gates.filter(g=>g.status==='warn').length;
+    let score=prob*.50+pass*8+warn*3+(stars/5)*10+(r!=null?(r>=3?8:r>=2?5:r>=1.5?2:0):0);
+    if(chopBad)score-=8;if(riskHigh)score-=12;if(structureBad)score-=8;if(eq.chase)score-=8;score=cap(Math.round(score),0,100);
+    const g=score>=88&&pass===5?'A+':score>=78&&pass>=4?'A':score>=67&&pass>=3?'B':score>=55?'C':'D';
+    const exact=['BUY','SELL'].includes(String(d.action||'').toUpperCase());
+    const hardBlock=dir==='WAIT'||riskHigh||structureBad||(r!=null&&r<1.5)||pass<=1||eq.chase;
+    let decision='TUNGGU PENGESAHAN',tone='wait',sub='Setup belum cukup lengkap untuk entry yang disiplin.';
+    if(d.tradeActive){decision='URUS POSISI AKTIF';tone='manage';sub='Fokus pada SL, TP dan pengurusan posisi. Elakkan tambah posisi hanya kerana harga bergerak memihak.'}
+    else if(hardBlock){decision='NO TRADE';tone='stop';sub='Ada saringan penting yang gagal. Lebih baik skip daripada memaksa entry.'}
+    else if(exact&&pass>=4&&score>=75&&(eq.inZone||eq.near)&&r!=null&&r>=2){decision=`ENTRY ${String(d.action).toUpperCase()} SEDIA`;tone=String(d.action).toUpperCase()==='SELL'?'sell':'ready';sub='Signal tepat sudah muncul dan majoriti saringan V6 menyokong setup. Kekalkan disiplin pada zon, SL dan saiz risiko.'}
+    else if(dir!=='WAIT'&&pass>=4&&score>=70){decision=`TUNGGU ENTRY ${dir}`;tone='wait';sub=eq.chase?'Harga terlalu jauh. Tunggu setup baru.':'Bias pasaran jelas tetapi entry belum lengkap. Tunggu harga / confirmation, jangan kejar.'}
+    else if(pass>=3){decision='TUNGGU PENGESAHAN';tone='wait';sub='Beberapa faktor menyokong setup tetapi belum cukup bersih untuk status entry sedia.'}
+    else {decision='NO TRADE';tone='stop';sub='Konfluens semasa tidak cukup kuat. Tunggu struktur pasaran menjadi lebih jelas.'}
+
+    return{dir,prob,stars,r,chop,risk,gates,pass,warn,score,grade:g,eq,decision,tone,exact,mtfStrong,momentumAligned,marketPower,structureGood,hemaGood,riskHigh,chopBad};
+  }
+
+  function gateHtml(g,i){return`<div class="gate ${g.status}"><div class="gate-num">${i+1}</div><div><div class="gate-name">${g.name}</div><div class="gate-desc">${g.desc}</div></div><span class="gate-status">${g.label}</span></div>`}
+
+  function updateCoach(d,x){
+    const dirTxt=x.dir==='BUY'?'bias BUY / bullish':x.dir==='SELL'?'bias SELL / bearish':'arah belum jelas';
+    let summary=`Pasaran sekarang menunjukkan ${dirTxt}. `;
+    if(x.decision.startsWith('ENTRY'))summary+=`Setup sudah hampir kepada keadaan entry yang lengkap, tetapi disiplin pada zon dan SL masih wajib.`;
+    else if(x.decision==='NO TRADE')summary+=`Kualiti setup belum cukup bersih; skip adalah keputusan yang valid.`;
+    else if(x.decision.startsWith('URUS'))summary+=`Posisi sedang aktif; fokus bertukar daripada mencari entry kepada menjaga risiko dan target.`;
+    else summary+=`Belum perlu tergesa-gesa. Tunggu saringan yang lemah menjadi selari.`;
+    setText('v6CoachSummary',summary);
+
+    const mtfAligned=x.gates[1].desc;const entryMsg=x.eq.desc;const rrMsg=x.r==null?'R:R belum tersedia.':`R:R ke TP3 sekitar ${x.r.toFixed(2)}R.`;
+    const now=[
+      `Struktur: ${d.marketStructure||'—'} • HEMA: ${d.hemaTrend||'—'}.`,
+      mtfAligned,
+      `Momentum: ${d.momentum||'—'} • Market Power: ${d.powerText||fmtV(d.marketPower,0)+'%'}.`,
+      entryMsg,
+      rrMsg
+    ];
+    const ul=zc('v6CoachNow');if(ul)ul.innerHTML=now.map(v=>`<li>${v}</li>`).join('');
+
+    let action='Tunggu. Jangan buat entry sehingga arah, lokasi dan risiko lebih jelas.';
+    if(x.decision.startsWith('ENTRY'))action=`Setup ${x.dir} berada pada tahap paling kuat V6 sekarang. Semak candle confirmation, pastikan harga masih dekat zon entry dan kekalkan SL pada tahap ZenCore. Jika harga sudah lari jauh, batalkan entry dan tunggu setup baharu.`;
+    else if(x.decision.startsWith('TUNGGU ENTRY'))action=`Arah ${x.dir} ada, tetapi belum masa terbaik untuk masuk. Fokus tunggu harga kembali ke zon entry atau signal tepat BUY/SELL baru daripada Pine.`;
+    else if(x.decision==='NO TRADE')action='Skip setup semasa. Tunggu signal baharu yang mempunyai alignment lebih baik. Tidak trade juga sebahagian daripada disiplin.';
+    else if(x.decision.startsWith('URUS'))action=`Posisi aktif. Utamakan pengurusan risiko: jangan alihkan SL lebih jauh untuk memberi ruang kepada loss. Gunakan TP / trailing yang sudah dirancang oleh ZenCore.`;
+    setText('v6CoachAction',action);
+
+    const avoid=[];
+    if(x.eq.chase)avoid.push('Jangan kejar harga kerana ia sudah jauh daripada zon entry.');
+    else avoid.push('Jangan entry di luar zon hanya kerana takut tertinggal pergerakan.');
+    if(x.chopBad)avoid.push('Pasaran choppy/ranging: kurangkan agresif dan elakkan overtrade.');
+    if(x.r!=null&&x.r<2)avoid.push('R:R rendah: jangan paksa trade hanya kerana signal nampak cantik.');
+    if(x.pass<4)avoid.push('Belum cukup konfluens: jangan anggap satu indikator sebagai pengesahan penuh.');
+    avoid.push('Jangan naikkan lot untuk mengejar kerugian atau kerana gred setup tinggi.');
+    setText('v6CoachAvoid',avoid.join(' '));
+
+    const z=x.eq.lo!=null?`${fmtV(x.eq.lo,3)} – ${fmtV(x.eq.hi,3)}`:fmtV(d.entry,3);
+    const plan=zc('v6Plan');if(plan)plan.innerHTML=`<div class="plan-item"><span class="k">Entry / Zon</span><b class="warn">${z}</b></div><div class="plan-item"><span class="k">Invalidation / SL</span><b class="bad">${fmtV(d.sl,3)}</b></div><div class="plan-item"><span class="k">Target</span><b class="good">TP1 ${fmtV(d.tp1,3)} • TP2 ${fmtV(d.tp2,3)} • TP3 ${fmtV(d.tp3,3)}</b></div><div class="plan-item"><span class="k">R:R TP3</span><b>${x.r==null?'—':x.r.toFixed(2)+'R'}</b></div>`;
+    setText('v6CoachBadge',x.decision,x.tone==='ready'?'coach-status good':x.tone==='sell'||x.tone==='stop'?'coach-status bad':x.tone==='manage'?'coach-status blue':'coach-status warn');
+  }
+
+  function updateV6(d){
+    if(!d)return;const x=buildDecision(d);
+    const card=zc('v6DecisionCard');if(card)card.className=`v6-decision ${x.tone}`;
+    setText('v6Decision',x.decision,`v6-main-decision ${x.tone==='ready'?'good':x.tone==='sell'||x.tone==='stop'?'bad':x.tone==='manage'?'blue':'warn'}`);
+    setText('v6DecisionSub',x.decisionSub||x.sub);
+    setText('v6MarketState',x.dir==='BUY'?'BULLISH / BUY':x.dir==='SELL'?'BEARISH / SELL':'NEUTRAL',x.dir==='BUY'?'good':x.dir==='SELL'?'bad':'warn');
+    setText('v6EntryState',x.eq.state,x.eq.inZone?'good':x.eq.chase?'bad':'warn');
+    const exactAction=String(d.action||'').toUpperCase();setText('v6SignalType',['BUY','SELL'].includes(exactAction)?`SIGNAL TEPAT ${exactAction}`:exactAction.includes('BIAS')?exactAction:'BIAS / TUNGGU',sideClass(exactAction));
+    setText('v6Score',`${x.score}/100`,x.score>=78?'good':x.score>=60?'warn':'bad');setText('v6Grade',x.grade,x.grade==='A+'||x.grade==='A'?'good':x.grade==='B'?'warn':'bad');
+    const sb=zc('v6ScoreBar');if(sb)sb.style.width=`${x.score}%`;
+    setText('v6ScoreNote',`Skor V6 ${x.score}/100 • ${x.pass}/5 saringan lulus • Pine probability ${x.prob}% • Confluence ${x.stars}/5. Skor setup bukan jaminan profit.`);
+    const gl=zc('v6GateList');if(gl)gl.innerHTML=x.gates.map(gateHtml).join('');setText('v6GateScore',`${x.pass} / 5 LULUS`,x.pass>=4?'pill good':x.pass>=3?'pill warn':'pill bad');
+    setText('v6GateExplain',x.pass>=4?'Majoriti saringan selari. Fokus sekarang ialah timing entry dan disiplin risiko.':x.pass===3?'Setup sederhana. Tunggu sekurang-kurangnya satu lagi saringan menjadi kuat.':'Setup belum bersih. Jangan paksa entry.');
+    updateCoach(d,x);
+  }
+
+  const oldRender=render;
+  render=function(d){oldRender(d);updateV6(d)};
+  if(typeof latest!=='undefined'&&latest)updateV6(latest);
+  document.addEventListener('input',e=>{if(e.target?.id==='zonePct'&&typeof latest!=='undefined'&&latest)setTimeout(()=>updateV6(latest),0)});
   document.querySelectorAll('.charttab').forEach(btn=>btn.addEventListener('click',()=>{
     document.querySelectorAll('.charttab').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.chartpane').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active'); document.getElementById(btn.dataset.target).classList.add('active');
-    if(btn.dataset.target==='zenMapPane' && window.zcChartState) setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
+    btn.classList.add('active');document.getElementById(btn.dataset.target)?.classList.add('active');
   }));
+})();
 </script>
 </body>
 </html>
