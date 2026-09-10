@@ -4,12 +4,12 @@
   "private": true,
   "description": "ZenCore TradingView Pine Script webhook dashboard",
   "scripts": {
-    "start": "node server-v8.js"
-  },
-  "dependencies": {
-    "pg": "^8.13.1"
+    "start": "node server-v9.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   }
 }
