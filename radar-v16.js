@@ -1,0 +1,22 @@
+(function(){
+  'use strict';
+  const $=id=>document.getElementById(id);
+  let data=null,filter='all',lastHot=new Set();
+  const fmt=(v,d=2)=>Number.isFinite(+v)?(+v).toLocaleString(undefined,{maximumFractionDigits:d}):'—';
+  const age=ts=>{if(!ts)return'—';const sec=Math.max(0,Math.floor((Date.now()-ts)/1000));return sec<60?`${sec}s`:sec<3600?`${Math.floor(sec/60)}m`:`${Math.floor(sec/3600)}h`};
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function sumCard(label,value,cls=''){return `<div class="sum"><span>${label}</span><b class="${cls}">${value}</b></div>`}
+  function visible(m){if(filter==='hot')return m.status==='HOT SETUP';if(filter==='near')return ['NEAR ENTRY','HOT SETUP'].includes(m.status);if(filter==='active')return m.status==='TRADE ACTIVE';if(filter==='live')return m.freshness==='LIVE';return true}
+  function zoneClass(z){z=String(z||'');return z.includes('IN ENTRY')?'in':z.includes('NEAR')?'near':'wait'}
+  function card(m){const side=(m.signal||'WAIT').toLowerCase(),hot=m.status==='HOT SETUP',trade=m.status==='TRADE ACTIVE',offline=m.freshness==='OFFLINE',badgeClass=hot?'hot':trade?'trade':m.freshness.toLowerCase();return `<a class="market ${side} ${hot?'hot':''} ${trade?'trade':''} ${offline?'offline':''}" href="/pair/${encodeURIComponent(m.symbol)}"><div class="mh"><div><div class="pair">${esc(m.symbol)}</div><div class="tf">TF ${esc(m.timeframe||'—')} • Radar ${m.radarScore||0}/100</div></div><span class="badge ${badgeClass}">${esc(m.status)}</span></div><div class="signal-row"><div class="signal">${esc(m.signal||'WAIT')}</div><div class="score"><span>GRADE</span><b>${esc(m.grade||'—')}</b></div></div><div class="meters"><div class="metric"><span>Stability</span><b>${m.stability||0}/100</b><div class="rail"><i style="width:${Math.max(0,Math.min(100,m.stability||0))}%"></i></div></div><div class="metric"><span>Entry Ready</span><b>${m.readiness||0}/100</b><div class="rail"><i style="width:${Math.max(0,Math.min(100,m.readiness||0))}%"></i></div></div><div class="metric"><span>R:R TP3</span><b>${m.rr==null?'—':fmt(m.rr,2)+'R'}</b></div><div class="metric"><span>MTF Align</span><b>${Number.isFinite(+m.mtfAligned)?m.mtfAligned+'/3':'—'}</b></div></div><div class="footrow"><span class="zone ${zoneClass(m.zone)}">${esc(m.zone||'—')}</span><span>${m.price==null?'—':fmt(m.price,5)}</span><span class="fresh ${String(m.freshness||'').toLowerCase()}">${esc(m.freshness)} • ${age(m.receivedAt)}</span></div></a>`}
+  function render(){if(!data)return;const s=data.summary||{};$('summary').innerHTML=sumCard('Markets',s.markets??0)+sumCard('Live',s.live??0,'good')+sumCard('Hot Setup',s.hot??0,'hot')+sumCard('Active Trade',s.active??0)+sumCard('Near Entry',s.near??0)+sumCard('Watch',s.watch??0)+sumCard('Offline',s.offline??0);
+    const best=data.best;if(best){$('bestSetup').innerHTML=`<span>BEST SETUP NOW</span><b>${esc(best.symbol)} • ${esc(best.signal)} • ${esc(best.grade)}</b><small>Radar ${best.radarScore}/100 • Stability ${best.stability} • Ready ${best.readiness} • ${esc(best.zone)}</small>`;}
+    else $('bestSetup').innerHTML='<span>BEST SETUP NOW</span><b>Menunggu data live...</b><small>Aktifkan TradingView alerts untuk pair yang mahu dipantau.</small>';
+    const rows=(data.markets||[]).filter(visible);$('marketGrid').innerHTML=rows.length?rows.map(card).join(''):'<div class="empty">Tiada pair memenuhi filter ini sekarang.</div>';
+    const currentHot=new Set((data.markets||[]).filter(x=>x.status==='HOT SETUP').map(x=>x.symbol));lastHot=currentHot;
+  }
+  async function refresh(){try{const r=await fetch('/api/markets',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);data=await r.json();render()}catch(e){$('marketGrid').innerHTML=`<div class="empty">Market Radar belum tersedia: ${esc(e.message)}</div>`}}
+  document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');filter=b.dataset.filter||'all';render()}));
+  try{const es=new EventSource('/market-events');es.addEventListener('markets',e=>{try{data=JSON.parse(e.data);render()}catch(_){}})}catch(_){}
+  refresh();setInterval(refresh,15000);setInterval(()=>{if(data)render()},1000);
+})();
