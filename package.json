@@ -4,7 +4,7 @@
   "private": true,
   "description": "ZenCore TradingView Pine Script webhook dashboard",
   "scripts": {
-    "start": "node server-v17.js"
+    "start": "node server-analysis.js"
   },
   "engines": {
     "node": ">=20"
