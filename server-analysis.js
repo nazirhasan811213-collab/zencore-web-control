@@ -42,7 +42,8 @@ function proxyHtml(req,res,targetPath){
     u.on('end',()=>{
       let html=Buffer.concat(chunks).toString('utf8');
       if(!html.includes('/v18-chart.js'))html=html.replace('</body>','<script src="/v18-chart.js?v=18.0"></script></body>');
-      html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V18 — Pro Analysis Chart</title>');
+      if(!html.includes('/precision-ui-v19.js'))html=html.replace('</body>','<script src="/precision-ui-v19.js?v=19.0"></script></body>');
+      html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V19 — Precision Analysis Terminal</title>');
       res.writeHead(u.statusCode||200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store, no-cache, must-revalidate'});
       res.end(html);
     });
@@ -59,6 +60,7 @@ const server=http.createServer((req,res)=>{
   const pathname=url.pathname;
 
   if(req.method==='GET'&&pathname==='/v18-chart.js')return sendAsset(res,'v18-chart.js','application/javascript; charset=utf-8');
+  if(req.method==='GET'&&pathname==='/precision-ui-v19.js')return sendAsset(res,'precision-ui-v19.js','application/javascript; charset=utf-8');
 
   if(req.method==='GET'&&(pathname==='/'||pathname==='/index.html')){
     return proxyHtml(req,res,'/pair/XAUUSD');
@@ -84,5 +86,5 @@ const server=http.createServer((req,res)=>{
 });
 
 server.listen(PUBLIC_PORT,'0.0.0.0',()=>{
-  console.log(`ZenCore V18 Analysis Focus gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}`);
+  console.log(`ZenCore V19 Precision Analysis gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}`);
 });
