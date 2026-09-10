@@ -8,30 +8,39 @@ process.env.PORT = String(CORE_PORT);
 require('./server-v9.js');
 process.env.PORT = String(PUBLIC_PORT);
 
-function injectV14(html){
-  if(html.includes('/v14-ui.js')) return html;
-  return html.replace('</body>','<script src="/v14-ui.js?v=14.0"></script>\n</body>');
+function injectVisualLayers(html){
+  let out = html;
+  if(!out.includes('/v14-ui.js')){
+    out = out.replace('</body>','<script src="/v14-ui.js?v=14.0"></script>\n</body>');
+  }
+  if(!out.includes('/v15-chart.js')){
+    out = out.replace('</body>','<script src="/v15-chart.js?v=15.0"></script>\n</body>');
+  }
+  return out;
+}
+
+function serveAsset(res, filename){
+  try{
+    const fs = require('fs');
+    const path = require('path');
+    const body = fs.readFileSync(path.join(__dirname,filename));
+    res.writeHead(200,{
+      'Content-Type':'application/javascript; charset=utf-8',
+      'Cache-Control':'no-store, no-cache, must-revalidate',
+      'Access-Control-Allow-Origin':'*'
+    });
+    return res.end(body);
+  }catch(e){
+    res.writeHead(404,{'Content-Type':'application/json'});
+    return res.end(JSON.stringify({ok:false,error:`${filename} not found`}));
+  }
 }
 
 const gateway = http.createServer((req,res)=>{
   const pathname = new URL(req.url,`http://${req.headers.host || 'localhost'}`).pathname;
 
-  if(req.method === 'GET' && pathname === '/v14-ui.js'){
-    try{
-      const fs = require('fs');
-      const path = require('path');
-      const body = fs.readFileSync(path.join(__dirname,'v14-ui.js'));
-      res.writeHead(200,{
-        'Content-Type':'application/javascript; charset=utf-8',
-        'Cache-Control':'no-store, no-cache, must-revalidate',
-        'Access-Control-Allow-Origin':'*'
-      });
-      return res.end(body);
-    }catch(e){
-      res.writeHead(404,{'Content-Type':'application/json'});
-      return res.end(JSON.stringify({ok:false,error:'V14 UI asset not found'}));
-    }
-  }
+  if(req.method === 'GET' && pathname === '/v14-ui.js') return serveAsset(res,'v14-ui.js');
+  if(req.method === 'GET' && pathname === '/v15-chart.js') return serveAsset(res,'v15-chart.js');
 
   const headers={...req.headers,host:`127.0.0.1:${CORE_PORT}`};
   const proxy=http.request({
@@ -53,7 +62,7 @@ const gateway = http.createServer((req,res)=>{
     const chunks=[];
     upstream.on('data',c=>chunks.push(c));
     upstream.on('end',()=>{
-      const body=injectV14(Buffer.concat(chunks).toString('utf8'));
+      const body=injectVisualLayers(Buffer.concat(chunks).toString('utf8'));
       const outHeaders={...upstream.headers};
       delete outHeaders['content-length'];
       outHeaders['content-length']=Buffer.byteLength(body);
@@ -73,5 +82,5 @@ const gateway = http.createServer((req,res)=>{
 });
 
 gateway.listen(PUBLIC_PORT,'0.0.0.0',()=>{
-  console.log(`ZenCore V14 Visual Intelligence gateway running on port ${PUBLIC_PORT} -> core ${CORE_PORT}`);
+  console.log(`ZenCore V15 Premium Chart gateway running on port ${PUBLIC_PORT} -> core ${CORE_PORT}`);
 });
