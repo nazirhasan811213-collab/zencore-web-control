@@ -22,9 +22,8 @@
     return new NativeES(next,opts);
   }
   PairEventSource.prototype=NativeES.prototype;
-  PairEventSource.CONNECTING=NativeES.CONNECTING;PairEventSource.OPEN=NativeES.OPEN;PairEventSource.CLOSED=NativeES.CLOSED;
+  PairEventSource.CONNECTING=NativeES.CONNECTING;
+  PairEventSource.OPEN=NativeES.OPEN;
+  PairEventSource.CLOSED=NativeES.CLOSED;
   window.EventSource=PairEventSource;
-  window.addEventListener('DOMContentLoaded',()=>{
-    const back=document.createElement('a');back.href='/';back.textContent='← MARKET RADAR';back.style.cssText='position:fixed;left:14px;bottom:14px;z-index:9999;padding:9px 12px;border:1px solid #2b4968;border-radius:999px;background:#071522e8;color:#9bcfff;text-decoration:none;font:800 10px Inter,system-ui;backdrop-filter:blur(10px);box-shadow:0 8px 30px #0008';document.body.appendChild(back);
-  });
 })();
