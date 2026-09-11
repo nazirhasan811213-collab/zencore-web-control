@@ -27,8 +27,13 @@ function topState(d,f){const s=side(d),ps=predSide(),tp3=d?.tp3Hit===true,sl=d?.
   const pbox=q('v19Precision'),rawDec=pbox?.querySelector('.v19decision')?.textContent||'TUNGGU SETUP',rawSub=pbox?.querySelector('.v19sub')?.textContent||'';
   const td=translateDecision(rawDec);set('v10Decision',td,td.includes('BUY')?'#32e38d':td.includes('SELL')?'#ff6070':'#ffbf58');set('v10DecisionSub',rawSub||'Tunggu setup yang betul-betul cun.');set('v10Signal',ps==='WAIT'?'WAIT':`BIAS ${ps}`,ps==='BUY'?'#32e38d':ps==='SELL'?'#ff6070':'#ffbf58');
 }
-function apply(){if(!latest||painting)return;painting=true;try{brand();const f=paintFeed(latest);topState(latest,f);precisionLifecycle(latest,f);}finally{painting=false;}}
+function apply(){if(!latest||painting||document.hidden)return;painting=true;try{brand();const f=paintFeed(latest);topState(latest,f);precisionLifecycle(latest,f);}finally{painting=false;}}
 async function refresh(){try{const [mr,pr]=await Promise.all([fetch(`/api/market/${encodeURIComponent(symbol)}`,{cache:'no-store'}),fetch(`/api/prediction/${encodeURIComponent(symbol)}`,{cache:'no-store'})]);if(mr.ok)latest=await mr.json();if(pr.ok)pred=await pr.json();apply();}catch(_){}}
-function lockPanel(){const root=q('v10Focus');if(!root)return;const mo=new MutationObserver(()=>{if(painting)return;queueMicrotask(apply)});mo.observe(root,{subtree:true,childList:true,characterData:true});}
-refresh();setInterval(refresh,3000);setInterval(apply,500);setTimeout(lockPanel,800);
+function liveStreams(){
+  try{const re=new EventSource('/events');re.onmessage=ev=>{try{const d=JSON.parse(ev.data);if(d&&U(d.symbol)===symbol){latest=d;apply()}}catch(_){}}}catch(_){}
+  try{const pe=new EventSource(`/prediction-events/${encodeURIComponent(symbol)}`);pe.addEventListener('prediction',ev=>{try{pred=JSON.parse(ev.data);apply()}catch(_){}})}catch(_){}
+}
+refresh();liveStreams();
+setInterval(()=>{if(!document.hidden)refresh()},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
 })();
