@@ -168,7 +168,7 @@ function relabel(){
 }
 function brand(){
   const h=document.querySelector('header.top .brand h1');
-  if(h)h.textContent='ZENCORE V30.1 — CLEAN TRADER VIEW';
+  if(h)h.textContent='ZENCORE V30.2 — SETUP WAKE MODE';
   const phases=document.querySelectorAll('header.top .phase-pill');
   if(phases.length){
     phases[phases.length-1].textContent=window.__ZENCORE_STRATEGY_MODE__==='FAST'?'FAST TRADE 1M':'NORMAL SCALPING 3M';
