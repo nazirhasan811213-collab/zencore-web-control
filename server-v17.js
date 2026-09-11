@@ -16,6 +16,8 @@ const predictionClients=new Map();
 const signalCoreBySymbol=new Map();
 const opportunityBySymbol=new Map();
 const sidewaysGuardBySymbol=new Map();
+const fastStrategyBySymbol=new Map();
+const normalStrategyBySymbol=new Map();
 const SIGNAL_INVALID_STREAK=2;
 const SIGNAL_REVERSAL_COOLDOWN_MS=45000;
 const SIGNAL_TRADE_COOLDOWN_MS=60000;
@@ -272,6 +274,130 @@ function fastTrade1m(symbol,d,a3){
   return{tf:'1m',state,side:state==='PAUSE'?'WAIT':side,score:scoreFinal,targetPips,pipSize:pip,targetDistance,targetPrice,entryPrice:c,reason,checks,analysisBias3m:side};
 }
 
+
+function aggregateClosedBars(symbol,d,minutes){
+  const ms=minutes*60000,arr=(historyBySymbol.get(symbol)||[]).filter(x=>N(x?.time)!=null).sort((a,b)=>N(a.time)-N(b.time)),map=new Map();
+  for(const x of arr){
+    const t=N(x.time),bucket=Math.floor(t/ms)*ms,o=N(x.open),h=N(x.high),l=N(x.low),c=N(x.close),vol=N(x.volume)||0;
+    if([o,h,l,c].some(v=>v==null))continue;
+    let b=map.get(bucket);
+    if(!b)b={time:bucket,open:o,high:h,low:l,close:c,volume:vol,lastTime:t};
+    else{b.high=Math.max(b.high,h);b.low=Math.min(b.low,l);b.close=c;b.volume+=vol;b.lastTime=t}
+    map.set(bucket,b);
+  }
+  const current=N(d?.time)!=null?Math.floor(N(d.time)/ms)*ms:null;
+  return[...map.values()].sort((a,b)=>a.time-b.time).filter(b=>current==null||b.time<current).slice(-160);
+}
+function analyzeClosedTF(symbol,d,minutes){
+  const bars=aggregateClosedBars(symbol,d,minutes),closes=bars.map(x=>x.close),last=bars[bars.length-1],prev=bars[bars.length-2];
+  if(!last)return{tf:`${minutes}m`,bias:'WAIT',confidence:0,sideways:false,status:'WARMING',bars:0,reason:`Tunggu candle ${minutes}m complete`,atr:null,chop:null};
+  const e9=emaLast(closes,9),e20=emaLast(closes,20),e50=emaLast(closes,50),h20=hemaLast(closes,20),h40=hemaLast(closes,40),rsi=rsiLast(closes,14),atr=atrBars(bars,14),chop=chopBars(bars,14);
+  let buy=0,sell=0,checks=[];
+  const vote=(condB,condS,w,label)=>{if(condB){buy+=w;checks.push(label+' BUY')}else if(condS){sell+=w;checks.push(label+' SELL')}};
+  vote(h20!=null&&h40!=null&&h20>h40,h20!=null&&h40!=null&&h20<h40,24,'HEMA');
+  vote(e9!=null&&e20!=null&&e9>e20,e9!=null&&e20!=null&&e9<e20,18,'EMA9/20');
+  vote(e20!=null&&e50!=null&&e20>e50,e20!=null&&e50!=null&&e20<e50,14,'EMA20/50');
+  vote(e20!=null&&last.close>e20,e20!=null&&last.close<e20,12,'Price/EMA20');
+  vote(rsi!=null&&rsi>=54,rsi!=null&&rsi<=46,10,'RSI');
+  vote(prev&&last.close>prev.close,prev&&last.close<prev.close,8,'Close slope');
+  const max=Math.max(buy,sell),gap=Math.abs(buy-sell),leader=buy>sell?'BUY':sell>buy?'SELL':'WAIT';
+  const sideways=(chop!=null&&chop>=61.8)||gap<18;
+  const bias=sideways?'WAIT':max>=55?leader:'WAIT';
+  const confidence=Math.round(clamp(max-(sideways?15:0)));
+  const minBars=minutes===5?3:minutes===3?4:3;
+  const status=bars.length<minBars?'WARMING':sideways?'SIDEWAYS':bias==='WAIT'?'WAIT':'CONFIRMED';
+  const lows=bars.slice(-5).map(x=>x.low),highs=bars.slice(-5).map(x=>x.high);
+  return{tf:`${minutes}m`,bias,confidence,sideways,status,bars:bars.length,reason:sideways?`${minutes}m sideways/chop`:bias==='WAIT'?`${minutes}m belum cukup solid`:`${minutes}m ${bias} clear`,atr,chop,ema9:e9,ema20:e20,ema50:e50,hema20:h20,hema40:h40,rsi,lastClose:last.close,swingLow:lows.length?Math.min(...lows):null,swingHigh:highs.length?Math.max(...highs):null,checks};
+}
+function oneMinuteAnalysis(symbol,d){
+  const chop=N(d?.chopIndex),structure=U(d?.marketStructure),arr=(historyBySymbol.get(symbol)||[]).slice(-8);
+  const emaSides=arr.map(x=>{const c=N(x?.close),e=N(x?.ema9);return c==null||e==null||c===e?0:c>e?1:-1});
+  const closes=arr.map(x=>N(x?.close)).filter(v=>v!=null),signs=[];
+  for(let i=1;i<closes.length;i++){const z=closes[i]-closes[i-1];if(z)signs.push(z>0?1:-1)}
+  const whipsaw=flipCount(emaSides)>=3&&flipCount(signs)>=3;
+  const sideways=(chop!=null&&chop>=61.8)||/SIDEWAY|CHOP|RANGE|FLAT/.test(structure)||whipsaw;
+  let buy=0,sell=0,checks=[];
+  const vote=(b,se,w,label)=>{if(b){buy+=w;checks.push(label+' BUY')}else if(se){sell+=w;checks.push(label+' SELL')}};
+  const hema=dirText(d?.hemaTrend),mom=dirText(d?.momentum),ms=dirText(d?.marketStructure),forecast=rawForecastDir(d);
+  const c=N(d?.close),o=N(d?.open),e9=N(d?.ema9),e20=N(d?.ema20),e50=N(d?.ema50),rsi=N(d?.rsi),w1=N(d?.waveTrend1),w2=N(d?.waveTrend2),rvol=N(d?.relativeVolume),atr=N(d?.atr);
+  vote(hema==='BUY',hema==='SELL',20,'HEMA');
+  vote(mom==='BUY',mom==='SELL',18,'Momentum');
+  vote(ms==='BUY',ms==='SELL',14,'Structure');
+  vote([c,e9,e20,e50].every(v=>v!=null)&&c>e9&&e9>e20&&e20>e50,[c,e9,e20,e50].every(v=>v!=null)&&c<e9&&e9<e20&&e20<e50,20,'EMA stack');
+  vote(w1!=null&&w2!=null&&w1>w2,w1!=null&&w2!=null&&w1<w2,10,'WaveTrend');
+  vote(rsi!=null&&rsi>=54&&rsi<=76,rsi!=null&&rsi<=46&&rsi>=24,8,'RSI');
+  vote(forecast==='BUY',forecast==='SELL',6,'Forecast');
+  vote(c!=null&&o!=null&&c>o,c!=null&&o!=null&&c<o,4,'Candle');
+  const max=Math.max(buy,sell),gap=Math.abs(buy-sell),leader=buy>sell?'BUY':sell>buy?'SELL':'WAIT';
+  const bias=sideways?'WAIT':max>=66&&gap>=18?leader:'WAIT';
+  const confidence=Math.round(clamp(max-(sideways?18:0)));
+  return{tf:'1m',bias,confidence,sideways,status:sideways?'SIDEWAYS':bias==='WAIT'?'WAIT':'CONFIRMED',reason:sideways?'1m choppy/sideways':bias==='WAIT'?'1m belum clear':`1m ${bias} clear`,chop,whipsaw,checks,close:c,open:o,ema9:e9,ema20:e20,ema50:e50,rsi,waveTrend1:w1,waveTrend2:w2,rvol,atr};
+}
+function strategyStreak(map,symbol,key,side,valid){
+  let st=map.get(symbol)||{lastKey:'',candidate:'WAIT',streak:0,plan:null,lockedUntil:0};
+  if(st.lastKey!==key){
+    if(valid&&side!=='WAIT'){if(st.candidate===side)st.streak++;else{st.candidate=side;st.streak=1}}
+    else{st.candidate='WAIT';st.streak=0;st.plan=null;st.lockedUntil=0}
+    st.lastKey=key;map.set(symbol,st);
+  }
+  return st;
+}
+function makePlan(side,entry,sl,tp1,tp2,tp3,meta={}){
+  return{side,entry,sl,tp1,tp2,tp3,...meta};
+}
+function fastTradeStrategy(symbol,d){
+  const a1=oneMinuteAnalysis(symbol,d),key=snapshotKey(d),pip=pipSizeFor(symbol),c=N(d?.close),atr=N(d?.atr),e9=N(d?.ema9),e20=N(d?.ema20),w1=N(d?.waveTrend1),w2=N(d?.waveTrend2);
+  const st=strategyStreak(fastStrategyBySymbol,symbol,key,a1.bias,a1.bias!=='WAIT'&&!a1.sideways&&a1.confidence>=78);
+  if(a1.sideways)return{mode:'FAST',tf:'1m',state:'PAUSE',side:'WAIT',score:a1.confidence,reason:'1m sideways/whipsaw — fast trade stop',analysis1m:a1,plan:null,targetRange:'20–30 pips'};
+  if(a1.bias==='WAIT')return{mode:'FAST',tf:'1m',state:'WAIT',side:'WAIT',score:a1.confidence,reason:'1m belum ada arah yang cukup kuat',analysis1m:a1,plan:null,targetRange:'20–30 pips'};
+  const side=a1.bias;
+  const candleOkay=c!=null&&N(d?.open)!=null&&(side==='BUY'?c>N(d.open):c<N(d.open));
+  const emaOkay=e9!=null&&e20!=null&&(side==='BUY'?e9>e20:e9<e20);
+  const wtOkay=w1!=null&&w2!=null&&(side==='BUY'?w1>w2:w1<w2);
+  const nearTrigger=atr!=null&&atr>0&&e9!=null&&Math.abs(c-e9)<=atr*.45;
+  const exact=exactAction(d?.action)===side;
+  const trigger=(exact||(candleOkay&&emaOkay&&wtOkay&&nearTrigger));
+  let state=a1.confidence>=74?'WATCH':'WAIT',reason=`1m ${side} ada, tunggu trigger lebih kemas`;
+  if(a1.confidence>=84&&st.streak>=2&&trigger){state='READY';reason=`FAST ${side} READY — 1m analysis + trigger confirm`;}
+  const atrPips=atr!=null?atr/pip:20;
+  const slPips=Math.round(clamp(atrPips*.18,10,18));
+  const targetPips=a1.confidence>=92&&atrPips>=28?30:a1.confidence>=87?25:20;
+  let plan=null;
+  if(state==='READY'&&c!=null){
+    const sl=side==='BUY'?c-slPips*pip:c+slPips*pip,tp1=side==='BUY'?c+20*pip:c-20*pip,tp2=side==='BUY'?c+30*pip:c-30*pip;
+    plan=makePlan(side,c,sl,tp1,tp2,null,{recommendedPips:targetPips,slPips,targetRange:'20–30 pips',planType:'FAST 1M'});
+  }
+  return{mode:'FAST',tf:'1m',state,side,score:a1.confidence,streak:st.streak,reason,analysis1m:a1,plan,targetRange:'20–30 pips'};
+}
+function normalScalpStrategy(symbol,d){
+  const a1=oneMinuteAnalysis(symbol,d),a3=analyzeClosedTF(symbol,d,3),a5=analyzeClosedTF(symbol,d,5),key=snapshotKey(d);
+  if(a3.bars<4||a5.bars<3)return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'Normal Scalping tengah bina history 3m/5m',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
+  if(a3.sideways||a5.sideways)return{mode:'NORMAL',tf:'3m',state:'PAUSE',side:'WAIT',score:0,reason:'3m/5m sideways — normal scalping stop',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
+  const side=a3.bias;
+  if(side==='WAIT')return{mode:'NORMAL',tf:'3m',state:'WAIT',side:'WAIT',score:a3.confidence,reason:'3m belum cukup solid',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
+  const align3=a3.bias===side,align5=a5.bias===side,align1=a1.bias===side;
+  const weighted=Math.round((a3.confidence||0)*.50+(a5.confidence||0)*.30+(a1.confidence||0)*.20);
+  const solid=align3&&align5&&align1&&a3.confidence>=80&&a5.confidence>=72&&a1.confidence>=75&&weighted>=84;
+  const st=strategyStreak(normalStrategyBySymbol,symbol,key,side,solid);
+  const c=N(d?.close),o=N(d?.open),e9=N(d?.ema9),w1=N(d?.waveTrend1),w2=N(d?.waveTrend2);
+  const trigger=c!=null&&o!=null&&e9!=null&&w1!=null&&w2!=null&&(side==='BUY'?c>o&&c>e9&&w1>w2:c<o&&c<e9&&w1<w2);
+  let state='WAIT',reason=`3m ${side}, tunggu 1m + 5m betul-betul sehala`;
+  if(align3&&align5&&weighted>=78)state='WATCH';
+  if(solid&&st.streak>=2&&trigger){state='READY';reason=`SOLID ${side} ENTRY — 1m + 3m + 5m semua sehala`;}
+  const atr3=N(a3.atr),entry=c;
+  let plan=null;
+  if(state==='READY'&&entry!=null&&atr3!=null&&atr3>0){
+    const structureDist=side==='BUY'&&N(a3.swingLow)!=null?entry-a3.swingLow:side==='SELL'&&N(a3.swingHigh)!=null?a3.swingHigh-entry:atr3*.6;
+    const riskDist=clamp(Math.max(atr3*.55,Math.min(Math.abs(structureDist)+atr3*.08,atr3*1.05)),atr3*.50,atr3*1.05);
+    const strong=weighted>=92&&a5.confidence>=82&&(N(a3.chop)==null||a3.chop<48);
+    const rr1=strong?1.0:.85,rr2=strong?1.8:1.5,rr3=strong?2.8:2.2;
+    const sl=side==='BUY'?entry-riskDist:entry+riskDist,tp1=side==='BUY'?entry+riskDist*rr1:entry-riskDist*rr1,tp2=side==='BUY'?entry+riskDist*rr2:entry-riskDist*rr2,tp3=side==='BUY'?entry+riskDist*rr3:entry-riskDist*rr3;
+    plan=makePlan(side,entry,sl,tp1,tp2,tp3,{riskDistance:riskDist,rr1,rr2,rr3,condition:strong?'STRONG TREND':'NORMAL TREND',planType:'NORMAL SCALPING 3M'});
+  }
+  const tfConfirm={m1:align1?'PASS':'WAIT',m3:align3?'PASS':'WAIT',m5:align5?'PASS':'WAIT'};
+  return{mode:'NORMAL',tf:'3m',state,side:state==='PAUSE'?'WAIT':side,score:weighted,streak:st.streak,reason,analysis1m:a1,analysis3m:a3,analysis5m:a5,confirmations:tfConfirm,solid,plan};
+}
+
 function exactAction(v){const s=U(v);return s==='BUY'||s==='SELL'?s:'WAIT';}
 function confirmationForSide(d,side){
   if(side!=='BUY'&&side!=='SELL')return{passed:0,total:4,mtfAligned:0,items:[]};
@@ -514,11 +640,11 @@ function updateOpportunity(symbol,d){
 
 function marketSummary(symbol){
   const d=latestBySymbol.get(symbol);
-  if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,sidewaysGuard:false,sidewaysReason:'Tiada data',sidewaysChop:null,sidewaysEmaFlips:0,sidewaysPriceReversals:0,opportunityType:'NONE',opportunitySide:'WAIT',opportunityStrength:'NONE',opportunityReason:'Tiada data',opportunityRisk:'WAIT',prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
-  const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p),a3=analysis3m(symbol,d),sg=sidewaysGuard(symbol,d),fast=fastTrade1m(symbol,d,a3);
+  if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,strategyFast:{mode:'FAST',state:'WAIT',side:'WAIT',score:0,reason:'Tiada data',plan:null},strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Tiada data',plan:null},sidewaysGuard:false,sidewaysReason:'Tiada data',sidewaysChop:null,sidewaysEmaFlips:0,sidewaysPriceReversals:0,opportunityType:'NONE',opportunitySide:'WAIT',opportunityStrength:'NONE',opportunityReason:'Tiada data',opportunityRisk:'WAIT',prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
+  const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p),a3=analysis3m(symbol,d),sg=sidewaysGuard(symbol,d),fast=fastTrade1m(symbol,d,a3),strategyFast=fastTradeStrategy(symbol,d),strategyNormal=normalScalpStrategy(symbol,d);
   const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d),opp=opportunityBySymbol.get(symbol)||updateOpportunity(symbol,d);
   const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
-  return{symbol,online:true,freshness:freshness(d.receivedAt),status:sg.active?'SIDEWAYS — SIGNAL PAUSE':predictionStatus(d,symbol,p),analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
+  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
 }
 function priority(m){return m.status==='TRADE ACTIVE'?700:m.status==='HOT PREDICTION'?600:m.status==='PREDICTION READY'?500:m.status==='WATCH'?400:m.status==='NEAR ENTRY'?300:m.status==='WAIT'?200:m.status==='STALE'?80:0;}
 function marketsPayload(){
@@ -526,7 +652,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore V27 Dual-Timeframe 3m Analysis + 1m Fast Trade',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore V28 Dual Strategy Engine — Fast 1m + Normal Scalping 3m',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
