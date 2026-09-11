@@ -42,14 +42,14 @@ function proxyHtml(req,res,targetPath){
     u.on('end',()=>{
       let html=Buffer.concat(chunks).toString('utf8');
       if(!html.includes('/v18-chart.js'))html=html.replace('</body>','<script src="/v18-chart.js?v=18.0"></script></body>');
-      if(!html.includes('/precision-ui-v19.js'))html=html.replace('</body>','<script src="/precision-ui-v19.js?v=26.0"></script></body>');
+      if(!html.includes('/precision-ui-v19.js'))html=html.replace('</body>','<script src="/precision-ui-v19.js?v=26.1"></script></body>');
       if(!html.includes('/v19-state-consistency.js'))html=html.replace('</body>','<script src="/v19-state-consistency.js?v=26.0"></script></body>');
       if(!html.includes('/secure-profit-v20.js'))html=html.replace('</body>','<script src="/secure-profit-v20.js?v=20.1"></script></body>');
       if(!html.includes('/trader-flow-v22.js'))html=html.replace('</body>','<script src="/trader-flow-v22.js?v=22.2"></script></body>');
       if(!html.includes('/smart-motion-v23.js'))html=html.replace('</body>','<script src="/smart-motion-v23.js?v=23.1"></script></body>');
       if(!html.includes('/interactive-layout-v24.js'))html=html.replace('</body>','<script src="/interactive-layout-v24.js?v=24.1"></script></body>');
-      if(!html.includes('/trader-cockpit-v25.js'))html=html.replace('</body>','<script src="/trader-cockpit-v25.js?v=26.0"></script></body>');
-      html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V26 — Signal Core</title>');
+      if(!html.includes('/trader-cockpit-v25.js'))html=html.replace('</body>','<script src="/trader-cockpit-v25.js?v=26.1"></script></body>');
+      html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V26.1 — Signal Core + Pullback</title>');
       res.writeHead(u.statusCode||200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store, no-cache, must-revalidate'});
       res.end(html);
     });
@@ -99,5 +99,5 @@ const server=http.createServer((req,res)=>{
 });
 
 server.listen(PUBLIC_PORT,'0.0.0.0',()=>{
-  console.log(`ZenCore V26 Signal Core gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}`);
+  console.log(`ZenCore V26.1 Signal Core + Pullback gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}`);
 });
