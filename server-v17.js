@@ -14,6 +14,7 @@ const historyBySymbol=new Map();
 const marketClients=new Set();
 const predictionClients=new Map();
 const signalCoreBySymbol=new Map();
+const opportunityBySymbol=new Map();
 const SIGNAL_INVALID_STREAK=2;
 const SIGNAL_REVERSAL_COOLDOWN_MS=45000;
 const SIGNAL_TRADE_COOLDOWN_MS=60000;
@@ -261,13 +262,77 @@ function predictionStatus(d,symbol,p){
   if(p.direction!=='WAIT'&&p.confidence>=68)return'WATCH';
   if(z.inZone||z.near)return'NEAR ENTRY'; return'WAIT';
 }
+
+function previousClosedSnapshot(symbol,d){
+  const arr=historyBySymbol.get(symbol)||[];
+  const curKey=N(d?.time)||N(d?.barIndex);
+  for(let i=arr.length-1;i>=0;i--){
+    const x=arr[i]; const k=N(x?.time)||N(x?.barIndex);
+    if(curKey==null||k!==curKey)return x;
+  }
+  return null;
+}
+function mtfTotalOf(d){
+  const direct=N(d?.mtfTotal);if(direct!=null)return direct;
+  return [['mtf1',N(d?.mtf1)],['mtf2',N(d?.mtf2)],['mtf3',N(d?.mtf3)]]
+    .reduce((a,[,v])=>a+(v==null?0:v>0?1:v<0?-1:0),0);
+}
+function opportunityStrength(d,side){
+  const mtf=mtfTotalOf(d),stars=N(d?.confluenceStars)||0,rvol=N(d?.relativeVolume)||0;
+  const strong=(side==='BUY'&&mtf>=2&&stars>=3&&rvol>1)||(side==='SELL'&&mtf<=-2&&stars>=3&&rvol>1);
+  const weak=(side==='BUY'&&mtf<=0)||(side==='SELL'&&mtf>=0)||stars<=2;
+  return{grade:strong?'STRONG':weak?'WEAK':'NORMAL',mtf,stars,rvol};
+}
+function updateOpportunity(symbol,d){
+  const now=Date.now(),prev=previousClosedSnapshot(symbol,d);
+  let last=opportunityBySymbol.get(symbol)||{type:'NONE',side:'WAIT',strength:'NONE',triggeredAt:0,barIndex:null,reason:'Tiada pullback trigger sekarang',risk:'WAIT'};
+  const c=N(d?.close),pclose=N(prev?.close),ema9=N(d?.ema9),pema9=N(prev?.ema9),ema20=N(d?.ema20),atr=N(d?.atr),o=N(d?.open),wt1=N(d?.waveTrend1),wt2=N(d?.waveTrend2),entry=N(d?.entry);
+  if([c,ema9].some(v=>v==null))return last;
+  const crossUp=prev&&pclose!=null&&pema9!=null&&pclose<=pema9&&c>ema9;
+  const crossDown=prev&&pclose!=null&&pema9!=null&&pclose>=pema9&&c<ema9;
+  const active=d?.tradeActive===true&&!d?.tp3Hit&&!d?.slHit;
+  const tradeSide=d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':'WAIT';
+  const positive=entry==null?false:tradeSide==='BUY'?c>entry:tradeSide==='SELL'?c<entry:false;
+  const hema=dirText(d?.hemaTrend);
+  const chop=N(d?.chopIndex);
+  const bar=N(d?.barIndex)??N(d?.time);
+  const cooldownOkay=last.barIndex==null||bar==null||Math.abs(bar-last.barIndex)>5;
+
+  let type='NONE',side='WAIT',reason='';
+  if(cooldownOkay&&active&&tradeSide==='BUY'&&positive&&crossUp&&wt1!=null&&wt2!=null&&wt1>wt2&&ema20!=null&&c>ema20){
+    type='PULLBACK';side='BUY';reason='BUY pullback: price reclaim EMA9, momentum bullish, masih atas EMA20 dan trade asal masih profit.';
+  }else if(cooldownOkay&&active&&tradeSide==='SELL'&&positive&&crossDown&&wt1!=null&&wt2!=null&&wt1<wt2&&ema20!=null&&c<ema20){
+    type='PULLBACK';side='SELL';reason='SELL pullback: price reject bawah EMA9, momentum bearish, masih bawah EMA20 dan trade asal masih profit.';
+  }else if(cooldownOkay&&!active&&hema==='BUY'&&crossUp&&wt1!=null&&wt2!=null&&wt1>wt2){
+    type='REENTRY';side='BUY';reason='BUY re-entry: HEMA bullish, price reclaim EMA9 dan momentum sambung naik.';
+  }else if(cooldownOkay&&!active&&hema==='SELL'&&crossDown&&wt1!=null&&wt2!=null&&wt1<wt2){
+    type='REENTRY';side='SELL';reason='SELL re-entry: HEMA bearish, price reject EMA9 dan momentum sambung turun.';
+  }else if(cooldownOkay&&atr!=null&&atr>0&&o!=null){
+    const body=c-o,rvol=N(d?.relativeVolume)||0;
+    if(hema==='BUY'&&body>atr*1.2&&rvol>1.2&&c>ema9){type='MOMENTUM';side='BUY';reason='Momentum BUY: candle kuat + volume + HEMA masih bullish.';}
+    else if(hema==='SELL'&&-body>atr*1.2&&rvol>1.2&&c<ema9){type='MOMENTUM';side='SELL';reason='Momentum SELL: candle kuat + volume + HEMA masih bearish.';}
+  }
+
+  if(type!=='NONE'){
+    const st=opportunityStrength(d,side);
+    const risk=(st.grade==='WEAK'||(chop!=null&&chop>=61.8))?'NO_ADD':active?'MANAGE_RISK':'WATCH_ENTRY';
+    last={type,side,strength:st.grade,triggeredAt:now,barIndex:bar,reason,risk,mtf:st.mtf,stars:st.stars,rvol:st.rvol,price:c,activeTrade:active};
+    opportunityBySymbol.set(symbol,last);return last;
+  }
+
+  const age=now-(last.triggeredAt||0);
+  if(last.type!=='NONE'&&age<=90000)return last;
+  last={type:'NONE',side:'WAIT',strength:'NONE',triggeredAt:0,barIndex:last.barIndex,reason:'Tiada pullback / re-entry trigger sekarang',risk:'WAIT'};
+  opportunityBySymbol.set(symbol,last);return last;
+}
+
 function marketSummary(symbol){
   const d=latestBySymbol.get(symbol);
-  if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
+  if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,opportunityType:'NONE',opportunitySide:'WAIT',opportunityStrength:'NONE',opportunityReason:'Tiada data',opportunityRisk:'WAIT',prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
   const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p);
-  const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d);
+  const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d),opp=opportunityBySymbol.get(symbol)||updateOpportunity(symbol,d);
   const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
-  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:p.direction,rawPrediction:p.direction,predictionConfidence:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
+  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:p.direction,rawPrediction:p.direction,predictionConfidence:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
 }
 function priority(m){return m.status==='TRADE ACTIVE'?700:m.status==='HOT PREDICTION'?600:m.status==='PREDICTION READY'?500:m.status==='WATCH'?400:m.status==='NEAR ENTRY'?300:m.status==='WAIT'?200:m.status==='STALE'?80:0;}
 function marketsPayload(){
@@ -275,7 +340,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore Signal Core v26 + Forward Prediction Ensemble',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore Signal Core v26.1 + Pullback/Re-entry Layer',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
@@ -287,6 +352,7 @@ function captureBody(body){
     const arr=historyBySymbol.get(symbol)||[]; const key=N(d.time)||N(d.barIndex)||Date.now();
     const i=arr.findIndex(x=>(N(x.time)||N(x.barIndex))===key); if(i>=0)arr[i]=d;else arr.push(d); if(arr.length>600)arr.splice(0,arr.length-600); historyBySymbol.set(symbol,arr);
     updateSignalCore(symbol,d);
+    updateOpportunity(symbol,d);
     broadcastMarkets();broadcastPrediction(symbol);
   }
 }
