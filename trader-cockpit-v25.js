@@ -155,6 +155,8 @@ function advice(x,h){
 }
 function profitWords(x){
   const cur=N(x?.current),peak=N(x?.peak);
+  if(x?.state==='CLOSED')return{now:'Trade dah settle',nowSub:'TP3 dah kena. Tunggu setup baru.',peak:'Trade complete',retain:null,retrace:null};
+  if(x?.state==='STOP')return{now:'Trade dah closed',nowSub:'Jangan revenge trade. Tunggu setup baru.',peak:'Trade selesai',retain:null,retrace:null};
   if(x?.state==='IDLE'||cur==null)return{now:'Belum ada trade aktif',nowSub:'Tunggu position.',peak:'Belum ada peak profit',retain:null,retrace:null};
   let now='Sekitar entry',nowSub='Trade belum bergerak jauh.';
   if(cur>=1.5){now='Profit sangat cantik';nowSub='Trade dah bergerak jauh dari entry.'}
@@ -170,7 +172,7 @@ function profitWords(x){
 function direction(p){
   if(!p)return{up:50,down:50,label:'ARAH BELUM CLEAR',why:'Prediction belum cukup data.',tone:'wait'};
   const mode=window.__ZENCORE_STRATEGY_MODE__==='FAST'?'FAST':'NORMAL',strat=mode==='FAST'?p?.strategyFast:p?.strategyNormal;
-  if(strat&&U(strat.state)==='PAUSE')return{up:50,down:50,label:'MARKET SIDEWAYS / PAUSE',why:strat.reason||'Strategi dipause sampai market clear.',tone:'wait'};
+  if(strat&&U(strat.state)==='COOLDOWN')return{up:50,down:50,label:'TUNGGU SETUP BARU',why:strat.reason||'Trade selesai. Jangan guna setup lama.',tone:'wait'};if(strat&&U(strat.state)==='PAUSE')return{up:50,down:50,label:'MARKET SIDEWAYS / PAUSE',why:strat.reason||'Strategi dipause sampai market clear.',tone:'wait'};
   const side=U(strat?.side||p.rawSide||p.side),conf=N(strat?.score??p.rawConf??p.conf)||0,st=N(p.st)||0,agree=N(p.agree)||0,passed=N(p.rawC?.passed)||0;
   let strength=conf*.45+st*.25+agree*.20+(passed/4)*10;
   let edge=clamp((strength-50)*.75,0,35);
@@ -191,6 +193,8 @@ function direction(p){
 }
 function setupWords(x){
   if(!x)return['Tunggu analysis','Belum cukup data setup.'];
+  if(x.state==='CLOSED')return['Tunggu setup baru','TP3 settle. Setup lama dah tamat.'];
+  if(x.state==='STOP')return['Tunggu setup baru','Trade dah closed. Jangan guna setup lama.'];
   const strong=N(x.strong)||0,warn=N(x.warn)||0;
   if(warn>=3)return['Setup dah rosak',`${warn} warning aktif. Elok utamakan protection.`];
   if(warn>=2)return['Setup mula lemah',`${strong} tanda masih kuat • ${warn} warning mula keluar.`];
@@ -220,6 +224,7 @@ function opportunityPaint(p){
   q('v26OppIcon').textContent=icon;q('v26OppTitle').textContent=title;q('v26OppReason').textContent=reason||'Tunggu trigger baru.';q('v26OppStrength').textContent=strength==='NONE'?'—':strength;q('v26OppAction').textContent=action;
 }
 function levelPaint(){
+  if(window.__ZENCORE_STRATEGY_MODE__&&window.__ZENCORE_PREDICTION_STATE__?.strategyFast)return;
   const price=domText('price'),entry=domText('entry'),sl=domText('sl'),tp1=domText('tp1'),tp2=domText('tp2'),tp3=domText('tp3');
   q('v25LivePrice').textContent=price;q('v25LiveEntry').textContent=entry;q('v25LiveSl').textContent=sl;q('v25LiveTp1').textContent=tp1;q('v25LiveTp2').textContent=tp2;q('v25LiveTp3').textContent=tp3;
   const x=window.__ZENCORE_SECURE_STATE__||{};
