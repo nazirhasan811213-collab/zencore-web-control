@@ -13,6 +13,10 @@ const latestBySymbol=new Map();
 const historyBySymbol=new Map();
 const marketClients=new Set();
 const predictionClients=new Map();
+const signalCoreBySymbol=new Map();
+const SIGNAL_INVALID_STREAK=2;
+const SIGNAL_REVERSAL_COOLDOWN_MS=45000;
+const SIGNAL_TRADE_COOLDOWN_MS=60000;
 
 const N=v=>{if(v===null||v===undefined||v===''||v==='null'||v==='NaN')return null;const x=Number(v);return Number.isFinite(x)?x:null};
 const U=v=>String(v||'').toUpperCase();
@@ -104,6 +108,120 @@ function predictionEngine(d,symbol){
   const reasons=leaderEvidence.slice(0,4).map(x=>x.label);
   return{direction,confidence,consensus,totalEvidence:ev.length,strength,horizon:'NEXT 1–3 BARS',reasons,conflict,bullScore:buy,bearScore:sell,agreement:Math.round(agreeWeight*100),currentAction:U(d.action||'WAIT'),freshness:freshness(d.receivedAt)};
 }
+
+function exactAction(v){const s=U(v);return s==='BUY'||s==='SELL'?s:'WAIT';}
+function confirmationForSide(d,side){
+  if(side!=='BUY'&&side!=='SELL')return{passed:0,total:4,mtfAligned:0,items:[]};
+  const items=[];
+  const mtf=[N(d?.mtf1),N(d?.mtf2),N(d?.mtf3)];
+  const mtfAligned=mtf.filter(v=>v!=null&&(side==='BUY'?v>0:v<0)).length;
+  items.push({name:'MTF',pass:mtfAligned>=2});
+  items.push({name:'HEMA',pass:dirText(d?.hemaTrend)===side});
+  items.push({name:'Momentum',pass:dirText(d?.momentum)===side});
+  items.push({name:'Structure',pass:dirText(d?.marketStructure)===side});
+  return{passed:items.filter(x=>x.pass).length,total:items.length,mtfAligned,items};
+}
+function planGeometry(d,side){
+  const e=N(d?.entry),sl=N(d?.sl),t1=N(d?.tp1),t2=N(d?.tp2),t3=N(d?.tp3);
+  if([e,sl,t1,t2,t3].some(v=>v==null))return false;
+  return side==='BUY'?sl<e&&e<t1&&t1<t2&&t2<t3:side==='SELL'?sl>e&&e>t1&&t1>t2&&t2>t3:false;
+}
+function exactPineZone(d){
+  const e=N(d?.entry),sl=N(d?.sl);
+  if(e==null||sl==null||e===sl)return null;
+  const z1=sl+(e-sl)*.786,z2=sl+(e-sl)*.236;
+  return{lo:Math.min(z1,z2),hi:Math.max(z1,z2)};
+}
+function entryReadyForSide(d,side){
+  const z=exactPineZone(d),price=N(d?.close),atr=N(d?.atr),entry=N(d?.entry),ch=N(d?.chopIndex),r=rr(d);
+  if(!z||price==null||atr==null||atr<=0||entry==null)return false;
+  const inZone=price>=z.lo&&price<=z.hi;
+  const zoneDist=price<z.lo?z.lo-price:price>z.hi?price-z.hi:0;
+  const nearZone=!inZone&&zoneDist<=atr*.20;
+  const nearEntry=Math.abs(price-entry)<=atr*.25;
+  return planGeometry(d,side)&&r!=null&&r>=1.5&&(ch==null||ch<61.8)&&(inZone||nearZone||nearEntry)&&exactAction(d?.action)===side;
+}
+function signalWarnings(d,p,side){
+  const notes=[];let count=0;
+  const opposite=side==='BUY'?'SELL':'BUY';
+  if(p?.direction===opposite&&p.confidence>=82&&p.agreement>=68){count++;notes.push('Prediction kuat dah lawan');}
+  if(dirText(d?.hemaTrend)===opposite){count++;notes.push('HEMA dah flip');}
+  if(dirText(d?.momentum)===opposite){count++;notes.push('Momentum dah lawan');}
+  if(dirText(d?.marketStructure)===opposite){count++;notes.push('Structure dah pecah');}
+  const mtf=[N(d?.mtf1),N(d?.mtf2),N(d?.mtf3)];
+  const oppMtf=mtf.filter(v=>v!=null&&(opposite==='BUY'?v>0:v<0)).length;
+  if(oppMtf>=2){count++;notes.push(`MTF ${oppMtf}/3 dah lawan`);}
+  const ch=N(d?.chopIndex);if(ch!=null&&ch>=68){count++;notes.push('Market terlalu serabut');}
+  return{count,notes,oppMtf};
+}
+function signalConfidenceForSide(p,side){
+  if(!p||side==='WAIT')return 0;
+  if(p.direction===side)return p.confidence;
+  const b=N(p.bullScore)||0,s=N(p.bearScore)||0,total=b+s;
+  if(!total)return 0;
+  return clamp(Math.round((side==='BUY'?b:s)/total*100));
+}
+function freshCore(){
+  return{side:'WAIT',stage:'WAIT',locked:false,lockedAt:0,updatedAt:Date.now(),invalidStreak:0,cooldownUntil:0,reason:'Tunggu setup',warnings:[]};
+}
+function updateSignalCore(symbol,d){
+  const now=Date.now(),p=predictionEngine(d,symbol),st=predictionStability(symbol),fresh=freshness(d?.receivedAt);
+  let c=signalCoreBySymbol.get(symbol)||freshCore();
+  const tp3=d?.tp3Hit===true,sl=d?.slHit===true&&!tp3,active=d?.tradeActive===true&&!tp3&&!sl;
+
+  if(tp3||sl){
+    const oldSide=c.side;
+    c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_TRADE_COOLDOWN_MS,updatedAt:now,reason:tp3?'TP3 settle — tunggu setup baru':'SL kena — jangan revenge trade',lastSide:oldSide};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(active){
+    const tradeSide=d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':c.side!=='WAIT'?c.side:p.direction;
+    c={...c,side:tradeSide,stage:'ACTIVE',locked:true,lockedAt:c.lockedAt||now,invalidStreak:0,cooldownUntil:0,updatedAt:now,reason:'Position aktif — signal ikut arah trade',warnings:[]};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(fresh!=='LIVE'){
+    c={...c,stage:c.locked?'LOCKED_WAIT':'WAIT',updatedAt:now,reason:'Data lambat — signal baru dibekukan'};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(c.stage==='COOLDOWN'&&now<c.cooldownUntil){
+    c={...c,side:'WAIT',locked:false,updatedAt:now,reason:'Cooldown — tunggu setup fresh'};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(c.stage==='COOLDOWN'&&now>=c.cooldownUntil)c=freshCore();
+
+  if(c.locked&&c.side!=='WAIT'){
+    const w=signalWarnings(d,p,c.side);
+    let streak=c.invalidStreak||0;
+    if(w.count>=3)streak++;else if(w.count<=1)streak=0;else streak=Math.max(0,streak-1);
+    if(streak>=SIGNAL_INVALID_STREAK){
+      const oldSide=c.side;
+      c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_REVERSAL_COOLDOWN_MS,updatedAt:now,reason:`Signal ${oldSide} batal — setup dah berubah`,lastSide:oldSide,warnings:w.notes};
+      signalCoreBySymbol.set(symbol,c);return c;
+    }
+    const cf=confirmationForSide(d,c.side),ch=N(d?.chopIndex);
+    const stillReady=cf.passed>=3&&(ch==null||ch<61.8);
+    const entryReady=stillReady&&entryReadyForSide(d,c.side);
+    c={...c,stage:entryReady?'ENTRY_READY':stillReady?'SETUP_READY':'LOCKED_WAIT',invalidStreak:streak,updatedAt:now,reason:entryReady?`${c.side} dah confirm — entry ikut plan`:stillReady?`${c.side} dikunci — setup masih sehala`:`${c.side} masih dikunci — tunggu confirmation balik`,warnings:w.notes};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+
+  if(p.direction==='WAIT'){
+    c={...freshCore(),updatedAt:now,reason:'Belum ada arah cukup kuat'};signalCoreBySymbol.set(symbol,c);return c;
+  }
+  const side=p.direction,cf=confirmationForSide(d,side),ch=N(d?.chopIndex);
+  const watch=p.confidence>=68&&p.consensus>=4;
+  const setupReady=p.confidence>=82&&p.consensus>=6&&st>=70&&p.agreement>=68&&!p.conflict&&(ch==null||ch<61.8)&&cf.passed>=3;
+  if(setupReady){
+    const entryReady=entryReadyForSide(d,side);
+    c={...freshCore(),side,stage:entryReady?'ENTRY_READY':'SETUP_READY',locked:true,lockedAt:now,updatedAt:now,reason:entryReady?`${side} dah confirm — entry ikut plan`:`${side} setup dah cukup kuat — arah dikunci`};
+  }else if(watch){
+    c={...freshCore(),side,stage:'WATCH',locked:false,updatedAt:now,reason:`${side} ada potensi — belum lock`};
+  }else{
+    c={...freshCore(),updatedAt:now,reason:'Tunggu setup lebih kuat'};
+  }
+  signalCoreBySymbol.set(symbol,c);return c;
+}
+
 function predictionGrade(p){
   if(p.direction==='WAIT')return p.confidence>=75?'B':'C';
   if(p.confidence>=90&&p.consensus>=7)return'A+';
@@ -137,9 +255,11 @@ function predictionStatus(d,symbol,p){
 }
 function marketSummary(symbol){
   const d=latestBySymbol.get(symbol);
-  if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',prediction:'WAIT',predictionConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
+  if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
   const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p);
-  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),signal:p.direction,prediction:p.direction,predictionConfidence:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
+  const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d);
+  const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
+  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:p.direction,rawPrediction:p.direction,predictionConfidence:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
 }
 function priority(m){return m.status==='TRADE ACTIVE'?700:m.status==='HOT PREDICTION'?600:m.status==='PREDICTION READY'?500:m.status==='WATCH'?400:m.status==='NEAR ENTRY'?300:m.status==='WAIT'?200:m.status==='STALE'?80:0;}
 function marketsPayload(){
@@ -147,7 +267,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore Forward Prediction Ensemble v17',generatedAt:Date.now(),note:'Prediction confidence is an ensemble quality score, not a guaranteed win probability.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore Signal Core v26 + Forward Prediction Ensemble',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
@@ -158,6 +278,7 @@ function captureBody(body){
     const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'}; latestBySymbol.set(symbol,d);
     const arr=historyBySymbol.get(symbol)||[]; const key=N(d.time)||N(d.barIndex)||Date.now();
     const i=arr.findIndex(x=>(N(x.time)||N(x.barIndex))===key); if(i>=0)arr[i]=d;else arr.push(d); if(arr.length>600)arr.splice(0,arr.length-600); historyBySymbol.set(symbol,arr);
+    updateSignalCore(symbol,d);
     broadcastMarkets();broadcastPrediction(symbol);
   }
 }
