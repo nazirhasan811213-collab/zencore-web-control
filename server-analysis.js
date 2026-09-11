@@ -48,7 +48,7 @@ function proxyHtml(req,res,targetPath){
       if(!html.includes('/trader-flow-v22.js'))html=html.replace('</body>','<script src="/trader-flow-v22.js?v=22.2"></script></body>');
       if(!html.includes('/smart-motion-v23.js'))html=html.replace('</body>','<script src="/smart-motion-v23.js?v=23.1"></script></body>');
       if(!html.includes('/interactive-layout-v24.js'))html=html.replace('</body>','<script src="/interactive-layout-v24.js?v=24.1"></script></body>');
-      if(!html.includes('/trader-cockpit-v25.js'))html=html.replace('</body>','<script src="/trader-cockpit-v25.js?v=25.0"></script></body>');
+      if(!html.includes('/trader-cockpit-v25.js'))html=html.replace('</body>','<script src="/trader-cockpit-v25.js?v=25.1"></script></body>');
       html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V25 — Trader Decision Cockpit</title>');
       res.writeHead(u.statusCode||200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store, no-cache, must-revalidate'});
       res.end(html);
