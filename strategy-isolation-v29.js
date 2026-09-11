@@ -60,7 +60,7 @@ function paint(){
  const p3=q('v29TP3Card');if(p3)p3.style.display=mode==='FAST'?'none':'block';
  const ch=q('v25Cockpit')&&q('v25Cockpit').querySelector('.v25-head-copy b'),cs=q('v25Cockpit')&&q('v25Cockpit').querySelector('.v25-head-copy span');
  if(ch)ch.textContent=mode==='FAST'?'⚡ FAST TRADE 1M — DECISION COCKPIT':'🧠 NORMAL SCALPING 3M — DECISION COCKPIT';if(cs)cs.textContent=mode==='FAST'?'Semua data bawah ini khas FAST 1M.':'Semua data bawah ini khas NORMAL 3M + confirmation 1m/3m/5m.';
- const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V29 — STRATEGY ISOLATION';const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent=mode==='FAST'?'FAST TRADE 1M':'NORMAL SCALPING 3M';
+ const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V30.2 — SETUP WAKE MODE';const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent=mode==='FAST'?'FAST TRADE 1M':'NORMAL SCALPING 3M';
 }
 function init(){restore();setTimeout(()=>{ensureSwitch();ensurePlan();paint()},1850);document.addEventListener('zencore:prediction-state',paint);document.addEventListener('zencore:flow-updated',paint);document.addEventListener('zencore:strategy-change',paint);document.addEventListener('visibilitychange',()=>{if(!document.hidden)paint()})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
