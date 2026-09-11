@@ -7,7 +7,7 @@ const U=v=>String(v||'').toUpperCase();
 let last='';
 
 const css=`
-#v22Flow{margin:12px 0 18px}.v22-flow-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;padding:0 2px}.v22-flow-head b{font:950 14px Inter,system-ui;color:#eef6fb}.v22-flow-head span{font:700 8px Inter,system-ui;color:#71899e}
+#v22Flow{margin:12px 0 18px}.v22-flow-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;padding:0 2px}.v22-flow-head b{font:950 14px Inter,system-ui;color:#eef6fb}.v22-flow-head span{font:700 8px Inter,system-ui;color:#71899e}.v22-legend{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 10px}.v22-legend span{padding:5px 8px;border-radius:999px;font:900 8px Inter,system-ui;border:1px solid #29475a;background:#07131d}.v22-legend .g{color:#3be497;border-color:#235c45;background:#0a2a1d}.v22-legend .y{color:#ffbf58;border-color:#685027;background:#2b210c}.v22-legend .r{color:#ff6878;border-color:#63313b;background:#2d1117}
 .v22-section{margin:0 0 12px;border:1px solid #1a394d;border-radius:16px;background:linear-gradient(145deg,#07131d,#061019);overflow:hidden;box-shadow:0 12px 28px #0003}
 .v22-sh{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 13px;border-bottom:1px solid #173244;background:#091722}
 .v22-num{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#10283a;border:1px solid #28506b;color:#9bd3ff;font:950 14px Inter,system-ui}
@@ -15,7 +15,7 @@ const css=`
 .v22-state{max-width:270px;padding:6px 9px;border-radius:999px;border:1px solid #36536a;background:#07131d;color:#d5e5f1;font:900 9px Inter,system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .v22-body{padding:12px}.v22-summary{display:grid;grid-template-columns:1.3fr repeat(3,.7fr);gap:7px}.v22-big,.v22-mini{border:1px solid #173346;border-radius:11px;background:#061019;padding:10px;min-width:0}
 .v22-big span,.v22-mini span{display:block;font:850 7px Inter,system-ui;color:#70889c;text-transform:uppercase;letter-spacing:.55px}.v22-big b{display:block;margin-top:5px;font:950 20px/1.08 Inter,system-ui;color:#ecf5fb}.v22-big small{display:block;margin-top:5px;font:650 9px/1.45 Inter,system-ui;color:#98acbc}.v22-mini b{display:block;margin-top:5px;font:900 12px Inter,system-ui;color:#dce9f2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.v22-buy .v22-state,.v22-buy .v22-big b{color:#3be497;border-color:#235c45}.v22-sell .v22-state,.v22-sell .v22-big b{color:#ff6878;border-color:#63313b}.v22-wait .v22-state,.v22-wait .v22-big b{color:#ffbf58;border-color:#685027}.v22-good .v22-state{color:#3be497;border-color:#235c45}.v22-bad .v22-state{color:#ff6878;border-color:#63313b}
+.v22-good{border-color:#235c45;background:linear-gradient(145deg,#071a13,#061019)}.v22-good .v22-sh{background:#0a2118}.v22-good .v22-state,.v22-good .v22-big b{color:#3be497;border-color:#235c45}.v22-wait{border-color:#5d4b27;background:linear-gradient(145deg,#1a1609,#061019)}.v22-wait .v22-sh{background:#211b0d}.v22-wait .v22-state,.v22-wait .v22-big b{color:#ffbf58;border-color:#685027}.v22-bad{border-color:#63313b;background:linear-gradient(145deg,#1d0d12,#061019)}.v22-bad .v22-sh{background:#241016}.v22-bad .v22-state,.v22-bad .v22-big b{color:#ff6878;border-color:#63313b}.v22-buy .v22-state,.v22-sell .v22-state{color:#d5e5f1;border-color:#36536a}
 .v22-slot>#v20Guard,.v22-slot>#v19Precision,.v22-slot>#v10Focus{margin:0!important}
 body.zc-focus #v21Overview,body.zc-focus .v21-section-label{display:none!important}
 body.zc-focus #v22Prediction #v19Precision .v19gates,body.zc-focus #v22Prediction #v19Precision .v19row,body.zc-focus #v22Prediction #v19Precision .v19elite{display:none!important}
@@ -44,7 +44,7 @@ function summarySection(id,num,title,desc,html){
 function root(){
   let r=q('v22Flow');if(r)return r;
   r=document.createElement('main');r.id='v22Flow';
-  r.innerHTML='<div class="v22-flow-head"><b>ZENCORE — TRADER FLOW</b><span>Baca dari Step 1 sampai Step 6</span></div>';
+  r.innerHTML='<div class="v22-flow-head"><b>ZENCORE — TRADER FLOW</b><span>Baca dari Step 1 sampai Step 6</span></div><div class="v22-legend"><span class="g">HIJAU = OK / HOLD / ENTRY VALID</span><span class="y">KUNING = WAIT / JAGA / MONITOR</span><span class="r">MERAH = AVOID / CLOSE / CUT</span></div>';
   const h=document.querySelector('header.top');if(h)h.insertAdjacentElement('afterend',r);else document.body.prepend(r);
   return r;
 }
@@ -76,40 +76,40 @@ function setState(id,text,tone){
 function market(){
   const decision=T('v10Decision'),sub=T('v10DecisionSub'),sig=T('v10Signal'),price=T('price'),feed=T('feed');
   q('v22MarketMain').textContent=decision;q('v22MarketSub').textContent=sub;q('v22Price').textContent=price;q('v22Bias').textContent=sig;q('v22Feed').textContent=feed;
-  const u=U(decision+' '+sig);setState('v22Market',/BUY/.test(u)?'BUY SIDE':/SELL/.test(u)?'SELL SIDE':'WAIT',/BUY/.test(u)?'buy':/SELL/.test(u)?'sell':'wait');
+  const u=U(decision+' '+sig+' '+feed);let tone='wait',state=/BUY/.test(u)?'BUY SIDE':/SELL/.test(u)?'SELL SIDE':'WAIT';if(/DATA DELAY|WAIT|BELUM|TUNGGU/.test(u))tone='wait';if(/ENTRY|RUNNING|PROFIT|HOLD|CUN/.test(u)&&!/BELUM|TUNGGU|WAIT|ROSAK|SL KENA|CLOSE|CUT|NO TRADE|TAK PAYAH/.test(u))tone='good';if(/ROSAK|SL KENA|CLOSE|CUT|NO TRADE|TAK PAYAH|AVOID/.test(u))tone='bad';setState('v22Market',state,tone);
 }
 function analysis(){
   const hema=T('hema'),mom=T('momentum'),mtf=T('mtfo'),structure=T('structure');
   const vals=[hema,mom,mtf,structure].map(U);
   const buys=vals.filter(v=>/BUY|BULL|UP/.test(v)).length,sells=vals.filter(v=>/SELL|BEAR|DOWN/.test(v)).length;
   let main='SETUP CAMPUR-CAMPUR',tone='wait';
-  if(buys>=3){main='BUY SETUP MASIH KUAT';tone='buy'}else if(sells>=3){main='SELL SETUP MASIH KUAT';tone='sell'}else if(/CHOP|SIDEWAYS/.test(U(structure))){main='MARKET SERABUT';tone='wait'}
+  if(buys>=3){main='BUY SETUP MASIH KUAT';tone='good'}else if(sells>=3){main='SELL SETUP MASIH KUAT';tone='good'}else if(/CHOP|SIDEWAYS/.test(U(structure))){main='MARKET SERABUT';tone='wait'}
   q('v22AnaMain').textContent=main;q('v22AnaSub').textContent=`Structure ${structure}`;q('v22Hema').textContent=hema;q('v22Mom').textContent=mom;q('v22Mtf').textContent=mtf;
   setState('v22Analysis',main,tone);
 }
 function position(){
   const g=q('v20Guard');const title=g?.querySelector('.v20action b')?.textContent?.trim()||'NO POSITION';
   const u=U(title);let tone='wait';
-  if(/PROFIT|RUNNER|TP3/.test(u))tone='good';else if(/SL|ROSAK|CLOSE|CUT/.test(u))tone='bad';else if(/BUY/.test(u))tone='buy';else if(/SELL/.test(u))tone='sell';
+  if(/SL|ROSAK|CLOSE|CUT/.test(u))tone='bad';else if(/SECURE|PARTIAL|SLOW|DELAY|WAIT/.test(u))tone='wait';else if(/PROFIT|RUNNER|TP3|BUY RUNNING|SELL RUNNING/.test(u))tone='good';
   setState('v22Position',title,tone);
 }
 function prediction(){
   const p=q('v19Precision'),dec=p?.querySelector('.v19decision')?.textContent?.trim()||'WAIT';
-  const u=U(dec);setState('v22Prediction',dec,/BUY/.test(u)?'buy':/SELL/.test(u)?'sell':'wait');
+  const u=U(dec);let tone='wait';if(/ENTRY .*CONFIRMED|DAH CUN|ELITE/.test(u))tone='good';if(/NO TRADE|TAK PAYAH|R:R TAK CUN|MARKET SERABUT|PLAN TAK CUN/.test(u))tone='bad';setState('v22Prediction',dec,tone);
 }
 function plan(){
   const action=T('v10Coach'),ready=T('v10Readiness'),decision=T('v10Decision');
-  const u=U(decision+' '+ready);setState('v22TradePlan',action!=='—'?action:ready,/BUY/.test(u)?'buy':/SELL/.test(u)?'sell':'wait');
+  const u=U(decision+' '+ready+' '+action);let tone='wait';if(/ENTRY|BOLEH|HOLD|CUN/.test(u)&&!/BELUM|TUNGGU|WAIT|ROSAK|CLOSE|CUT|TAK PAYAH|NO TRADE/.test(u))tone='good';if(/ROSAK|CLOSE|CUT|TAK PAYAH|NO TRADE|SL KENA/.test(u))tone='bad';setState('v22TradePlan',action!=='—'?action:ready,tone);
 }
 function chart(){
-  const feed=T('feed');setState('v22Chart',feed==='DATA LIVE'?'CHART LIVE':feed,feed==='DATA LIVE'?'good':'wait');
+  const feed=T('feed');let tone=feed==='DATA LIVE'?'good':/DELAY|RECONNECT/.test(U(feed))?'wait':'bad';setState('v22Chart',feed==='DATA LIVE'?'CHART LIVE':feed,tone);
 }
 function paint(){
   if(document.hidden)return;build();
   const sig=[T('v10Decision'),T('v10Signal'),T('price'),T('feed'),T('hema'),T('momentum'),T('mtfo'),T('structure'),q('v20Guard')?.textContent,q('v19Precision')?.textContent,T('v10Coach')].join('|');
   if(sig===last)return;last=sig;
   market();position();analysis();prediction();plan();chart();
-  const h=document.querySelector('header.top .brand h1');if(h)h.textContent='ZENCORE V22 — STEP-BY-STEP TRADER VIEW';
+  const h=document.querySelector('header.top .brand h1');if(h)h.textContent='ZENCORE V22.1 — STEP-BY-STEP TRADER VIEW';
   const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='6-STEP FLOW';
 }
 function init(){document.body.classList.add('zc-v22');setTimeout(()=>{build();paint()},900);setInterval(paint,3000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)paint()})}
