@@ -90,7 +90,7 @@ function deriveAction(){
   const pred=q('v19Precision')?.querySelector('.v19decision')?.textContent?.trim()||'WAIT';
   const all=U([posTitle,posBadge,decision,coach].join(' '));
   let tone='wait',action='TUNGGU DULU',why=coach!=='—'?coach:'Tunggu setup yang betul-betul cun.',orb='👀';
-  if(/SL KENA|SETUP DAH ROSAK|CLOSE POSITION|CLOSE \/ CUT|CUT EARLY/.test(all)){
+  if(/TP3 SETTLE|TRADE COMPLETE/.test(all)){tone='good';action='TUNGGU SETUP BARU';why='TP3 dah settle. Jangan kejar market; tunggu setup fresh.';orb='✅';}else if(/SL KENA|SETUP DAH ROSAK|CLOSE POSITION|CLOSE \/ CUT|CUT EARLY/.test(all)){
     tone='bad';action=/SL KENA/.test(all)?'TRADE DAH CLOSED':'CLOSE / CUT';why=posMsg||coach;orb='🚪';
   }else if(/CLOSE SEPARUH|MOMENTUM DAH SLOW/.test(all)){
     tone='wait';action='BOLEH CLOSE SEPARUH';why=posMsg||'Momentum dah slow, secure sikit profit.';orb='✂️';
