@@ -346,6 +346,8 @@ function makePlan(side,entry,sl,tp1,tp2,tp3,meta={}){
   return{side,entry,sl,tp1,tp2,tp3,...meta};
 }
 function fastTradeStrategy(symbol,d){
+  const life=signalCoreBySymbol.get(symbol);
+  if(life?.stage==='COOLDOWN')return{mode:'FAST',tf:'1m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',analysis1m:null,plan:null,targetRange:'20–30 pips'};
   const a1=oneMinuteAnalysis(symbol,d),key=snapshotKey(d),pip=pipSizeFor(symbol),c=N(d?.close),atr=N(d?.atr),e9=N(d?.ema9),e20=N(d?.ema20),w1=N(d?.waveTrend1),w2=N(d?.waveTrend2);
   const st=strategyStreak(fastStrategyBySymbol,symbol,key,a1.bias,a1.bias!=='WAIT'&&!a1.sideways&&a1.confidence>=78);
   if(a1.sideways)return{mode:'FAST',tf:'1m',state:'PAUSE',side:'WAIT',score:a1.confidence,reason:'1m sideways/whipsaw — fast trade stop',analysis1m:a1,plan:null,targetRange:'20–30 pips'};
@@ -370,6 +372,8 @@ function fastTradeStrategy(symbol,d){
   return{mode:'FAST',tf:'1m',state,side,score:a1.confidence,streak:st.streak,reason,analysis1m:a1,plan,targetRange:'20–30 pips'};
 }
 function normalScalpStrategy(symbol,d){
+  const life=signalCoreBySymbol.get(symbol);
+  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',analysis1m:null,analysis3m:null,analysis5m:null,confirmations:{m1:'WAIT',m3:'WAIT',m5:'WAIT'},solid:false,plan:null};
   const a1=oneMinuteAnalysis(symbol,d),a3=analyzeClosedTF(symbol,d,3),a5=analyzeClosedTF(symbol,d,5),key=snapshotKey(d);
   if(a3.bars<4||a5.bars<3)return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'Normal Scalping tengah bina history 3m/5m',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
   if(a3.sideways||a5.sideways)return{mode:'NORMAL',tf:'3m',state:'PAUSE',side:'WAIT',score:0,reason:'3m/5m sideways — normal scalping stop',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
@@ -641,8 +645,9 @@ function updateOpportunity(symbol,d){
 function marketSummary(symbol){
   const d=latestBySymbol.get(symbol);
   if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,strategyFast:{mode:'FAST',state:'WAIT',side:'WAIT',score:0,reason:'Tiada data',plan:null},strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Tiada data',plan:null},sidewaysGuard:false,sidewaysReason:'Tiada data',sidewaysChop:null,sidewaysEmaFlips:0,sidewaysPriceReversals:0,opportunityType:'NONE',opportunitySide:'WAIT',opportunityStrength:'NONE',opportunityReason:'Tiada data',opportunityRisk:'WAIT',prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
-  const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p),a3=analysis3m(symbol,d),sg=sidewaysGuard(symbol,d),fast=fastTrade1m(symbol,d,a3),strategyFast=fastTradeStrategy(symbol,d),strategyNormal=normalScalpStrategy(symbol,d);
+  const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p),a3=analysis3m(symbol,d),sg=sidewaysGuard(symbol,d),fast=fastTrade1m(symbol,d,a3);
   const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d),opp=opportunityBySymbol.get(symbol)||updateOpportunity(symbol,d);
+  const strategyFast=fastTradeStrategy(symbol,d),strategyNormal=normalScalpStrategy(symbol,d);
   const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
   return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
 }
@@ -652,7 +657,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore V28 Dual Strategy Engine — Fast 1m + Normal Scalping 3m',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore V30.1 Strategy Isolation + Lifecycle Guard',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
