@@ -45,15 +45,15 @@ const css=`
 
 /* Keep chart comfortable */
 #v22Chart .v22-body{padding:8px!important}
-#v22Chart .v6-grid{grid-template-columns:1fr!important}
-#v22Chart .v6-side{display:none!important}
+body.zc-focus #v22Chart .v6-grid{grid-template-columns:1fr!important}
+body.zc-focus #v22Chart .v6-side{display:none!important}
 #v22Chart .chartpanel{min-height:620px!important}
 #v22Chart .chartwrap,#v22Chart #chart{min-height:520px!important}
 
 /* Trade plan is action focused */
-#v22TradePlan .v10-plan{grid-template-columns:1.15fr repeat(2,1fr)!important}
-#v22TradePlan .v10-plan .v10-kpi:nth-child(5),
-#v22TradePlan .v10-plan .v10-kpi:nth-child(6){display:none!important}
+body.zc-focus #v22TradePlan .v10-plan{grid-template-columns:1.15fr repeat(2,1fr)!important}
+body.zc-focus #v22TradePlan .v10-plan .v10-kpi:nth-child(5),
+body.zc-focus #v22TradePlan .v10-plan .v10-kpi:nth-child(6){display:none!important}
 
 /* Responsive */
 @media(max-width:1180px){
