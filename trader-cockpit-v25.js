@@ -169,8 +169,8 @@ function profitWords(x){
 }
 function direction(p){
   if(!p)return{up:50,down:50,label:'ARAH BELUM CLEAR',why:'Prediction belum cukup data.',tone:'wait'};
-  if(p.sidewaysGuard)return{up:50,down:50,label:'MARKET SIDEWAYS',why:p.sidewaysReason||'Signal arah dipause sampai market clear.',tone:'wait'};
-  const side=U(p.rawSide||p.side),conf=N(p.rawConf??p.conf)||0,st=N(p.st)||0,agree=N(p.agree)||0,passed=N(p.rawC?.passed)||0;
+  if(p.sidewaysGuard||p?.analysis3m?.sideways)return{up:50,down:50,label:'MARKET SIDEWAYS',why:p.sidewaysReason||p?.analysis3m?.reason||'Signal arah dipause sampai market clear.',tone:'wait'};
+  const a3=p?.analysis3m||null;const side=U(a3?.bias||p.rawSide||p.side),conf=N(a3?.confidence??p.rawConf??p.conf)||0,st=N(p.st)||0,agree=N(p.agree)||0,passed=N(p.rawC?.passed)||0;
   let strength=conf*.45+st*.25+agree*.20+(passed/4)*10;
   let edge=clamp((strength-50)*.75,0,35);
   if(p.conflict)edge*=.4;
@@ -238,12 +238,12 @@ function paint(){
   q('v25ProfitNow').textContent=pw.now;q('v25ProfitNowSub').textContent=pw.nowSub;q('v25ProfitPeak').textContent=pw.peak;
   if(pw.retain==null){q('v25RetainText').textContent='Belum ada data';q('v25RetraceText').textContent='Belum ada profit untuk dibandingkan.';q('v25RetainBar').style.width='0%'}
   else{q('v25RetainText').textContent=`Masih simpan ${pw.retain}% daripada peak profit`;q('v25RetraceText').textContent=pw.retrace<=10?'Profit masih dijaga elok.':`${pw.retrace}% profit dah retrace dari puncak.`;q('v25RetainBar').style.width=pw.retain+'%'}
-  q('v25SetupText').textContent=sw[0];q('v25SetupSub').textContent=sw[1];const sb=q('v26SignalBadge');if(sb){const ss=U(p?.side||'WAIT'),locked=!!p?.signalLocked,swg=!!p?.sidewaysGuard;sb.textContent=swg?'⚠️ SIGNAL PAUSE':ss==='WAIT'?'SIGNAL: WAIT':locked?`🔒 SIGNAL ${ss}`:`👀 WATCH ${ss}`;sb.classList.toggle('locked',locked&&!swg)}
+  q('v25SetupText').textContent=sw[0];q('v25SetupSub').textContent=sw[1];const sb=q('v26SignalBadge');if(sb){const a3=U(p?.analysis3m?.bias||'WAIT'),swg=!!p?.sidewaysGuard||!!p?.analysis3m?.sideways;sb.textContent=swg?'⚠️ 3M SIDEWAYS':a3==='WAIT'?'3M BIAS: WAIT':`🧠 3M BIAS ${a3}`;sb.classList.toggle('locked',a3!=='WAIT'&&!swg)}
   if(lastHealth!=null&&Math.abs(h.score-lastHealth)>=4)burst(q('v25Cockpit'));lastHealth=h.score;
   if(lastState!==String(x?.state||'')){burst(q('v25Cockpit'));lastState=String(x?.state||'')}
   const dirSig=d.label+d.up;if(lastDir&&lastDir!==dirSig)burst(q('v25Cockpit'));lastDir=dirSig;
-  const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V26.2 — SIDEWAYS SAFETY GUARD';
-  const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='SIDEWAYS GUARD • SIGNAL SAFE';
+  const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V27 — DUAL TIMEFRAME SIGNAL ENGINE';
+  const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='3M ANALYSIS • 1M FAST TRADE';
 }
 function init(){
   setTimeout(()=>{ensure();restoreMode();paint()},1550);
