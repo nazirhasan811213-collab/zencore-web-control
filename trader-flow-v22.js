@@ -112,6 +112,13 @@ function paint(){
   const h=document.querySelector('header.top .brand h1');if(h)h.textContent='ZENCORE V22.1 — STEP-BY-STEP TRADER VIEW';
   const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='6-STEP FLOW';
 }
-function init(){document.body.classList.add('zc-v22');setTimeout(()=>{build();paint()},900);setInterval(paint,3000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)paint()})}
+let flowObs=null,paintQueued=false;
+function schedulePaint(){if(document.hidden||paintQueued)return;paintQueued=true;requestAnimationFrame(()=>{paintQueued=false;paint();try{document.dispatchEvent(new CustomEvent('zencore:flow-updated'))}catch(_){}})}
+function bindSources(){
+  if(flowObs)return;
+  flowObs=new MutationObserver(schedulePaint);
+  ['v10Focus','v20Guard','v19Precision','feed','price','hema','momentum','mtfo','structure'].forEach(id=>{const e=q(id);if(e)flowObs.observe(e,{subtree:true,childList:true,characterData:true})});
+}
+function init(){document.body.classList.add('zc-v22');setTimeout(()=>{build();paint();bindSources();try{document.dispatchEvent(new CustomEvent('zencore:flow-updated'))}catch(_){}},900);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedulePaint()})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
