@@ -9,7 +9,7 @@ let lastHealth=null,lastState='',lastDir='';
 
 const css=`
 #v25Cockpit{grid-column:1/-1;border:1px solid #244a61;border-radius:18px;background:linear-gradient(145deg,#07141e,#061019);padding:13px;box-shadow:0 14px 34px #0004;contain:layout style paint}
-.v25-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.v25-head-copy b{display:block;font:950 13px Inter,system-ui;color:#edf6fb;letter-spacing:.4px}.v25-head-copy span{display:block;margin-top:3px;font:650 8.5px Inter,system-ui;color:#8198aa}.v25-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.v25-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.v25-head-copy b{display:block;font:950 13px Inter,system-ui;color:#edf6fb;letter-spacing:.4px}.v25-head-copy span{display:block;margin-top:3px;font:650 8.5px Inter,system-ui;color:#8198aa}.v25-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.v26-signal{padding:6px 9px;border:1px solid #29475a;border-radius:999px;background:#07131d;color:#ffbf58;font:950 8px Inter,system-ui}.v26-signal.locked{color:#3be497;border-color:#235c45}
 .v25-btn{border:1px solid #29475a;border-radius:9px;background:#07131d;color:#91a7b8;padding:6px 9px;font:900 8px Inter,system-ui;cursor:pointer}.v25-btn:hover,.v25-btn.active{color:#eef7fc;border-color:#477894;background:#0c2130}
 .v25-levels{display:grid;grid-template-columns:1.25fr repeat(5,1fr);gap:8px;margin:0 0 10px}
 .v25-level{border:1px solid #17384c;border-radius:12px;background:#061019;padding:10px;min-width:0;position:relative;overflow:hidden}
@@ -51,7 +51,7 @@ function ensure(){
   e.innerHTML=`
     <div class="v25-head">
       <div class="v25-head-copy"><b>🚘 TRADER DECISION COCKPIT</b><span>Tengok meter → faham keadaan → ikut action. Nombor teknikal disimpan dalam Detail Teknikal.</span></div>
-      <div class="v25-actions"><button class="v25-btn active" id="v25TraderBtn">TRADER VIEW</button><button class="v25-btn" id="v25DetailBtn">DETAIL TEKNIKAL</button></div>
+      <div class="v25-actions"><span class="v26-signal" id="v26SignalBadge">SIGNAL: WAIT</span><button class="v25-btn active" id="v25TraderBtn">TRADER VIEW</button><button class="v25-btn" id="v25DetailBtn">DETAIL TEKNIKAL</button></div>
     </div>
     <div class="v25-levels" id="v25Levels">
       <div class="v25-level price"><span>📍 Price Sekarang</span><b id="v25LivePrice">—</b><small>Harga live market</small></div>
@@ -162,7 +162,7 @@ function profitWords(x){
 }
 function direction(p){
   if(!p)return{up:50,down:50,label:'ARAH BELUM CLEAR',why:'Prediction belum cukup data.',tone:'wait'};
-  const side=U(p.side),conf=N(p.conf)||0,st=N(p.st)||0,agree=N(p.agree)||0,passed=N(p.c?.passed)||0;
+  const side=U(p.rawSide||p.side),conf=N(p.rawConf??p.conf)||0,st=N(p.st)||0,agree=N(p.agree)||0,passed=N(p.rawC?.passed)||0;
   let strength=conf*.45+st*.25+agree*.20+(passed/4)*10;
   let edge=clamp((strength-50)*.75,0,35);
   if(p.conflict)edge*=.4;
@@ -209,12 +209,12 @@ function paint(){
   q('v25ProfitNow').textContent=pw.now;q('v25ProfitNowSub').textContent=pw.nowSub;q('v25ProfitPeak').textContent=pw.peak;
   if(pw.retain==null){q('v25RetainText').textContent='Belum ada data';q('v25RetraceText').textContent='Belum ada profit untuk dibandingkan.';q('v25RetainBar').style.width='0%'}
   else{q('v25RetainText').textContent=`Masih simpan ${pw.retain}% daripada peak profit`;q('v25RetraceText').textContent=pw.retrace<=10?'Profit masih dijaga elok.':`${pw.retrace}% profit dah retrace dari puncak.`;q('v25RetainBar').style.width=pw.retain+'%'}
-  q('v25SetupText').textContent=sw[0];q('v25SetupSub').textContent=sw[1];
+  q('v25SetupText').textContent=sw[0];q('v25SetupSub').textContent=sw[1];const sb=q('v26SignalBadge');if(sb){const ss=U(p?.side||'WAIT'),locked=!!p?.signalLocked;sb.textContent=ss==='WAIT'?'SIGNAL: WAIT':locked?`🔒 SIGNAL ${ss}`:`👀 WATCH ${ss}`;sb.classList.toggle('locked',locked)}
   if(lastHealth!=null&&Math.abs(h.score-lastHealth)>=4)burst(q('v25Cockpit'));lastHealth=h.score;
   if(lastState!==String(x?.state||'')){burst(q('v25Cockpit'));lastState=String(x?.state||'')}
   const dirSig=d.label+d.up;if(lastDir&&lastDir!==dirSig)burst(q('v25Cockpit'));lastDir=dirSig;
-  const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V25 — TRADER DECISION COCKPIT';
-  const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='TENGOK • FAHAM • BERTINDAK';
+  const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V26 — SIGNAL CORE';
+  const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='SIGNAL STABIL • ENTRY TERPILIH';
 }
 function init(){
   setTimeout(()=>{ensure();restoreMode();paint()},1550);
