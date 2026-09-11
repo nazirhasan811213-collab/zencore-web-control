@@ -119,7 +119,7 @@ function toast(text){
 }
 function render(d){
   if(!d||document.hidden)return;
-  const x=assess(d),e=host();
+  const x=assess(d),e=host();window.__ZENCORE_SECURE_STATE__=x;try{document.dispatchEvent(new CustomEvent('zencore:secure-state',{detail:x}))}catch(_){}
   const sig=JSON.stringify([x.state,x.current,x.peak,x.giveback,x.warn,x.strong,d?.receivedAt]);
   if(sig===lastRenderSig)return;lastRenderSig=sig;
   e.className=x.tone==='good'?'v20-good':x.tone==='warn'?'v20-warn':x.tone==='bad'?'v20-bad':x.tone==='buy'?'v20-buy':x.tone==='sell'?'v20-sell':'';
