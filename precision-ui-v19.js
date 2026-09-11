@@ -13,6 +13,7 @@ function geometry(d,side){const e=N(d?.entry),sl=N(d?.sl),t1=N(d?.tp1),t2=N(d?.t
 function pineZone(d){const e=N(d?.entry),sl=N(d?.sl);if(e==null||sl==null||e===sl)return null;const z1=sl+(e-sl)*0.786,z2=sl+(e-sl)*0.236;return{lo:Math.min(z1,z2),hi:Math.max(z1,z2)} }
 function freshness(d){const t=N(d?.receivedAt);if(!t)return'NO DATA';const age=Date.now()-t;return age<90000?'LIVE':age<240000?'STALE':'OFFLINE'}
 function confirmation(d,side){
+  if(side!=='BUY'&&side!=='SELL')return{items:[],passed:0,total:4,mtfAligned:0};
   const items=[];
   const mtf=[N(d?.mtf1),N(d?.mtf2),N(d?.mtf3)];
   const mtfAligned=mtf.filter(v=>v!=null&&(side==='BUY'?v>0:v<0)).length;
@@ -28,7 +29,7 @@ function evaluate(){
   const rawConf=N(p.predictionConfidence)||0,signalStage=U(p.signalState||'WAIT'),signalLocked=!!p.signalLocked;
   const conf=signalLocked?(N(p.signalConfidence)||rawConf):rawConf,cons=N(p.predictionConsensus)||0,evidence=N(p.predictionEvidence)||0,st=N(p.stability)||0,agree=N(p.predictionAgreement)||0;
   const conflict=!!p.predictionConflict; const predPass=signalLocked?['SETUP_READY','ENTRY_READY','ACTIVE'].includes(signalStage):(side!=='WAIT'&&conf>=82&&cons>=6&&st>=70&&agree>=68&&!conflict);
-  const c=confirmation(d,side); const confirmPass=side!=='WAIT'&&c.passed>=3;
+  const c=confirmation(d,side),rawC=confirmation(d,rawSide); const confirmPass=side!=='WAIT'&&c.passed>=3;
   const ch=N(d.chopIndex); const chopPass=ch==null||ch<61.8;
   const planRR=rr(d), rrPass=planRR!=null&&planRR>=1.5;
   const geo=geometry(d,side); const z=pineZone(d),price=N(d.close),atr=N(d.atr),entry=N(d.entry);
@@ -58,7 +59,7 @@ function evaluate(){
   else if(exactMatch&&entryPass){decision=`ENTRY ${side} CONFIRMED`;tone=side.toLowerCase();why='Prediction, confirmation, trigger dan trade plan semuanya sehala.';}
   else if(entryPass){decision=`PREPARE ${side}`;tone=side.toLowerCase();why='Setup berkualiti dan harga berada di kawasan execution; tunggu trigger tepat.';}
   else {decision=`WAIT PRICE ${side}`;tone=side.toLowerCase();why='Prediction dan confirmation lulus, tetapi harga belum berada di kawasan execution.';}
-  return{side,rawSide,rawConf,signalStage,signalLocked,signalReason:p.signalReason||'',fresh,conf,cons,evidence,st,agree,conflict,predPass,c,confirmPass,ch,chopPass,planRR,rrPass,geo,z,price,inZone,nearZone,atTriggerArea,entryPass,exact,exactMatch,elite,quality,decision,tone,why,active};
+  return{side,rawSide,rawConf,rawC,signalStage,signalLocked,signalReason:p.signalReason||'',fresh,conf,cons,evidence,st,agree,conflict,predPass,c,confirmPass,ch,chopPass,planRR,rrPass,geo,z,price,inZone,nearZone,atTriggerArea,entryPass,exact,exactMatch,elite,quality,decision,tone,why,active};
 }
 const css=`
 #v17Prediction{display:none!important}
