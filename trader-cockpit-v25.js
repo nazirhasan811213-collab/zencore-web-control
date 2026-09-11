@@ -11,6 +11,14 @@ const css=`
 #v25Cockpit{grid-column:1/-1;border:1px solid #244a61;border-radius:18px;background:linear-gradient(145deg,#07141e,#061019);padding:13px;box-shadow:0 14px 34px #0004;contain:layout style paint}
 .v25-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.v25-head-copy b{display:block;font:950 13px Inter,system-ui;color:#edf6fb;letter-spacing:.4px}.v25-head-copy span{display:block;margin-top:3px;font:650 8.5px Inter,system-ui;color:#8198aa}.v25-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .v25-btn{border:1px solid #29475a;border-radius:9px;background:#07131d;color:#91a7b8;padding:6px 9px;font:900 8px Inter,system-ui;cursor:pointer}.v25-btn:hover,.v25-btn.active{color:#eef7fc;border-color:#477894;background:#0c2130}
+.v25-levels{display:grid;grid-template-columns:1.25fr repeat(5,1fr);gap:8px;margin:0 0 10px}
+.v25-level{border:1px solid #17384c;border-radius:12px;background:#061019;padding:10px;min-width:0;position:relative;overflow:hidden}
+.v25-level span{display:block;font:850 7px Inter,system-ui;color:#70899d;text-transform:uppercase;letter-spacing:.6px}
+.v25-level b{display:block;margin-top:5px;font:950 15px Inter,system-ui;color:#e9f3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v25-level small{display:block;margin-top:4px;font:700 7.5px Inter,system-ui;color:#758da0}
+.v25-level.price{border-color:#285b72;background:#071923}.v25-level.price b{font-size:20px;color:#78d9ff}
+.v25-level.entry b{color:#ffbf58}.v25-level.sl b{color:#ff6878}.v25-level.tp b{color:#3be497}
+.v25-level.hit{border-color:#2f805e;background:#082218}.v25-level.hit:after{content:'✓ HIT';position:absolute;right:8px;top:8px;font:950 7px Inter,system-ui;color:#3be497}
 .v25-main{display:grid;grid-template-columns:5fr 7fr;gap:10px}.v25-card{border:1px solid #17384c;border-radius:14px;background:#061019;padding:12px;min-width:0}
 .v25-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.v25-card-title b{font:950 10px Inter,system-ui;color:#e3eef6;letter-spacing:.45px}.v25-card-title span{font:800 7px Inter,system-ui;color:#70899d}
 .v25-gauge-area{position:relative;max-width:330px;height:178px;margin:8px auto 0}.v25-gauge{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:280px;height:140px;overflow:hidden}
@@ -31,8 +39,8 @@ body.zc-focus.v25-simple #v22Market,body.zc-focus.v25-simple #v22Position,body.z
 body.zc-focus.v25-simple #v22TradePlan{grid-column:1/span 5!important}
 body.zc-focus.v25-simple #v22Chart{grid-column:6/span 7!important}
 body.zc-focus #v24Controls .v24-btn{display:none!important}
-@media(max-width:1180px){.v25-main{grid-template-columns:1fr}.v25-profit{grid-template-columns:1fr 1fr}body.zc-focus.v25-simple #v22TradePlan,body.zc-focus.v25-simple #v22Chart{grid-column:1/-1!important}}
-@media(max-width:650px){.v25-profit{grid-template-columns:1fr}.v25-direction-main{grid-template-columns:1fr}.v25-gauge-area{max-width:290px}.v25-gauge{width:250px;height:125px}.v25-gauge-ring:after{left:26px;right:26px;height:100px}.v25-needle{height:88px}.v25-head{align-items:flex-start;flex-direction:column}}
+@media(max-width:1180px){.v25-levels{grid-template-columns:repeat(3,1fr)}.v25-main{grid-template-columns:1fr}.v25-profit{grid-template-columns:1fr 1fr}body.zc-focus.v25-simple #v22TradePlan,body.zc-focus.v25-simple #v22Chart{grid-column:1/-1!important}}
+@media(max-width:650px){.v25-levels{grid-template-columns:1fr 1fr}.v25-level.price{grid-column:1/-1}.v25-profit{grid-template-columns:1fr}.v25-direction-main{grid-template-columns:1fr}.v25-gauge-area{max-width:290px}.v25-gauge{width:250px;height:125px}.v25-gauge-ring:after{left:26px;right:26px;height:100px}.v25-needle{height:88px}.v25-head{align-items:flex-start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.v25-needle,.v25-fill,.v25-retain>i{transition:none!important}.v25-burst{animation:none!important}}
 `;
 const st=document.createElement('style');st.id='v25Style';st.textContent=css;document.head.appendChild(st);
@@ -44,6 +52,14 @@ function ensure(){
     <div class="v25-head">
       <div class="v25-head-copy"><b>🚘 TRADER DECISION COCKPIT</b><span>Tengok meter → faham keadaan → ikut action. Nombor teknikal disimpan dalam Detail Teknikal.</span></div>
       <div class="v25-actions"><button class="v25-btn active" id="v25TraderBtn">TRADER VIEW</button><button class="v25-btn" id="v25DetailBtn">DETAIL TEKNIKAL</button></div>
+    </div>
+    <div class="v25-levels" id="v25Levels">
+      <div class="v25-level price"><span>📍 Price Sekarang</span><b id="v25LivePrice">—</b><small>Harga live market</small></div>
+      <div class="v25-level entry"><span>🎯 Entry</span><b id="v25LiveEntry">—</b><small>Harga masuk plan</small></div>
+      <div class="v25-level sl"><span>🛑 Stop Loss</span><b id="v25LiveSl">—</b><small>Protection level</small></div>
+      <div class="v25-level tp" id="v25Tp1Card"><span>💰 TP1</span><b id="v25LiveTp1">—</b><small>Target pertama</small></div>
+      <div class="v25-level tp" id="v25Tp2Card"><span>💰 TP2</span><b id="v25LiveTp2">—</b><small>Target kedua</small></div>
+      <div class="v25-level tp" id="v25Tp3Card"><span>🚀 TP3</span><b id="v25LiveTp3">—</b><small>Target akhir</small></div>
     </div>
     <div class="v25-main">
       <div class="v25-card">
@@ -172,11 +188,20 @@ function setupWords(x){
   if(strong>=4&&warn===0)return['Setup masih kuat',`${strong} tanda utama masih okay • tiada warning.`];
   return['Setup masih okay',`${strong} tanda kuat • ${warn} warning.`];
 }
+function domText(id){return q(id)?.textContent?.trim()||'—'}
+function levelPaint(){
+  const price=domText('price'),entry=domText('entry'),sl=domText('sl'),tp1=domText('tp1'),tp2=domText('tp2'),tp3=domText('tp3');
+  q('v25LivePrice').textContent=price;q('v25LiveEntry').textContent=entry;q('v25LiveSl').textContent=sl;q('v25LiveTp1').textContent=tp1;q('v25LiveTp2').textContent=tp2;q('v25LiveTp3').textContent=tp3;
+  const x=window.__ZENCORE_SECURE_STATE__||{};
+  q('v25Tp1Card')?.classList.toggle('hit',x?.state==='CLOSED'||q('hits')?.textContent?.includes('TP1'));
+  q('v25Tp2Card')?.classList.toggle('hit',x?.state==='CLOSED'||q('hits')?.textContent?.includes('TP2'));
+  q('v25Tp3Card')?.classList.toggle('hit',x?.state==='CLOSED'||q('hits')?.textContent?.includes('TP3'));
+}
 function burst(e){if(!e)return;e.classList.remove('v25-burst');void e.offsetWidth;e.classList.add('v25-burst');setTimeout(()=>e.classList.remove('v25-burst'),2200)}
 function paint(){
   if(document.hidden)return;
   const e=ensure(),x=window.__ZENCORE_SECURE_STATE__||null,p=window.__ZENCORE_PREDICTION_STATE__||null;
-  const h=setupScore(x),a=advice(x,h),pw=profitWords(x),d=direction(p),sw=setupWords(x);
+  const h=setupScore(x),a=advice(x,h),pw=profitWords(x),d=direction(p),sw=setupWords(x);levelPaint();
   e.className='v25-'+h.tone;
   const angle=-90+h.score*1.8;q('v25Needle').style.transform=`translateX(-50%) rotate(${angle}deg)`;
   q('v25HealthLabel').textContent=h.label;q('v25HealthScore').textContent=h.score+'/100';q('v25AdviceTitle').textContent='Cadangan: '+a[0];q('v25Advice').textContent=a[1];
