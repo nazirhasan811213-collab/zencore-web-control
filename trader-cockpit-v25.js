@@ -11,6 +11,8 @@ const css=`
 #v25Cockpit{grid-column:1/-1;border:1px solid #244a61;border-radius:18px;background:linear-gradient(145deg,#07141e,#061019);padding:13px;box-shadow:0 14px 34px #0004;contain:layout style paint}
 .v25-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.v25-head-copy b{display:block;font:950 13px Inter,system-ui;color:#edf6fb;letter-spacing:.4px}.v25-head-copy span{display:block;margin-top:3px;font:650 8.5px Inter,system-ui;color:#8198aa}.v25-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.v26-signal{padding:6px 9px;border:1px solid #29475a;border-radius:999px;background:#07131d;color:#ffbf58;font:950 8px Inter,system-ui}.v26-signal.locked{color:#3be497;border-color:#235c45}
 .v25-btn{border:1px solid #29475a;border-radius:9px;background:#07131d;color:#91a7b8;padding:6px 9px;font:900 8px Inter,system-ui;cursor:pointer}.v25-btn:hover,.v25-btn.active{color:#eef7fc;border-color:#477894;background:#0c2130}
+.v26-oppbar{display:grid;grid-template-columns:52px minmax(0,1.5fr) .7fr .7fr;gap:8px;margin:0 0 10px;border:1px solid #214259;border-radius:13px;background:#061019;padding:9px;align-items:center}
+.v26-oppicon{display:grid;place-items:center;height:48px;border:1px solid #24475e;border-radius:11px;background:#07131d;font-size:23px}.v26-opptxt span,.v26-oppkpi span{display:block;font:850 7px Inter,system-ui;color:#71899d;text-transform:uppercase}.v26-opptxt b{display:block;margin-top:4px;font:950 15px Inter,system-ui;color:#ffbf58}.v26-opptxt small{display:block;margin-top:4px;font:650 8.5px/1.35 Inter,system-ui;color:#8fa4b5}.v26-oppkpi{border:1px solid #173447;border-radius:10px;background:#07131d;padding:9px}.v26-oppkpi b{display:block;margin-top:5px;font:900 11px Inter,system-ui;color:#e5eff6}.v26-oppbar.strong{border-color:#235c45}.v26-oppbar.strong .v26-opptxt b{color:#3be497}.v26-oppbar.weak{border-color:#63313b}.v26-oppbar.weak .v26-opptxt b{color:#ff6878}
 .v25-levels{display:grid;grid-template-columns:1.25fr repeat(5,1fr);gap:8px;margin:0 0 10px}
 .v25-level{border:1px solid #17384c;border-radius:12px;background:#061019;padding:10px;min-width:0;position:relative;overflow:hidden}
 .v25-level span{display:block;font:850 7px Inter,system-ui;color:#70899d;text-transform:uppercase;letter-spacing:.6px}
@@ -40,7 +42,7 @@ body.zc-focus.v25-simple #v22TradePlan{grid-column:1/span 5!important}
 body.zc-focus.v25-simple #v22Chart{grid-column:6/span 7!important}
 body.zc-focus #v24Controls .v24-btn{display:none!important}
 @media(max-width:1180px){.v25-levels{grid-template-columns:repeat(3,1fr)}.v25-main{grid-template-columns:1fr}.v25-profit{grid-template-columns:1fr 1fr}body.zc-focus.v25-simple #v22TradePlan,body.zc-focus.v25-simple #v22Chart{grid-column:1/-1!important}}
-@media(max-width:650px){.v25-levels{grid-template-columns:1fr 1fr}.v25-level.price{grid-column:1/-1}.v25-profit{grid-template-columns:1fr}.v25-direction-main{grid-template-columns:1fr}.v25-gauge-area{max-width:290px}.v25-gauge{width:250px;height:125px}.v25-gauge-ring:after{left:26px;right:26px;height:100px}.v25-needle{height:88px}.v25-head{align-items:flex-start;flex-direction:column}}
+@media(max-width:650px){.v26-oppbar{grid-template-columns:44px 1fr}.v26-oppkpi{grid-column:1/-1}.v25-levels{grid-template-columns:1fr 1fr}.v25-level.price{grid-column:1/-1}.v25-profit{grid-template-columns:1fr}.v25-direction-main{grid-template-columns:1fr}.v25-gauge-area{max-width:290px}.v25-gauge{width:250px;height:125px}.v25-gauge-ring:after{left:26px;right:26px;height:100px}.v25-needle{height:88px}.v25-head{align-items:flex-start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.v25-needle,.v25-fill,.v25-retain>i{transition:none!important}.v25-burst{animation:none!important}}
 `;
 const st=document.createElement('style');st.id='v25Style';st.textContent=css;document.head.appendChild(st);
@@ -53,6 +55,7 @@ function ensure(){
       <div class="v25-head-copy"><b>🚘 TRADER DECISION COCKPIT</b><span>Tengok meter → faham keadaan → ikut action. Nombor teknikal disimpan dalam Detail Teknikal.</span></div>
       <div class="v25-actions"><span class="v26-signal" id="v26SignalBadge">SIGNAL: WAIT</span><button class="v25-btn active" id="v25TraderBtn">TRADER VIEW</button><button class="v25-btn" id="v25DetailBtn">DETAIL TEKNIKAL</button></div>
     </div>
+    <div class="v26-oppbar" id="v26OppBar"><div class="v26-oppicon" id="v26OppIcon">↩️</div><div class="v26-opptxt"><span>Signal Pullback / Re-entry</span><b id="v26OppTitle">TIADA TRIGGER SEKARANG</b><small id="v26OppReason">Tunggu price buat setup pullback yang betul-betul confirm.</small></div><div class="v26-oppkpi"><span>Strength</span><b id="v26OppStrength">—</b></div><div class="v26-oppkpi"><span>Action</span><b id="v26OppAction">WAIT</b></div></div>
     <div class="v25-levels" id="v25Levels">
       <div class="v25-level price"><span>📍 Price Sekarang</span><b id="v25LivePrice">—</b><small>Harga live market</small></div>
       <div class="v25-level entry"><span>🎯 Entry</span><b id="v25LiveEntry">—</b><small>Harga masuk plan</small></div>
@@ -189,6 +192,22 @@ function setupWords(x){
   return['Setup masih okay',`${strong} tanda kuat • ${warn} warning.`];
 }
 function domText(id){return q(id)?.textContent?.trim()||'—'}
+function opportunityPaint(p){
+  const bar=q('v26OppBar');if(!bar)return;
+  const type=U(p?.opportunityType||'NONE'),side=U(p?.opportunitySide||'WAIT'),strength=U(p?.opportunityStrength||'NONE'),risk=U(p?.opportunityRisk||'WAIT'),reason=p?.opportunityReason||'';
+  bar.classList.remove('strong','weak');
+  if(strength==='STRONG')bar.classList.add('strong');else if(strength==='WEAK'||risk==='NO_ADD')bar.classList.add('weak');
+  let icon='↩️',title='TIADA TRIGGER SEKARANG',action='WAIT';
+  if(type==='PULLBACK'){icon='↩️';title=`${side} PULLBACK DETECTED`;}
+  else if(type==='REENTRY'){icon='🔁';title=`${side} RE-ENTRY DETECTED`;}
+  else if(type==='MOMENTUM'){icon='🚀';title=`${side} MOMENTUM CONTINUATION`;}
+  if(type!=='NONE'){
+    if(risk==='NO_ADD')action='JANGAN ADD';
+    else if(risk==='MANAGE_RISK')action='MANAGE RISK';
+    else action='WATCH ENTRY';
+  }
+  q('v26OppIcon').textContent=icon;q('v26OppTitle').textContent=title;q('v26OppReason').textContent=reason||'Tunggu trigger baru.';q('v26OppStrength').textContent=strength==='NONE'?'—':strength;q('v26OppAction').textContent=action;
+}
 function levelPaint(){
   const price=domText('price'),entry=domText('entry'),sl=domText('sl'),tp1=domText('tp1'),tp2=domText('tp2'),tp3=domText('tp3');
   q('v25LivePrice').textContent=price;q('v25LiveEntry').textContent=entry;q('v25LiveSl').textContent=sl;q('v25LiveTp1').textContent=tp1;q('v25LiveTp2').textContent=tp2;q('v25LiveTp3').textContent=tp3;
@@ -201,7 +220,7 @@ function burst(e){if(!e)return;e.classList.remove('v25-burst');void e.offsetWidt
 function paint(){
   if(document.hidden)return;
   const e=ensure(),x=window.__ZENCORE_SECURE_STATE__||null,p=window.__ZENCORE_PREDICTION_STATE__||null;
-  const h=setupScore(x),a=advice(x,h),pw=profitWords(x),d=direction(p),sw=setupWords(x);levelPaint();
+  const h=setupScore(x),a=advice(x,h),pw=profitWords(x),d=direction(p),sw=setupWords(x);opportunityPaint(p);levelPaint();
   e.className='v25-'+h.tone;
   const angle=-90+h.score*1.8;q('v25Needle').style.transform=`translateX(-50%) rotate(${angle}deg)`;
   q('v25HealthLabel').textContent=h.label;q('v25HealthScore').textContent=h.score+'/100';q('v25AdviceTitle').textContent='Cadangan: '+a[0];q('v25Advice').textContent=a[1];
@@ -213,7 +232,7 @@ function paint(){
   if(lastHealth!=null&&Math.abs(h.score-lastHealth)>=4)burst(q('v25Cockpit'));lastHealth=h.score;
   if(lastState!==String(x?.state||'')){burst(q('v25Cockpit'));lastState=String(x?.state||'')}
   const dirSig=d.label+d.up;if(lastDir&&lastDir!==dirSig)burst(q('v25Cockpit'));lastDir=dirSig;
-  const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V26 — SIGNAL CORE';
+  const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V26.1 — SIGNAL CORE + PULLBACK';
   const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent='SIGNAL STABIL • ENTRY TERPILIH';
 }
 function init(){
