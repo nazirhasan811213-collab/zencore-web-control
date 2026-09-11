@@ -161,22 +161,30 @@ function signalConfidenceForSide(p,side){
   if(!total)return 0;
   return clamp(Math.round((side==='BUY'?b:s)/total*100));
 }
+function signalPlanKey(d,side=''){return [side||exactAction(d?.action),N(d?.entry),N(d?.sl),N(d?.tp3)].join('|');}
 function freshCore(){
-  return{side:'WAIT',stage:'WAIT',locked:false,lockedAt:0,updatedAt:Date.now(),invalidStreak:0,cooldownUntil:0,reason:'Tunggu setup',warnings:[]};
+  return{side:'WAIT',stage:'WAIT',locked:false,lockedAt:0,updatedAt:Date.now(),invalidStreak:0,cooldownUntil:0,reason:'Tunggu setup',warnings:[],planKey:'',endPlanKey:''};
 }
 function updateSignalCore(symbol,d){
   const now=Date.now(),p=predictionEngine(d,symbol),st=predictionStability(symbol),fresh=freshness(d?.receivedAt);
   let c=signalCoreBySymbol.get(symbol)||freshCore();
   const tp3=d?.tp3Hit===true,sl=d?.slHit===true&&!tp3,active=d?.tradeActive===true&&!tp3&&!sl;
+  const currentPlanKey=signalPlanKey(d,c.side);
+  const freshPlanAfterEnd=(tp3||sl)&&c.stage==='COOLDOWN'&&now>=c.cooldownUntil&&exactAction(d?.action)!=='WAIT'&&c.endPlanKey&&currentPlanKey!==c.endPlanKey;
 
-  if(tp3||sl){
-    const oldSide=c.side;
-    c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_TRADE_COOLDOWN_MS,updatedAt:now,reason:tp3?'TP3 settle — tunggu setup baru':'SL kena — jangan revenge trade',lastSide:oldSide};
+  if((tp3||sl)&&!freshPlanAfterEnd){
+    const oldSide=c.side||c.lastSide||'WAIT';
+    if(c.stage!=='COOLDOWN'||c.endPlanKey!==currentPlanKey){
+      c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_TRADE_COOLDOWN_MS,updatedAt:now,reason:tp3?'TP3 settle — tunggu setup baru':'SL kena — jangan revenge trade',lastSide:oldSide,endPlanKey:currentPlanKey};
+    }else{
+      c={...c,side:'WAIT',locked:false,updatedAt:now,reason:tp3?'TP3 settle — tunggu setup baru':'SL kena — jangan revenge trade'};
+    }
     signalCoreBySymbol.set(symbol,c);return c;
   }
+  if(freshPlanAfterEnd)c=freshCore();
   if(active){
     const tradeSide=d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':c.side!=='WAIT'?c.side:p.direction;
-    c={...c,side:tradeSide,stage:'ACTIVE',locked:true,lockedAt:c.lockedAt||now,invalidStreak:0,cooldownUntil:0,updatedAt:now,reason:'Position aktif — signal ikut arah trade',warnings:[]};
+    c={...c,side:tradeSide,stage:'ACTIVE',locked:true,lockedAt:c.lockedAt||now,invalidStreak:0,cooldownUntil:0,updatedAt:now,reason:'Position aktif — signal ikut arah trade',warnings:[],planKey:signalPlanKey(d,tradeSide)};
     signalCoreBySymbol.set(symbol,c);return c;
   }
   if(fresh!=='LIVE'){
@@ -201,7 +209,7 @@ function updateSignalCore(symbol,d){
     const cf=confirmationForSide(d,c.side),ch=N(d?.chopIndex);
     const stillReady=cf.passed>=3&&(ch==null||ch<61.8);
     const entryReady=stillReady&&entryReadyForSide(d,c.side);
-    c={...c,stage:entryReady?'ENTRY_READY':stillReady?'SETUP_READY':'LOCKED_WAIT',invalidStreak:streak,updatedAt:now,reason:entryReady?`${c.side} dah confirm — entry ikut plan`:stillReady?`${c.side} dikunci — setup masih sehala`:`${c.side} masih dikunci — tunggu confirmation balik`,warnings:w.notes};
+    c={...c,stage:entryReady?'ENTRY_READY':stillReady?'SETUP_READY':'LOCKED_WAIT',invalidStreak:streak,updatedAt:now,planKey:c.planKey||signalPlanKey(d,c.side),reason:entryReady?`${c.side} dah confirm — entry ikut plan`:stillReady?`${c.side} dikunci — setup masih sehala`:`${c.side} masih dikunci — tunggu confirmation balik`,warnings:w.notes};
     signalCoreBySymbol.set(symbol,c);return c;
   }
 
@@ -213,7 +221,7 @@ function updateSignalCore(symbol,d){
   const setupReady=p.confidence>=82&&p.consensus>=6&&st>=70&&p.agreement>=68&&!p.conflict&&(ch==null||ch<61.8)&&cf.passed>=3;
   if(setupReady){
     const entryReady=entryReadyForSide(d,side);
-    c={...freshCore(),side,stage:entryReady?'ENTRY_READY':'SETUP_READY',locked:true,lockedAt:now,updatedAt:now,reason:entryReady?`${side} dah confirm — entry ikut plan`:`${side} setup dah cukup kuat — arah dikunci`};
+    c={...freshCore(),side,stage:entryReady?'ENTRY_READY':'SETUP_READY',locked:true,lockedAt:now,updatedAt:now,reason:entryReady?`${side} dah confirm — entry ikut plan`:`${side} setup dah cukup kuat — arah dikunci`,planKey:signalPlanKey(d,side)};
   }else if(watch){
     c={...freshCore(),side,stage:'WATCH',locked:false,updatedAt:now,reason:`${side} ada potensi — belum lock`};
   }else{
