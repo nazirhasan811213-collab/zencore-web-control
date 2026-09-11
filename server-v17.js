@@ -247,6 +247,7 @@ function fastTrade1m(symbol,d,a3){
   const side=a3?.bias||'WAIT';
   if(!d||c==null)return{tf:'1m',state:'WAIT',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'Tiada data 1m'};
   if(String(d.timeframe||'1')!=='1')return{tf:'1m',state:'WAIT',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'Fast Trade perlukan feed 1 min'};
+  if(a3?.status==='WARMING'&&(N(a3?.bars)||0)<2)return{tf:'1m',state:'PAUSE',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'3m tengah warm-up — tunggu sekurang-kurangnya 2 candle 3m complete'};
   if(a3?.sideways||side==='WAIT')return{tf:'1m',state:'PAUSE',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'3m tak clear / sideways — fast trade pause'};
   const sg=sidewaysGuardBySymbol.get(symbol);if(sg?.active)return{tf:'1m',state:'PAUSE',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'1m whipsaw — fast trade pause'};
   let score=0,checks=[];
