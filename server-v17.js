@@ -328,7 +328,7 @@ function freshCore(){
   return{side:'WAIT',stage:'WAIT',locked:false,lockedAt:0,updatedAt:Date.now(),invalidStreak:0,cooldownUntil:0,reason:'Tunggu setup',warnings:[],planKey:'',endPlanKey:''};
 }
 function updateSignalCore(symbol,d){
-  const now=Date.now(),p=predictionEngine(d,symbol),st=predictionStability(symbol),fresh=freshness(d?.receivedAt);
+  const now=Date.now(),p=predictionEngine(d,symbol),st=predictionStability(symbol),fresh=freshness(d?.receivedAt),a3=analysis3m(symbol,d);
   let c=signalCoreBySymbol.get(symbol)||freshCore();
   const tp3=d?.tp3Hit===true,sl=d?.slHit===true&&!tp3,active=d?.tradeActive===true&&!tp3&&!sl;
   const currentPlanKey=signalPlanKey(d,c.side);
@@ -347,6 +347,19 @@ function updateSignalCore(symbol,d){
   if(active){
     const tradeSide=d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':c.side!=='WAIT'?c.side:p.direction;
     c={...c,side:tradeSide,stage:'ACTIVE',locked:true,lockedAt:c.lockedAt||now,invalidStreak:0,cooldownUntil:0,updatedAt:now,reason:'Position aktif — signal ikut arah trade',warnings:[],planKey:signalPlanKey(d,tradeSide)};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(a3.status==='WARMING'&&a3.bars<2){
+    c={...freshCore(),side:'WAIT',stage:'ANALYSIS_3M_WARMING',locked:false,updatedAt:now,reason:'Analysis 3m tengah warm-up — jangan lock signal lagi'};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(a3.bias==='WAIT'&& !a3.sideways){
+    c={...freshCore(),side:'WAIT',stage:'ANALYSIS_3M_WAIT',locked:false,updatedAt:now,reason:'Analysis 3m belum ada arah clear'};
+    signalCoreBySymbol.set(symbol,c);return c;
+  }
+  if(c.locked&&c.side!=='WAIT'&&a3.bias!=='WAIT'&&c.side!==a3.bias){
+    const oldSide=c.side;
+    c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_REVERSAL_COOLDOWN_MS,updatedAt:now,reason:`3m bias dah berubah dari ${oldSide} ke ${a3.bias} — tunggu 1m confirm semula`,lastSide:oldSide};
     signalCoreBySymbol.set(symbol,c);return c;
   }
   const sg=sidewaysGuard(symbol,d);
@@ -380,19 +393,21 @@ function updateSignalCore(symbol,d){
     signalCoreBySymbol.set(symbol,c);return c;
   }
 
-  if(p.direction==='WAIT'){
-    c={...freshCore(),updatedAt:now,reason:'Belum ada arah cukup kuat'};signalCoreBySymbol.set(symbol,c);return c;
+  const side=a3.bias;
+  if(side==='WAIT'){
+    c={...freshCore(),updatedAt:now,reason:'3m belum ada arah cukup kuat'};signalCoreBySymbol.set(symbol,c);return c;
   }
-  const side=p.direction,cf=confirmationForSide(d,side),ch=N(d?.chopIndex);
-  const watch=p.confidence>=68&&p.consensus>=4;
-  const setupReady=p.confidence>=82&&p.consensus>=6&&st>=70&&p.agreement>=68&&!p.conflict&&(ch==null||ch<61.8)&&cf.passed>=3;
+  const cf=confirmationForSide(d,side),ch=N(d?.chopIndex);
+  const oneMinAligned=p.direction===side;
+  const watch=oneMinAligned&&p.confidence>=68&&p.consensus>=4;
+  const setupReady=oneMinAligned&&p.confidence>=82&&p.consensus>=6&&st>=70&&p.agreement>=68&&!p.conflict&&(ch==null||ch<61.8)&&cf.passed>=3;
   if(setupReady){
     const entryReady=entryReadyForSide(d,side);
     c={...freshCore(),side,stage:entryReady?'ENTRY_READY':'SETUP_READY',locked:true,lockedAt:now,updatedAt:now,reason:entryReady?`${side} dah confirm — entry ikut plan`:`${side} setup dah cukup kuat — arah dikunci`,planKey:signalPlanKey(d,side)};
   }else if(watch){
     c={...freshCore(),side,stage:'WATCH',locked:false,updatedAt:now,reason:`${side} ada potensi — belum lock`};
   }else{
-    c={...freshCore(),updatedAt:now,reason:'Tunggu setup lebih kuat'};
+    c={...freshCore(),side,stage:'WAIT_1M_CONFIRM',locked:false,updatedAt:now,reason:`3m ${side} — tunggu 1m confirm sehala`};
   }
   signalCoreBySymbol.set(symbol,c);return c;
 }
