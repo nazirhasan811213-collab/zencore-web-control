@@ -170,5 +170,5 @@ function drawV18(){
 try{window.drawChart=drawV18}catch(_){}
 addOverlayLabels();
 setTimeout(()=>{try{drawV18()}catch(e){console.warn('[V18 chart]',e)}},200);
-setInterval(()=>{try{drawV18()}catch(_){}},5000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){try{drawV18()}catch(_){}}});
 })();
