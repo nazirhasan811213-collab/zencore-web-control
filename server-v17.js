@@ -128,7 +128,7 @@ function sidewaysGuard(symbol,d){
   const arr=(historyBySymbol.get(symbol)||[]).slice(-8);
   const chop=N(d?.chopIndex);
   const structure=U(d?.marketStructure);
-  const explicitSideways=/SIDEWAY|CHOP|RANGE|FLAT/.test(structure);
+  const explicitSideways=/SIDEWAY|CHOP|RANGE|FLAT/.test(structure);const a3=analysis3m(symbol,d);
   const hardChop=chop!=null&&chop>=68;
   const softChop=chop!=null&&chop>=61.8;
 
@@ -147,17 +147,18 @@ function sidewaysGuard(symbol,d){
   const range=closes.length?Math.max(...closes)-Math.min(...closes):0;
   const fastWhipsaw=atr!=null&&atr>0&&range>=atr*.55&&emaFlips>=3&&priceReversals>=2;
   const noisyWhipsaw=emaFlips>=4&&priceReversals>=3;
-  const danger=hardChop||explicitSideways||softChop&&fastWhipsaw||fastWhipsaw||noisyWhipsaw;
+  const danger=a3.sideways||hardChop||explicitSideways||softChop&&fastWhipsaw||fastWhipsaw||noisyWhipsaw;
 
   let dangerStreak=g.dangerStreak||0,cleanStreak=g.cleanStreak||0,active=!!g.active;
   if(danger){dangerStreak++;cleanStreak=0;}else{cleanStreak++;dangerStreak=0;}
 
-  if(!active&&(hardChop||explicitSideways||dangerStreak>=SIDEWAYS_TRIGGER_STREAK))active=true;
+  if(!active&&(a3.sideways||hardChop||explicitSideways||dangerStreak>=SIDEWAYS_TRIGGER_STREAK))active=true;
   if(active&&cleanStreak>=SIDEWAYS_CLEAR_STREAK)active=false;
 
   let reason='Market clear';
   if(active){
-    if(hardChop)reason=`Chop tinggi ${chop.toFixed(1)}% — market terlalu serabut.`;
+    if(a3.sideways)reason='Analysis 3m SIDEWAYS — semua signal baru dipause.';
+    else if(hardChop)reason=`Chop tinggi ${chop.toFixed(1)}% — market terlalu serabut.`;
     else if(explicitSideways)reason='Structure SIDEWAYS/RANGE — signal baru dipause.';
     else if(fastWhipsaw)reason=`Price whipsaw laju — EMA9 flip ${emaFlips}x, arah price bertukar ${priceReversals}x.`;
     else reason='Market ulang-alik terlalu kerap — tunggu clear.';
@@ -165,6 +166,109 @@ function sidewaysGuard(symbol,d){
 
   g={active,dangerStreak,cleanStreak,lastKey:key,reason,activatedAt:active?(g.activatedAt||now):0,chop,emaFlips,priceReversals,range,atr,fastWhipsaw,explicitSideways};
   sidewaysGuardBySymbol.set(symbol,g);return g;
+}
+
+
+function emaLast(values,len){
+  const xs=values.filter(v=>Number.isFinite(v));if(!xs.length)return null;
+  const k=2/(len+1);let e=xs[0];for(let i=1;i<xs.length;i++)e=xs[i]*k+e*(1-k);return e;
+}
+function hemaLast(values,len){
+  if(!values.length)return null;
+  const half=Math.max(1,Math.round(len/2)),root=Math.max(1,Math.round(Math.sqrt(len)));
+  const emaSeries=(xs,n)=>{const k=2/(n+1);let e=xs[0];return xs.map((v,i)=>{e=i===0?v:v*k+e*(1-k);return e})};
+  const a=emaSeries(values,half),b=emaSeries(values,len),diff=a.map((v,i)=>2*v-b[i]);
+  return emaLast(diff,root);
+}
+function rsiLast(values,len=14){
+  if(values.length<2)return null;let gain=0,loss=0,n=Math.min(len,values.length-1);
+  for(let i=values.length-n;i<values.length;i++){const d=values[i]-values[i-1];if(d>0)gain+=d;else loss-=d;}
+  if(!n)return null;const ag=gain/n,al=loss/n;if(al===0)return 100;const rs=ag/al;return 100-(100/(1+rs));
+}
+function trValue(b,prevClose){return Math.max(b.high-b.low,Math.abs(b.high-prevClose),Math.abs(b.low-prevClose));}
+function atrBars(bars,len=14){
+  if(bars.length<2)return null;const start=Math.max(1,bars.length-len);let sum=0,n=0;
+  for(let i=start;i<bars.length;i++){sum+=trValue(bars[i],bars[i-1].close);n++}return n?sum/n:null;
+}
+function chopBars(bars,len=14){
+  if(bars.length<3)return null;const xs=bars.slice(-Math.min(len,bars.length));if(xs.length<3)return null;
+  let sum=0;for(let i=1;i<xs.length;i++)sum+=trValue(xs[i],xs[i-1].close);
+  const hi=Math.max(...xs.map(x=>x.high)),lo=Math.min(...xs.map(x=>x.low)),span=hi-lo;
+  if(!span||sum<=0)return null;return 100*(Math.log10(sum/span)/Math.log10(xs.length));
+}
+function threeMinuteBars(symbol,d){
+  const arr=(historyBySymbol.get(symbol)||[]).filter(x=>N(x?.time)!=null).sort((a,b)=>N(a.time)-N(b.time));
+  if(!arr.length)return[];
+  const map=new Map();
+  for(const x of arr){
+    const t=N(x.time),bucket=Math.floor(t/180000)*180000;
+    let b=map.get(bucket);
+    const o=N(x.open),h=N(x.high),l=N(x.low),c=N(x.close),vol=N(x.volume)||0;
+    if([o,h,l,c].some(v=>v==null))continue;
+    if(!b)b={time:bucket,open:o,high:h,low:l,close:c,volume:vol,lastTime:t,count:1};
+    else{b.high=Math.max(b.high,h);b.low=Math.min(b.low,l);b.close=c;b.volume+=vol;b.lastTime=t;b.count++}
+    map.set(bucket,b);
+  }
+  const currentBucket=N(d?.time)!=null?Math.floor(N(d.time)/180000)*180000:null;
+  return [...map.values()].sort((a,b)=>a.time-b.time).filter(b=>currentBucket==null||b.time<currentBucket).slice(-120);
+}
+function fallback3mHemaFromSop(d){
+  if(typeof d?.sop5!=='boolean')return'WAIT';
+  let base=d?.tradeActive===true?(d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':'WAIT'):dirText(d?.hemaTrend);
+  if(base==='WAIT')return'WAIT';
+  return d.sop5?base:(base==='BUY'?'SELL':'BUY');
+}
+function analysis3m(symbol,d){
+  const bars=threeMinuteBars(symbol,d),closes=bars.map(b=>b.close),last=bars[bars.length-1],prev=bars[bars.length-2];
+  const fallback=fallback3mHemaFromSop(d);
+  if(!last){
+    return{tf:'3m',bias:fallback,confidence:fallback==='WAIT'?0:58,status:'WARMING',sideways:false,reason:fallback==='WAIT'?'Tunggu 3m pertama complete':'Guna HEMA 3m Pine sementara history warm-up',bars:0,chop:null};
+  }
+  const e9=emaLast(closes,9),e20=emaLast(closes,20),e50=emaLast(closes,50),h20=hemaLast(closes,20),h40=hemaLast(closes,40),rsi=rsiLast(closes,14),atr=atrBars(bars,14),chop=chopBars(bars,14);
+  let buy=0,sell=0,reasons=[];
+  if(h20!=null&&h40!=null){if(h20>h40){buy+=3;reasons.push('HEMA 3m bull')}else if(h20<h40){sell+=3;reasons.push('HEMA 3m bear')}}
+  if(e9!=null&&e20!=null){if(e9>e20)buy+=2;else if(e9<e20)sell+=2}
+  if(e20!=null&&e50!=null){if(e20>e50)buy+=2;else if(e20<e50)sell+=2}
+  if(last&&e20!=null){if(last.close>e20)buy+=1;else if(last.close<e20)sell+=1}
+  if(rsi!=null){if(rsi>=54)buy+=1;else if(rsi<=46)sell+=1}
+  if(prev){if(last.close>prev.close)buy+=1;else if(last.close<prev.close)sell+=1}
+  if(fallback==='BUY')buy+=2;else if(fallback==='SELL')sell+=2;
+  const diff=buy-sell,total=buy+sell||1;
+  const sideways=(chop!=null&&chop>=61.8)||Math.abs(diff)<=1;
+  let bias=sideways?'WAIT':diff>=2?'BUY':diff<=-2?'SELL':'WAIT';
+  let confidence=Math.round(clamp(50+Math.abs(diff)*5+(Math.max(buy,sell)/total-.5)*25-(sideways?18:0)));
+  const mature=bars.length>=20,status=sideways?'SIDEWAYS':mature?'CONFIRMED':'WARMING';
+  if(!mature&&bias==='WAIT'&&fallback!=='WAIT'){bias=fallback;confidence=Math.max(confidence,58)}
+  return{tf:'3m',bias,confidence,status,sideways,reason:sideways?'3m tengah sideways/chop':bias==='BUY'?'3m trend lebih cenderung BUY':bias==='SELL'?'3m trend lebih cenderung SELL':'3m belum clear',bars:bars.length,chop,ema9:e9,ema20:e20,ema50:e50,hema20:h20,hema40:h40,rsi,atr,lastBarTime:last.time,reasons};
+}
+function pipSizeFor(symbol){if(symbol==='XAUUSD'||symbol==='XAGUSD')return .01;if(/JPY$/.test(symbol))return .01;return .0001;}
+function fastTrade1m(symbol,d,a3){
+  const pip=pipSizeFor(symbol),targetPips=20,targetDistance=pip*targetPips,c=N(d?.close),atr=N(d?.atr),ch=N(d?.chopIndex);
+  const side=a3?.bias||'WAIT';
+  if(!d||c==null)return{tf:'1m',state:'WAIT',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'Tiada data 1m'};
+  if(String(d.timeframe||'1')!=='1')return{tf:'1m',state:'WAIT',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'Fast Trade perlukan feed 1 min'};
+  if(a3?.sideways||side==='WAIT')return{tf:'1m',state:'PAUSE',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'3m tak clear / sideways — fast trade pause'};
+  const sg=sidewaysGuardBySymbol.get(symbol);if(sg?.active)return{tf:'1m',state:'PAUSE',side:'WAIT',score:0,targetPips,targetPrice:null,reason:'1m whipsaw — fast trade pause'};
+  let score=0,checks=[];
+  const hema=dirText(d?.hemaTrend),mom=dirText(d?.momentum),ms=dirText(d?.marketStructure);
+  const e9=N(d?.ema9),e20=N(d?.ema20),rsi=N(d?.rsi),rvol=N(d?.relativeVolume),mtf=mtfTotalOf(d);
+  const aligned=(cond,label,pts)=>{if(cond){score+=pts;checks.push(label)}};
+  aligned(hema===side,'HEMA 1m',15);aligned(mom===side,'Momentum 1m',15);aligned(ms===side,'Structure 1m',10);
+  aligned(e9!=null&&e20!=null&&(side==='BUY'?e9>e20:e9<e20),'EMA 1m',15);
+  aligned(rsi!=null&&(side==='BUY'?rsi>=52&&rsi<=74:rsi<=48&&rsi>=26),'RSI okay',10);
+  aligned(side==='BUY'?mtf>=1:mtf<=-1,'MTF support',10);
+  aligned(rvol==null||rvol>=.8,'Volume okay',8);
+  if(atr!=null&&atr>0&&e9!=null){const dist=Math.abs(c-e9);aligned(dist<=atr*.35,'Price dekat trigger',12);aligned(atr>=targetDistance*.65,'Volatility cukup',5)}
+  const opp=opportunityBySymbol.get(symbol);
+  const trigger=(exactAction(d?.action)===side)||(opp&&opp.side===side&&opp.type!=='NONE'&&opp.risk!=='NO_ADD');
+  const notChop=ch==null||ch<58;
+  const scoreFinal=Math.round(clamp(score));
+  let state='WAIT',reason='1m belum cukup confirm';
+  if(scoreFinal>=75&&trigger&&notChop){state='READY';reason=`FAST ${side} ready — 3m sehala + trigger 1m confirm`;}
+  else if(scoreFinal>=65&&notChop){state='WATCH';reason=`Bias 3m ${side}, tunggu trigger 1m yang lebih cun`;}
+  else if(!notChop){state='PAUSE';reason='1m chop tinggi — jangan paksa fast trade';}
+  const targetPrice=state==='READY'?(side==='BUY'?c+targetDistance:c-targetDistance):null;
+  return{tf:'1m',state,side:state==='PAUSE'?'WAIT':side,score:scoreFinal,targetPips,pipSize:pip,targetDistance,targetPrice,entryPrice:c,reason,checks,analysisBias3m:side};
 }
 
 function exactAction(v){const s=U(v);return s==='BUY'||s==='SELL'?s:'WAIT';}
@@ -395,10 +499,10 @@ function updateOpportunity(symbol,d){
 function marketSummary(symbol){
   const d=latestBySymbol.get(symbol);
   if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,sidewaysGuard:false,sidewaysReason:'Tiada data',sidewaysChop:null,sidewaysEmaFlips:0,sidewaysPriceReversals:0,opportunityType:'NONE',opportunitySide:'WAIT',opportunityStrength:'NONE',opportunityReason:'Tiada data',opportunityRisk:'WAIT',prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
-  const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p),sg=sidewaysGuard(symbol,d);
+  const p=predictionEngine(d,symbol),z=zoneInfo(d),st=predictionStability(symbol),rd=predictionReadiness(d,symbol,p),a3=analysis3m(symbol,d),sg=sidewaysGuard(symbol,d),fast=fastTrade1m(symbol,d,a3);
   const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d),opp=opportunityBySymbol.get(symbol)||updateOpportunity(symbol,d);
   const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
-  return{symbol,online:true,freshness:freshness(d.receivedAt),status:sg.active?'SIDEWAYS — SIGNAL PAUSE':predictionStatus(d,symbol,p),sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
+  return{symbol,online:true,freshness:freshness(d.receivedAt),status:sg.active?'SIDEWAYS — SIGNAL PAUSE':predictionStatus(d,symbol,p),analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE'};
 }
 function priority(m){return m.status==='TRADE ACTIVE'?700:m.status==='HOT PREDICTION'?600:m.status==='PREDICTION READY'?500:m.status==='WATCH'?400:m.status==='NEAR ENTRY'?300:m.status==='WAIT'?200:m.status==='STALE'?80:0;}
 function marketsPayload(){
@@ -406,7 +510,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore Signal Core v26.2 + Sideways Safety Guard',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore V27 Dual-Timeframe 3m Analysis + 1m Fast Trade',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
