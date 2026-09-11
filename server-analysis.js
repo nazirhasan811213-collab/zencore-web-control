@@ -45,8 +45,8 @@ function proxyHtml(req,res,targetPath){
       if(!html.includes('/precision-ui-v19.js'))html=html.replace('</body>','<script src="/precision-ui-v19.js?v=19.0"></script></body>');
       if(!html.includes('/v19-state-consistency.js'))html=html.replace('</body>','<script src="/v19-state-consistency.js?v=19.1"></script></body>');
       if(!html.includes('/secure-profit-v20.js'))html=html.replace('</body>','<script src="/secure-profit-v20.js?v=20.0"></script></body>');
-      if(!html.includes('/trader-flow-v21.js'))html=html.replace('</body>','<script src="/trader-flow-v21.js?v=21.0"></script></body>');
-      html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V21 — Trader Flow Analysis</title>');
+      if(!html.includes('/trader-flow-v22.js'))html=html.replace('</body>','<script src="/trader-flow-v22.js?v=22.0"></script></body>');
+      html=html.replace(/<title>[^<]*<\/title>/i,'<title>ZenCore V22 — Step-by-Step Trader View</title>');
       res.writeHead(u.statusCode||200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store, no-cache, must-revalidate'});
       res.end(html);
     });
@@ -67,6 +67,7 @@ const server=http.createServer((req,res)=>{
   if(req.method==='GET'&&pathname==='/v19-state-consistency.js')return sendAsset(res,'v19-state-consistency.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/secure-profit-v20.js')return sendAsset(res,'secure-profit-v20.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/trader-flow-v21.js')return sendAsset(res,'trader-flow-v21.js','application/javascript; charset=utf-8');
+  if(req.method==='GET'&&pathname==='/trader-flow-v22.js')return sendAsset(res,'trader-flow-v22.js','application/javascript; charset=utf-8');
 
   if(req.method==='GET'&&(pathname==='/'||pathname==='/index.html')){
     return proxyHtml(req,res,'/pair/XAUUSD');
@@ -92,5 +93,5 @@ const server=http.createServer((req,res)=>{
 });
 
 server.listen(PUBLIC_PORT,'0.0.0.0',()=>{
-  console.log(`ZenCore V21 Trader Flow Analysis gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}`);
+  console.log(`ZenCore V22 Step-by-Step Trader View gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}`);
 });
