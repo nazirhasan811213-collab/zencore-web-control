@@ -96,13 +96,12 @@
         }
       }
     }catch(_){}
-    try{ if(typeof drawChart==='function')drawChart(); }catch(_){}
-    try{ if(typeof renderAlertTape==='function')renderAlertTape(); }catch(_){}
+    try{ if(!document.hidden&&typeof renderAlertTape==='function')renderAlertTape(); }catch(_){}
   }
 
   cleanGlobals();
   setTimeout(updateHealth,600);
-  setInterval(updateHealth,10000);
+  setInterval(()=>{if(!document.hidden)updateHealth()},30000);
 })();
 
 (function(){
@@ -159,14 +158,14 @@
   }
   function paint(id,val,color){const e=q(id);if(!e)return;e.textContent=val||'—';if(color)e.style.color=color}
   function sync(){
-    const decision=read('v6Decision');paint('v10Decision',decision,decision.includes('NO TRADE')?'#ff6070':decision.includes('ENTRY')?'#32e38d':decision.includes('URUS')?'#51a8ff':'#ffb74b');paint('v10DecisionSub',read('v6DecisionSub'));
-    const sig=read('sumAction');paint('v10Signal',sig,sig.includes('LONG')||sig==='BUY'?'#32e38d':sig.includes('SHORT')||sig==='SELL'?'#ff6070':'#ffb74b');
+    if(document.hidden)return;
+    if(!window.__ZENCORE_DISPLAY_STATE_LOCK__){const decision=read('v6Decision');paint('v10Decision',decision,decision.includes('NO TRADE')?'#ff6070':decision.includes('ENTRY')?'#32e38d':decision.includes('URUS')?'#51a8ff':'#ffb74b');paint('v10DecisionSub',read('v6DecisionSub'));const sig=read('sumAction');paint('v10Signal',sig,sig.includes('LONG')||sig==='BUY'?'#32e38d':sig.includes('SHORT')||sig==='SELL'?'#ff6070':'#ffb74b');}
     const stab=read('v7Stability'),ready=read('v7Readiness');paint('v10Stability',stab,parseInt(stab)>=75?'#32e38d':parseInt(stab)>=55?'#ffb74b':'#ff6070');paint('v10Readiness',ready,parseInt(ready)>=75?'#32e38d':parseInt(ready)>=55?'#ffb74b':'#ff6070');paint('v10Grade',`${read('v6Grade')} • ${read('v6Score')}`);
     paint('v10Zone',read('zoneRange'),'#ffb74b');paint('v10Entry',read('entry'),'#ffb74b');paint('v10Sl',read('sl'),'#ff6070');paint('v10Tp1',read('tp1'),'#32e38d');paint('v10Tp3',read('tp3'),'#32e38d');paint('v10RR',read('rr3'));
     const action=read('v6CoachAction');paint('v10Coach',action!=='—'?action:read('v7Next'));
     const shield=read('v7ShieldTitle');paint('v10Shield',shield,shield.includes('AKTIF')?'#ff6070':shield.includes('BOLEH')?'#32e38d':'#ffb74b');paint('v10ShieldReason',read('v7ShieldReason'));
   }
   function label(){const h=document.querySelector('.brand h1');if(h)h.textContent='ZENCORE V10 — TRADER FOCUS ANALYSIS TERMINAL';const sub=document.querySelector('.brand .sub');if(sub)sub.textContent='Keputusan jelas • Chart ZenCore • Entry / SL / TP • AI Coach Bahasa Malaysia • Performance measured';const phase=document.querySelector('.phase-pill');if(phase)phase.textContent='V10: TRADER FOCUS';}
-  function init(){addSwitch();addFocus();label();const saved=localStorage.getItem('zcViewMode');setMode(['full','performance'].includes(saved)?saved:'focus');sync();setInterval(sync,800)}
+  function init(){addSwitch();addFocus();label();const saved=localStorage.getItem('zcViewMode');setMode(['full','performance'].includes(saved)?saved:'focus');sync();setInterval(sync,3000)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,300));else setTimeout(init,300);
 })();
