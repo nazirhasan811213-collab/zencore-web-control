@@ -30,7 +30,7 @@ const css=`
 .v22-title b{display:flex!important;align-items:center!important}
 .v23-pill-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:#ffbf58;vertical-align:middle}
 .v22-good .v23-pill-dot{background:#3be497}.v22-bad .v23-pill-dot{background:#ff6878}
-.v23-goodpulse{animation:v23Pulse 2.8s ease-in-out infinite}.v23-waitbreathe{animation:v23Breathe 3.4s ease-in-out infinite}.v23-badshake{animation:v23Shake 1.6s ease-in-out infinite}.v23-float{animation:v23Float 3.2s ease-in-out infinite}.v23-arrowup{animation:v23ArrowUp 1.8s ease-in-out infinite}.v23-arrowdown{animation:v23ArrowDown 1.8s ease-in-out infinite}
+.v23-goodpulse{animation:v23Pulse 2.8s ease-in-out 3}.v23-waitbreathe{animation:v23Breathe 3.4s ease-in-out 2}.v23-badshake{animation:v23Shake 1.6s ease-in-out 3}.v23-float{animation:v23Float 3.2s ease-in-out 2}.v23-arrowup{animation:v23ArrowUp 1.8s ease-in-out 3}.v23-arrowdown{animation:v23ArrowDown 1.8s ease-in-out 3}
 @keyframes v23Pulse{0%,100%{transform:scale(1);opacity:.88}50%{transform:scale(1.08);opacity:1}}
 @keyframes v23Breathe{0%,100%{transform:scale(.98);opacity:.72}50%{transform:scale(1.04);opacity:1}}
 @keyframes v23Shake{0%,84%,100%{transform:translateX(0)}88%{transform:translateX(-2px)}92%{transform:translateX(2px)}96%{transform:translateX(-1px)}}
@@ -120,7 +120,7 @@ function paint(){
 }
 function init(){
   setTimeout(()=>{ensureActionBar();paint()},1100);
-  setInterval(paint,3000);
+  document.addEventListener('zencore:flow-updated',paint);
   document.addEventListener('visibilitychange',()=>{document.body.classList.toggle('zc-motion-paused',document.hidden);if(!document.hidden)paint()});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
