@@ -559,6 +559,24 @@ function marketsPayload(){
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
   return{ok:true,engine:'ZenCore V32 Pine SOP Normal Entry',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
+function chartPayload(symbol,limit=180){
+  const lim=Math.max(30,Math.min(400,Number(limit)||180));
+  const arr=(historyBySymbol.get(symbol)||[]).slice(-lim);
+  const points=arr.map(d=>({
+    time:N(d?.time),barIndex:N(d?.barIndex),
+    open:N(d?.open),high:N(d?.high),low:N(d?.low),close:N(d?.close),
+    hema20:N(d?.hema20),hema40:N(d?.hema40),basis:N(d?.basis),
+    entry:N(d?.normal3Entry??d?.entry),sl:N(d?.sl),tp1:N(d?.tp1),tp2:N(d?.tp2),tp3:N(d?.tp3),
+    solid:d?.normal3Solid===true,
+    side:U(d?.normal3Side||'WAIT'),
+    sopGreen:[d?.normal3Sop1,d?.normal3Sop2,d?.normal3Sop3,d?.normal3Sop4,d?.normal3Sop5].filter(v=>v===true).length,
+    forecast:U(d?.normal3Forecast||'WAIT').replace(/[^A-Z]/g,''),
+    marketPower:N(d?.normal3MarketPower??d?.marketPower),
+    action:U(d?.action||'WAIT')
+  })).filter(p=>p.time!=null&&p.close!=null);
+  return{ok:true,symbol,feed:'ZENCORE_NATIVE_CHART_V1',generatedAt:Date.now(),count:points.length,points};
+}
+
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
 function captureBody(body){
@@ -596,6 +614,12 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&pathname==='/radar-v17.js')return serveFile(res,'radar-v17.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/prediction-ui-v17.js')return serveFile(res,'prediction-ui-v17.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/api/markets')return send(res,200,JSON.stringify(marketsPayload()));
+  let cm=pathname.match(/^\/api\/chart\/([A-Za-z0-9._-]+)$/i);
+  if(req.method==='GET'&&cm){
+    const sym=normSymbol(cm[1]);
+    const limit=Number(url.searchParams.get('limit')||180);
+    return send(res,200,JSON.stringify(chartPayload(sym,limit)));
+  }
   let vm=pathname.match(/^\/api\/strategy-performance\/([A-Za-z0-9._-]+)(?:\/(FAST|NORMAL))?$/i);
   if(req.method==='GET'&&vm){const sym=normSymbol(vm[1]),mode=vm[2]?U(vm[2]):null;return send(res,200,JSON.stringify({ok:true,symbol:sym,mode:mode||'ALL',generatedAt:Date.now(),summary:validationSummary(sym,mode)}));}
   if(req.method==='GET'&&pathname==='/market-events'){
