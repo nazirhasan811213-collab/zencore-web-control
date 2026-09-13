@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZenCore Precision Entry</title>
+<link rel="stylesheet" href="/precision-entry.css?v=1.0">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">ZP</div>
+      <div>
+        <h1>ZenCore Precision Entry</h1>
+        <p>Normal Scalping 3M • Pine SOP V32 • Hard-Gate Entry Engine</p>
+      </div>
+    </div>
+    <div class="livebox">
+      <span id="feedDot" class="dot"></span>
+      <div><b id="feedState">WAITING FEED</b><small id="feedAge">No live data yet</small></div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div>
+      <span class="eyebrow">PRECISION ENTRY COMMAND CENTER</span>
+      <h2 id="heroSignal">WAIT FOR VALID SETUP</h2>
+      <p id="heroReason">Sistem hanya benarkan entry apabila semua hard gate utama lulus.</p>
+    </div>
+    <div class="symbolbox">
+      <span>MARKET</span>
+      <b id="symbol">XAUUSD</b>
+      <small>TF 3M • Confirm 5M HEMA</small>
+    </div>
+  </section>
+
+  <section class="status-grid">
+    <article class="status-card main">
+      <span>ENTRY STATUS</span>
+      <strong id="entryState">WARMING</strong>
+      <small id="entrySide">SIDE: WAIT</small>
+    </article>
+    <article class="status-card">
+      <span>ENTRY PRICE</span>
+      <strong id="entryPrice">—</strong>
+      <small id="closePrice">Current: —</small>
+    </article>
+    <article class="status-card">
+      <span>MARKET POWER</span>
+      <strong id="marketPower">—</strong>
+      <small id="forecast">Forecast: —</small>
+    </article>
+    <article class="status-card">
+      <span>SOP SCORE</span>
+      <strong id="sopScore">0/5</strong>
+      <small>Minimum 4 green</small>
+    </article>
+  </section>
+
+  <section class="layout">
+    <div class="panel gates-panel">
+      <div class="panel-head">
+        <div><span class="eyebrow">ENTRY VALIDATION</span><h3>5 Hard Gates</h3></div>
+        <div id="gateScore" class="score-ring">0/5</div>
+      </div>
+      <div id="gateList" class="gate-list"></div>
+    </div>
+
+    <div class="panel plan-panel">
+      <div class="panel-head">
+        <div><span class="eyebrow">TRADE PLAN</span><h3 id="planTitle">No Active Plan</h3></div>
+      </div>
+      <div class="plan-grid">
+        <div><span>ENTRY</span><b id="planEntry">—</b></div>
+        <div><span>STOP LOSS</span><b id="planSL">—</b></div>
+        <div><span>TP1 • 1R</span><b id="planTP1">—</b></div>
+        <div><span>TP2 • 2R</span><b id="planTP2">—</b></div>
+        <div><span>TP3 • 3R</span><b id="planTP3">—</b></div>
+        <div><span>RISK DISTANCE</span><b id="riskDistance">—</b></div>
+      </div>
+      <div id="planNote" class="plan-note">Plan hanya muncul apabila semua syarat entry lulus.</div>
+    </div>
+  </section>
+
+  <section class="layout lower">
+    <div class="panel">
+      <div class="panel-head"><div><span class="eyebrow">SOP CHECKLIST</span><h3>Pine 3M</h3></div></div>
+      <div id="sopList" class="sop-list"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div><span class="eyebrow">5M CONFIRMATION</span><h3>HEMA Ribbon</h3></div></div>
+      <div class="hema-box">
+        <div><span>Position</span><b id="m5Position">—</b></div>
+        <div><span>5M Close</span><b id="m5Close">—</b></div>
+        <div><span>HEMA 20</span><b id="m5Hema20">—</b></div>
+        <div><span>HEMA 40</span><b id="m5Hema40">—</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="rules">
+    <h3>ZenCore Precision Entry Rules</h3>
+    <p><b>BUY:</b> Solid Entry + harga melepasi Entry BUY + SOP ≥4/5 + Forecast BULLISH/NEUTRAL melepasi threshold + candle 5M di atas HEMA Ribbon.</p>
+    <p><b>SELL:</b> Solid Entry + harga di bawah Entry SELL + SOP ≥4/5 + Forecast BEARISH >50% atau NEUTRAL <50% + candle 5M di bawah HEMA Ribbon.</p>
+  </section>
+
+  <footer>
+    ZenCore Precision Entry • Entry confirmation tool • Bukan jaminan profit • Gunakan risk management.
+  </footer>
+</div>
+<script src="/precision-entry.js?v=1.0"></script>
+</body>
+</html>
