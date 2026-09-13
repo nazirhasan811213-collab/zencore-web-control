@@ -1340,6 +1340,62 @@ f_web_num(float _v) =>
 f_web_bool(bool _v) =>
     _v ? "true" : "false"
 
+// ==========================================
+// V32 NORMAL SCALPING TF3M - PINE HARD-GATE FEED
+// FAST TRADE 1M is untouched.
+// ==========================================
+normal_tf3_ok = timeframe.period == "3"
+normal_sop_version = normal_tf3_ok ? "32.0" : "TF3_REQUIRED"
+normal_3m_close = close
+
+var string normal_last_side = "WAIT"
+if is_zone_turn_green
+    normal_last_side := "BUY"
+else if is_zone_turn_red
+    normal_last_side := "SELL"
+
+normal_side = normal_last_side
+if curr_active
+    normal_side := curr_isBuy ? "BUY" : "SELL"
+
+normal_price_past_entry = false
+if normal_tf3_ok and not na(saved_entry_price)
+    if normal_side == "BUY"
+        normal_price_past_entry := normal_3m_close > saved_entry_price
+    else if normal_side == "SELL"
+        normal_price_past_entry := normal_3m_close < saved_entry_price
+
+normal_solid_buy = false
+normal_solid_sell = false
+if normal_tf3_ok and curr_active and curr_triggered and not trigger_reentry
+    if curr_isBuy
+        normal_solid_buy := normal_3m_close > curr_entry and normal_3m_close > basis and wt1 > wt2 and not sellSig and rsi_val < 75
+    else
+        normal_solid_sell := normal_3m_close < curr_entry and normal_3m_close < basis and wt1 < wt2 and not buySig and rsi_val > 25
+
+normal_solid_entry = normal_solid_buy or normal_solid_sell
+normal_sop1 = normal_tf3_ok and sop1_pass
+normal_sop2 = normal_tf3_ok and sop2_pass
+normal_sop3 = normal_tf3_ok and sop3_pass
+normal_sop4 = normal_tf3_ok and sop4_pass
+normal_sop5 = normal_tf3_ok and sop5_pass
+
+normal_forecast_dir = "NEUTRAL"
+if forecast_direction == "BULLISH 🚀"
+    normal_forecast_dir := "BULLISH"
+else if forecast_direction == "BEARISH 🩸"
+    normal_forecast_dir := "BEARISH"
+else if forecast_direction == "CHOPPY 🛑"
+    normal_forecast_dir := "CHOPPY"
+
+[normal_5m_close, normal_5m_hema20, normal_5m_hema40] = request.security(syminfo.tickerid, "5", [close, f_hema(close, 20), f_hema(close, 40)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+
+normal_5m_position = "INSIDE"
+if normal_5m_close > math.max(normal_5m_hema20, normal_5m_hema40)
+    normal_5m_position := "ABOVE"
+else if normal_5m_close < math.min(normal_5m_hema20, normal_5m_hema40)
+    normal_5m_position := "BELOW"
+
 if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green or is_zone_turn_red)
     string web_action = is_zone_turn_green ? "BUY" : is_zone_turn_red ? "SELL" : global_trend > 0 ? "LONG_BIAS" : global_trend < 0 ? "SHORT_BIAS" : "WAIT"
 
@@ -1392,7 +1448,25 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"sop2\":" + f_web_bool(sop2_pass) + ","
     web_payload += "\"sop3\":" + f_web_bool(sop3_pass) + ","
     web_payload += "\"sop4\":" + f_web_bool(sop4_pass) + ","
-    web_payload += "\"sop5\":" + f_web_bool(sop5_pass)
+    web_payload += "\"sop5\":" + f_web_bool(sop5_pass) + ","
+    web_payload += "\"normalSopVersion\":\"" + normal_sop_version + "\","
+    web_payload += "\"normal3Side\":\"" + normal_side + "\","
+    web_payload += "\"normal3Solid\":" + f_web_bool(normal_solid_entry) + ","
+    web_payload += "\"normal3PricePastEntry\":" + f_web_bool(normal_price_past_entry) + ","
+    web_payload += "\"normal3Sop1\":" + f_web_bool(normal_sop1) + ","
+    web_payload += "\"normal3Sop2\":" + f_web_bool(normal_sop2) + ","
+    web_payload += "\"normal3Sop3\":" + f_web_bool(normal_sop3) + ","
+    web_payload += "\"normal3Sop4\":" + f_web_bool(normal_sop4) + ","
+    web_payload += "\"normal3Sop5\":" + f_web_bool(normal_sop5) + ","
+    web_payload += "\"normal3Forecast\":\"" + normal_forecast_dir + "\","
+    web_payload += "\"normal3MarketPower\":" + str.tostring(market_power, "#") + ","
+    web_payload += "\"normal3Entry\":" + f_web_num(saved_entry_price) + ","
+    web_payload += "\"normal3Close\":" + f_web_num(normal_3m_close) + ","
+    web_payload += "\"normal3Atr\":" + f_web_num(atr) + ","
+    web_payload += "\"normal5Position\":\"" + normal_5m_position + "\","
+    web_payload += "\"normal5Close\":" + f_web_num(normal_5m_close) + ","
+    web_payload += "\"normal5Hema20\":" + f_web_num(normal_5m_hema20) + ","
+    web_payload += "\"normal5Hema40\":" + f_web_num(normal_5m_hema40)
     web_payload += "}"
 
     alert(web_payload, alert.freq_once_per_bar_close)
