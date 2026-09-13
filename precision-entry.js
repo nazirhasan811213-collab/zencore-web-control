@@ -235,10 +235,229 @@ try{
   es.addEventListener('prediction',e=>{try{renderMarket(JSON.parse(e.data))}catch(_){}});
 }catch(_){}
 
+
+let nativeChartPoints=[];
+let chartMode='zencore';
+
+function chartColor(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function chartNum(v){const n=Number(v);return Number.isFinite(n)?n:null}
+
+function drawRoundRect(ctx,x,y,w,h,r,fill,stroke){
+  const rr=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.arcTo(x+w,y,x+w,y+h,rr);
+  ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr);
+  ctx.arcTo(x,y,x+w,y,rr);
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill()}
+  if(stroke){ctx.strokeStyle=stroke;ctx.stroke()}
+}
+
+function drawZenCoreChart(points){
+  const canvas=$('zencoreCanvas');
+  if(!canvas)return;
+  const panel=$('zencoreChartPanel');
+  const rect=panel.getBoundingClientRect();
+  const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+  const w=Math.max(320,Math.floor(rect.width));
+  const h=Math.max(280,Math.floor(rect.height));
+  if(canvas.width!==Math.floor(w*dpr)||canvas.height!==Math.floor(h*dpr)){
+    canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);
+  }
+  canvas.style.width=w+'px';canvas.style.height=h+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#090e13';ctx.fillRect(0,0,w,h);
+
+  const raw=(points||[]).slice(-140);
+  if(raw.length<2){
+    $('chartEmptyState')?.classList.remove('hidden');
+    setText('nativeChartStatus','Waiting live candles');
+    return;
+  }
+  $('chartEmptyState')?.classList.add('hidden');
+
+  const data=[];
+  let prevClose=null;
+  for(const p of raw){
+    const close=chartNum(p.close); if(close==null)continue;
+    const open=chartNum(p.open)??prevClose??close;
+    const high=chartNum(p.high)??Math.max(open,close);
+    const low=chartNum(p.low)??Math.min(open,close);
+    data.push({...p,open,high,low,close});
+    prevClose=close;
+  }
+  if(data.length<2){
+    $('chartEmptyState')?.classList.remove('hidden');return;
+  }
+
+  const pad={l:14,r:82,t:28,b:28};
+  const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+  const latest=data[data.length-1];
+  const levelVals=['entry','sl','tp1','tp2','tp3'].map(k=>chartNum(latest[k])).filter(v=>v!=null);
+  let min=Math.min(...data.map(p=>p.low),...levelVals);
+  let max=Math.max(...data.map(p=>p.high),...levelVals);
+  const span=Math.max(0.0001,max-min);
+  min-=span*.08;max+=span*.08;
+  const y=v=>pad.t+(max-v)/(max-min)*ch;
+  const step=cw/data.length;
+  const x=i=>pad.l+i*step+step*.5;
+
+  // grid
+  ctx.lineWidth=1;
+  ctx.font='10px system-ui';
+  ctx.textBaseline='middle';
+  for(let i=0;i<=6;i++){
+    const yy=pad.t+(ch/6)*i;
+    ctx.strokeStyle='#17232d';
+    ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
+    const price=max-(max-min)*(i/6);
+    ctx.fillStyle='#8293a0';
+    ctx.textAlign='left';
+    ctx.fillText(price.toFixed(price>=1000?2:4),w-pad.r+8,yy);
+  }
+  const vLines=8;
+  for(let i=0;i<=vLines;i++){
+    const xx=pad.l+(cw/vLines)*i;
+    ctx.strokeStyle='#111b23';
+    ctx.beginPath();ctx.moveTo(xx,pad.t);ctx.lineTo(xx,h-pad.b);ctx.stroke();
+  }
+
+  // HEMA ribbon
+  const ribbon=data.map((p,i)=>({x:x(i),a:chartNum(p.hema20),b:chartNum(p.hema40)})).filter(p=>p.a!=null&&p.b!=null);
+  if(ribbon.length>1){
+    const bullish=(ribbon[ribbon.length-1].a??0)>(ribbon[ribbon.length-1].b??0);
+    ctx.beginPath();
+    ribbon.forEach((p,i)=>{const yy=y(p.a);i===0?ctx.moveTo(p.x,yy):ctx.lineTo(p.x,yy)});
+    for(let i=ribbon.length-1;i>=0;i--)ctx.lineTo(ribbon[i].x,y(ribbon[i].b));
+    ctx.closePath();
+    ctx.fillStyle=bullish?'rgba(0,210,150,.22)':'rgba(255,50,40,.22)';
+    ctx.fill();
+
+    const drawLine=(key,color)=>{
+      ctx.beginPath();let started=false;
+      data.forEach((p,i)=>{const v=chartNum(p[key]);if(v==null)return;const xx=x(i),yy=y(v);if(!started){ctx.moveTo(xx,yy);started=true}else ctx.lineTo(xx,yy)});
+      ctx.strokeStyle=color;ctx.lineWidth=1.2;ctx.stroke();
+    };
+    drawLine('hema20',bullish?'rgba(40,230,170,.75)':'rgba(255,75,60,.72)');
+    drawLine('hema40',bullish?'rgba(15,125,100,.75)':'rgba(120,35,30,.72)');
+  }
+
+  // candles
+  const bodyW=Math.max(3,Math.min(10,step*.66));
+  data.forEach((p,i)=>{
+    const xx=x(i),yo=y(p.open),yc=y(p.close),yh=y(p.high),yl=y(p.low);
+    const up=p.close>=p.open;
+    const col=up?'#42c7e8':'#ff5b5f';
+    ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(xx,yh);ctx.lineTo(xx,yl);ctx.stroke();
+    const top=Math.min(yo,yc),bh=Math.max(1.5,Math.abs(yc-yo));
+    ctx.fillRect(xx-bodyW/2,top,bodyW,bh);
+  });
+
+  // horizontal trade levels
+  const levels=[
+    ['tp3','#29e6a3','TP3'],['tp2','#29e6a3','TP2'],['tp1','#29e6a3','TP1'],
+    ['entry','#d8c44b','ENTRY'],['sl','#ff5c65','SL']
+  ];
+  for(const [key,color,label] of levels){
+    const v=chartNum(latest[key]);if(v==null)continue;
+    const yy=y(v);
+    ctx.save();
+    ctx.setLineDash(key==='entry'?[7,5]:[]);
+    ctx.strokeStyle=color;ctx.globalAlpha=.9;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(Math.max(pad.l,w-pad.r-170),yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
+    ctx.restore();
+    ctx.font='9px system-ui';ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillStyle=color;
+    ctx.fillText(label+' '+v.toFixed(v>=1000?2:4),w-pad.r-4,yy-2);
+  }
+
+  // current price dotted line
+  const py=y(latest.close);
+  ctx.save();ctx.setLineDash([2,3]);ctx.strokeStyle='#d9ce5a';ctx.globalAlpha=.72;
+  ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(w-pad.r,py);ctx.stroke();ctx.restore();
+
+  // solid-entry markers
+  const solids=[];
+  data.forEach((p,i)=>{if(p.solid)solids.push({p,i})});
+  solids.slice(-10).forEach(({p,i})=>{
+    const xx=x(i),yy=y(p.side==='SELL'?p.high:p.low)+(p.side==='SELL'?-20:8);
+    const txt='⚡ Solid Entry';
+    ctx.font='bold 9px system-ui';
+    const tw=ctx.measureText(txt).width+12;
+    drawRoundRect(ctx,xx-tw/2,yy,tw,18,4,'rgba(15,225,160,.93)',null);
+    ctx.fillStyle='#072016';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(txt,xx,yy+9);
+  });
+
+  // forecast banner
+  if(latest.forecast&&latest.forecast!=='WAIT'){
+    const txt='AI FORECAST: '+latest.forecast+' '+(latest.marketPower==null?'':Math.round(latest.marketPower)+'%');
+    ctx.font='bold 9px system-ui';const tw=ctx.measureText(txt).width+16;
+    const bull=latest.forecast==='BULLISH',bear=latest.forecast==='BEARISH';
+    const fill=bull?'rgba(25,225,160,.9)':bear?'rgba(255,84,84,.9)':'rgba(255,183,77,.9)';
+    drawRoundRect(ctx,Math.max(pad.l+180,w-pad.r-tw-30),pad.t+8,tw,20,5,fill,null);
+    ctx.fillStyle=bear?'#fff':'#071512';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(txt,Math.max(pad.l+180,w-pad.r-tw-30)+tw/2,pad.t+18);
+  }
+
+  // SOP checklist overlay
+  const sop=Number(latest.sopGreen||0);
+  const bw=176,bh=70,bx=w-pad.r-bw-6,by=h-pad.b-bh-8;
+  drawRoundRect(ctx,bx,by,bw,bh,8,'rgba(8,16,24,.9)','#2d3f50');
+  ctx.fillStyle='#8b4adf';ctx.fillRect(bx,by,bw,18);
+  ctx.fillStyle='#fff';ctx.font='bold 9px system-ui';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText('SOP ENTRY CHECKLIST',bx+8,by+9);
+  ctx.fillStyle='#a7bac9';ctx.font='9px system-ui';ctx.fillText('Mode: '+(latest.side||'WAIT'),bx+8,by+31);
+  ctx.fillStyle=sop>=4?'#49e6ae':'#ffbd59';ctx.fillText('SOP Green: '+sop+'/5',bx+8,by+45);
+  ctx.fillStyle='#8397a8';ctx.fillText('Forecast: '+(latest.forecast||'WAIT'),bx+8,by+59);
+
+  // time labels
+  ctx.font='9px system-ui';ctx.fillStyle='#718391';ctx.textAlign='center';ctx.textBaseline='top';
+  const every=Math.max(1,Math.floor(data.length/7));
+  for(let i=0;i<data.length;i+=every){
+    const t=Number(data[i].time);
+    if(!Number.isFinite(t))continue;
+    const d=new Date(t);
+    const label=d.toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Kuala_Lumpur'});
+    ctx.fillText(label,x(i),h-pad.b+7);
+  }
+  setText('nativeChartStatus',data.length+' candles • ZenCore native feed');
+}
+
+async function refreshNativeChart(){
+  try{
+    const r=await fetch('/api/chart/XAUUSD?limit=180',{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const payload=await r.json();
+    nativeChartPoints=Array.isArray(payload.points)?payload.points:[];
+    drawZenCoreChart(nativeChartPoints);
+  }catch(e){
+    setText('nativeChartStatus','Chart feed unavailable');
+  }
+}
+
+document.querySelectorAll('.chart-tab').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.chart-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  chartMode=btn.dataset.chartMode||'zencore';
+  $('zencoreChartPanel')?.classList.toggle('active',chartMode==='zencore');
+  $('tradingViewPanel')?.classList.toggle('active',chartMode==='tradingview');
+  if(chartMode==='zencore')drawZenCoreChart(nativeChartPoints);
+}));
+
+window.addEventListener('resize',()=>{if(chartMode==='zencore')drawZenCoreChart(nativeChartPoints)});
+
 refreshMarket();
 refreshPerformance();
+refreshNativeChart();
 setInterval(refreshMarket,10000);
 setInterval(refreshPerformance,30000);
+setInterval(refreshNativeChart,5000);
 setInterval(()=>{if(window.__lastReceived)setText('feedAge',age(window.__lastReceived))},1000);
 
 })();
