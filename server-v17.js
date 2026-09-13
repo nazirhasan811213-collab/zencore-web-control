@@ -18,6 +18,9 @@ const opportunityBySymbol=new Map();
 const sidewaysGuardBySymbol=new Map();
 const fastStrategyBySymbol=new Map();
 const normalStrategyBySymbol=new Map();
+const validationOpenByKey=new Map();
+const validationClosed=[];
+const validationSeen=new Set();
 const SIGNAL_INVALID_STREAK=2;
 const SIGNAL_REVERSAL_COOLDOWN_MS=45000;
 const SIGNAL_TRADE_COOLDOWN_MS=60000;
@@ -642,6 +645,93 @@ function updateOpportunity(symbol,d){
   opportunityBySymbol.set(symbol,last);return last;
 }
 
+
+function validationKey(symbol,mode){return symbol+'|'+mode;}
+function signalId(symbol,mode,strat,d){
+  const t=N(d?.time)||N(d?.barIndex)||Date.now();
+  const side=U(strat?.side||'WAIT'),entry=N(strat?.plan?.entry);
+  return [symbol,mode,side,entry,t].join('|');
+}
+function validationSnapshot(symbol,mode,strat,d){
+  if(!strat||U(strat.state)!=='READY'||!strat.plan)return;
+  const key=validationKey(symbol,mode),id=signalId(symbol,mode,strat,d);
+  if(validationSeen.has(id)||validationOpenByKey.has(key))return;
+  const p=strat.plan,entry=N(p.entry),sl=N(p.sl),tp1=N(p.tp1),tp2=N(p.tp2),tp3=N(p.tp3);
+  if(entry==null||sl==null||tp1==null)return;
+  const rec={
+    id,symbol,mode,side:U(strat.side),state:'OPEN',
+    openedAt:Date.now(),openedTime:N(d?.time),openedBar:N(d?.barIndex),
+    openedKey:snapshotKey(d),entry,sl,tp1,tp2,tp3,
+    score:N(strat.score)||0,reason:strat.reason||'',
+    confirmations:strat.confirmations||null,
+    condition:p.condition||null,
+    targetRange:p.targetRange||strat.targetRange||null,
+    slPips:N(p.slPips),recommendedPips:N(p.recommendedPips),
+    hitTp1:false,hitTp2:false,hitTp3:false,
+    outcome:null,resolvedAt:null,resolvedTime:null,resolvedBar:null
+  };
+  validationSeen.add(id);validationOpenByKey.set(key,rec);
+}
+function hitLevel(side,kind,level,hi,lo){
+  if(level==null||hi==null||lo==null)return false;
+  if(kind==='TP')return side==='BUY'?hi>=level:lo<=level;
+  return side==='BUY'?lo<=level:hi>=level;
+}
+function resolveValidation(symbol,d){
+  const hi=N(d?.high),lo=N(d?.low),keyNow=snapshotKey(d);
+  if(hi==null||lo==null)return;
+  for(const mode of ['FAST','NORMAL']){
+    const key=validationKey(symbol,mode),r=validationOpenByKey.get(key);
+    if(!r||r.openedKey===keyNow)continue;
+    const slHit=hitLevel(r.side,'SL',r.sl,hi,lo);
+    const t1=hitLevel(r.side,'TP',r.tp1,hi,lo);
+    const t2=hitLevel(r.side,'TP',r.tp2,hi,lo);
+    const t3=hitLevel(r.side,'TP',r.tp3,hi,lo);
+    if(t1)r.hitTp1=true;if(t2)r.hitTp2=true;if(t3)r.hitTp3=true;
+
+    let done=false,outcome=null;
+    if(slHit&&t1){done=true;outcome='AMBIGUOUS';}
+    else if(slHit){done=true;outcome=r.hitTp1?'PROTECTED_WIN':'SL';}
+    else if(mode==='FAST'&&t2){done=true;outcome='TP30';}
+    else if(mode==='FAST'&&t1){
+      // FAST resolves primary win at first target; keep 30-pip hit as bonus if same/subsequent candle reaches it.
+      done=true;outcome='TP20';
+    }
+    else if(mode==='NORMAL'&&t3){done=true;outcome='TP3';}
+    else if(mode==='NORMAL'&&t2&&r.hitTp1){done=true;outcome='TP2';}
+    else if(mode==='NORMAL'&&t1){done=true;outcome='TP1';}
+
+    if(done){
+      r.state='CLOSED';r.outcome=outcome;r.resolvedAt=Date.now();r.resolvedTime=N(d?.time);r.resolvedBar=N(d?.barIndex);
+      validationClosed.push({...r});if(validationClosed.length>1000)validationClosed.splice(0,validationClosed.length-1000);
+      validationOpenByKey.delete(key);
+    }
+  }
+}
+function validationSummary(symbol,mode){
+  const rows=validationClosed.filter(r=>(!symbol||r.symbol===symbol)&&(!mode||r.mode===mode));
+  const resolved=rows.filter(r=>r.outcome!=='AMBIGUOUS');
+  const wins=resolved.filter(r=>['TP20','TP30','TP1','TP2','TP3','PROTECTED_WIN'].includes(r.outcome)).length;
+  const losses=resolved.filter(r=>r.outcome==='SL').length;
+  const ambiguous=rows.filter(r=>r.outcome==='AMBIGUOUS').length;
+  const winRate=resolved.length?Math.round(wins/resolved.length*1000)/10:null;
+  const byOutcome={};
+  rows.forEach(r=>byOutcome[r.outcome]=(byOutcome[r.outcome]||0)+1);
+  return{
+    sample:rows.length,resolved:resolved.length,wins,losses,ambiguous,winRate,
+    maturity:resolved.length<20?'EARLY':resolved.length<50?'BUILDING':resolved.length<100?'MINIMUM SAMPLE':'MATURE',
+    byOutcome,
+    recent:rows.slice(-20).reverse(),
+    open:[...validationOpenByKey.values()].filter(r=>(!symbol||r.symbol===symbol)&&(!mode||r.mode===mode))
+  };
+}
+function updateValidation(symbol,d){
+  resolveValidation(symbol,d);
+  const f=fastTradeStrategy(symbol,d),n=normalScalpStrategy(symbol,d);
+  validationSnapshot(symbol,'FAST',f,d);
+  validationSnapshot(symbol,'NORMAL',n,d);
+}
+
 function marketSummary(symbol){
   const d=latestBySymbol.get(symbol);
   if(!d)return{symbol,online:false,freshness:'OFFLINE',status:'OFFLINE',signal:'WAIT',signalState:'WAIT',signalLocked:false,strategyFast:{mode:'FAST',state:'WAIT',side:'WAIT',score:0,reason:'Tiada data',plan:null},strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Tiada data',plan:null},sidewaysGuard:false,sidewaysReason:'Tiada data',sidewaysChop:null,sidewaysEmaFlips:0,sidewaysPriceReversals:0,opportunityType:'NONE',opportunitySide:'WAIT',opportunityStrength:'NONE',opportunityReason:'Tiada data',opportunityRisk:'WAIT',prediction:'WAIT',rawPrediction:'WAIT',predictionConfidence:0,signalConfidence:0,predictionConsensus:0,predictionHorizon:'NEXT 1–3 BARS',currentAction:'WAIT',grade:'—',stability:0,readiness:0,radarScore:0,zone:'NO DATA',rr:null,price:null,timeframe:'—',receivedAt:null,tradeActive:false,reasons:[]};
@@ -657,7 +747,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore V30.1 Strategy Isolation + Lifecycle Guard',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore V31 Signal Validation Engine',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
@@ -670,6 +760,7 @@ function captureBody(body){
     const i=arr.findIndex(x=>(N(x.time)||N(x.barIndex))===key); if(i>=0)arr[i]=d;else arr.push(d); if(arr.length>600)arr.splice(0,arr.length-600); historyBySymbol.set(symbol,arr);
     updateSignalCore(symbol,d);
     updateOpportunity(symbol,d);
+    updateValidation(symbol,d);
     broadcastMarkets();broadcastPrediction(symbol);
   }
 }
@@ -695,6 +786,8 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&pathname==='/radar-v17.js')return serveFile(res,'radar-v17.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/prediction-ui-v17.js')return serveFile(res,'prediction-ui-v17.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/api/markets')return send(res,200,JSON.stringify(marketsPayload()));
+  let vm=pathname.match(/^\/api\/strategy-performance\/([A-Za-z0-9._-]+)(?:\/(FAST|NORMAL))?$/i);
+  if(req.method==='GET'&&vm){const sym=normSymbol(vm[1]),mode=vm[2]?U(vm[2]):null;return send(res,200,JSON.stringify({ok:true,symbol:sym,mode:mode||'ALL',generatedAt:Date.now(),summary:validationSummary(sym,mode)}));}
   if(req.method==='GET'&&pathname==='/market-events'){
     res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive','Access-Control-Allow-Origin':'*','X-Accel-Buffering':'no'});marketClients.add(res);res.write(`event: markets\ndata: ${JSON.stringify(marketsPayload())}\n\n`);const ping=setInterval(()=>{try{res.write(': ping\n\n')}catch(_){}},20000);req.on('close',()=>{clearInterval(ping);marketClients.delete(res)});return;
   }
