@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071018">
 <title>ZenCore Precision Entry</title>
-<link rel="stylesheet" href="/precision-entry.css?v=1.0">
+<link rel="stylesheet" href="/precision-entry.css?v=2.0">
 </head>
 <body>
 <div class="app">
@@ -13,25 +14,31 @@
       <div class="mark">ZP</div>
       <div>
         <h1>ZenCore Precision Entry</h1>
-        <p>Normal Scalping 3M • Pine SOP V32 • Hard-Gate Entry Engine</p>
+        <p>Normal Scalping 3M • Pine SOP V32 • Profit Quality Layer</p>
       </div>
     </div>
-    <div class="livebox">
-      <span id="feedDot" class="dot"></span>
-      <div><b id="feedState">WAITING FEED</b><small id="feedAge">No live data yet</small></div>
+    <div class="header-right">
+      <div class="session"><span>MARKET</span><b id="marketSession">WAITING</b></div>
+      <div class="livebox">
+        <span id="feedDot" class="dot"></span>
+        <div><b id="feedState">WAITING FEED</b><small id="feedAge">No live data yet</small></div>
+      </div>
     </div>
   </header>
 
   <section class="hero">
-    <div>
+    <div class="hero-copy">
       <span class="eyebrow">PRECISION ENTRY COMMAND CENTER</span>
       <h2 id="heroSignal">WAIT FOR VALID SETUP</h2>
-      <p id="heroReason">Sistem hanya benarkan entry apabila semua hard gate utama lulus.</p>
+      <p id="heroReason">SOP asal kekal. Profit Quality hanya menilai sama ada setup itu berkualiti tinggi untuk execution.</p>
+      <div class="hero-tags">
+        <span>TF 3M</span><span>5M HEMA CONFIRM</span><span>NO SOP CHANGE</span>
+      </div>
     </div>
     <div class="symbolbox">
       <span>MARKET</span>
       <b id="symbol">XAUUSD</b>
-      <small>TF 3M • Confirm 5M HEMA</small>
+      <small id="lastPrice">Price: —</small>
     </div>
   </section>
 
@@ -41,10 +48,15 @@
       <strong id="entryState">WARMING</strong>
       <small id="entrySide">SIDE: WAIT</small>
     </article>
+    <article class="status-card quality">
+      <span>A+ PROFIT QUALITY</span>
+      <strong id="qualityGrade">—</strong>
+      <small id="qualityScore">Quality: 0/100</small>
+    </article>
     <article class="status-card">
-      <span>ENTRY PRICE</span>
-      <strong id="entryPrice">—</strong>
-      <small id="closePrice">Current: —</small>
+      <span>VALIDATED WIN RATE</span>
+      <strong id="validatedWinRate">—</strong>
+      <small id="sampleSize">Sample: 0 • collecting data</small>
     </article>
     <article class="status-card">
       <span>MARKET POWER</span>
@@ -58,6 +70,58 @@
     </article>
   </section>
 
+  <section class="chart-section panel">
+    <div class="panel-head">
+      <div>
+        <span class="eyebrow">LIVE MARKET</span>
+        <h3>TradingView • XAUUSD • 3 Minute</h3>
+      </div>
+      <div class="chart-badges"><span>OANDA:XAUUSD</span><span>3M</span></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="tradingview-widget-container">
+        <div class="tradingview-widget-container__widget"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+        {
+          "autosize": true,
+          "symbol": "OANDA:XAUUSD",
+          "interval": "3",
+          "timezone": "Asia/Kuala_Lumpur",
+          "theme": "dark",
+          "style": "1",
+          "locale": "en",
+          "backgroundColor": "rgba(7, 16, 24, 1)",
+          "gridColor": "rgba(29, 49, 68, 0.35)",
+          "allow_symbol_change": false,
+          "save_image": false,
+          "calendar": false,
+          "withdateranges": true,
+          "hide_side_toolbar": false,
+          "support_host": "https://www.tradingview.com"
+        }
+        </script>
+      </div>
+      <aside class="execution-box">
+        <div class="execution-title">
+          <span class="eyebrow">EXECUTION PANEL</span>
+          <h3 id="executionTitle">WAIT</h3>
+          <p id="executionAdvice">Tunggu setup lengkap dan quality yang lebih baik.</p>
+        </div>
+        <div class="execution-grid">
+          <div><span>ENTRY LINE</span><b id="entryPrice">—</b></div>
+          <div><span>CURRENT</span><b id="closePrice">—</b></div>
+          <div><span>5M HEMA</span><b id="m5PositionMini">—</b></div>
+          <div><span>RR TO TP3</span><b id="rrTp3">—</b></div>
+        </div>
+        <div class="quality-meter">
+          <div><span>Execution Quality</span><b id="qualityMeterLabel">0%</b></div>
+          <div class="rail"><i id="qualityRail"></i></div>
+        </div>
+      </aside>
+    </div>
+    <div class="chart-note">TradingView widget memaparkan chart harga. ZenCore SOP/entry data diambil daripada webhook Pine dan dipaparkan pada panel analysis di sekeliling chart.</div>
+  </section>
+
   <section class="layout">
     <div class="panel gates-panel">
       <div class="panel-head">
@@ -67,9 +131,20 @@
       <div id="gateList" class="gate-list"></div>
     </div>
 
+    <div class="panel quality-panel">
+      <div class="panel-head">
+        <div><span class="eyebrow">PROFIT QUALITY</span><h3>A+ Execution Filter</h3></div>
+        <div id="qualityBadge" class="quality-badge">WAIT</div>
+      </div>
+      <div id="qualityChecklist" class="quality-list"></div>
+      <div class="quality-disclaimer">Quality score bukan win probability. Ia hanya ranking setup; SOP entry tidak diubah.</div>
+    </div>
+  </section>
+
+  <section class="layout">
     <div class="panel plan-panel">
       <div class="panel-head">
-        <div><span class="eyebrow">TRADE PLAN</span><h3 id="planTitle">No Active Plan</h3></div>
+        <div><span class="eyebrow">TRADE PLAN & RISK</span><h3 id="planTitle">No Active Plan</h3></div>
       </div>
       <div class="plan-grid">
         <div><span>ENTRY</span><b id="planEntry">—</b></div>
@@ -79,7 +154,28 @@
         <div><span>TP3 • 3R</span><b id="planTP3">—</b></div>
         <div><span>RISK DISTANCE</span><b id="riskDistance">—</b></div>
       </div>
+      <div class="risk-strip">
+        <div><span>Risk State</span><b id="riskState">—</b></div>
+        <div><span>Setup Probability</span><b id="setupProbability">—</b></div>
+        <div><span>Confluence</span><b id="confluence">—</b></div>
+        <div><span>Entry Zone</span><b id="entryZone">—</b></div>
+      </div>
       <div id="planNote" class="plan-note">Plan hanya muncul apabila semua syarat entry lulus.</div>
+    </div>
+
+    <div class="panel performance-panel">
+      <div class="panel-head">
+        <div><span class="eyebrow">VALIDATED PERFORMANCE</span><h3>Normal 3M Results</h3></div>
+        <div id="performanceStatus" class="performance-badge">EARLY</div>
+      </div>
+      <div class="performance-grid">
+        <div><span>WIN RATE</span><b id="perfWinRate">—</b></div>
+        <div><span>RESOLVED</span><b id="perfResolved">0</b></div>
+        <div><span>WINS</span><b id="perfWins">0</b></div>
+        <div><span>LOSSES</span><b id="perfLosses">0</b></div>
+      </div>
+      <div id="performanceMessage" class="performance-message">Target 80%+ hanya dianggap valid selepas sample mencukupi.</div>
+      <div id="recentResults" class="recent-results"></div>
     </div>
   </section>
 
@@ -101,15 +197,16 @@
   </section>
 
   <section class="rules">
-    <h3>ZenCore Precision Entry Rules</h3>
-    <p><b>BUY:</b> Solid Entry + harga melepasi Entry BUY + SOP ≥4/5 + Forecast BULLISH/NEUTRAL melepasi threshold + candle 5M di atas HEMA Ribbon.</p>
-    <p><b>SELL:</b> Solid Entry + harga di bawah Entry SELL + SOP ≥4/5 + Forecast BEARISH >50% atau NEUTRAL <50% + candle 5M di bawah HEMA Ribbon.</p>
+    <div>
+      <span class="eyebrow">ENTRY SOP — UNCHANGED</span>
+      <h3>ZenCore Normal Entry Rules</h3>
+    </div>
+    <p><b>BUY:</b> Solid Entry + harga melepasi Entry BUY + SOP ≥4/5 + Forecast BULLISH/NEUTRAL mengikut threshold + candle 5M di atas HEMA Ribbon.</p>
+    <p><b>SELL:</b> Solid Entry + harga di bawah Entry SELL + SOP ≥4/5 + Forecast BEARISH &gt;50% atau NEUTRAL &lt;50% + candle 5M di bawah HEMA Ribbon.</p>
   </section>
 
-  <footer>
-    ZenCore Precision Entry • Entry confirmation tool • Bukan jaminan profit • Gunakan risk management.
-  </footer>
+  <footer>ZenCore Precision Entry • SOP source signal kekal • A+ Quality = execution ranking, bukan jaminan profit • Gunakan risk management.</footer>
 </div>
-<script src="/precision-entry.js?v=1.0"></script>
+<script src="/precision-entry.js?v=2.0"></script>
 </body>
 </html>
