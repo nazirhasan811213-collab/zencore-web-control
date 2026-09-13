@@ -376,275 +376,79 @@ function fastTradeStrategy(symbol,d){
 }
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
-  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',analysis1m:null,analysis3m:null,analysis5m:null,confirmations:{m1:'WAIT',m3:'WAIT',m5:'WAIT'},solid:false,plan:null};
-  const a1=oneMinuteAnalysis(symbol,d),a3=analyzeClosedTF(symbol,d,3),a5=analyzeClosedTF(symbol,d,5),key=snapshotKey(d);
-  if(a3.bars<4||a5.bars<3)return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'Normal Scalping tengah bina history 3m/5m',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
-  if(a3.sideways||a5.sideways)return{mode:'NORMAL',tf:'3m',state:'PAUSE',side:'WAIT',score:0,reason:'3m/5m sideways — normal scalping stop',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
-  const side=a3.bias;
-  if(side==='WAIT')return{mode:'NORMAL',tf:'3m',state:'WAIT',side:'WAIT',score:a3.confidence,reason:'3m belum cukup solid',analysis1m:a1,analysis3m:a3,analysis5m:a5,plan:null};
-  const align3=a3.bias===side,align5=a5.bias===side,align1=a1.bias===side;
-  const weighted=Math.round((a3.confidence||0)*.50+(a5.confidence||0)*.30+(a1.confidence||0)*.20);
-  const solid=align3&&align5&&align1&&a3.confidence>=80&&a5.confidence>=72&&a1.confidence>=75&&weighted>=84;
-  const st=strategyStreak(normalStrategyBySymbol,symbol,key,side,solid);
-  const c=N(d?.close),o=N(d?.open),e9=N(d?.ema9),w1=N(d?.waveTrend1),w2=N(d?.waveTrend2);
-  const trigger=c!=null&&o!=null&&e9!=null&&w1!=null&&w2!=null&&(side==='BUY'?c>o&&c>e9&&w1>w2:c<o&&c<e9&&w1<w2);
-  let state='WAIT',reason=`3m ${side}, tunggu 1m + 5m betul-betul sehala`;
-  if(align3&&align5&&weighted>=78)state='WATCH';
-  if(solid&&st.streak>=2&&trigger){state='READY';reason=`SOLID ${side} ENTRY — 1m + 3m + 5m semua sehala`;}
-  const atr3=N(a3.atr),entry=c;
+  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',confirmations:{m1:'WAIT',m3:'WAIT',m5:'WAIT'},sop:null,solid:false,plan:null};
+
+  const hasPineSop=d?.normalSopVersion==='32.0' || d?.normalSopVersion===32 || d?.normalSopVersion==='V32';
+  if(!hasPineSop){
+    return{
+      mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,
+      reason:'UPDATE FEED REQUIRED — Normal SOP perlukan data Pine V32 untuk Solid Entry + current 5m HEMA ribbon.',
+      confirmations:{m1:'WAIT',m3:'WAIT',m5:'WAIT'},
+      sop:{feedReady:false,passed:0,total:5},
+      solid:false,plan:null
+    };
+  }
+
+  const side=U(d?.normal3Side||'WAIT');
+  const entry=N(d?.normal3Entry),close3=N(d?.normal3Close),atr3=N(d?.normal3Atr);
+  const solid=d?.normal3Solid===true;
+  const pricePast=d?.normal3PricePastEntry===true;
+  const sopFlags=[d?.normal3Sop1,d?.normal3Sop2,d?.normal3Sop3,d?.normal3Sop4,d?.normal3Sop5].map(v=>v===true);
+  const sopGreen=sopFlags.filter(Boolean).length;
+  const forecast=U(d?.normal3Forecast||'WAIT');
+  const power=N(d?.normal3MarketPower);
+  const forecastPass=power!=null&&power>50&&(
+    side==='BUY'?(forecast==='BULLISH'||forecast==='NEUTRAL'):
+    side==='SELL'?(forecast==='BEARISH'||forecast==='NEUTRAL'):false
+  );
+  const m5pos=U(d?.normal5Position||'WAIT');
+  const m5Pass=side==='BUY'?m5pos==='ABOVE':side==='SELL'?m5pos==='BELOW':false;
+  const allReady=(side==='BUY'||side==='SELL')&&solid&&pricePast&&sopGreen>=4&&forecastPass&&m5Pass;
+
+  const gates=[
+    {key:'solid',label:'Solid Entry Signal',pass:solid},
+    {key:'entry',label:'Price Lepas Entry Line',pass:pricePast},
+    {key:'sop',label:'SOP Checklist ≥4 Green',pass:sopGreen>=4,detail:`${sopGreen}/5`},
+    {key:'forecast',label:'10-Candle Forecast >50%',pass:forecastPass,detail:`${forecast} ${power==null?'—':power+'%'}`},
+    {key:'m5',label:'Current 5m vs HEMA Ribbon',pass:m5Pass,detail:m5pos}
+  ];
+  const passed=gates.filter(g=>g.pass).length;
+  const score=Math.round(passed/gates.length*100);
+
+  let state='WAIT',reason='Normal 3m belum ada setup yang lengkap.';
+  if(side==='BUY'||side==='SELL'){
+    state=passed>=3?'WATCH':'WAIT';
+    const failed=gates.filter(g=>!g.pass).map(g=>g.label);
+    reason=allReady?`SOLID ${side} ENTRY — semua SOP Normal lulus.`:`${side} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
+  }
+  if(allReady)state='READY';
+
   let plan=null;
-  if(state==='READY'&&entry!=null&&atr3!=null&&atr3>0){
-    const structureDist=side==='BUY'&&N(a3.swingLow)!=null?entry-a3.swingLow:side==='SELL'&&N(a3.swingHigh)!=null?a3.swingHigh-entry:atr3*.6;
-    const riskDist=clamp(Math.max(atr3*.55,Math.min(Math.abs(structureDist)+atr3*.08,atr3*1.05)),atr3*.50,atr3*1.05);
-    const strong=weighted>=92&&a5.confidence>=82&&(N(a3.chop)==null||a3.chop<48);
-    const rr1=strong?1.0:.85,rr2=strong?1.8:1.5,rr3=strong?2.8:2.2;
-    const sl=side==='BUY'?entry-riskDist:entry+riskDist,tp1=side==='BUY'?entry+riskDist*rr1:entry-riskDist*rr1,tp2=side==='BUY'?entry+riskDist*rr2:entry-riskDist*rr2,tp3=side==='BUY'?entry+riskDist*rr3:entry-riskDist*rr3;
-    plan=makePlan(side,entry,sl,tp1,tp2,tp3,{riskDistance:riskDist,rr1,rr2,rr3,condition:strong?'STRONG TREND':'NORMAL TREND',planType:'NORMAL SCALPING 3M'});
+  if(allReady&&entry!=null&&atr3!=null&&atr3>0){
+    const riskDist=atr3;
+    const sl=side==='BUY'?entry-riskDist:entry+riskDist;
+    const tp1=side==='BUY'?entry+riskDist:entry-riskDist;
+    const tp2=side==='BUY'?entry+riskDist*2:entry-riskDist*2;
+    const tp3=side==='BUY'?entry+riskDist*3:entry-riskDist*3;
+    plan=makePlan(side,entry,sl,tp1,tp2,tp3,{
+      riskDistance:riskDist,rr1:1,rr2:2,rr3:3,
+      condition:'PINE SOP NORMAL',planType:'NORMAL SCALPING 3M — PINE SOP V32'
+    });
   }
-  const tfConfirm={m1:align1?'PASS':'WAIT',m3:align3?'PASS':'WAIT',m5:align5?'PASS':'WAIT'};
-  return{mode:'NORMAL',tf:'3m',state,side:state==='PAUSE'?'WAIT':side,score:weighted,streak:st.streak,reason,analysis1m:a1,analysis3m:a3,analysis5m:a5,confirmations:tfConfirm,solid,plan};
-}
 
-function exactAction(v){const s=U(v);return s==='BUY'||s==='SELL'?s:'WAIT';}
-function confirmationForSide(d,side){
-  if(side!=='BUY'&&side!=='SELL')return{passed:0,total:4,mtfAligned:0,items:[]};
-  const items=[];
-  const mtf=[N(d?.mtf1),N(d?.mtf2),N(d?.mtf3)];
-  const mtfAligned=mtf.filter(v=>v!=null&&(side==='BUY'?v>0:v<0)).length;
-  items.push({name:'MTF',pass:mtfAligned>=2});
-  items.push({name:'HEMA',pass:dirText(d?.hemaTrend)===side});
-  items.push({name:'Momentum',pass:dirText(d?.momentum)===side});
-  items.push({name:'Structure',pass:dirText(d?.marketStructure)===side});
-  return{passed:items.filter(x=>x.pass).length,total:items.length,mtfAligned,items};
-}
-function planGeometry(d,side){
-  const e=N(d?.entry),sl=N(d?.sl),t1=N(d?.tp1),t2=N(d?.tp2),t3=N(d?.tp3);
-  if([e,sl,t1,t2,t3].some(v=>v==null))return false;
-  return side==='BUY'?sl<e&&e<t1&&t1<t2&&t2<t3:side==='SELL'?sl>e&&e>t1&&t1>t2&&t2>t3:false;
-}
-function exactPineZone(d){
-  const e=N(d?.entry),sl=N(d?.sl);
-  if(e==null||sl==null||e===sl)return null;
-  const z1=sl+(e-sl)*.786,z2=sl+(e-sl)*.236;
-  return{lo:Math.min(z1,z2),hi:Math.max(z1,z2)};
-}
-function entryReadyForSide(d,side){
-  const z=exactPineZone(d),price=N(d?.close),atr=N(d?.atr),entry=N(d?.entry),ch=N(d?.chopIndex),r=rr(d);
-  if(!z||price==null||atr==null||atr<=0||entry==null)return false;
-  const inZone=price>=z.lo&&price<=z.hi;
-  const zoneDist=price<z.lo?z.lo-price:price>z.hi?price-z.hi:0;
-  const nearZone=!inZone&&zoneDist<=atr*.20;
-  const nearEntry=Math.abs(price-entry)<=atr*.25;
-  return planGeometry(d,side)&&r!=null&&r>=1.5&&(ch==null||ch<61.8)&&(inZone||nearZone||nearEntry)&&exactAction(d?.action)===side;
-}
-function signalWarnings(d,p,side){
-  const notes=[];let count=0;
-  const opposite=side==='BUY'?'SELL':'BUY';
-  if(p?.direction===opposite&&p.confidence>=82&&p.agreement>=68){count++;notes.push('Prediction kuat dah lawan');}
-  if(dirText(d?.hemaTrend)===opposite){count++;notes.push('HEMA dah flip');}
-  if(dirText(d?.momentum)===opposite){count++;notes.push('Momentum dah lawan');}
-  if(dirText(d?.marketStructure)===opposite){count++;notes.push('Structure dah pecah');}
-  const mtf=[N(d?.mtf1),N(d?.mtf2),N(d?.mtf3)];
-  const oppMtf=mtf.filter(v=>v!=null&&(opposite==='BUY'?v>0:v<0)).length;
-  if(oppMtf>=2){count++;notes.push(`MTF ${oppMtf}/3 dah lawan`);}
-  const ch=N(d?.chopIndex);if(ch!=null&&ch>=68){count++;notes.push('Market terlalu serabut');}
-  return{count,notes,oppMtf};
-}
-function signalConfidenceForSide(p,side){
-  if(!p||side==='WAIT')return 0;
-  if(p.direction===side)return p.confidence;
-  const b=N(p.bullScore)||0,s=N(p.bearScore)||0,total=b+s;
-  if(!total)return 0;
-  return clamp(Math.round((side==='BUY'?b:s)/total*100));
-}
-function signalPlanKey(d,side=''){return [side||exactAction(d?.action),N(d?.entry),N(d?.sl),N(d?.tp3)].join('|');}
-function freshCore(){
-  return{side:'WAIT',stage:'WAIT',locked:false,lockedAt:0,updatedAt:Date.now(),invalidStreak:0,cooldownUntil:0,reason:'Tunggu setup',warnings:[],planKey:'',endPlanKey:''};
-}
-function updateSignalCore(symbol,d){
-  const now=Date.now(),p=predictionEngine(d,symbol),st=predictionStability(symbol),fresh=freshness(d?.receivedAt),a3=analysis3m(symbol,d);
-  let c=signalCoreBySymbol.get(symbol)||freshCore();
-  const tp3=d?.tp3Hit===true,sl=d?.slHit===true&&!tp3,active=d?.tradeActive===true&&!tp3&&!sl;
-  const currentPlanKey=signalPlanKey(d,c.side);
-  const freshPlanAfterEnd=(tp3||sl)&&c.stage==='COOLDOWN'&&now>=c.cooldownUntil&&exactAction(d?.action)!=='WAIT'&&c.endPlanKey&&currentPlanKey!==c.endPlanKey;
-
-  if((tp3||sl)&&!freshPlanAfterEnd){
-    const oldSide=c.side||c.lastSide||'WAIT';
-    if(c.stage!=='COOLDOWN'||c.endPlanKey!==currentPlanKey){
-      c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_TRADE_COOLDOWN_MS,updatedAt:now,reason:tp3?'TP3 settle — tunggu setup baru':'SL kena — jangan revenge trade',lastSide:oldSide,endPlanKey:currentPlanKey};
-    }else{
-      c={...c,side:'WAIT',locked:false,updatedAt:now,reason:tp3?'TP3 settle — tunggu setup baru':'SL kena — jangan revenge trade'};
+  return{
+    mode:'NORMAL',tf:'3m',state,side,score,reason,solid,plan,
+    confirmations:{m1:'N/A',m3:allReady?'PASS':'WAIT',m5:m5Pass?'PASS':'WAIT'},
+    sop:{
+      feedReady:true,passed,total:gates.length,gates,
+      solid,pricePastEntry:pricePast,sopGreen,
+      sop1:sopFlags[0],sop2:sopFlags[1],sop3:sopFlags[2],sop4:sopFlags[3],sop5:sopFlags[4],
+      forecast,marketPower:power,forecastPass,
+      m5Position:m5pos,m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),m5Pass,
+      entry,close3,atr3
     }
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(freshPlanAfterEnd)c=freshCore();
-  if(active){
-    const tradeSide=d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':c.side!=='WAIT'?c.side:p.direction;
-    c={...c,side:tradeSide,stage:'ACTIVE',locked:true,lockedAt:c.lockedAt||now,invalidStreak:0,cooldownUntil:0,updatedAt:now,reason:'Position aktif — signal ikut arah trade',warnings:[],planKey:signalPlanKey(d,tradeSide)};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(a3.status==='WARMING'&&a3.bars<2){
-    c={...freshCore(),side:'WAIT',stage:'ANALYSIS_3M_WARMING',locked:false,updatedAt:now,reason:'Analysis 3m tengah warm-up — jangan lock signal lagi'};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(a3.bias==='WAIT'&& !a3.sideways){
-    c={...freshCore(),side:'WAIT',stage:'ANALYSIS_3M_WAIT',locked:false,updatedAt:now,reason:'Analysis 3m belum ada arah clear'};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(c.locked&&c.side!=='WAIT'&&a3.bias!=='WAIT'&&c.side!==a3.bias){
-    const oldSide=c.side;
-    c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_REVERSAL_COOLDOWN_MS,updatedAt:now,reason:`3m bias dah berubah dari ${oldSide} ke ${a3.bias} — tunggu 1m confirm semula`,lastSide:oldSide};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  const sg=sidewaysGuard(symbol,d);
-  if(sg.active){
-    c={...freshCore(),side:'WAIT',stage:'SIDEWAYS',locked:false,updatedAt:now,reason:'MARKET SIDEWAYS — signal entry baru dipause',warnings:[sg.reason],lastSide:c.side||c.lastSide||'WAIT'};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(fresh!=='LIVE'){
-    c={...c,stage:c.locked?'LOCKED_WAIT':'WAIT',updatedAt:now,reason:'Data lambat — signal baru dibekukan'};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(c.stage==='COOLDOWN'&&now<c.cooldownUntil){
-    c={...c,side:'WAIT',locked:false,updatedAt:now,reason:'Cooldown — tunggu setup fresh'};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-  if(c.stage==='COOLDOWN'&&now>=c.cooldownUntil)c=freshCore();
-
-  if(c.locked&&c.side!=='WAIT'){
-    const w=signalWarnings(d,p,c.side);
-    let streak=c.invalidStreak||0;
-    if(w.count>=3)streak++;else if(w.count<=1)streak=0;else streak=Math.max(0,streak-1);
-    if(streak>=SIGNAL_INVALID_STREAK){
-      const oldSide=c.side;
-      c={...freshCore(),side:'WAIT',stage:'COOLDOWN',locked:false,cooldownUntil:now+SIGNAL_REVERSAL_COOLDOWN_MS,updatedAt:now,reason:`Signal ${oldSide} batal — setup dah berubah`,lastSide:oldSide,warnings:w.notes};
-      signalCoreBySymbol.set(symbol,c);return c;
-    }
-    const cf=confirmationForSide(d,c.side),ch=N(d?.chopIndex);
-    const stillReady=cf.passed>=3&&(ch==null||ch<61.8);
-    const entryReady=stillReady&&entryReadyForSide(d,c.side);
-    c={...c,stage:entryReady?'ENTRY_READY':stillReady?'SETUP_READY':'LOCKED_WAIT',invalidStreak:streak,updatedAt:now,planKey:c.planKey||signalPlanKey(d,c.side),reason:entryReady?`${c.side} dah confirm — entry ikut plan`:stillReady?`${c.side} dikunci — setup masih sehala`:`${c.side} masih dikunci — tunggu confirmation balik`,warnings:w.notes};
-    signalCoreBySymbol.set(symbol,c);return c;
-  }
-
-  const side=a3.bias;
-  if(side==='WAIT'){
-    c={...freshCore(),updatedAt:now,reason:'3m belum ada arah cukup kuat'};signalCoreBySymbol.set(symbol,c);return c;
-  }
-  const cf=confirmationForSide(d,side),ch=N(d?.chopIndex);
-  const oneMinAligned=p.direction===side;
-  const watch=oneMinAligned&&p.confidence>=68&&p.consensus>=4;
-  const setupReady=oneMinAligned&&p.confidence>=82&&p.consensus>=6&&st>=70&&p.agreement>=68&&!p.conflict&&(ch==null||ch<61.8)&&cf.passed>=3;
-  if(setupReady){
-    const entryReady=entryReadyForSide(d,side);
-    c={...freshCore(),side,stage:entryReady?'ENTRY_READY':'SETUP_READY',locked:true,lockedAt:now,updatedAt:now,reason:entryReady?`${side} dah confirm — entry ikut plan`:`${side} setup dah cukup kuat — arah dikunci`,planKey:signalPlanKey(d,side)};
-  }else if(watch){
-    c={...freshCore(),side,stage:'WATCH',locked:false,updatedAt:now,reason:`${side} ada potensi — belum lock`};
-  }else{
-    c={...freshCore(),side,stage:'WAIT_1M_CONFIRM',locked:false,updatedAt:now,reason:`3m ${side} — tunggu 1m confirm sehala`};
-  }
-  signalCoreBySymbol.set(symbol,c);return c;
+  };
 }
-
-function predictionGrade(p){
-  if(p.direction==='WAIT')return p.confidence>=75?'B':'C';
-  if(p.confidence>=90&&p.consensus>=7)return'A+';
-  if(p.confidence>=82&&p.consensus>=6)return'A';
-  if(p.confidence>=74&&p.consensus>=5)return'B';
-  if(p.confidence>=66)return'C';
-  return'D';
-}
-function predictionReadiness(d,symbol,p){
-  const z=zoneInfo(d),r=rr(d),st=predictionStability(symbol);
-  let score=p.confidence*.56+st*.20+(p.consensus>=6?8:p.consensus>=4?4:0);
-  if(z.inZone)score+=10;else if(z.near)score+=6;
-  if(r!=null&&r>=1.5)score+=5;
-  if(p.direction==='WAIT')score-=18;
-  if(freshness(d.receivedAt)!=='LIVE')score-=20;
-  return clamp(Math.round(score));
-}
-function predictionRadarScore(d,symbol,p){
-  const rd=predictionReadiness(d,symbol,p),st=predictionStability(symbol),z=zoneInfo(d),r=rr(d);
-  let score=p.confidence*.48+rd*.24+st*.16+(z.inZone?8:z.near?5:0)+(r!=null?Math.min(6,r*1.5):0);
-  if(p.direction==='WAIT')score-=18; if(p.conflict)score-=6; return clamp(Math.round(score));
-}
-function predictionStatus(d,symbol,p){
-  if(!d)return'OFFLINE'; const fresh=freshness(d.receivedAt); if(fresh==='OFFLINE')return'OFFLINE'; if(fresh==='STALE')return'STALE';
-  if(d.tradeActive===true&&!d.tp3Hit&&!d.slHit)return'TRADE ACTIVE';
-  const z=zoneInfo(d),rd=predictionReadiness(d,symbol,p),st=predictionStability(symbol);
-  if(p.direction!=='WAIT'&&p.confidence>=82&&p.consensus>=6&&st>=65&&rd>=70&&(z.inZone||z.near))return'HOT PREDICTION';
-  if(p.direction!=='WAIT'&&p.confidence>=74&&p.consensus>=5)return'PREDICTION READY';
-  if(p.direction!=='WAIT'&&p.confidence>=68)return'WATCH';
-  if(z.inZone||z.near)return'NEAR ENTRY'; return'WAIT';
-}
-
-function previousClosedSnapshot(symbol,d){
-  const arr=historyBySymbol.get(symbol)||[];
-  const curKey=N(d?.time)||N(d?.barIndex);
-  for(let i=arr.length-1;i>=0;i--){
-    const x=arr[i]; const k=N(x?.time)||N(x?.barIndex);
-    if(curKey==null||k!==curKey)return x;
-  }
-  return null;
-}
-function mtfTotalOf(d){
-  const direct=N(d?.mtfTotal);if(direct!=null)return direct;
-  return [['mtf1',N(d?.mtf1)],['mtf2',N(d?.mtf2)],['mtf3',N(d?.mtf3)]]
-    .reduce((a,[,v])=>a+(v==null?0:v>0?1:v<0?-1:0),0);
-}
-function opportunityStrength(d,side){
-  const mtf=mtfTotalOf(d),stars=N(d?.confluenceStars)||0,rvol=N(d?.relativeVolume)||0;
-  const strong=(side==='BUY'&&mtf>=2&&stars>=3&&rvol>1)||(side==='SELL'&&mtf<=-2&&stars>=3&&rvol>1);
-  const weak=(side==='BUY'&&mtf<=0)||(side==='SELL'&&mtf>=0)||stars<=2;
-  return{grade:strong?'STRONG':weak?'WEAK':'NORMAL',mtf,stars,rvol};
-}
-function updateOpportunity(symbol,d){
-  const now=Date.now(),prev=previousClosedSnapshot(symbol,d),sg=sidewaysGuard(symbol,d);
-  let last=opportunityBySymbol.get(symbol)||{type:'NONE',side:'WAIT',strength:'NONE',triggeredAt:0,barIndex:null,reason:'Tiada pullback trigger sekarang',risk:'WAIT'};
-  if(sg.active){
-    last={type:'NONE',side:'WAIT',strength:'NONE',triggeredAt:0,barIndex:last.barIndex,reason:'MARKET SIDEWAYS — pullback/re-entry/momentum dipause. Jangan add position.',risk:'NO_ADD'};
-    opportunityBySymbol.set(symbol,last);return last;
-  }
-  const c=N(d?.close),pclose=N(prev?.close),ema9=N(d?.ema9),pema9=N(prev?.ema9),ema20=N(d?.ema20),atr=N(d?.atr),o=N(d?.open),wt1=N(d?.waveTrend1),wt2=N(d?.waveTrend2),entry=N(d?.entry);
-  if([c,ema9].some(v=>v==null))return last;
-  const crossUp=prev&&pclose!=null&&pema9!=null&&pclose<=pema9&&c>ema9;
-  const crossDown=prev&&pclose!=null&&pema9!=null&&pclose>=pema9&&c<ema9;
-  const active=d?.tradeActive===true&&!d?.tp3Hit&&!d?.slHit;
-  const tradeSide=d?.tradeIsBuy===true?'BUY':d?.tradeIsBuy===false?'SELL':'WAIT';
-  const positive=entry==null?false:tradeSide==='BUY'?c>entry:tradeSide==='SELL'?c<entry:false;
-  const hema=dirText(d?.hemaTrend);
-  const chop=N(d?.chopIndex);
-  const bar=N(d?.barIndex)??N(d?.time);
-  const cooldownOkay=last.barIndex==null||bar==null||Math.abs(bar-last.barIndex)>5;
-
-  let type='NONE',side='WAIT',reason='';
-  if(cooldownOkay&&active&&tradeSide==='BUY'&&positive&&crossUp&&wt1!=null&&wt2!=null&&wt1>wt2&&ema20!=null&&c>ema20){
-    type='PULLBACK';side='BUY';reason='BUY pullback: price reclaim EMA9, momentum bullish, masih atas EMA20 dan trade asal masih profit.';
-  }else if(cooldownOkay&&active&&tradeSide==='SELL'&&positive&&crossDown&&wt1!=null&&wt2!=null&&wt1<wt2&&ema20!=null&&c<ema20){
-    type='PULLBACK';side='SELL';reason='SELL pullback: price reject bawah EMA9, momentum bearish, masih bawah EMA20 dan trade asal masih profit.';
-  }else if(cooldownOkay&&!active&&hema==='BUY'&&crossUp&&wt1!=null&&wt2!=null&&wt1>wt2){
-    type='REENTRY';side='BUY';reason='BUY re-entry: HEMA bullish, price reclaim EMA9 dan momentum sambung naik.';
-  }else if(cooldownOkay&&!active&&hema==='SELL'&&crossDown&&wt1!=null&&wt2!=null&&wt1<wt2){
-    type='REENTRY';side='SELL';reason='SELL re-entry: HEMA bearish, price reject EMA9 dan momentum sambung turun.';
-  }else if(cooldownOkay&&atr!=null&&atr>0&&o!=null){
-    const body=c-o,rvol=N(d?.relativeVolume)||0;
-    if(hema==='BUY'&&body>atr*1.2&&rvol>1.2&&c>ema9){type='MOMENTUM';side='BUY';reason='Momentum BUY: candle kuat + volume + HEMA masih bullish.';}
-    else if(hema==='SELL'&&-body>atr*1.2&&rvol>1.2&&c<ema9){type='MOMENTUM';side='SELL';reason='Momentum SELL: candle kuat + volume + HEMA masih bearish.';}
-  }
-
-  if(type!=='NONE'){
-    const st=opportunityStrength(d,side);
-    const risk=(st.grade==='WEAK'||(chop!=null&&chop>=61.8))?'NO_ADD':active?'MANAGE_RISK':'WATCH_ENTRY';
-    last={type,side,strength:st.grade,triggeredAt:now,barIndex:bar,reason,risk,mtf:st.mtf,stars:st.stars,rvol:st.rvol,price:c,activeTrade:active};
-    opportunityBySymbol.set(symbol,last);return last;
-  }
-
-  const age=now-(last.triggeredAt||0);
-  if(last.type!=='NONE'&&age<=90000)return last;
-  last={type:'NONE',side:'WAIT',strength:'NONE',triggeredAt:0,barIndex:last.barIndex,reason:'Tiada pullback / re-entry trigger sekarang',risk:'WAIT'};
-  opportunityBySymbol.set(symbol,last);return last;
-}
-
 
 function validationKey(symbol,mode){return symbol+'|'+mode;}
 function signalId(symbol,mode,strat,d){
@@ -753,7 +557,7 @@ function marketsPayload(){
   const markets=symbols.map(marketSummary).sort((a,b)=>(priority(b)+b.radarScore)-(priority(a)+a.radarScore));
   const count=s=>markets.filter(m=>m.status===s).length; const live=markets.filter(m=>m.freshness==='LIVE').length;
   const best=markets.filter(m=>m.freshness==='LIVE'&&m.prediction!=='WAIT').sort((a,b)=>b.radarScore-a.radarScore)[0]||null;
-  return{ok:true,engine:'ZenCore V31 Signal Validation Engine',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
+  return{ok:true,engine:'ZenCore V32 Pine SOP Normal Entry',generatedAt:Date.now(),note:'Prediction remains forward-looking. Signal is locked separately by V26 to reduce flip-flop; scores are not guaranteed win probabilities.',summary:{markets:markets.length,live,hot:count('HOT PREDICTION'),ready:count('PREDICTION READY'),active:count('TRADE ACTIVE'),near:count('NEAR ENTRY'),watch:count('WATCH'),offline:count('OFFLINE')},best,markets};
 }
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
