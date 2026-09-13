@@ -395,11 +395,11 @@ function normalScalpStrategy(symbol,d){
   const pricePast=d?.normal3PricePastEntry===true;
   const sopFlags=[d?.normal3Sop1,d?.normal3Sop2,d?.normal3Sop3,d?.normal3Sop4,d?.normal3Sop5].map(v=>v===true);
   const sopGreen=sopFlags.filter(Boolean).length;
-  const forecast=U(d?.normal3Forecast||'WAIT');
+  const forecast=U(d?.normal3Forecast||'WAIT').replace(/[^A-Z]/g,'');
   const power=N(d?.normal3MarketPower);
-  const forecastPass=power!=null&&power>50&&(
-    side==='BUY'?(forecast==='BULLISH'||forecast==='NEUTRAL'):
-    side==='SELL'?(forecast==='BEARISH'||forecast==='NEUTRAL'):false
+  const forecastPass=power!=null&&(
+    side==='BUY'?((forecast==='BULLISH'||forecast==='NEUTRAL')&&power>50):
+    side==='SELL'?((forecast==='BEARISH'&&power>50)||(forecast==='NEUTRAL'&&power<50)):false
   );
   const m5pos=U(d?.normal5Position||'WAIT');
   const m5Pass=side==='BUY'?m5pos==='ABOVE':side==='SELL'?m5pos==='BELOW':false;
