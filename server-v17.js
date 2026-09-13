@@ -687,19 +687,25 @@ function resolveValidation(symbol,d){
     const t1=hitLevel(r.side,'TP',r.tp1,hi,lo);
     const t2=hitLevel(r.side,'TP',r.tp2,hi,lo);
     const t3=hitLevel(r.side,'TP',r.tp3,hi,lo);
+    const hadTp1=r.hitTp1,hadTp2=r.hitTp2,hadTp3=r.hitTp3;
     if(t1)r.hitTp1=true;if(t2)r.hitTp2=true;if(t3)r.hitTp3=true;
 
     let done=false,outcome=null;
-    if(slHit&&t1){done=true;outcome='AMBIGUOUS';}
-    else if(slHit){done=true;outcome=r.hitTp1?'PROTECTED_WIN':'SL';}
-    else if(mode==='FAST'&&t2){done=true;outcome='TP30';}
-    else if(mode==='FAST'&&t1){
-      // FAST resolves primary win at first target; keep 30-pip hit as bonus if same/subsequent candle reaches it.
-      done=true;outcome='TP20';
+    const maxAge=mode==='FAST'?20*60*1000:90*60*1000;
+    const timedOut=Date.now()-r.openedAt>=maxAge;
+
+    if(slHit&&t1&&!hadTp1){done=true;outcome='AMBIGUOUS';}
+    else if(slHit){
+      done=true;
+      outcome=hadTp2?'TP2_PROTECTED':hadTp1?'PROTECTED_WIN':'SL';
     }
+    else if(mode==='FAST'&&t2){done=true;outcome='TP30';}
     else if(mode==='NORMAL'&&t3){done=true;outcome='TP3';}
-    else if(mode==='NORMAL'&&t2&&r.hitTp1){done=true;outcome='TP2';}
-    else if(mode==='NORMAL'&&t1){done=true;outcome='TP1';}
+    else if(timedOut){
+      done=true;
+      if(mode==='FAST')outcome=r.hitTp1?'TP20':'TIMEOUT';
+      else outcome=r.hitTp2?'TP2':r.hitTp1?'TP1':'TIMEOUT';
+    }
 
     if(done){
       r.state='CLOSED';r.outcome=outcome;r.resolvedAt=Date.now();r.resolvedTime=N(d?.time);r.resolvedBar=N(d?.barIndex);
@@ -711,7 +717,7 @@ function resolveValidation(symbol,d){
 function validationSummary(symbol,mode){
   const rows=validationClosed.filter(r=>(!symbol||r.symbol===symbol)&&(!mode||r.mode===mode));
   const resolved=rows.filter(r=>r.outcome!=='AMBIGUOUS');
-  const wins=resolved.filter(r=>['TP20','TP30','TP1','TP2','TP3','PROTECTED_WIN'].includes(r.outcome)).length;
+  const wins=resolved.filter(r=>['TP20','TP30','TP1','TP2','TP3','PROTECTED_WIN','TP2_PROTECTED'].includes(r.outcome)).length;
   const losses=resolved.filter(r=>r.outcome==='SL').length;
   const ambiguous=rows.filter(r=>r.outcome==='AMBIGUOUS').length;
   const winRate=resolved.length?Math.round(wins/resolved.length*1000)/10:null;
