@@ -78,28 +78,48 @@
       </div>
       <div class="chart-badges"><span>OANDA:XAUUSD</span><span>3M</span></div>
     </div>
+    <div class="chart-tabs">
+      <button class="chart-tab active" data-chart-mode="zencore">ZENCORE LIVE CHART</button>
+      <button class="chart-tab" data-chart-mode="tradingview">TRADINGVIEW</button>
+      <span id="nativeChartStatus">Waiting chart feed</span>
+    </div>
     <div class="chart-wrap">
-      <div class="tradingview-widget-container">
-        <div class="tradingview-widget-container__widget"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-        {
-          "autosize": true,
-          "symbol": "OANDA:XAUUSD",
-          "interval": "3",
-          "timezone": "Asia/Kuala_Lumpur",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "backgroundColor": "rgba(7, 16, 24, 1)",
-          "gridColor": "rgba(29, 49, 68, 0.35)",
-          "allow_symbol_change": false,
-          "save_image": false,
-          "calendar": false,
-          "withdateranges": true,
-          "hide_side_toolbar": false,
-          "support_host": "https://www.tradingview.com"
-        }
-        </script>
+      <div class="chart-stage">
+        <div id="zencoreChartPanel" class="chart-panel active">
+          <canvas id="zencoreCanvas"></canvas>
+          <div id="chartEmptyState" class="chart-empty">
+            <b>ZENCORE CHART FEED READY</b>
+            <span>Live candles + HEMA + Entry/SL/TP akan muncul selepas webhook 3M menerima candle confirmed.</span>
+          </div>
+          <div class="chart-overlay-brand">
+            <b>ZenCore AI Dashboard Pro</b>
+            <span>3M • Native Web Chart</span>
+          </div>
+        </div>
+        <div id="tradingViewPanel" class="chart-panel">
+          <div class="tradingview-widget-container">
+            <div class="tradingview-widget-container__widget"></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+            {
+              "autosize": true,
+              "symbol": "OANDA:XAUUSD",
+              "interval": "3",
+              "timezone": "Asia/Kuala_Lumpur",
+              "theme": "dark",
+              "style": "1",
+              "locale": "en",
+              "backgroundColor": "rgba(7, 16, 24, 1)",
+              "gridColor": "rgba(29, 49, 68, 0.35)",
+              "allow_symbol_change": false,
+              "save_image": false,
+              "calendar": false,
+              "withdateranges": true,
+              "hide_side_toolbar": false,
+              "support_host": "https://www.tradingview.com"
+            }
+            </script>
+          </div>
+        </div>
       </div>
       <aside class="execution-box">
         <div class="execution-title">
@@ -119,7 +139,7 @@
         </div>
       </aside>
     </div>
-    <div class="chart-note">TradingView widget memaparkan chart harga. ZenCore SOP/entry data diambil daripada webhook Pine dan dipaparkan pada panel analysis di sekeliling chart.</div>
+    <div class="chart-note">ZenCore Live Chart meniru paparan indikator: candle, HEMA ribbon, Solid Entry, Entry/SL/TP dan SOP state daripada webhook Pine. TradingView standard kekal sebagai rujukan kedua.</div>
   </section>
 
   <section class="layout">
