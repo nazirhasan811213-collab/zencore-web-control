@@ -8,7 +8,7 @@ const st=document.createElement('style');st.id='v29Style';st.textContent="\n#v28
 
 function restore(){try{mode=localStorage.getItem('zcStrategyMode')==='FAST'?'FAST':'NORMAL'}catch(_){mode='NORMAL'}window.__ZENCORE_STRATEGY_MODE__=mode}
 function strat(p){return mode==='FAST'?(p&&p.strategyFast||{}):(p&&p.strategyNormal||{})}
-function stateText(s){const z=U(s&&s.state),side=U(s&&s.side||'WAIT');if(z==='READY')return mode==='FAST'?'FAST '+side+' READY':'SOLID '+side+' ENTRY';if(z==='WATCH')return 'WATCH '+side;if(z==='PAUSE')return 'SIGNAL PAUSE';if(z==='WARMING')return 'ANALYSIS WARMING';if(z==='COOLDOWN')return 'WAIT NEXT SETUP';return 'WAIT'}
+function stateText(s){const z=U(s&&s.state),side=U(s&&s.side||'WAIT');if(z==='READY')return mode==='FAST'?'FAST '+side+' READY':'SOLID '+side+' ENTRY';if(z==='WATCH')return 'WATCH '+side;if(z==='PAUSE')return 'SIGNAL PAUSE';if(z==='WARMING')return mode==='NORMAL'?'NORMAL SOP WARMING':'ANALYSIS WARMING';if(z==='COOLDOWN')return 'WAIT NEXT SETUP';return 'WAIT'}
 function fmt(v){return N(v)==null?'—':Number(v).toFixed(3)}
 function setT(id,v){const e=q(id);if(e)e.textContent=v}
 
@@ -17,7 +17,7 @@ function ensureSwitch(){
  e=document.createElement('section');e.id='v29StrategySwitch';
  e.innerHTML='<div class="v29-title"><b>PILIH STRATEGI TRADE</b><span>Satu strategi = satu set analysis, signal & trade plan</span></div>'+
  '<div class="v29-tabs"><button class="v29-tab" id="v29Fast"><span class="ico">⚡</span><strong>FAST TRADE 1M</strong><small>Analysis 1m • Entry cepat • Target 20–30 pips • SL ikut volatility 1m</small></button>'+
- '<button class="v29-tab" id="v29Normal"><span class="ico">🧠</span><strong>NORMAL SCALPING 3M</strong><small>3m utama • Confirm 1m + 3m + 5m • TP/SL ikut market condition</small></button></div>'+
+ '<button class="v29-tab" id="v29Normal"><span class="ico">🧠</span><strong>NORMAL SCALPING 3M</strong><small>SOP Pine 3m • 5 gate keras • Current 5m HEMA confirm</small></button></div>'+
  '<div class="v29-current"><div class="main" id="v29StateCard"><span>Strategi Aktif</span><b id="v29State">WAIT</b></div><div><span>Signal</span><b id="v29Side">WAIT</b></div><div><span>Setup Score</span><b id="v29Score">—</b></div><div><span id="v29Metric3Label">Target</span><b id="v29Metric3Value">—</b></div><div><span>Data / Confirm</span><b id="v29Confirm">—</b></div></div>'+
  '<div class="v29-modebar" id="v29Reason">Tunggu data strategi.</div>';
  const h=document.querySelector('header.top');if(h)h.insertAdjacentElement('afterend',e);else document.body.prepend(e);
@@ -44,23 +44,23 @@ function paint(){
  const sc=q('v29StateCard');if(sc)sc.className='main '+(U(s.state)==='READY'?'ready':U(s.state)==='PAUSE'?'pause':'');
  setT('v29State',stateText(s));setT('v29Side',U(s.side||'WAIT'));setT('v29Score',Math.round(N(s.score)||0)+'/100');
  if(mode==='FAST'){setT('v29Metric3Label','Target');setT('v29Metric3Value','20–30 pips');setT('v29Confirm',U(s.state)==='READY'?'1M CONFIRMED':'1M '+U(s.state||'WAIT'))}
- else{const c=s.confirmations||{},cnt=[c.m1,c.m3,c.m5].filter(x=>x==='PASS').length;setT('v29Metric3Label','TF Confirm');setT('v29Metric3Value',cnt+'/3 TF');setT('v29Confirm','1M '+(c.m1||'WAIT')+' • 3M '+(c.m3||'WAIT')+' • 5M '+(c.m5||'WAIT'))}
+ else{const sop=s.sop||{};setT('v29Metric3Label','SOP Green');setT('v29Metric3Value',(sop.sopGreen??0)+'/5');setT('v29Confirm',sop.feedReady===false?'UPDATE PINE FEED':('Forecast '+(sop.forecast||'WAIT')+' '+(sop.marketPower==null?'—':sop.marketPower+'%')+' • 5M '+(sop.m5Position||'WAIT')))}
  setT('v29Reason',(mode==='FAST'?'⚡ FAST: ':'🧠 NORMAL: ')+(s.reason||'Tunggu setup.'));
  const plan=s.plan||{},hasPlan=!!s.plan,price=q('price')&&q('price').textContent.trim()||'—';const pe=q('v29PlanEmpty');if(pe){pe.style.display=hasPlan?'none':'block';pe.textContent=U(s.state)==='COOLDOWN'?'Trade selesai. Tunggu setup baru yang fresh.':'Belum ada trade plan — tunggu setup confirm.'}q('v29Plan')?.classList.toggle('has-plan',hasPlan);
  setT('v25LivePrice',price);[['v25LiveEntry',plan.entry],['v25LiveSl',plan.sl],['v25LiveTp1',plan.tp1],['v25LiveTp2',plan.tp2],['v25LiveTp3',plan.tp3]].forEach(a=>setT(a[0],N(a[1])==null?'—':fmt(a[1])));
  const top3=q('v25Tp3Card');if(top3)top3.style.display=mode==='FAST'?'none':'block';
  setT('v22MarketMain',stateText(s));setT('v22MarketSub',s.reason||'Tunggu setup.');setT('v22Bias',(mode==='FAST'?'FAST 1M':'NORMAL 3M')+' • '+U(s.side||'WAIT'));
  const at=q('v22Analysis')&&q('v22Analysis').querySelector('.v22-title b'),ad=q('v22Analysis')&&q('v22Analysis').querySelector('.v22-title span');
- if(at)at.textContent=mode==='FAST'?'FAST ANALYSIS 1M':'NORMAL ANALYSIS 1M / 3M / 5M';if(ad)ad.textContent=mode==='FAST'?'Semua bacaan dari TF1m sahaja.':'3m utama, 1m + 5m confirm untuk solid entry.';
+ if(at)at.textContent=mode==='FAST'?'FAST ANALYSIS 1M':'NORMAL ANALYSIS 1M / 3M / 5M';if(ad)ad.textContent=mode==='FAST'?'Semua bacaan dari TF1m sahaja.':'SOP Pine 3m + current 5m HEMA untuk solid entry.';
  if(U(s.state)==='COOLDOWN'){setT('v22AnaMain','WAIT NEXT SETUP');setT('v22AnaSub',s.reason||'Trade selesai. Tunggu setup baru.');setT('v22Hema','WAIT');setT('v22Mom','WAIT');setT('v22Mtf','WAIT')}else if(mode==='FAST'){const a=s.analysis1m||{};setT('v22AnaMain',stateText(s));setT('v22AnaSub',a.reason||s.reason||'1m analysis');setT('v22Hema','1M '+U(a.bias||'WAIT'));setT('v22Mom','Score '+Math.round(N(s.score)||0)+'/100');setT('v22Mtf',a.sideways?'SIDEWAYS':'1M CLEAR')}
- else{const a1=s.analysis1m||{},a3=s.analysis3m||{},a5=s.analysis5m||{},c=s.confirmations||{};setT('v22AnaMain',stateText(s));setT('v22AnaSub',s.reason||'Tunggu TF align.');setT('v22Hema','1M '+U(a1.bias||'WAIT')+' • '+(c.m1||'WAIT'));setT('v22Mom','3M '+U(a3.bias||'WAIT')+' • '+(c.m3||'WAIT'));setT('v22Mtf','5M '+U(a5.bias||'WAIT')+' • '+(c.m5||'WAIT'))}
+ else{const sop=s.sop||{};setT('v22AnaMain',stateText(s));setT('v22AnaSub',s.reason||'Tunggu semua SOP Normal lengkap.');setT('v22Hema','Solid Entry '+(sop.solid?'✅':'❌')+' • Entry Line '+(sop.pricePastEntry?'✅':'❌'));setT('v22Mom','SOP '+(sop.sopGreen??0)+'/5 • Forecast '+(sop.forecast||'WAIT')+' '+(sop.marketPower==null?'—':sop.marketPower+'%'));setT('v22Mtf','5M HEMA '+(sop.m5Position||'WAIT')+' '+(sop.m5Pass?'✅':'❌'))}
  const pt=q('v22TradePlan')&&q('v22TradePlan').querySelector('.v22-title b'),pd=q('v22TradePlan')&&q('v22TradePlan').querySelector('.v22-title span'),ps=q('v22TradePlan')&&q('v22TradePlan').querySelector('.v22-state');
  if(pt)pt.textContent=mode==='FAST'?'FAST TRADE PLAN 1M':'NORMAL SCALPING TRADE PLAN';if(pd)pd.textContent=mode==='FAST'?'Entry, SL dan target khas Fast Trade.':'Entry 3m solid, TP/SL dynamic ikut market condition.';if(ps)ps.textContent=stateText(s);
  setT('v29Entry',N(plan.entry)==null?'—':fmt(plan.entry));setT('v29SL',N(plan.sl)==null?'—':fmt(plan.sl));setT('v29TP1',N(plan.tp1)==null?'—':fmt(plan.tp1));setT('v29TP2',N(plan.tp2)==null?'—':fmt(plan.tp2));setT('v29TP3',N(plan.tp3)==null?'—':fmt(plan.tp3));
  const p3=q('v29TP3Card');if(p3)p3.style.display=mode==='FAST'?'none':'block';
  const ch=q('v25Cockpit')&&q('v25Cockpit').querySelector('.v25-head-copy b'),cs=q('v25Cockpit')&&q('v25Cockpit').querySelector('.v25-head-copy span');
  if(ch)ch.textContent=mode==='FAST'?'⚡ FAST TRADE 1M — DECISION COCKPIT':'🧠 NORMAL SCALPING 3M — DECISION COCKPIT';if(cs)cs.textContent=mode==='FAST'?'Semua data bawah ini khas FAST 1M.':'Semua data bawah ini khas NORMAL 3M + confirmation 1m/3m/5m.';
- const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V30.2 — SETUP WAKE MODE';const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent=mode==='FAST'?'FAST TRADE 1M':'NORMAL SCALPING 3M';
+ const brand=document.querySelector('header.top .brand h1');if(brand)brand.textContent='ZENCORE V32 — PINE SOP NORMAL';const phases=document.querySelectorAll('header.top .phase-pill');if(phases.length)phases[phases.length-1].textContent=mode==='FAST'?'FAST TRADE 1M':'NORMAL SCALPING 3M';
 }
 function init(){restore();setTimeout(()=>{ensureSwitch();ensurePlan();paint()},1850);document.addEventListener('zencore:prediction-state',paint);document.addEventListener('zencore:flow-updated',paint);document.addEventListener('zencore:strategy-change',paint);document.addEventListener('visibilitychange',()=>{if(!document.hidden)paint()})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
