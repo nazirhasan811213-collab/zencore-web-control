@@ -39,6 +39,17 @@ const server=http.createServer((req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`);
   const pathname=url.pathname;
 
+  if(SITE_MODE==='closed'){
+    try{
+      const body=fs.readFileSync(path.join(__dirname,'retired.html'));
+      res.writeHead(410,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store, no-cache, must-revalidate'});
+      return res.end(body);
+    }catch(_){
+      res.writeHead(410,{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
+      return res.end('ZenCore legacy service is closed.');
+    }
+  }
+
   if(req.method==='GET'&&pathname==='/precision-entry.css')return sendAsset(res,'precision-entry.css','text/css; charset=utf-8');
   if(req.method==='GET'&&pathname==='/precision-entry.js')return sendAsset(res,'precision-entry.js','application/javascript; charset=utf-8');
 
