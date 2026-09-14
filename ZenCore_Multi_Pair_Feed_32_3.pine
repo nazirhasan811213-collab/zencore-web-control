@@ -1,5 +1,5 @@
 //@version=6
-indicator("ZenCore Multi-Pair Feed 32.3", shorttitle="ZenCore MP Feed", overlay=false, dynamic_requests=true)
+indicator("ZenCore Multi-Pair Feed 32.3", shorttitle="ZenCore MP Feed", overlay=false, dynamic_requests=true, max_bars_back=650)
 
 // One permanent alert feeds all supported markets to ZenCore Web Control.
 // Run this bridge on a 3-minute chart. It does not draw or alter the original indicator.
@@ -262,8 +262,8 @@ if feedEnabled and correctTf and barstate.isconfirmed
     for i=0 to array.size(symbols)-1
         string ticker=array.get(symbols,i)
         string alias=array.get(aliases,i)
-        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction]=request.security(ticker,"3",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true)
-        [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true)
+        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction]=request.security(ticker,"3",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
+        [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
         string m5pos=na(m5close)?"WAIT":m5close>math.max(m5h20,m5h40)?"ABOVE":m5close<math.min(m5h20,m5h40)?"BELOW":"INSIDE"
         bool sop5=side=="BUY"?m5h20>m5h40:side=="SELL"?m5h20<m5h40:false
 
