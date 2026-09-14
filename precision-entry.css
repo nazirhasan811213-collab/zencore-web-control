@@ -36,3 +36,5 @@ body{margin:0;background:
 #zencoreCanvas{display:block;width:100%;height:100%;background:#0a0f14}.chart-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:7px;padding:25px;background:radial-gradient(circle at 50% 35%,#17314755,transparent 36%);pointer-events:none}.chart-empty.hidden{display:none}.chart-empty b{font-size:14px;letter-spacing:.12em;color:#d8ecf7}.chart-empty span{max-width:560px;color:#71889b;font-size:11px;line-height:1.5}.chart-overlay-brand{position:absolute;left:14px;top:12px;display:flex;flex-direction:column;gap:2px;pointer-events:none;text-shadow:0 2px 8px #000}.chart-overlay-brand b{font-size:11px;color:#d9e8f2}.chart-overlay-brand span{font-size:9px;color:#6f8798}
 @media(max-width:1180px){.chart-panel#zencoreChartPanel,.chart-panel#tradingViewPanel{height:500px}}
 @media(max-width:520px){.chart-tabs{flex-wrap:wrap}.chart-tabs>span{width:100%;margin-left:0}.chart-panel#zencoreChartPanel,.chart-panel#tradingViewPanel{height:440px}}
+
+/* pro-v3-ready */
