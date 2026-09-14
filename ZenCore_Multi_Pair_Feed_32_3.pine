@@ -28,6 +28,9 @@ f_num(float value)=>
 f_bool(bool value)=>
     value?"true":"false"
 
+f_int(int value)=>
+    na(value)?"null":str.tostring(value)
+
 f_quote(string value)=>
     string safe=str.replace_all(value,"\\","\\\\")
     safe:=str.replace_all(safe,"\"","\\\"")
@@ -265,16 +268,16 @@ if feedEnabled and correctTf and barstate.isconfirmed
         bool sop5=side=="BUY"?m5h20>m5h40:side=="SELL"?m5h20<m5h40:false
 
         string row="["
-        row+=f_quote(alias)+","+str.tostring(bt)+","+str.tostring(bi)+","
+        row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","
         row+=f_num(e9)+","+f_num(e20)+","+f_num(e50)+","+f_num(h20)+","+f_num(h40)+","+f_num(b20)+","
-        row+=f_num(w1)+","+f_num(w2)+","+f_num(r14)+","+f_num(ch)+","+f_num(rv)+","+str.tostring(gt)+","+f_num(prob)+","+str.tostring(stars)+","+f_num(a14)+","
+        row+=f_num(w1)+","+f_num(w2)+","+f_num(r14)+","+f_num(ch)+","+f_num(rv)+","+f_int(gt)+","+f_num(prob)+","+f_int(stars)+","+f_num(a14)+","
         row+=f_num(entry)+","+f_num(initialSl)+","+f_num(activeSl)+","+f_num(tp1)+","+f_num(tp2)+","+f_num(tp3)+","
         row+=f_bool(active)+","+f_bool(isBuy)+","+f_bool(hit1)+","+f_bool(hit2)+","+f_bool(hit3)+","+f_bool(slHit)+","
         row+=f_quote(side)+","+f_bool(solid)+","+f_bool(pricePast)+","+f_bool(sop1)+","+f_bool(sop2)+","+f_bool(sop3)+","+f_bool(sop4)+","+f_bool(sop5)+","
         row+=f_quote(forecast)+","+f_num(power)+","+f_quote(m5pos)+","+f_num(m5close)+","+f_num(m5h20)+","+f_num(m5h40)+","
-        row+=f_quote(exitStage)+","+f_quote(exitAction)+","+f_bool(halfArmed)+","+f_bool(oppositeYellow)+","+str.tostring(remaining)+","+f_quote(yellowType)+","+f_quote(closeType)+","+f_quote(closeReason)+","
-        row+=str.tostring(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+"]"
+        row+=f_quote(exitStage)+","+f_quote(exitAction)+","+f_bool(halfArmed)+","+f_bool(oppositeYellow)+","+f_int(remaining)+","+f_quote(yellowType)+","+f_quote(closeType)+","+f_quote(closeReason)+","
+        row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+"]"
         marketsJson+=(i>0?",":"")+row
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"markets\":["+marketsJson+"]}"
