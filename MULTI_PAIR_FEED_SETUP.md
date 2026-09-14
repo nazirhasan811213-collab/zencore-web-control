@@ -1,6 +1,6 @@
 # ZenCore Multi-Pair Feed 32.3
 
-This bridge feeds all 11 supported instruments to ZenCore Web Control from one TradingView alert.
+This bridge feeds all 11 supported instruments to ZenCore Web Control from one TradingView alert. Request history is capped to the bars required by the SOP calculations to stay below TradingView memory limits.
 
 ## Markets
 
