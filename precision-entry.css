@@ -233,3 +233,65 @@ footer{order:9}
   .rules{grid-column:1/-1;grid-row:7;margin:0!important}
   footer{grid-column:1/-1;grid-row:8;margin:0!important}
 }
+
+/* zencore-v4-mosaic-details */
+@media(min-width:1101px){
+  .status-grid .status-card{
+    min-height:116px;
+    padding:17px 16px;
+    justify-content:center;
+  }
+  .status-grid .status-card.main{
+    min-height:122px;
+    background:
+      radial-gradient(circle at 88% 18%,rgba(84,215,255,.12),transparent 28%),
+      linear-gradient(145deg,rgba(14,31,46,.98),rgba(7,16,25,.98));
+  }
+  .status-grid .status-card strong{font-size:clamp(24px,2vw,34px)}
+
+  .position-management{
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
+  }
+  .position-flow{
+    display:flex!important;
+    flex-direction:column;
+    gap:8px;
+    align-items:stretch;
+  }
+  .position-step{
+    min-height:74px;
+    width:100%;
+    position:relative;
+  }
+  .position-step::after{
+    content:"";
+    position:absolute;
+    left:25px;
+    bottom:-9px;
+    width:1px;
+    height:9px;
+    background:linear-gradient(var(--line2),transparent);
+  }
+  .position-step:last-of-type::after{display:none}
+  .flow-arrow{display:none!important}
+  .position-metrics{
+    grid-template-columns:1fr 1fr!important;
+    margin-top:12px;
+  }
+  .position-exit-reason{margin-top:auto}
+
+  .validation-layout{
+    display:grid!important;
+    grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);
+    gap:14px;
+  }
+  .layout.lower{
+    display:grid!important;
+    grid-template-columns:1fr;
+    gap:14px;
+  }
+  .layout.lower>.panel:first-child{min-height:260px}
+  .layout.lower>.panel:last-child{min-height:240px}
+}
