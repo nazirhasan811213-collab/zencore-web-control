@@ -208,3 +208,28 @@ footer{order:9}
 @media(max-width:520px){
   .position-flow,.position-metrics{grid-template-columns:1fr}
 }
+
+/* zencore-v4-mosaic-core */
+@media(min-width:1101px){
+  .app{
+    display:grid!important;
+    grid-template-columns:repeat(12,minmax(0,1fr));
+    gap:14px;
+    align-items:stretch;
+  }
+  .topbar{grid-column:1/-1;grid-row:1;margin:0}
+  .plan-top{grid-column:1/-1;grid-row:2;margin:0!important}
+  .hero{grid-column:1/8;grid-row:3;margin:0!important;min-height:355px}
+  .status-grid{
+    grid-column:8/-1;grid-row:3;margin:0!important;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px
+  }
+  .status-grid .status-card.main{grid-column:1/-1}
+  .chart-section{grid-column:1/9;grid-row:4;margin:0!important}
+  .position-management{grid-column:9/-1;grid-row:4;margin:0!important}
+  .validation-layout{grid-column:1/9;grid-row:5;margin:0!important}
+  .layout.lower{grid-column:9/-1;grid-row:5;margin:0!important}
+  .performance-layout{grid-column:1/-1;grid-row:6;margin:0!important}
+  .rules{grid-column:1/-1;grid-row:7;margin:0!important}
+  footer{grid-column:1/-1;grid-row:8;margin:0!important}
+}
