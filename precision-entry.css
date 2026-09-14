@@ -295,3 +295,43 @@ footer{order:9}
   .layout.lower>.panel:first-child{min-height:260px}
   .layout.lower>.panel:last-child{min-height:240px}
 }
+
+/* zencore-v4-top-composition */
+@media(min-width:1101px){
+  .plan-top{
+    display:grid!important;
+    grid-template-columns:minmax(0,2fr) minmax(330px,.9fr);
+    column-gap:14px;
+    row-gap:10px;
+    padding:16px!important;
+  }
+  .plan-top .panel-head{grid-column:1/-1;margin-bottom:0}
+  .plan-top .plan-grid{
+    grid-column:1;
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:9px;
+  }
+  .plan-top .risk-strip{
+    grid-column:2;
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    gap:9px;
+    margin-top:0!important;
+  }
+  .plan-top .plan-note{grid-column:1/-1;margin-top:0!important}
+
+  .hero{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 240px!important;
+    gap:18px;
+    align-items:center;
+    padding:22px!important;
+  }
+  .hero-copy{max-width:none!important}
+  .hero h2{font-size:clamp(30px,2.55vw,43px)!important}
+  .hero-side{min-width:0!important}
+  .holo-console{min-height:205px!important}
+  .pro-symbolbox{min-width:0!important}
+  .holo-chip{font-size:8px!important;padding:6px 8px!important}
+}
