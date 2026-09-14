@@ -104,12 +104,16 @@ function renderPositionManagement(m){
   const action=String(pm.action||'IDLE').toUpperCase();
   const remaining=num(pm.remainingPct);
   const yellow=String(pm.yellowType||'NONE').toUpperCase();
+  const slLock=String(pm.slLockLabel||'INITIAL').toUpperCase();
+  const activeSl=num(pm.activeSl);
   const reason=String(pm.reason||'No active position.');
 
   setText('positionExitStage',stage);
   setText('positionExitAction',action.replaceAll('_',' '));
   setText('positionRemaining',(remaining==null?0:remaining)+'%');
   setText('positionYellowState',yellow.replaceAll('_',' '));
+  setText('positionActiveSL',fmt(activeSl,3));
+  setText('positionSlLock',slLock.replaceAll('_',' '));
   setText('positionExitReason',reason);
 
   const badge=$('positionExitBadge');
@@ -118,7 +122,7 @@ function renderPositionManagement(m){
     let cls='position-exit-badge';
     if(action==='HOLD')cls+=' hold';
     else if(action==='CLOSE_50_NOW'||action==='WAIT_OPPOSITE_YELLOW')cls+=' half';
-    else if(action==='EXIT_REMAINING')cls+=' exit';
+    else if(action==='EXIT_REMAINING'||action==='EXIT_ALL'||action==='EXIT_SL')cls+=' exit';
     else if(stage==='CLOSED')cls+=' closed';
     badge.className=cls;
   }
@@ -133,6 +137,8 @@ function renderPositionManagement(m){
   }else if(action==='EXIT_REMAINING'){
     $('positionStepHalf')?.classList.add('warning');
     $('positionStepWait')?.classList.add('warning');
+    $('positionStepExit')?.classList.add('exit-now');
+  }else if(action==='EXIT_ALL'||action==='EXIT_SL'){
     $('positionStepExit')?.classList.add('exit-now');
   }else if(action==='HOLD'){
     $('positionStepHold')?.classList.add('active');

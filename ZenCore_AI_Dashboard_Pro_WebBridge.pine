@@ -151,6 +151,19 @@ f_addMgmtLabel(int x, float y, string txt, string style, color col, color textco
         label.delete(array.shift(mgmtLabels))
     lb
 
+f_moveActiveSL(float _new_sl, string _lock_name) =>
+    if array.size(tmLines) >= 2
+        line sl_ln = array.get(tmLines, array.size(tmLines) - 2)
+        line.set_y1(sl_ln, _new_sl)
+        line.set_y2(sl_ln, _new_sl)
+        line.set_color(sl_ln, colSL)
+    if array.size(tmLabels) >= 2
+        label sl_lb = array.get(tmLabels, array.size(tmLabels) - 2)
+        label.set_y(sl_lb, _new_sl)
+        label.set_text(sl_lb, f_lbl(_lock_name, _new_sl))
+        label.set_color(sl_lb, colSL)
+    true
+
 // ==========================================
 // 2. Core Scalping Calculations 
 // ==========================================
@@ -271,6 +284,11 @@ var bool  exit_half_armed = false
 var bool  exit_completed  = false
 var int   exit_half_bar   = na
 var int   exit_full_bar   = na
+var float curr_initial_sl  = na
+var int   sl_lock_stage    = 0
+var int   sl_lock_bar      = na
+var string exit_close_type = "NONE"
+var string exit_close_reason = ""
 
 price_cross_ema9_up    = ta.crossover(close, ema9)
 price_cross_ema9_down  = ta.crossunder(close, ema9)
@@ -327,6 +345,7 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
         curr_tp2       := tp2
         curr_tp3       := tp3
         curr_sl        := SL
+        curr_initial_sl := SL
         curr_active    := true
         curr_triggered := false 
         curr_tp1_hit   := false
@@ -341,6 +360,10 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
         exit_completed  := false
         exit_half_bar   := na
         exit_full_bar   := na
+        sl_lock_stage    := 0
+        sl_lock_bar      := na
+        exit_close_type  := "NONE"
+        exit_close_reason := ""
 
 if curr_active
     int tmL_size = array.size(tmLines)
@@ -904,11 +927,16 @@ if trigger_reentry
     curr_sl_hit      := false
     curr_triggered   := true
     max_alert_level  := 1
-    curr_entry       := close 
-    exit_half_armed := false
-    exit_completed  := false
-    exit_half_bar   := na
-    exit_full_bar   := na
+    curr_entry       := close
+    curr_initial_sl  := curr_sl
+    exit_half_armed  := false
+    exit_completed   := false
+    exit_half_bar    := na
+    exit_full_bar    := na
+    sl_lock_stage    := 0
+    sl_lock_bar      := na
+    exit_close_type  := "NONE"
+    exit_close_reason := ""
 
 bool is_strong_bull_candle = (close - open) > (atr * 1.2) and rvol > 1.2
 bool is_strong_bear_candle = (open - close) > (atr * 1.2) and rvol > 1.2
@@ -940,62 +968,90 @@ if curr_active
     if curr_triggered
         if curr_isBuy
             if low <= curr_sl
-                curr_active := false 
-                curr_sl_hit := true  
-                // --- TRIGGER ALERT: SL HIT ---
+                curr_active       := false
+                curr_sl_hit       := true
+                exit_half_armed   := false
+                exit_completed    := true
+                exit_full_bar     := bar_index
+                exit_close_type   := sl_lock_stage == 3 ? "SL_TP2_LOCK" : sl_lock_stage == 2 ? "SL_TP1_LOCK" : sl_lock_stage == 1 ? "SL_BREAKEVEN" : "SL_INITIAL"
+                exit_close_reason := sl_lock_stage == 3 ? "Protected SL at TP2 hit" : sl_lock_stage == 2 ? "Protected SL at TP1 hit" : sl_lock_stage == 1 ? "Breakeven SL hit" : "Initial SL hit"
+                f_addMgmtLabel(bar_index, low, "🛡️ " + exit_close_reason, label.style_label_up, color.new(color.red, 0), color.white, size.small)
                 if en_alert_sl
-                    alert("🛑 [ZENCORE EXIT] STOPLOSS HIT | Long Position Closed at " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
+                    alert("🛑 [ZENCORE EXIT] " + exit_close_reason + " | Long Position Closed at " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
             else
                 if high >= curr_tp1 and not curr_tp1_hit
-                    curr_tp1_hit := true
+                    curr_tp1_hit  := true
+                    curr_sl       := curr_entry
+                    sl_lock_stage := 1
+                    sl_lock_bar   := bar_index
+                    f_moveActiveSL(curr_sl, "🛡️ SL BREAKEVEN")
                     float prof = math.abs(curr_tp1 - curr_entry)
-                    f_addMgmtLabel(bar_index, high, "🥳 TP 1\n+" + str.tostring(prof, "#.##"), label.style_label_down, color.lime, color.black, size.small)
-                    // --- TRIGGER ALERT: TP1 ---
+                    f_addMgmtLabel(bar_index, high, "🥳 TP 1\n+" + str.tostring(prof, "#.##") + "\n🔒 SL → ENTRY", label.style_label_down, color.lime, color.black, size.small)
                     if en_alert_tp
-                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 1 HIT | Long position reached: " + str.tostring(curr_tp1, format.mintick), alert.freq_once_per_bar)
+                        alert("✅ [ZENCORE PROFIT LOCK] TP1 HIT | MOVE SL TO ENTRY | Long | Active SL: " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
                 if high >= curr_tp2 and not curr_tp2_hit
-                    curr_tp2_hit := true
+                    curr_tp2_hit  := true
+                    curr_sl       := curr_tp1
+                    sl_lock_stage := 2
+                    sl_lock_bar   := bar_index
+                    f_moveActiveSL(curr_sl, "🛡️ SL LOCK TP1")
                     float prof = math.abs(curr_tp2 - curr_entry)
-                    f_addMgmtLabel(bar_index, high, "🥳 TP 2\n+" + str.tostring(prof, "#.##"), label.style_label_down, color.lime, color.black, size.small)
-                    // --- TRIGGER ALERT: TP2 ---
+                    f_addMgmtLabel(bar_index, high, "🥳 TP 2\n+" + str.tostring(prof, "#.##") + "\n🔒 SL → TP1", label.style_label_down, color.lime, color.black, size.small)
                     if en_alert_tp
-                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 2 HIT | Long position reached: " + str.tostring(curr_tp2, format.mintick), alert.freq_once_per_bar)
+                        alert("✅ [ZENCORE PROFIT LOCK] TP2 HIT | MOVE SL TO TP1 | Long | Active SL: " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
                 if high >= curr_tp3 and not curr_tp3_hit
-                    curr_tp3_hit := true
+                    curr_tp3_hit  := true
+                    curr_sl       := curr_tp2
+                    sl_lock_stage := 3
+                    sl_lock_bar   := bar_index
+                    f_moveActiveSL(curr_sl, "🛡️ SL LOCK TP2")
                     float prof = math.abs(curr_tp3 - curr_entry)
-                    f_addMgmtLabel(bar_index, high, "🥳 TP 3\n+" + str.tostring(prof, "#.##"), label.style_label_down, color.lime, color.black, size.small)
-                    // --- TRIGGER ALERT: TP3 ---
+                    f_addMgmtLabel(bar_index, high, "🥳 TP 3\n+" + str.tostring(prof, "#.##") + "\n🔒 SL → TP2", label.style_label_down, color.lime, color.black, size.small)
                     if en_alert_tp
-                        alert("🚀 [ZENCORE PROFIT] TARGET PROFIT 3 HIT | Long position reached: " + str.tostring(curr_tp3, format.mintick), alert.freq_once_per_bar)
+                        alert("🚀 [ZENCORE PROFIT LOCK] TP3 HIT | MOVE SL TO TP2 | Long runner protected | Active SL: " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
         else
             if high >= curr_sl
-                curr_active := false 
-                curr_sl_hit := true  
-                // --- TRIGGER ALERT: SL HIT ---
+                curr_active       := false
+                curr_sl_hit       := true
+                exit_half_armed   := false
+                exit_completed    := true
+                exit_full_bar     := bar_index
+                exit_close_type   := sl_lock_stage == 3 ? "SL_TP2_LOCK" : sl_lock_stage == 2 ? "SL_TP1_LOCK" : sl_lock_stage == 1 ? "SL_BREAKEVEN" : "SL_INITIAL"
+                exit_close_reason := sl_lock_stage == 3 ? "Protected SL at TP2 hit" : sl_lock_stage == 2 ? "Protected SL at TP1 hit" : sl_lock_stage == 1 ? "Breakeven SL hit" : "Initial SL hit"
+                f_addMgmtLabel(bar_index, high, "🛡️ " + exit_close_reason, label.style_label_down, color.new(color.red, 0), color.white, size.small)
                 if en_alert_sl
-                    alert("🛑 [ZENCORE EXIT] STOPLOSS HIT | Short Position Closed at " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
+                    alert("🛑 [ZENCORE EXIT] " + exit_close_reason + " | Short Position Closed at " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
             else
                 if low <= curr_tp1 and not curr_tp1_hit
-                    curr_tp1_hit := true
+                    curr_tp1_hit  := true
+                    curr_sl       := curr_entry
+                    sl_lock_stage := 1
+                    sl_lock_bar   := bar_index
+                    f_moveActiveSL(curr_sl, "🛡️ SL BREAKEVEN")
                     float prof = math.abs(curr_entry - curr_tp1)
-                    f_addMgmtLabel(bar_index, low, "🥳 TP 1\n+" + str.tostring(prof, "#.##"), label.style_label_up, color.lime, color.black, size.small)
-                    // --- TRIGGER ALERT: TP1 ---
+                    f_addMgmtLabel(bar_index, low, "🥳 TP 1\n+" + str.tostring(prof, "#.##") + "\n🔒 SL → ENTRY", label.style_label_up, color.lime, color.black, size.small)
                     if en_alert_tp
-                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 1 HIT | Short position reached: " + str.tostring(curr_tp1, format.mintick), alert.freq_once_per_bar)
+                        alert("✅ [ZENCORE PROFIT LOCK] TP1 HIT | MOVE SL TO ENTRY | Short | Active SL: " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
                 if low <= curr_tp2 and not curr_tp2_hit
-                    curr_tp2_hit := true
+                    curr_tp2_hit  := true
+                    curr_sl       := curr_tp1
+                    sl_lock_stage := 2
+                    sl_lock_bar   := bar_index
+                    f_moveActiveSL(curr_sl, "🛡️ SL LOCK TP1")
                     float prof = math.abs(curr_entry - curr_tp2)
-                    f_addMgmtLabel(bar_index, low, "🥳 TP 2\n+" + str.tostring(prof, "#.##"), label.style_label_up, color.lime, color.black, size.small)
-                    // --- TRIGGER ALERT: TP2 ---
+                    f_addMgmtLabel(bar_index, low, "🥳 TP 2\n+" + str.tostring(prof, "#.##") + "\n🔒 SL → TP1", label.style_label_up, color.lime, color.black, size.small)
                     if en_alert_tp
-                        alert("✅ [ZENCORE PROFIT] TARGET PROFIT 2 HIT | Short position reached: " + str.tostring(curr_tp2, format.mintick), alert.freq_once_per_bar)
+                        alert("✅ [ZENCORE PROFIT LOCK] TP2 HIT | MOVE SL TO TP1 | Short | Active SL: " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
                 if low <= curr_tp3 and not curr_tp3_hit
-                    curr_tp3_hit := true
+                    curr_tp3_hit  := true
+                    curr_sl       := curr_tp2
+                    sl_lock_stage := 3
+                    sl_lock_bar   := bar_index
+                    f_moveActiveSL(curr_sl, "🛡️ SL LOCK TP2")
                     float prof = math.abs(curr_entry - curr_tp3)
-                    f_addMgmtLabel(bar_index, low, "🥳 TP 3\n+" + str.tostring(prof, "#.##"), label.style_label_up, color.lime, color.black, size.small)
-                    // --- TRIGGER ALERT: TP3 ---
+                    f_addMgmtLabel(bar_index, low, "🥳 TP 3\n+" + str.tostring(prof, "#.##") + "\n🔒 SL → TP2", label.style_label_up, color.lime, color.black, size.small)
                     if en_alert_tp
-                        alert("🚀 [ZENCORE PROFIT] TARGET PROFIT 3 HIT | Short position reached: " + str.tostring(curr_tp3, format.mintick), alert.freq_once_per_bar)
+                        alert("🚀 [ZENCORE PROFIT LOCK] TP3 HIT | MOVE SL TO TP2 | Short runner protected | Active SL: " + str.tostring(curr_sl, format.mintick), alert.freq_once_per_bar)
 
 if curr_active and curr_triggered
     int current_condition = 0
@@ -1034,14 +1090,12 @@ if curr_active and curr_triggered
                 exit_half_armed := false
                 exit_completed  := true
                 exit_full_bar   := bar_index
+                exit_close_type := "EMERGENCY"
+                exit_close_reason := "Emergency close all"
             else if current_condition == 2
                 float y_pos = curr_isBuy ? high + (atr*0.5) : low - (atr*0.5)
                 string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
                 f_addMgmtLabel(bar_index, y_pos, "⚠️ CLOSE SEPARUH", l_style, color.new(color.orange, 10), color.black, size.small)
-                exit_half_armed := true
-                exit_completed  := false
-                exit_half_bar   := bar_index
-                exit_full_bar   := na
                 
                 // --- TRIGGER ALERT: PARTIAL CLOSE ---
                 if en_alert_adv
@@ -1157,10 +1211,10 @@ color final_chart_color = v2_useCol ? v2_barColor : (colorBar ? v1_bar_c : na)
 barcolor(final_chart_color)
 
 // ==========================================
-// POSITION MANAGEMENT: 2-STAGE EXIT
-// Stage 1: CLOSE 50% advisory.
-// Stage 2: confirmed opposite yellow Bj Reversal candle exits remaining 50%.
-// Entry SOP is NOT changed.
+// POSITION MANAGEMENT: EXISTING 2-STAGE EXIT + 3-STEP SL PROFIT LOCK
+// Existing: CLOSE 50%, then confirmed opposite yellow exits remaining 50%.
+// Added: TP1 -> SL Entry, TP2 -> SL TP1, TP3 -> SL TP2.
+// TP3 remains a protected runner. Entry SOP is NOT changed.
 // ==========================================
 bool exit_bearish_yellow = v2_useCol and v2_strat == "Bj Reversal" and v2_dr
 bool exit_bullish_yellow = v2_useCol and v2_strat == "Bj Reversal" and v2_ur
@@ -1174,10 +1228,12 @@ if exit_opposite_yellow
     f_addMgmtLabel(bar_index, exit_y, "🟡 EXIT BAKI 50%", exit_style, color.new(color.yellow, 0), color.black, size.small)
     if en_alert_adv
         alert("🟡 [ZENCORE EXIT] OPPOSITE YELLOW CONFIRMED | CLOSE REMAINING 50% | Side: " + (curr_isBuy ? "BUY" : "SELL") + " | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
-    exit_completed  := true
-    exit_half_armed := false
-    exit_full_bar   := bar_index
-    curr_active     := false
+    exit_completed    := true
+    exit_half_armed   := false
+    exit_full_bar     := bar_index
+    exit_close_type   := "OPPOSITE_YELLOW"
+    exit_close_reason := "Confirmed opposite yellow candle"
+    curr_active       := false
 
 // ==========================================
 // 15. SOP ENTRY CHECKLIST DASHBOARD
@@ -1389,6 +1445,13 @@ f_web_num(float _v) =>
 f_web_bool(bool _v) =>
     _v ? "true" : "false"
 
+f_web_str(string _v) =>
+    string _s = str.replace_all(_v, "\\", "\\\\")
+    _s := str.replace_all(_s, "\"", "\\\"")
+    _s := str.replace_all(_s, "\n", "\\n")
+    _s := str.replace_all(_s, "\r", "\\r")
+    _s
+
 // ==========================================
 // V32 NORMAL SCALPING TF3M - PINE HARD-GATE FEED
 // FAST TRADE 1M is untouched.
@@ -1445,25 +1508,30 @@ if normal_5m_close > math.max(normal_5m_hema20, normal_5m_hema40)
 else if normal_5m_close < math.min(normal_5m_hema20, normal_5m_hema40)
     normal_5m_position := "BELOW"
 
+bool position_closed_now = exit_completed and not na(exit_full_bar) and bar_index == exit_full_bar
 string position_exit_stage = exit_completed ? "CLOSED" : exit_half_armed ? "WAIT_YELLOW" : curr_active ? "HOLD" : "IDLE"
-string position_exit_action = exit_completed and not na(exit_full_bar) and bar_index == exit_full_bar ? "EXIT_REMAINING" : exit_half_armed and not na(exit_half_bar) and bar_index == exit_half_bar ? "CLOSE_50_NOW" : exit_half_armed ? "WAIT_OPPOSITE_YELLOW" : curr_active ? "HOLD" : "IDLE"
+string position_exit_action = position_closed_now ? (exit_close_type == "EMERGENCY" ? "EXIT_ALL" : exit_close_type == "OPPOSITE_YELLOW" ? "EXIT_REMAINING" : "EXIT_SL") : exit_half_armed and not na(exit_half_bar) and bar_index == exit_half_bar ? "CLOSE_50_NOW" : exit_half_armed ? "WAIT_OPPOSITE_YELLOW" : curr_active ? "HOLD" : "IDLE"
 int position_remaining_pct = exit_completed ? 0 : exit_half_armed ? 50 : curr_active ? 100 : 0
 string position_yellow_type = exit_opposite_yellow ? (curr_isBuy ? "BEARISH_YELLOW" : "BULLISH_YELLOW") : "NONE"
-string position_exit_reason = position_exit_action == "CLOSE_50_NOW" ? "Close Separuh signal" : position_exit_action == "WAIT_OPPOSITE_YELLOW" ? "Waiting confirmed opposite yellow candle" : position_exit_action == "EXIT_REMAINING" ? "Confirmed opposite yellow candle" : position_exit_action == "HOLD" ? "No exit condition" : "No active position"
+string position_exit_reason = position_exit_action == "CLOSE_50_NOW" ? "Close Separuh signal" : position_exit_action == "WAIT_OPPOSITE_YELLOW" ? "Waiting confirmed opposite yellow candle" : position_exit_action == "HOLD" ? (sl_lock_stage == 3 ? "Runner protected at TP2" : sl_lock_stage == 2 ? "Profit protected at TP1" : sl_lock_stage == 1 ? "Breakeven protected" : "No exit condition") : exit_completed ? exit_close_reason : "No active position"
+string position_sl_stage = exit_completed ? "CLOSED" : not curr_active ? "IDLE" : sl_lock_stage == 3 ? "TP2_LOCKED" : sl_lock_stage == 2 ? "TP1_LOCKED" : sl_lock_stage == 1 ? "BREAKEVEN" : "INITIAL"
+string position_sl_action = not na(sl_lock_bar) and bar_index == sl_lock_bar ? (sl_lock_stage == 3 ? "MOVE_SL_TP2" : sl_lock_stage == 2 ? "MOVE_SL_TP1" : "MOVE_SL_ENTRY") : "NONE"
 
 if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green or is_zone_turn_red)
     string web_action = is_zone_turn_green ? "BUY" : is_zone_turn_red ? "SELL" : global_trend > 0 ? "LONG_BIAS" : global_trend < 0 ? "SHORT_BIAS" : "WAIT"
 
+    // JSON-safe Precision Entry payload.
+    // Every numeric value uses f_web_num() so na never becomes invalid JSON NaN.
     string web_payload = "{"
-    web_payload += "\"secret\":\"" + web_secret + "\","
+    web_payload += "\"schemaVersion\":\"32.3-EXIT-STEPLOCK\","
     web_payload += "\"source\":\"ZenCore AI Dashboard Pro + Alerts\","
-    web_payload += "\"symbol\":\"" + syminfo.ticker + "\","
-    web_payload += "\"tickerid\":\"" + syminfo.tickerid + "\","
-    web_payload += "\"timeframe\":\"" + timeframe.period + "\","
-    web_payload += "\"tradeMode\":\"" + tradeMode + "\","
+    web_payload += "\"symbol\":\"" + f_web_str(syminfo.ticker) + "\","
+    web_payload += "\"tickerid\":\"" + f_web_str(syminfo.tickerid) + "\","
+    web_payload += "\"timeframe\":\"" + f_web_str(timeframe.period) + "\","
     web_payload += "\"time\":" + str.tostring(time) + ","
     web_payload += "\"barIndex\":" + str.tostring(bar_index) + ","
-    web_payload += "\"chartFeedVersion\":\"1.0\","
+    web_payload += "\"chartFeedVersion\":\"2.0\","
+
     web_payload += "\"open\":" + f_web_num(open) + ","
     web_payload += "\"high\":" + f_web_num(high) + ","
     web_payload += "\"low\":" + f_web_num(low) + ","
@@ -1479,54 +1547,39 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"waveTrend1\":" + f_web_num(wt1) + ","
     web_payload += "\"waveTrend2\":" + f_web_num(wt2) + ","
     web_payload += "\"rsi\":" + f_web_num(rsi_val) + ","
+
     web_payload += "\"action\":\"" + web_action + "\","
-    web_payload += "\"barStatus\":\"" + bar_status + "\","
-    web_payload += "\"marketStructure\":\"" + mkt_struct + "\","
-    web_payload += "\"momentum\":\"" + mom_state + "\","
-    web_payload += "\"demand\":\"" + demand_state + "\","
-    web_payload += "\"hemaTrend\":\"" + (is_hema_bull ? "Bullish" : is_hema_bear ? "Bearish" : "Flat") + "\","
-    web_payload += "\"chopIndex\":" + str.tostring(chop_val, "#.0") + ","
-    web_payload += "\"dxyStatus\":\"" + dxy_dir + "\","
-    web_payload += "\"sdClearance\":\"" + snd_clearance_str + "\","
-    web_payload += "\"whaleState\":\"" + whale_state + "\","
-    web_payload += "\"relativeVolume\":" + str.tostring(rvol, "#.00") + ","
-    web_payload += "\"globalTrend\":" + str.tostring(global_trend) + ","
-    web_payload += "\"setupProbability\":" + str.tostring(success_prob, "#") + ","
-    web_payload += "\"confluenceStars\":" + str.tostring(conf_stars) + ","
-    web_payload += "\"riskState\":\"" + risk_lvl + "\","
+    web_payload += "\"chopIndex\":" + f_web_num(chop_val) + ","
+    web_payload += "\"relativeVolume\":" + f_web_num(rvol) + ","
+    web_payload += "\"globalTrend\":" + f_web_num(global_trend) + ","
+    web_payload += "\"setupProbability\":" + f_web_num(success_prob) + ","
+    web_payload += "\"confluenceStars\":" + f_web_num(conf_stars) + ","
     web_payload += "\"atr\":" + f_web_num(atr) + ","
+
     web_payload += "\"entry\":" + f_web_num(curr_entry) + ","
     web_payload += "\"sl\":" + f_web_num(curr_sl) + ","
+    web_payload += "\"initialSl\":" + f_web_num(curr_initial_sl) + ","
+    web_payload += "\"activeSl\":" + f_web_num(curr_sl) + ","
+    web_payload += "\"slLockStage\":" + str.tostring(sl_lock_stage) + ","
+    web_payload += "\"slLockLabel\":\"" + position_sl_stage + "\","
+    web_payload += "\"slMoveAction\":\"" + position_sl_action + "\","
+    web_payload += "\"slMoveTriggered\":" + f_web_bool(position_sl_action != "NONE") + ","
     web_payload += "\"tp1\":" + f_web_num(curr_tp1) + ","
     web_payload += "\"tp2\":" + f_web_num(curr_tp2) + ","
     web_payload += "\"tp3\":" + f_web_num(curr_tp3) + ","
     web_payload += "\"tradeActive\":" + f_web_bool(curr_active) + ","
-    web_payload += "\"positionExitStage\":\"" + position_exit_stage + "\","
-    web_payload += "\"positionExitAction\":\"" + position_exit_action + "\","
-    web_payload += "\"exitPartialArmed\":" + f_web_bool(exit_half_armed) + ","
-    web_payload += "\"exitOppositeYellow\":" + f_web_bool(exit_opposite_yellow) + ","
-    web_payload += "\"exitRemainingPct\":" + str.tostring(position_remaining_pct) + ","
-    web_payload += "\"exitYellowType\":\"" + position_yellow_type + "\","
-    web_payload += "\"exitReason\":\"" + position_exit_reason + "\","
     web_payload += "\"tradeIsBuy\":" + f_web_bool(curr_isBuy) + ","
     web_payload += "\"tp1Hit\":" + f_web_bool(curr_tp1_hit) + ","
     web_payload += "\"tp2Hit\":" + f_web_bool(curr_tp2_hit) + ","
     web_payload += "\"tp3Hit\":" + f_web_bool(curr_tp3_hit) + ","
     web_payload += "\"slHit\":" + f_web_bool(curr_sl_hit) + ","
-    web_payload += "\"mtf1\":" + str.tostring(mtf_1) + ","
-    web_payload += "\"mtf2\":" + str.tostring(mtf_2) + ","
-    web_payload += "\"mtf3\":" + str.tostring(mtf_3) + ","
-    web_payload += "\"mtfTotal\":" + str.tostring(mtf_total) + ","
-    web_payload += "\"mtfOverall\":\"" + mtf_word + "\","
-    web_payload += "\"forecast3Bars\":\"" + next_3_forecast + "\","
-    web_payload += "\"marketPower\":" + str.tostring(market_power, "#") + ","
-    web_payload += "\"powerText\":\"" + power_txt + "\","
-    web_payload += "\"proTip\":\"" + pro_tip + "\","
+
     web_payload += "\"sop1\":" + f_web_bool(sop1_pass) + ","
     web_payload += "\"sop2\":" + f_web_bool(sop2_pass) + ","
     web_payload += "\"sop3\":" + f_web_bool(sop3_pass) + ","
     web_payload += "\"sop4\":" + f_web_bool(sop4_pass) + ","
     web_payload += "\"sop5\":" + f_web_bool(sop5_pass) + ","
+
     web_payload += "\"normalSopVersion\":\"" + normal_sop_version + "\","
     web_payload += "\"normal3Side\":\"" + normal_side + "\","
     web_payload += "\"normal3Solid\":" + f_web_bool(normal_solid_entry) + ","
@@ -1537,14 +1590,23 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"normal3Sop4\":" + f_web_bool(normal_sop4) + ","
     web_payload += "\"normal3Sop5\":" + f_web_bool(normal_sop5) + ","
     web_payload += "\"normal3Forecast\":\"" + normal_forecast_dir + "\","
-    web_payload += "\"normal3MarketPower\":" + str.tostring(market_power, "#") + ","
+    web_payload += "\"normal3MarketPower\":" + f_web_num(market_power) + ","
     web_payload += "\"normal3Entry\":" + f_web_num(saved_entry_price) + ","
     web_payload += "\"normal3Close\":" + f_web_num(normal_3m_close) + ","
     web_payload += "\"normal3Atr\":" + f_web_num(atr) + ","
     web_payload += "\"normal5Position\":\"" + normal_5m_position + "\","
     web_payload += "\"normal5Close\":" + f_web_num(normal_5m_close) + ","
     web_payload += "\"normal5Hema20\":" + f_web_num(normal_5m_hema20) + ","
-    web_payload += "\"normal5Hema40\":" + f_web_num(normal_5m_hema40)
+    web_payload += "\"normal5Hema40\":" + f_web_num(normal_5m_hema40) + ","
+
+    web_payload += "\"positionExitStage\":\"" + position_exit_stage + "\","
+    web_payload += "\"positionExitAction\":\"" + position_exit_action + "\","
+    web_payload += "\"exitPartialArmed\":" + f_web_bool(exit_half_armed) + ","
+    web_payload += "\"exitOppositeYellow\":" + f_web_bool(exit_opposite_yellow) + ","
+    web_payload += "\"exitRemainingPct\":" + str.tostring(position_remaining_pct) + ","
+    web_payload += "\"exitYellowType\":\"" + position_yellow_type + "\","
+    web_payload += "\"exitCloseType\":\"" + exit_close_type + "\","
+    web_payload += "\"exitReason\":\"" + f_web_str(position_exit_reason) + "\""
     web_payload += "}"
 
     alert(web_payload, alert.freq_once_per_bar_close)

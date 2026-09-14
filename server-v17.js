@@ -39,7 +39,7 @@ function dirText(v){
   return 'WAIT';
 }
 function rr(d){
-  const e=N(d?.entry),sl=N(d?.sl),tp=N(d?.tp3);
+  const e=N(d?.entry),sl=N(d?.initialSl??d?.sl),tp=N(d?.tp3);
   if(e==null||sl==null||tp==null)return null;
   const r=Math.abs(e-sl); return r?Math.abs(tp-e)/r:null;
 }
@@ -492,28 +492,36 @@ function resolveValidation(symbol,d){
   for(const mode of ['FAST','NORMAL']){
     const key=validationKey(symbol,mode),r=validationOpenByKey.get(key);
     if(!r||r.openedKey===keyNow)continue;
-    const slHit=hitLevel(r.side,'SL',r.sl,hi,lo);
     const t1=hitLevel(r.side,'TP',r.tp1,hi,lo);
     const t2=hitLevel(r.side,'TP',r.tp2,hi,lo);
     const t3=hitLevel(r.side,'TP',r.tp3,hi,lo);
     const hadTp1=r.hitTp1,hadTp2=r.hitTp2,hadTp3=r.hitTp3;
+    const activeSlBefore=mode==='NORMAL'?(hadTp3?r.tp2:hadTp2?r.tp1:hadTp1?r.entry:r.sl):r.sl;
+    const slHit=hitLevel(r.side,'SL',activeSlBefore,hi,lo);
+    const newTargetHit=(t1&&!hadTp1)||(t2&&!hadTp2)||(t3&&!hadTp3);
     if(t1)r.hitTp1=true;if(t2)r.hitTp2=true;if(t3)r.hitTp3=true;
+    r.activeSl=mode==='NORMAL'?(r.hitTp3?r.tp2:r.hitTp2?r.tp1:r.hitTp1?r.entry:r.sl):r.sl;
+    r.slLockStage=mode==='NORMAL'?(r.hitTp3?3:r.hitTp2?2:r.hitTp1?1:0):0;
 
     let done=false,outcome=null;
     const maxAge=mode==='FAST'?20*60*1000:90*60*1000;
     const timedOut=Date.now()-r.openedAt>=maxAge;
+    const pineExit=U(d?.positionExitAction);
 
-    if(slHit&&t1&&!hadTp1){done=true;outcome='AMBIGUOUS';}
+    if(slHit&&newTargetHit){done=true;outcome='AMBIGUOUS';}
     else if(slHit){
       done=true;
-      outcome=hadTp2?'TP2_PROTECTED':hadTp1?'PROTECTED_WIN':'SL';
+      outcome=mode==='NORMAL'?(hadTp3?'TP3_PROTECTED':hadTp2?'TP2_PROTECTED':hadTp1?'PROTECTED_WIN':'SL'):(hadTp1?'PROTECTED_WIN':'SL');
     }
     else if(mode==='FAST'&&t2){done=true;outcome='TP30';}
-    else if(mode==='NORMAL'&&t3){done=true;outcome='TP3';}
+    else if(mode==='NORMAL'&&['EXIT_REMAINING','EXIT_ALL'].includes(pineExit)){
+      done=true;
+      outcome=r.hitTp3?'TP3_MANAGED':r.hitTp2?'TP2_MANAGED':r.hitTp1?'TP1_MANAGED':'MANAGED_EXIT';
+    }
     else if(timedOut){
       done=true;
       if(mode==='FAST')outcome=r.hitTp1?'TP20':'TIMEOUT';
-      else outcome=r.hitTp2?'TP2':r.hitTp1?'TP1':'TIMEOUT';
+      else outcome=r.hitTp3?'TP3':r.hitTp2?'TP2':r.hitTp1?'TP1':'TIMEOUT';
     }
 
     if(done){
@@ -526,7 +534,7 @@ function resolveValidation(symbol,d){
 function validationSummary(symbol,mode){
   const rows=validationClosed.filter(r=>(!symbol||r.symbol===symbol)&&(!mode||r.mode===mode));
   const resolved=rows.filter(r=>r.outcome!=='AMBIGUOUS');
-  const wins=resolved.filter(r=>['TP20','TP30','TP1','TP2','TP3','PROTECTED_WIN','TP2_PROTECTED'].includes(r.outcome)).length;
+  const wins=resolved.filter(r=>['TP20','TP30','TP1','TP2','TP3','PROTECTED_WIN','TP2_PROTECTED','TP3_PROTECTED','TP1_MANAGED','TP2_MANAGED','TP3_MANAGED'].includes(r.outcome)).length;
   const losses=resolved.filter(r=>r.outcome==='SL').length;
   const ambiguous=rows.filter(r=>r.outcome==='AMBIGUOUS').length;
   const winRate=resolved.length?Math.round(wins/resolved.length*1000)/10:null;
@@ -554,7 +562,7 @@ function marketSummary(symbol){
   const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d),opp=opportunityBySymbol.get(symbol)||updateOpportunity(symbol,d);
   const strategyFast=fastTradeStrategy(symbol,d),strategyNormal=normalScalpStrategy(symbol,d);
   const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
-  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.tp3Hit&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE',positionManagement:{stage:U(d.positionExitStage||'IDLE'),action:U(d.positionExitAction||'IDLE'),partialArmed:d.exitPartialArmed===true,oppositeYellow:d.exitOppositeYellow===true,remainingPct:N(d.exitRemainingPct),yellowType:U(d.exitYellowType||'NONE'),reason:String(d.exitReason||'')}};
+  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE',positionManagement:{stage:U(d.positionExitStage||'IDLE'),action:U(d.positionExitAction||'IDLE'),partialArmed:d.exitPartialArmed===true,oppositeYellow:d.exitOppositeYellow===true,remainingPct:N(d.exitRemainingPct),yellowType:U(d.exitYellowType||'NONE'),reason:String(d.exitReason||''),initialSl:N(d.initialSl??d.sl),activeSl:N(d.activeSl??d.sl),slLockStage:N(d.slLockStage)||0,slLockLabel:U(d.slLockLabel||'INITIAL'),slMoveAction:U(d.slMoveAction||'NONE'),slMoveTriggered:d.slMoveTriggered===true,exitCloseType:U(d.exitCloseType||'NONE')}};
 }
 function priority(m){return m.status==='TRADE ACTIVE'?700:m.status==='HOT PREDICTION'?600:m.status==='PREDICTION READY'?500:m.status==='WATCH'?400:m.status==='NEAR ENTRY'?300:m.status==='WAIT'?200:m.status==='STALE'?80:0;}
 function marketsPayload(){
