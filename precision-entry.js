@@ -167,7 +167,7 @@ function renderMarket(m){
   setText('heroSignal',state==='READY'?('PRECISION '+side+' READY'):state==='WATCH'?('WATCH '+side+' SETUP'):'WAIT FOR VALID SETUP');
   setText('heroReason',n.reason||'Menunggu Pine V32 feed.');
 
-  setText('lastPrice','Price: '+fmt(m?.price,3));
+  setText('lastPrice',fmt(m?.price,3));
   setText('entryPrice',fmt(s.entry,3));
   setText('closePrice',fmt(s.close3??m?.price,3));
   setText('marketPower',s.marketPower==null?'—':Math.round(num(s.marketPower))+'%');
