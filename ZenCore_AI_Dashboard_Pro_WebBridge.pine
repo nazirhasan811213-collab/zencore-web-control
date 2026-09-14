@@ -266,6 +266,11 @@ var int   curr_setup_bar = na
 var bool  curr_sl_hit    = false 
 var int   max_alert_level= 0 
 var label runner_lbl     = na 
+// --- POSITION MANAGEMENT: 2-STAGE EXIT ---
+var bool  exit_half_armed = false
+var bool  exit_completed  = false
+var int   exit_half_bar   = na
+var int   exit_full_bar   = na
 
 price_cross_ema9_up    = ta.crossover(close, ema9)
 price_cross_ema9_down  = ta.crossunder(close, ema9)
@@ -332,6 +337,10 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
         curr_sl_hit    := false
         max_alert_level:= 0
         runner_lbl     := na 
+        exit_half_armed := false
+        exit_completed  := false
+        exit_half_bar   := na
+        exit_full_bar   := na
 
 if curr_active
     int tmL_size = array.size(tmLines)
@@ -896,6 +905,10 @@ if trigger_reentry
     curr_triggered   := true
     max_alert_level  := 1
     curr_entry       := close 
+    exit_half_armed := false
+    exit_completed  := false
+    exit_half_bar   := na
+    exit_full_bar   := na
 
 bool is_strong_bull_candle = (close - open) > (atr * 1.2) and rvol > 1.2
 bool is_strong_bear_candle = (open - close) > (atr * 1.2) and rvol > 1.2
@@ -1018,10 +1031,17 @@ if curr_active and curr_triggered
                 
                 curr_active := false 
                 curr_sl_hit := true 
+                exit_half_armed := false
+                exit_completed  := true
+                exit_full_bar   := bar_index
             else if current_condition == 2
                 float y_pos = curr_isBuy ? high + (atr*0.5) : low - (atr*0.5)
                 string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
                 f_addMgmtLabel(bar_index, y_pos, "⚠️ CLOSE SEPARUH", l_style, color.new(color.orange, 10), color.black, size.small)
+                exit_half_armed := true
+                exit_completed  := false
+                exit_half_bar   := bar_index
+                exit_full_bar   := na
                 
                 // --- TRIGGER ALERT: PARTIAL CLOSE ---
                 if en_alert_adv
@@ -1054,6 +1074,12 @@ if curr_tp3_hit and curr_active
                 hold_stat := "⚠️ Close Separuh"
                 hold_c := color.orange
                 
+        if hold_stat == "⚠️ Close Separuh" and not exit_half_armed
+            exit_half_armed := true
+            exit_completed  := false
+            exit_half_bar   := bar_index
+            exit_full_bar   := na
+
         string r_txt = "🥷 FIGHTER: +" + str.tostring(pips_run, "#") + " Pts\n" + hold_stat
         float y_pos = curr_isBuy ? high + (atr * 1.5) : low - (atr * 1.5)
         string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
@@ -1129,6 +1155,29 @@ else if close < he1 and he1 < he2
 // ==========================================
 color final_chart_color = v2_useCol ? v2_barColor : (colorBar ? v1_bar_c : na)
 barcolor(final_chart_color)
+
+// ==========================================
+// POSITION MANAGEMENT: 2-STAGE EXIT
+// Stage 1: CLOSE 50% advisory.
+// Stage 2: confirmed opposite yellow Bj Reversal candle exits remaining 50%.
+// Entry SOP is NOT changed.
+// ==========================================
+bool exit_bearish_yellow = v2_useCol and v2_strat == "Bj Reversal" and v2_dr
+bool exit_bullish_yellow = v2_useCol and v2_strat == "Bj Reversal" and v2_ur
+bool exit_opposite_yellow = false
+if curr_active and exit_half_armed and barstate.isconfirmed and not na(exit_half_bar) and bar_index > exit_half_bar
+    exit_opposite_yellow := curr_isBuy ? exit_bearish_yellow : exit_bullish_yellow
+
+if exit_opposite_yellow
+    float exit_y = curr_isBuy ? high + (atr * 0.9) : low - (atr * 0.9)
+    string exit_style = curr_isBuy ? label.style_label_down : label.style_label_up
+    f_addMgmtLabel(bar_index, exit_y, "🟡 EXIT BAKI 50%", exit_style, color.new(color.yellow, 0), color.black, size.small)
+    if en_alert_adv
+        alert("🟡 [ZENCORE EXIT] OPPOSITE YELLOW CONFIRMED | CLOSE REMAINING 50% | Side: " + (curr_isBuy ? "BUY" : "SELL") + " | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
+    exit_completed  := true
+    exit_half_armed := false
+    exit_full_bar   := bar_index
+    curr_active     := false
 
 // ==========================================
 // 15. SOP ENTRY CHECKLIST DASHBOARD
@@ -1396,6 +1445,12 @@ if normal_5m_close > math.max(normal_5m_hema20, normal_5m_hema40)
 else if normal_5m_close < math.min(normal_5m_hema20, normal_5m_hema40)
     normal_5m_position := "BELOW"
 
+string position_exit_stage = exit_completed ? "CLOSED" : exit_half_armed ? "WAIT_YELLOW" : curr_active ? "HOLD" : "IDLE"
+string position_exit_action = exit_completed and not na(exit_full_bar) and bar_index == exit_full_bar ? "EXIT_REMAINING" : exit_half_armed and not na(exit_half_bar) and bar_index == exit_half_bar ? "CLOSE_50_NOW" : exit_half_armed ? "WAIT_OPPOSITE_YELLOW" : curr_active ? "HOLD" : "IDLE"
+int position_remaining_pct = exit_completed ? 0 : exit_half_armed ? 50 : curr_active ? 100 : 0
+string position_yellow_type = exit_opposite_yellow ? (curr_isBuy ? "BEARISH_YELLOW" : "BULLISH_YELLOW") : "NONE"
+string position_exit_reason = position_exit_action == "CLOSE_50_NOW" ? "Close Separuh signal" : position_exit_action == "WAIT_OPPOSITE_YELLOW" ? "Waiting confirmed opposite yellow candle" : position_exit_action == "EXIT_REMAINING" ? "Confirmed opposite yellow candle" : position_exit_action == "HOLD" ? "No exit condition" : "No active position"
+
 if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green or is_zone_turn_red)
     string web_action = is_zone_turn_green ? "BUY" : is_zone_turn_red ? "SELL" : global_trend > 0 ? "LONG_BIAS" : global_trend < 0 ? "SHORT_BIAS" : "WAIT"
 
@@ -1446,6 +1501,13 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"tp2\":" + f_web_num(curr_tp2) + ","
     web_payload += "\"tp3\":" + f_web_num(curr_tp3) + ","
     web_payload += "\"tradeActive\":" + f_web_bool(curr_active) + ","
+    web_payload += "\"positionExitStage\":\"" + position_exit_stage + "\","
+    web_payload += "\"positionExitAction\":\"" + position_exit_action + "\","
+    web_payload += "\"exitPartialArmed\":" + f_web_bool(exit_half_armed) + ","
+    web_payload += "\"exitOppositeYellow\":" + f_web_bool(exit_opposite_yellow) + ","
+    web_payload += "\"exitRemainingPct\":" + str.tostring(position_remaining_pct) + ","
+    web_payload += "\"exitYellowType\":\"" + position_yellow_type + "\","
+    web_payload += "\"exitReason\":\"" + position_exit_reason + "\","
     web_payload += "\"tradeIsBuy\":" + f_web_bool(curr_isBuy) + ","
     web_payload += "\"tp1Hit\":" + f_web_bool(curr_tp1_hit) + ","
     web_payload += "\"tp2Hit\":" + f_web_bool(curr_tp2_hit) + ","
