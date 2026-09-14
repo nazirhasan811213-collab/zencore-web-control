@@ -91,3 +91,13 @@ footer{order:9}
 @media(max-width:900px){.hero-copy{max-width:100%}.hero::before,.hero::after{opacity:.28}}
 @media(max-width:820px){.hero::before{right:-40px;top:62px}.hero::after{right:24px;top:124px}}
 @media(prefers-reduced-motion:reduce){.hero::before,.hero::after{animation:none!important}}
+
+/* pro-v3-plan-sheen */
+.layout:has(.plan-panel) .plan-panel::after{
+ content:"";position:absolute;top:-55%;left:-42%;width:40%;height:210%;transform:rotate(18deg);
+ background:linear-gradient(90deg,transparent,rgba(255,255,255,.045),transparent);
+ animation:proPlanSweep 8s linear infinite;pointer-events:none
+}
+.layout:has(.plan-panel) .panel-head,.layout:has(.plan-panel) .plan-grid,.layout:has(.plan-panel) .risk-strip,.layout:has(.plan-panel) .plan-note{position:relative;z-index:2}
+@keyframes proPlanSweep{from{left:-42%}to{left:130%}}
+@media(prefers-reduced-motion:reduce){.layout:has(.plan-panel) .plan-panel::after{animation:none!important}}
