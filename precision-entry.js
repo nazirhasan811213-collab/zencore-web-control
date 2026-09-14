@@ -98,6 +98,47 @@ function qualityMarkup(c){
     '<strong class="'+(full?'good':partial?'warn':'bad')+'">'+c.earned+'/'+c.max+'</strong></div>';
 }
 
+function renderPositionManagement(m){
+  const pm=m?.positionManagement||{};
+  const stage=String(pm.stage||'IDLE').toUpperCase();
+  const action=String(pm.action||'IDLE').toUpperCase();
+  const remaining=num(pm.remainingPct);
+  const yellow=String(pm.yellowType||'NONE').toUpperCase();
+  const reason=String(pm.reason||'No active position.');
+
+  setText('positionExitStage',stage);
+  setText('positionExitAction',action.replaceAll('_',' '));
+  setText('positionRemaining',(remaining==null?0:remaining)+'%');
+  setText('positionYellowState',yellow.replaceAll('_',' '));
+  setText('positionExitReason',reason);
+
+  const badge=$('positionExitBadge');
+  if(badge){
+    badge.textContent=action.replaceAll('_',' ');
+    let cls='position-exit-badge';
+    if(action==='HOLD')cls+=' hold';
+    else if(action==='CLOSE_50_NOW'||action==='WAIT_OPPOSITE_YELLOW')cls+=' half';
+    else if(action==='EXIT_REMAINING')cls+=' exit';
+    else if(stage==='CLOSED')cls+=' closed';
+    badge.className=cls;
+  }
+
+  const ids=['positionStepHold','positionStepHalf','positionStepWait','positionStepExit'];
+  ids.forEach(id=>{const el=$(id);if(el)el.className='position-step';});
+  if(action==='CLOSE_50_NOW'){
+    $('positionStepHalf')?.classList.add('warning');
+  }else if(action==='WAIT_OPPOSITE_YELLOW'){
+    $('positionStepHalf')?.classList.add('warning');
+    $('positionStepWait')?.classList.add('active');
+  }else if(action==='EXIT_REMAINING'){
+    $('positionStepHalf')?.classList.add('warning');
+    $('positionStepWait')?.classList.add('warning');
+    $('positionStepExit')?.classList.add('exit-now');
+  }else if(action==='HOLD'){
+    $('positionStepHold')?.classList.add('active');
+  }
+}
+
 function renderMarket(m){
   lastMarket=m;
   const n=m?.strategyNormal||{},s=n?.sop||{},p=n?.plan||null;
@@ -166,6 +207,7 @@ function renderMarket(m){
   setText('setupProbability',m?.setupProbability==null?'—':Math.round(num(m.setupProbability))+'%');
   setText('confluence',m?.confluence==null?'—':m.confluence+'/5');
   setText('entryZone',m?.zone||'—');
+  renderPositionManagement(m);
 }
 
 function outcomeClass(o){
