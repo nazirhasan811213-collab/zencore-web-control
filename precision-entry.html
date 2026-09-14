@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#071018">
 <title>ZenCore Precision Entry Pro</title>
-<link rel="stylesheet" href="/precision-entry.css?v=4.1">
+<link rel="stylesheet" href="/precision-entry.css?v=5.0">
 </head>
 <body>
 <div class="pro-bg-grid"></div>
@@ -30,9 +30,21 @@
     </div>
     <div class="header-right">
       <div class="symbolbox pro-symbolbox top-pricebox">
-        <span>LIVE MARKET</span>
+        <label for="pairSelector">LIVE MARKET • PILIH PAIR</label>
         <div class="top-price-row">
-          <b id="symbol">XAUUSD</b>
+          <select id="pairSelector" class="pair-selector" aria-label="Pilih pair trading">
+            <option value="XAUUSD">XAUUSD</option>
+            <option value="EURUSD">EURUSD</option>
+            <option value="GBPUSD">GBPUSD</option>
+            <option value="USDJPY">USDJPY</option>
+            <option value="US30">US30</option>
+            <option value="USDCAD">USDCAD</option>
+            <option value="USDCHF">USDCHF</option>
+            <option value="EURJPY">EURJPY</option>
+            <option value="GBPJPY">GBPJPY</option>
+            <option value="EURGBP">EURGBP</option>
+            <option value="BTCUSD">BTCUSD</option>
+          </select>
           <small id="lastPrice">—</small>
         </div>
       </div>
@@ -166,9 +178,9 @@
     <div class="panel-head">
       <div>
         <span class="eyebrow">LIVE MARKET</span>
-        <h3>TradingView • XAUUSD • 3 Minute</h3>
+        <h3 id="chartPairTitle">TradingView • XAUUSD • 3 Minute</h3>
       </div>
-      <div class="chart-badges"><span>OANDA:XAUUSD</span><span>3M</span></div>
+      <div class="chart-badges"><span id="chartSymbolBadge">OANDA:XAUUSD</span><span>3M</span></div>
     </div>
     <div class="chart-tabs">
       <button class="chart-tab active" data-chart-mode="zencore">ZENCORE LIVE CHART</button>
@@ -189,27 +201,8 @@
           </div>
         </div>
         <div id="tradingViewPanel" class="chart-panel">
-          <div class="tradingview-widget-container">
+          <div id="tradingViewHost" class="tradingview-widget-container">
             <div class="tradingview-widget-container__widget"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-            {
-              "autosize": true,
-              "symbol": "OANDA:XAUUSD",
-              "interval": "3",
-              "timezone": "Asia/Kuala_Lumpur",
-              "theme": "dark",
-              "style": "1",
-              "locale": "en",
-              "backgroundColor": "rgba(7, 16, 24, 1)",
-              "gridColor": "rgba(29, 49, 68, 0.35)",
-              "allow_symbol_change": false,
-              "save_image": false,
-              "calendar": false,
-              "withdateranges": true,
-              "hide_side_toolbar": false,
-              "support_host": "https://www.tradingview.com"
-            }
-            </script>
           </div>
         </div>
       </div>
@@ -298,6 +291,6 @@
 
   <footer>ZenCore Precision Entry • SOP source signal kekal • A+ Quality = execution ranking, bukan jaminan profit • Gunakan risk management.</footer>
 </div>
-<script src="/precision-entry.js?v=4.1"></script>
+<script src="/precision-entry.js?v=5.0"></script>
 </body>
 </html>

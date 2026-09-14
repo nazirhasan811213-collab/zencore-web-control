@@ -8,7 +8,7 @@ process.env.PORT=String(V16_PORT);
 require('./server-v16.js');
 process.env.PORT=String(PUBLIC_PORT);
 
-const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','AUDUSD','NZDUSD','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','AUDJPY'];
+const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','US30','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'];
 const latestBySymbol=new Map();
 const historyBySymbol=new Map();
 const marketClients=new Set();
@@ -592,18 +592,55 @@ function chartPayload(symbol,limit=180){
 
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
 function broadcastPrediction(symbol){const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
+function expandCompactMarket(row,batch){
+  if(!Array.isArray(row)||row.length<61)return null;
+  const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action]=row;
+  return{
+    schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
+    source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:true,
+    symbol,timeframe:'3',time,barIndex,open,high,low,close,ema9,ema20,ema50,
+    hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
+    chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
+    entry,sl:initialSl,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,
+    normalSopVersion:'32.0',normal3Side,normal3Solid,normal3PricePastEntry,
+    normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,
+    normal3Forecast,normal3MarketPower,normal3Entry:entry,normal3Close:close,normal3Atr:atr,
+    normal5Position,normal5Close,normal5Hema20,normal5Hema40,
+    positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,
+    exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered
+  };
+}
+function storeSnapshot(parsed){
+  if(!parsed||parsed.source!=='ZenCore AI Dashboard Pro + Alerts')return null;
+  const symbol=normSymbol(parsed.symbol||parsed.tickerid);
+  if(!symbol||N(parsed.close)==null)return null;
+  const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'};
+  latestBySymbol.set(symbol,d);
+  const arr=historyBySymbol.get(symbol)||[];
+  const key=N(d.time)||N(d.barIndex)||Date.now();
+  const i=arr.findIndex(x=>(N(x.time)||N(x.barIndex))===key);
+  if(i>=0)arr[i]=d;else arr.push(d);
+  if(arr.length>600)arr.splice(0,arr.length-600);
+  historyBySymbol.set(symbol,arr);
+  updateSignalCore(symbol,d);
+  updateOpportunity(symbol,d);
+  updateValidation(symbol,d);
+  return symbol;
+}
 function captureBody(body){
   let parsed=null;try{parsed=JSON.parse(body)}catch(_){}
-  if(parsed&&parsed.source==='ZenCore AI Dashboard Pro + Alerts'){
-    const symbol=normSymbol(parsed.symbol||parsed.tickerid);if(!symbol)return;
-    const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'}; latestBySymbol.set(symbol,d);
-    const arr=historyBySymbol.get(symbol)||[]; const key=N(d.time)||N(d.barIndex)||Date.now();
-    const i=arr.findIndex(x=>(N(x.time)||N(x.barIndex))===key); if(i>=0)arr[i]=d;else arr.push(d); if(arr.length>600)arr.splice(0,arr.length-600); historyBySymbol.set(symbol,arr);
-    updateSignalCore(symbol,d);
-    updateOpportunity(symbol,d);
-    updateValidation(symbol,d);
-    broadcastMarkets();broadcastPrediction(symbol);
+  if(!parsed)return;
+  if(parsed.source==='ZenCore Multi-Pair Feed'&&parsed.encoding==='zencore-compact-v1'&&Array.isArray(parsed.markets)){
+    const touched=[];
+    for(const row of parsed.markets){
+      const symbol=storeSnapshot(expandCompactMarket(row,parsed));
+      if(symbol&&!touched.includes(symbol))touched.push(symbol);
+    }
+    if(touched.length){broadcastMarkets();for(const symbol of touched)broadcastPrediction(symbol);}
+    return;
   }
+  const symbol=storeSnapshot(parsed);
+  if(symbol){broadcastMarkets();broadcastPrediction(symbol);}
 }
 function send(res,code,body,type='application/json; charset=utf-8'){res.writeHead(code,{'Content-Type':type,'Cache-Control':'no-store, no-cache, must-revalidate','Pragma':'no-cache','Access-Control-Allow-Origin':'*'});res.end(body);}
 function readBody(req,limit=160000){return new Promise(resolve=>{let b='';req.on('data',c=>{if(b.length<limit)b+=c});req.on('end',()=>resolve(b))})}

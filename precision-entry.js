@@ -11,6 +11,79 @@ const setText=(id,v)=>{const el=$(id);if(el)el.textContent=v};
 let lastMarket=null;
 let lastPerformance=null;
 
+const DEFAULT_PAIRS=['XAUUSD','EURUSD','GBPUSD','USDJPY','US30','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'];
+const normalisePair=v=>String(v||'').toUpperCase().replace(/^.*:/,'').replace(/[^A-Z0-9._-]/g,'');
+const queryPair=normalisePair(new URLSearchParams(location.search).get('pair'));
+let storedPair='';
+try{storedPair=normalisePair(localStorage.getItem('zencorePair'))}catch(_){}
+let activePair=queryPair||storedPair||'XAUUSD';
+let predictionStream=null;
+let pairSwitchToken=0;
+const priceDigits=symbol=>{const s=normalisePair(symbol||activePair);return s==='US30'||s==='BTCUSD'?2:s.includes('JPY')?3:s.startsWith('XAU')||s.startsWith('XAG')?3:5};
+const fmtPrice=(v,symbol)=>fmt(v,priceDigits(symbol||activePair));
+
+function ensurePairOption(pair){
+  const select=$('pairSelector'),value=normalisePair(pair);
+  if(!select||!value)return;
+  if(!Array.from(select.options).some(o=>o.value===value)){
+    const option=document.createElement('option');option.value=value;option.textContent=value;select.appendChild(option);
+  }
+}
+function syncPairLabels(){
+  ensurePairOption(activePair);
+  const select=$('pairSelector');if(select&&select.value!==activePair)select.value=activePair;
+  setText('chartPairTitle','TradingView • '+activePair+' • 3 Minute');
+  setText('chartSymbolBadge',tradingViewSymbol(activePair));
+}
+function tradingViewSymbol(pair){const p=normalisePair(pair);return p==='US30'?'OANDA:US30USD':'OANDA:'+p}
+function rebuildTradingView(){
+  const host=$('tradingViewHost');if(!host)return;
+  host.innerHTML='<div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>';
+  const script=document.createElement('script');
+  script.type='text/javascript';script.async=true;
+  script.src='https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  script.textContent=JSON.stringify({autosize:true,symbol:tradingViewSymbol(activePair),interval:'3',timezone:'Asia/Kuala_Lumpur',theme:'dark',style:'1',locale:'en',backgroundColor:'rgba(7, 16, 24, 1)',gridColor:'rgba(29, 49, 68, 0.35)',allow_symbol_change:false,save_image:false,calendar:false,withdateranges:true,hide_side_toolbar:false,support_host:'https://www.tradingview.com'});
+  host.appendChild(script);
+}
+function connectPredictionStream(){
+  if(predictionStream){try{predictionStream.close()}catch(_){}predictionStream=null}
+  const pair=activePair;
+  try{
+    predictionStream=new EventSource('/prediction-events/'+encodeURIComponent(pair));
+    predictionStream.addEventListener('prediction',e=>{
+      if(pair!==activePair)return;
+      try{const payload=JSON.parse(e.data);if(normalisePair(payload?.symbol)===activePair)renderMarket(payload)}catch(_){}
+    });
+  }catch(_){}
+}
+function clearPairView(){
+  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine 3M untuk '+activePair,plan:null}});
+  renderPerformance({summary:{resolved:0,wins:0,losses:0,winRate:null,maturity:'EARLY',recent:[]}});
+  nativeChartPoints=[];drawZenCoreChart(nativeChartPoints);
+}
+function setActivePair(value){
+  const next=normalisePair(value);if(!next||next===activePair)return;
+  activePair=next;pairSwitchToken++;
+  try{localStorage.setItem('zencorePair',activePair)}catch(_){}
+  try{const url=new URL(location.href);url.searchParams.set('pair',activePair);history.replaceState(null,'',url)}catch(_){}
+  syncPairLabels();clearPairView();connectPredictionStream();rebuildTradingView();
+  refreshMarket();refreshPerformance();refreshNativeChart();
+}
+async function refreshPairOptions(){
+  try{
+    const r=await fetch('/api/markets',{cache:'no-store'});if(!r.ok)return;
+    const payload=await r.json();
+    DEFAULT_PAIRS.forEach(ensurePairOption);
+    (Array.isArray(payload?.markets)?payload.markets:[]).forEach(m=>ensurePairOption(m?.symbol));
+    syncPairLabels();
+  }catch(_){}
+}
+function initialisePairSelector(){
+  DEFAULT_PAIRS.forEach(ensurePairOption);syncPairLabels();
+  $('pairSelector')?.addEventListener('change',e=>setActivePair(e.target.value));
+  connectPredictionStream();rebuildTradingView();
+}
+
 function rrFromPlan(p){
   if(!p)return null;
   const e=num(p.entry),sl=num(p.sl),tp3=num(p.tp3);
@@ -112,7 +185,7 @@ function renderPositionManagement(m){
   setText('positionExitAction',action.replaceAll('_',' '));
   setText('positionRemaining',(remaining==null?0:remaining)+'%');
   setText('positionYellowState',yellow.replaceAll('_',' '));
-  setText('positionActiveSL',fmt(activeSl,3));
+  setText('positionActiveSL',fmtPrice(activeSl));
   setText('positionSlLock',slLock.replaceAll('_',' '));
   setText('positionExitReason',reason);
 
@@ -146,13 +219,15 @@ function renderPositionManagement(m){
 }
 
 function renderMarket(m){
+  const responsePair=normalisePair(m?.symbol);
+  if(responsePair&&responsePair!==activePair)return;
   lastMarket=m;
   const n=m?.strategyNormal||{},s=n?.sop||{},p=n?.plan||null;
   const q=qualityLayer(m);
   window.__lastReceived=m?.receivedAt||null;
 
   const fresh=String(m?.freshness||'OFFLINE').toUpperCase();
-  setText('symbol',m?.symbol||'XAUUSD');
+  syncPairLabels();
   setText('feedState',fresh==='LIVE'?'LIVE • 3M BAR':fresh);
   setText('feedAge',age(m?.receivedAt));
   setText('marketSession',fresh==='LIVE'?'OPEN / BAR-CLOSE':fresh==='STALE'?'STALE':'CLOSED / OFFLINE');
@@ -167,9 +242,9 @@ function renderMarket(m){
   setText('heroSignal',state==='READY'?('PRECISION '+side+' READY'):state==='WATCH'?('WATCH '+side+' SETUP'):'WAIT FOR VALID SETUP');
   setText('heroReason',n.reason||'Menunggu Pine V32 feed.');
 
-  setText('lastPrice',fmt(m?.price,3));
-  setText('entryPrice',fmt(s.entry,3));
-  setText('closePrice',fmt(s.close3??m?.price,3));
+  setText('lastPrice',fmtPrice(m?.price));
+  setText('entryPrice',fmtPrice(s.entry));
+  setText('closePrice',fmtPrice(s.close3??m?.price));
   setText('marketPower',s.marketPower==null?'—':Math.round(num(s.marketPower))+'%');
   setText('forecast','Forecast: '+String(s.forecast||'—'));
   setText('sopScore',(s.sopGreen??0)+'/5');
@@ -195,17 +270,17 @@ function renderMarket(m){
 
   setText('m5Position',s.m5Position||'—');
   setText('m5PositionMini',s.m5Position||'—');
-  setText('m5Close',fmt(s.m5Close,3));
-  setText('m5Hema20',fmt(s.m5Hema20,3));
-  setText('m5Hema40',fmt(s.m5Hema40,3));
+  setText('m5Close',fmtPrice(s.m5Close));
+  setText('m5Hema20',fmtPrice(s.m5Hema20));
+  setText('m5Hema40',fmtPrice(s.m5Hema40));
 
   setText('planTitle',p?(side+' PLAN READY'):'No Active Plan');
-  setText('planEntry',fmt(p?.entry,3));
-  setText('planSL',fmt(p?.sl,3));
-  setText('planTP1',fmt(p?.tp1,3));
-  setText('planTP2',fmt(p?.tp2,3));
-  setText('planTP3',fmt(p?.tp3,3));
-  setText('riskDistance',fmt(p?.riskDistance,3));
+  setText('planEntry',fmtPrice(p?.entry));
+  setText('planSL',fmtPrice(p?.sl));
+  setText('planTP1',fmtPrice(p?.tp1));
+  setText('planTP2',fmtPrice(p?.tp2));
+  setText('planTP3',fmtPrice(p?.tp3));
+  setText('riskDistance',fmtPrice(p?.riskDistance));
   setText('rrTp3',q.rr==null?'—':q.rr.toFixed(1)+'R');
   setText('planNote',p?'Hard gates passed. SOP signal valid; A+ Quality ialah lapisan execution berasingan.':'Plan hanya muncul apabila semua syarat SOP entry lulus.');
 
@@ -257,31 +332,31 @@ function renderPerformance(payload){
 }
 
 async function refreshMarket(){
+  const pair=activePair,token=pairSwitchToken;
   try{
-    const r=await fetch('/api/prediction/XAUUSD',{cache:'no-store'});
+    const r=await fetch('/api/prediction/'+encodeURIComponent(pair),{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
-    renderMarket(await r.json());
+    const payload=await r.json();
+    if(pair===activePair&&token===pairSwitchToken)renderMarket(payload);
   }catch(e){
+    if(pair!==activePair||token!==pairSwitchToken)return;
     setText('feedState','OFFLINE');
     setText('marketSession','CLOSED / OFFLINE');
-    setText('heroReason','Dashboard waiting for backend: '+e.message);
+    setText('heroReason','Dashboard waiting for '+pair+' backend: '+e.message);
   }
 }
 
 async function refreshPerformance(){
+  const pair=activePair,token=pairSwitchToken;
   try{
-    const r=await fetch('/api/strategy-performance/XAUUSD/NORMAL',{cache:'no-store'});
+    const r=await fetch('/api/strategy-performance/'+encodeURIComponent(pair)+'/NORMAL',{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
-    renderPerformance(await r.json());
+    const payload=await r.json();
+    if(pair===activePair&&token===pairSwitchToken)renderPerformance(payload);
   }catch(e){
-    setText('performanceMessage','Performance data unavailable: '+e.message);
+    if(pair===activePair&&token===pairSwitchToken)setText('performanceMessage','Performance data unavailable: '+e.message);
   }
 }
-
-try{
-  const es=new EventSource('/prediction-events/XAUUSD');
-  es.addEventListener('prediction',e=>{try{renderMarket(JSON.parse(e.data))}catch(_){}});
-}catch(_){}
 
 
 let nativeChartPoints=[];
@@ -368,7 +443,7 @@ function drawZenCoreChart(points){
     const price=max-(max-min)*(i/6);
     ctx.fillStyle='#8293a0';
     ctx.textAlign='left';
-    ctx.fillText(price.toFixed(price>=1000?2:4),w-pad.r+8,yy);
+    ctx.fillText(price.toFixed(priceDigits(activePair)),w-pad.r+8,yy);
   }
   const vLines=8;
   for(let i=0;i<=vLines;i++){
@@ -423,7 +498,7 @@ function drawZenCoreChart(points){
     ctx.beginPath();ctx.moveTo(Math.max(pad.l,w-pad.r-170),yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
     ctx.restore();
     ctx.font='9px system-ui';ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillStyle=color;
-    ctx.fillText(label+' '+v.toFixed(v>=1000?2:4),w-pad.r-4,yy-2);
+    ctx.fillText(label+' '+v.toFixed(priceDigits(activePair)),w-pad.r-4,yy-2);
   }
 
   // current price dotted line
@@ -479,9 +554,11 @@ function drawZenCoreChart(points){
 
 async function refreshNativeChart(){
   try{
-    const r=await fetch('/api/chart/XAUUSD?limit=180',{cache:'no-store'});
+    const pair=activePair,token=pairSwitchToken;
+    const r=await fetch('/api/chart/'+encodeURIComponent(pair)+'?limit=180',{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const payload=await r.json();
+    if(pair!==activePair||token!==pairSwitchToken)return;
     nativeChartPoints=Array.isArray(payload.points)?payload.points:[];
     drawZenCoreChart(nativeChartPoints);
   }catch(e){
@@ -496,16 +573,20 @@ document.querySelectorAll('.chart-tab').forEach(btn=>btn.addEventListener('click
   $('zencoreChartPanel')?.classList.toggle('active',chartMode==='zencore');
   $('tradingViewPanel')?.classList.toggle('active',chartMode==='tradingview');
   if(chartMode==='zencore')drawZenCoreChart(nativeChartPoints);
+  else rebuildTradingView();
 }));
 
 window.addEventListener('resize',()=>{if(chartMode==='zencore')drawZenCoreChart(nativeChartPoints)});
 
+initialisePairSelector();
+refreshPairOptions();
 refreshMarket();
 refreshPerformance();
 refreshNativeChart();
 setInterval(refreshMarket,10000);
 setInterval(refreshPerformance,30000);
 setInterval(refreshNativeChart,5000);
+setInterval(refreshPairOptions,30000);
 setInterval(()=>{if(window.__lastReceived)setText('feedAge',age(window.__lastReceived))},1000);
 
 })();
