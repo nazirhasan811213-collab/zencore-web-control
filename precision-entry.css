@@ -101,3 +101,7 @@ footer{order:9}
 .layout:has(.plan-panel) .panel-head,.layout:has(.plan-panel) .plan-grid,.layout:has(.plan-panel) .risk-strip,.layout:has(.plan-panel) .plan-note{position:relative;z-index:2}
 @keyframes proPlanSweep{from{left:-42%}to{left:130%}}
 @media(prefers-reduced-motion:reduce){.layout:has(.plan-panel) .plan-panel::after{animation:none!important}}
+
+/* pro-v3-hover */
+.status-card,.panel,.execution-box,.plan-grid>div,.risk-strip>div{transition:transform .25s ease,border-color .25s ease}
+.status-card:hover,.panel:hover,.execution-box:hover,.plan-grid>div:hover,.risk-strip>div:hover{transform:translateY(-3px);border-color:rgba(84,215,255,.30)}
