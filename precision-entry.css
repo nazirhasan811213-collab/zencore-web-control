@@ -105,3 +105,47 @@ footer{order:9}
 /* pro-v3-hover */
 .status-card,.panel,.execution-box,.plan-grid>div,.risk-strip>div{transition:transform .25s ease,border-color .25s ease}
 .status-card:hover,.panel:hover,.execution-box:hover,.plan-grid>div:hover,.risk-strip>div:hover{transform:translateY(-3px);border-color:rgba(84,215,255,.30)}
+
+/* premium-zencore-symbol */
+.mark.zencore-mark{
+  position:relative;
+  width:58px;height:58px;min-width:58px;border-radius:18px;
+  background:radial-gradient(circle at 50% 48%,rgba(83,218,255,.14),rgba(4,14,22,.96) 62%);
+  border:1px solid rgba(103,216,255,.26);
+  overflow:hidden;
+  box-shadow:0 0 26px rgba(84,215,255,.15),0 12px 30px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.mark.zencore-mark::before{
+  content:"";position:absolute;inset:-20%;
+  background:conic-gradient(from 0deg,transparent 0 72%,rgba(255,255,255,.10) 80%,transparent 88%);
+  animation:zcMarkSweep 5.5s linear infinite
+}
+.zc-orbit{
+  position:absolute;left:50%;top:50%;border-radius:50%;
+  border:1px solid rgba(103,216,255,.52);
+  transform-style:preserve-3d;
+  box-shadow:0 0 14px rgba(103,216,255,.10)
+}
+.zc-orbit-a{width:39px;height:39px;margin:-19.5px;animation:zcOrbitA 5.6s linear infinite}
+.zc-orbit-b{width:30px;height:30px;margin:-15px;border-color:rgba(73,240,181,.50);animation:zcOrbitB 4.3s linear infinite}
+.zc-orbit-c{width:21px;height:21px;margin:-10.5px;border-color:rgba(138,125,255,.54);animation:zcOrbitC 3.4s linear infinite}
+.zc-core{
+  position:absolute;left:50%;top:50%;width:13px;height:13px;margin:-6.5px;border-radius:50%;
+  background:radial-gradient(circle at 30% 26%,#ffffff 0,#bff9ff 16%,#67d8ff 40%,#396dff 72%,#17194b 100%);
+  box-shadow:0 0 12px rgba(103,216,255,.9),0 0 26px rgba(103,216,255,.35);
+  animation:zcCorePulse 2.4s ease-in-out infinite
+}
+.zc-node{
+  position:absolute;width:4px;height:4px;border-radius:50%;background:#9af0ff;
+  box-shadow:0 0 10px rgba(154,240,255,.95)
+}
+.zc-node-a{left:10px;top:26px;animation:zcNodeFloat 2.6s ease-in-out infinite}
+.zc-node-b{right:11px;top:14px;background:#51f0b9;box-shadow:0 0 10px rgba(81,240,185,.95);animation:zcNodeFloat 3s ease-in-out infinite reverse}
+.zc-node-c{right:14px;bottom:10px;background:#9a86ff;box-shadow:0 0 10px rgba(154,134,255,.95);animation:zcNodeFloat 3.4s ease-in-out infinite}
+@keyframes zcOrbitA{from{transform:rotateX(70deg) rotateZ(0)}to{transform:rotateX(70deg) rotateZ(360deg)}}
+@keyframes zcOrbitB{from{transform:rotateY(70deg) rotateZ(360deg)}to{transform:rotateY(70deg) rotateZ(0)}}
+@keyframes zcOrbitC{from{transform:rotateX(55deg) rotateY(35deg) rotateZ(0)}to{transform:rotateX(55deg) rotateY(35deg) rotateZ(360deg)}}
+@keyframes zcCorePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.22)}}
+@keyframes zcNodeFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes zcMarkSweep{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.mark.zencore-mark::before,.zc-orbit,.zc-core,.zc-node{animation:none!important}}
