@@ -43,9 +43,14 @@ function rr(d){
   if(e==null||sl==null||tp==null)return null;
   const r=Math.abs(e-sl); return r?Math.abs(tp-e)/r:null;
 }
-function freshness(ts){
+function freshness(ts,tf='3'){
   const age=Math.max(0,Date.now()-(N(ts)||0));
-  return age<90000?'LIVE':age<240000?'STALE':'OFFLINE';
+  const mins=Math.max(1,N(tf)||3);
+  // Confirmed-bar feeds naturally update once per chart bar.
+  // Allow one full bar + safety margin before calling the feed stale.
+  const liveMs=Math.max(120000,mins*60000+60000);
+  const staleMs=Math.max(360000,mins*60000+300000);
+  return age<liveMs?'LIVE':age<staleMs?'STALE':'OFFLINE';
 }
 function zoneInfo(d){
   const e=N(d?.entry),a=N(d?.atr),c=N(d?.close);
@@ -115,7 +120,7 @@ function predictionEngine(d,symbol){
 
   const strength=direction==='WAIT'?(confidence>=70?'CONFLICT':'LOW'):confidence>=86?'STRONG':confidence>=76?'GOOD':'EARLY';
   const reasons=leaderEvidence.slice(0,4).map(x=>x.label);
-  return{direction,confidence,consensus,totalEvidence:ev.length,strength,horizon:'NEXT 1–3 BARS',reasons,conflict,bullScore:buy,bearScore:sell,agreement:Math.round(agreeWeight*100),currentAction:U(d.action||'WAIT'),freshness:freshness(d.receivedAt)};
+  return{direction,confidence,consensus,totalEvidence:ev.length,strength,horizon:'NEXT 1–3 BARS',reasons,conflict,bullScore:buy,bearScore:sell,agreement:Math.round(agreeWeight*100),currentAction:U(d.action||'WAIT'),freshness:freshness(d.receivedAt,d.timeframe)};
 }
 
 
