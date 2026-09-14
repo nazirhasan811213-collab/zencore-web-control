@@ -147,9 +147,9 @@ function renderMarket(m){
 
   const fresh=String(m?.freshness||'OFFLINE').toUpperCase();
   setText('symbol',m?.symbol||'XAUUSD');
-  setText('feedState',fresh);
+  setText('feedState',fresh==='LIVE'?'LIVE • 3M BAR':fresh);
   setText('feedAge',age(m?.receivedAt));
-  setText('marketSession',fresh==='LIVE'?'OPEN / LIVE':fresh==='STALE'?'STALE':'CLOSED / OFFLINE');
+  setText('marketSession',fresh==='LIVE'?'OPEN / BAR-CLOSE':fresh==='STALE'?'STALE':'CLOSED / OFFLINE');
   $('feedDot')?.classList.toggle('live',fresh==='LIVE');
 
   const state=String(n.state||'WARMING').toUpperCase();
