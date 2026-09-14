@@ -117,6 +117,47 @@
     </article>
   </section>
 
+  <section class="position-management panel">
+    <div class="panel-head">
+      <div>
+        <span class="eyebrow">POSITION MANAGEMENT</span>
+        <h3>2-Stage Exit Control</h3>
+      </div>
+      <div id="positionExitBadge" class="position-exit-badge">IDLE</div>
+    </div>
+
+    <div class="position-flow">
+      <div id="positionStepHold" class="position-step active">
+        <span class="step-no">1</span>
+        <div><b>HOLD</b><small>No exit condition</small></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div id="positionStepHalf" class="position-step">
+        <span class="step-no">2</span>
+        <div><b>CLOSE 50%</b><small>Close Separuh signal</small></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div id="positionStepWait" class="position-step">
+        <span class="step-no">3</span>
+        <div><b>WAIT YELLOW</b><small>Confirmed opposite Bj Reversal</small></div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div id="positionStepExit" class="position-step">
+        <span class="step-no">4</span>
+        <div><b>EXIT REMAINING</b><small>Close baki 50%</small></div>
+      </div>
+    </div>
+
+    <div class="position-metrics">
+      <div><span>CURRENT ACTION</span><b id="positionExitAction">IDLE</b></div>
+      <div><span>POSITION STAGE</span><b id="positionExitStage">IDLE</b></div>
+      <div><span>REMAINING</span><b id="positionRemaining">0%</b></div>
+      <div><span>YELLOW SIGNAL</span><b id="positionYellowState">NONE</b></div>
+    </div>
+
+    <div id="positionExitReason" class="position-exit-reason">No active position.</div>
+  </section>
+
   <section class="chart-section panel">
     <div class="panel-head">
       <div>
