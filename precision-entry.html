@@ -4,17 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#071018">
-<title>ZenCore Precision Entry</title>
-<link rel="stylesheet" href="/precision-entry.css?v=2.0">
+<title>ZenCore Precision Entry Pro</title>
+<link rel="stylesheet" href="/precision-entry.css?v=3.0">
 </head>
 <body>
-<div class="app">
-  <header class="topbar">
+<div class="pro-bg-grid"></div>
+<div class="pro-orb pro-orb-a"></div>
+<div class="pro-orb pro-orb-b"></div>
+<div class="app pro-app">
+  <header class="topbar pro-topbar">
     <div class="brand">
       <div class="mark">ZP</div>
       <div>
         <h1>ZenCore Precision Entry</h1>
-        <p>Normal Scalping 3M • Pine SOP V32 • Profit Quality Layer</p>
+        <p>Normal Scalping 3M • Pine SOP V32 • Professional Execution Layer</p>
       </div>
     </div>
     <div class="header-right">
@@ -26,6 +29,29 @@
     </div>
   </header>
 
+  <!-- PROFESSIONAL TOP TRADING PLAN -->
+    <div class="panel plan-panel plan-top pro-3d-card">
+      <div class="panel-head">
+        <div><span class="eyebrow">TRADE PLAN & RISK</span><h3 id="planTitle">No Active Plan</h3></div>
+      </div>
+      <div class="plan-grid">
+        <div><span>ENTRY</span><b id="planEntry">—</b></div>
+        <div><span>STOP LOSS</span><b id="planSL">—</b></div>
+        <div><span>TP1 • 1R</span><b id="planTP1">—</b></div>
+        <div><span>TP2 • 2R</span><b id="planTP2">—</b></div>
+        <div><span>TP3 • 3R</span><b id="planTP3">—</b></div>
+        <div><span>RISK DISTANCE</span><b id="riskDistance">—</b></div>
+      </div>
+      <div class="risk-strip">
+        <div><span>Risk State</span><b id="riskState">—</b></div>
+        <div><span>Setup Probability</span><b id="setupProbability">—</b></div>
+        <div><span>Confluence</span><b id="confluence">—</b></div>
+        <div><span>Entry Zone</span><b id="entryZone">—</b></div>
+      </div>
+      <div id="planNote" class="plan-note">Plan hanya muncul apabila semua syarat entry lulus.</div>
+    </div>
+
+
   <section class="hero">
     <div class="hero-copy">
       <span class="eyebrow">PRECISION ENTRY COMMAND CENTER</span>
@@ -35,10 +61,23 @@
         <span>TF 3M</span><span>5M HEMA CONFIRM</span><span>NO SOP CHANGE</span>
       </div>
     </div>
-    <div class="symbolbox">
-      <span>MARKET</span>
-      <b id="symbol">XAUUSD</b>
-      <small id="lastPrice">Price: —</small>
+    <div class="hero-side">
+      <div class="holo-console" aria-hidden="true">
+        <div class="holo-ring ring-a"></div>
+        <div class="holo-ring ring-b"></div>
+        <div class="holo-ring ring-c"></div>
+        <div class="holo-core"></div>
+        <div class="holo-beam"></div>
+        <span class="holo-chip chip-solid">SOLID ENTRY</span>
+        <span class="holo-chip chip-sop">SOP V32</span>
+        <span class="holo-chip chip-hema">HEMA 5M</span>
+        <div class="holo-floor"></div>
+      </div>
+      <div class="symbolbox pro-symbolbox">
+        <span>LIVE MARKET</span>
+        <b id="symbol">XAUUSD</b>
+        <small id="lastPrice">Price: —</small>
+      </div>
     </div>
   </section>
 
@@ -161,28 +200,7 @@
     </div>
   </section>
 
-  <section class="layout">
-    <div class="panel plan-panel">
-      <div class="panel-head">
-        <div><span class="eyebrow">TRADE PLAN & RISK</span><h3 id="planTitle">No Active Plan</h3></div>
-      </div>
-      <div class="plan-grid">
-        <div><span>ENTRY</span><b id="planEntry">—</b></div>
-        <div><span>STOP LOSS</span><b id="planSL">—</b></div>
-        <div><span>TP1 • 1R</span><b id="planTP1">—</b></div>
-        <div><span>TP2 • 2R</span><b id="planTP2">—</b></div>
-        <div><span>TP3 • 3R</span><b id="planTP3">—</b></div>
-        <div><span>RISK DISTANCE</span><b id="riskDistance">—</b></div>
-      </div>
-      <div class="risk-strip">
-        <div><span>Risk State</span><b id="riskState">—</b></div>
-        <div><span>Setup Probability</span><b id="setupProbability">—</b></div>
-        <div><span>Confluence</span><b id="confluence">—</b></div>
-        <div><span>Entry Zone</span><b id="entryZone">—</b></div>
-      </div>
-      <div id="planNote" class="plan-note">Plan hanya muncul apabila semua syarat entry lulus.</div>
-    </div>
-
+  <section class="layout performance-layout">
     <div class="panel performance-panel">
       <div class="panel-head">
         <div><span class="eyebrow">VALIDATED PERFORMANCE</span><h3>Normal 3M Results</h3></div>
@@ -227,6 +245,6 @@
 
   <footer>ZenCore Precision Entry • SOP source signal kekal • A+ Quality = execution ranking, bukan jaminan profit • Gunakan risk management.</footer>
 </div>
-<script src="/precision-entry.js?v=2.0"></script>
+<script src="/precision-entry.js?v=3.0"></script>
 </body>
 </html>
