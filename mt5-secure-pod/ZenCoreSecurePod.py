@@ -15,6 +15,7 @@ import getpass
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import sqlite3
@@ -39,16 +40,18 @@ SUPPORTED_MARKETS = (
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
 )
 MAGIC = 3233001
-CONNECTOR_VERSION = "1.3.0-demo"
+CONNECTOR_VERSION = "1.4.0-demo-execution"
 HOST_OWNERSHIP_MODES = {
     "WINDOWS_PC": "TRADER_OWNED_WINDOWS_PC",
     "AZURE_CONFIDENTIAL_VM": "TRADER_OWNED_AZURE",
 }
 CONFIG_SCHEMA_VERSION = 1
 PRODUCTION_CONTROL_HOST = "zencore-precision-entry.onrender.com"
-# This source release is intentionally unable to place even DEMO orders. A later,
-# separately reviewed release must change this build gate after broker validation.
-DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False
+# Execution still requires the local config switch, the Render control-plane gate,
+# an InterStellar DEMO terminal, a signed command and an armed local ledger.
+DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = True
+DEMO_EXECUTION_MARKETS = ("XAUUSD",)
+INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 FORBIDDEN_CREDENTIAL_ENVIRONMENT = (
     "MT5_LOGIN",
     "MT5_PASSWORD",
@@ -390,6 +393,15 @@ class Ledger:
         ).fetchone()
         return (row[0], json.loads(row[1])) if row else None
 
+    def claim_command(self, command_id: str) -> bool:
+        cursor = self.db.execute(
+            "INSERT OR IGNORE INTO commands (id, status, result_json, processed_at) "
+            "VALUES (?, 'IN_PROGRESS', '{}', ?)",
+            (command_id, int(time.time() * 1000)),
+        )
+        self.db.commit()
+        return cursor.rowcount == 1
+
     def save_result(self, command_id: str, status: str, result: dict[str, Any]) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO commands (id, status, result_json, processed_at) VALUES (?, ?, ?, ?)",
@@ -475,14 +487,30 @@ class SecurePod:
         tail = safe[-visible_count:]
         return f"****{tail}"
 
+    @staticmethod
+    def server_id(value: Any) -> str:
+        return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
+
+    def assert_demo_terminal(self, require_execution: bool = False) -> tuple[Any, Any]:
+        account = mt5.account_info()
+        terminal = mt5.terminal_info()
+        if account is None or terminal is None:
+            raise RuntimeError("MT5 account or terminal state unavailable")
+        if account.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO:
+            raise RuntimeError("Secure Pod only permits an MT5 DEMO account")
+        if require_execution:
+            if self.server_id(account.server) != INTERSTELLAR_DEMO_SERVER_ID:
+                raise RuntimeError("DEMO execution only permits InterStellarFinancial-Demo")
+            if not bool(account.trade_allowed) or not bool(getattr(account, "trade_expert", False)):
+                raise RuntimeError("MT5 DEMO account does not allow expert trading")
+            if not bool(terminal.trade_allowed) or bool(terminal.tradeapi_disabled):
+                raise RuntimeError("Enable Algo Trading and Python API trading in MT5")
+        return account, terminal
+
     def initialise_terminal(self) -> None:
         if not mt5.initialize(path=self.config.terminal_path):
             raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
-        account = mt5.account_info()
-        if account is None:
-            raise RuntimeError(f"MT5 account unavailable: {mt5.last_error()}")
-        if account.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO:
-            raise RuntimeError("Secure Pod first rollout only permits a DEMO account")
+        self.assert_demo_terminal(require_execution=self.config.demo_execution_enabled)
 
     def canonical_symbol(self, broker_symbol: str) -> str | None:
         upper = broker_symbol.upper()
@@ -568,8 +596,15 @@ class SecurePod:
             "tradeMode": "DEMO" if account.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO else "REAL",
             "terminalTradeAllowed": bool(terminal.trade_allowed),
             "accountTradeAllowed": bool(account.trade_allowed),
-            "expertTradeAllowed": bool(terminal.trade_allowed and not terminal.tradeapi_disabled),
-            "demoExecutionUnlocked": bool(self.config.demo_execution_enabled),
+            "expertTradeAllowed": bool(
+                terminal.trade_allowed and not terminal.tradeapi_disabled
+                and getattr(account, "trade_expert", False)
+            ),
+            "demoExecutionUnlocked": bool(
+                self.config.demo_execution_enabled
+                and account.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
+                and self.server_id(account.server) == INTERSTELLAR_DEMO_SERVER_ID
+            ),
             "connectorVersion": CONNECTOR_VERSION,
             "terminalBuild": str(terminal.build),
             "symbolSpecs": self.symbol_specs(),
@@ -592,11 +627,65 @@ class SecurePod:
         return envelope
 
     @staticmethod
-    def normalise_volume(info: Any, volume: float) -> float:
-        steps = round(volume / info.volume_step)
-        return max(info.volume_min, min(info.volume_max, steps * info.volume_step))
+    def volume_digits(step: float) -> int:
+        text = f"{float(step):.10f}".rstrip("0")
+        return len(text.split(".", 1)[1]) if "." in text else 0
+
+    @staticmethod
+    def normalise_volume(info: Any, volume: float, rounding: str = "nearest") -> float:
+        step = float(info.volume_step)
+        ratio = max(0.0, float(volume)) / step
+        if rounding == "up":
+            steps = math.ceil(ratio - 1e-9)
+        elif rounding == "down":
+            steps = math.floor(ratio + 1e-9)
+        else:
+            steps = math.floor(ratio + 0.5 + 1e-9)
+        normalised = max(float(info.volume_min), min(float(info.volume_max), steps * step))
+        return round(normalised, SecurePod.volume_digits(step))
+
+    @staticmethod
+    def success_retcodes() -> set[int]:
+        return {
+            int(mt5.TRADE_RETCODE_DONE),
+            int(getattr(mt5, "TRADE_RETCODE_DONE_PARTIAL", mt5.TRADE_RETCODE_DONE)),
+        }
+
+    @staticmethod
+    def filling_modes(info: Any) -> list[int]:
+        modes: list[int] = []
+        flags = int(getattr(info, "filling_mode", 0) or 0)
+        if flags & 1:
+            modes.append(mt5.ORDER_FILLING_FOK)
+        if flags & 2:
+            modes.append(mt5.ORDER_FILLING_IOC)
+        market_execution = getattr(mt5, "SYMBOL_TRADE_EXECUTION_MARKET", 2)
+        if int(getattr(info, "trade_exemode", -1)) != int(market_execution):
+            modes.append(mt5.ORDER_FILLING_RETURN)
+        if not modes:
+            modes.extend([mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC])
+        return list(dict.fromkeys(modes))
+
+    def checked_deal_request(self, info: Any, request: dict[str, Any]) -> dict[str, Any]:
+        errors = []
+        for filling_mode in self.filling_modes(info):
+            candidate = {**request, "type_filling": filling_mode}
+            checked = mt5.order_check(candidate)
+            retcode = getattr(checked, "retcode", None)
+            if checked is not None and retcode in (0, mt5.TRADE_RETCODE_DONE):
+                return candidate
+            errors.append(str(getattr(checked, "comment", retcode if retcode is not None else mt5.last_error())))
+        raise RuntimeError(f"OrderCheck failed: {'; '.join(errors)[:120]}")
+
+    def send_checked_deal(self, info: Any, request: dict[str, Any]) -> Any:
+        checked_request = self.checked_deal_request(info, request)
+        result = mt5.order_send(checked_request)
+        if result is None or int(result.retcode) not in self.success_retcodes():
+            raise RuntimeError(f"OrderSend failed: {getattr(result, 'comment', mt5.last_error())}")
+        return result
 
     def send_market_layer(self, payload: dict[str, Any], layer: int) -> str:
+        self.assert_demo_terminal(require_execution=True)
         canonical = payload["symbol"]
         symbol = self.broker_symbol(canonical)
         if not mt5.symbol_select(symbol, True):
@@ -612,35 +701,62 @@ class SecurePod:
             "symbol": symbol,
             "volume": self.normalise_volume(info, float(payload["lotPerLayer"])),
             "type": order_type,
-            "price": tick.ask if side == "BUY" else tick.bid,
-            "sl": float(payload["sl"]),
+            "price": round(tick.ask if side == "BUY" else tick.bid, int(info.digits)),
+            "sl": round(float(payload["sl"]), int(info.digits)),
             "tp": 0.0,
             "deviation": 30,
             "magic": MAGIC,
             "comment": f"ZenCore:{str(payload.get('signalReceivedAt', ''))[-8:]}:L{layer}",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        checked = mt5.order_check(request)
-        if checked is None or checked.retcode not in (0, mt5.TRADE_RETCODE_DONE):
-            raise RuntimeError(f"OrderCheck failed for layer {layer}: {getattr(checked, 'comment', mt5.last_error())}")
-        result = mt5.order_send(request)
-        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            raise RuntimeError(f"OrderSend failed for layer {layer}: {getattr(result, 'comment', mt5.last_error())}")
+        result = self.send_checked_deal(info, request)
         return str(result.order or result.deal)
 
-    def place_setup(self, payload: dict[str, Any]) -> list[str]:
+    def validate_setup_payload(self, payload: dict[str, Any]) -> None:
+        if payload.get("strategy") != "NORMAL_3M_SOP_V32" or payload.get("schemaVersion") != "32.3-EXIT-STEPLOCK":
+            raise RuntimeError("Unknown strategy or exit schema")
+        symbol = str(payload.get("symbol", "")).upper()
+        side = str(payload.get("side", "")).upper()
+        if symbol not in DEMO_EXECUTION_MARKETS:
+            raise RuntimeError("This DEMO execution release only permits XAUUSD")
+        if side not in {"BUY", "SELL"}:
+            raise RuntimeError("Setup side must be BUY or SELL")
+        try:
+            layers = int(payload.get("layers"))
+            lot = float(payload.get("lotPerLayer"))
+            values = [float(payload.get(key)) for key in ("entry", "sl", "tp1", "tp2", "tp3")]
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("Setup price, lot or layer value is invalid") from exc
+        if not 1 <= layers <= 10 or lot <= 0 or not all(math.isfinite(value) and value > 0 for value in values):
+            raise RuntimeError("Setup price, lot or layer range is invalid")
+        entry, sl, tp1, tp2, tp3 = values
+        levels_valid = sl < entry < tp1 < tp2 < tp3 if side == "BUY" else sl > entry > tp1 > tp2 > tp3
+        if not levels_valid:
+            raise RuntimeError("Setup SL/TP levels do not match the trade side")
+        signal_time = int(payload.get("signalReceivedAt") or 0)
+        age = int(time.time() * 1000) - signal_time
+        if signal_time <= 0 or age < -60_000 or age > 10 * 60 * 1000:
+            raise RuntimeError("Setup signal is outside the DEMO execution freshness window")
+
+    def place_setup(self, payload: dict[str, Any], command_id: str) -> list[str]:
         if not self.config.demo_execution_enabled:
             raise RuntimeError("DEMO execution lock is active")
         if not self.ledger.armed():
             raise RuntimeError("Auto Trade is not armed")
-        if payload.get("strategy") != "NORMAL_3M_SOP_V32" or payload.get("schemaVersion") != "32.3-EXIT-STEPLOCK":
-            raise RuntimeError("Unknown strategy or exit schema")
-        orders = []
-        for index in range(int(payload["layers"])):
-            orders.append(self.send_market_layer(payload, index + 1))
-        self.ledger.save_plan(payload["symbol"], {
-            "symbol": payload["symbol"],
+        self.assert_demo_terminal(require_execution=True)
+        self.validate_setup_payload(payload)
+        canonical = payload["symbol"]
+        if any(self.canonical_symbol(position.symbol) == canonical for position in self.zencore_positions()):
+            raise RuntimeError("An open ZenCore position already exists for this symbol")
+        info = mt5.symbol_info(self.broker_symbol(canonical))
+        if info is None:
+            raise RuntimeError(f"Broker symbol not found for {canonical}")
+        requested_lot = float(payload["lotPerLayer"])
+        broker_lot = self.normalise_volume(info, requested_lot)
+        if abs(broker_lot - requested_lot) > 1e-9:
+            raise RuntimeError("Lot per layer does not match the broker volume step")
+        self.ledger.save_plan(canonical, {
+            "symbol": canonical,
             "side": payload["side"],
             "entry": float(payload["entry"]),
             "initialSl": float(payload["sl"]),
@@ -648,63 +764,155 @@ class SecurePod:
             "tp2": float(payload["tp2"]),
             "tp3": float(payload["tp3"]),
             "lockStage": 0,
+            "partialCloseDone": False,
+            "commandId": command_id,
         })
+        orders = []
+        try:
+            for index in range(int(payload["layers"])):
+                orders.append(self.send_market_layer(payload, index + 1))
+        except Exception as exc:
+            raise RuntimeError(
+                f"Layer execution stopped after {len(orders)}; any filled layer keeps its broker SL: {exc}"
+            ) from exc
+        positions = [
+            position for position in self.zencore_positions()
+            if self.canonical_symbol(position.symbol) == canonical
+        ]
+        if positions:
+            total_volume = sum(float(position.volume) for position in positions)
+            plan = self.ledger.plan(canonical) or {}
+            plan["entry"] = sum(
+                float(position.price_open) * float(position.volume) for position in positions
+            ) / total_volume
+            self.ledger.save_plan(canonical, plan)
         return orders
 
-    def modify_sl(self, canonical: str, active_sl: float) -> int:
+    def modify_sl(self, canonical: str, active_sl: float | None, use_position_entry: bool = False) -> int:
+        self.assert_demo_terminal(require_execution=True)
         changed = 0
         for position in self.zencore_positions():
             if self.canonical_symbol(position.symbol) != canonical:
                 continue
-            if position.type == mt5.POSITION_TYPE_BUY and position.sl and position.sl >= active_sl:
+            info = mt5.symbol_info(position.symbol)
+            if info is None:
+                raise RuntimeError(f"Broker symbol unavailable for {canonical}")
+            target_sl = float(position.price_open) if use_position_entry else float(active_sl)
+            target_sl = round(target_sl, int(info.digits))
+            if position.type == mt5.POSITION_TYPE_BUY and position.sl and position.sl >= target_sl:
                 continue
-            if position.type == mt5.POSITION_TYPE_SELL and position.sl and position.sl <= active_sl:
+            if position.type == mt5.POSITION_TYPE_SELL and position.sl and position.sl <= target_sl:
                 continue
             result = mt5.order_send({
                 "action": mt5.TRADE_ACTION_SLTP,
                 "position": position.ticket,
                 "symbol": position.symbol,
-                "sl": float(active_sl),
+                "sl": target_sl,
                 "tp": position.tp,
                 "magic": MAGIC,
             })
-            if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            if result is None or int(result.retcode) not in self.success_retcodes():
                 raise RuntimeError(f"SL modification failed for {position.ticket}")
             changed += 1
         return changed
 
-    def close_position(self, position: Any, percent: float) -> str:
+    def close_position(self, position: Any, volume: float) -> str:
+        self.assert_demo_terminal(require_execution=True)
         info = mt5.symbol_info(position.symbol)
         tick = mt5.symbol_info_tick(position.symbol)
         if info is None or tick is None:
             raise RuntimeError(f"No live tick for {position.symbol}")
-        requested = position.volume * percent / 100.0
-        volume = position.volume if percent >= 100 else self.normalise_volume(info, requested)
+        close_volume = min(float(position.volume), float(volume))
+        close_volume = round(close_volume, self.volume_digits(float(info.volume_step)))
+        if close_volume < float(info.volume_min) - 1e-9:
+            raise RuntimeError(f"Close volume is below broker minimum for {position.symbol}")
         order_type = mt5.ORDER_TYPE_SELL if position.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
-        result = mt5.order_send({
+        request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "position": position.ticket,
             "symbol": position.symbol,
-            "volume": min(position.volume, volume),
+            "volume": close_volume,
             "type": order_type,
-            "price": tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask,
+            "price": round(
+                tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask,
+                int(info.digits),
+            ),
             "deviation": 40,
             "magic": MAGIC,
             "comment": "ZenCore:managed-exit",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
-        })
-        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            raise RuntimeError(f"Close failed for {position.ticket}: {getattr(result, 'comment', mt5.last_error())}")
+        }
+        result = self.send_checked_deal(info, request)
         return str(result.order or result.deal)
 
+    def close_symbol_percent(self, canonical: str, percent: float) -> list[str]:
+        positions = sorted(
+            [
+                position for position in self.zencore_positions()
+                if self.canonical_symbol(position.symbol) == canonical
+            ],
+            key=lambda position: int(position.ticket),
+        )
+        if not positions:
+            return []
+        if percent >= 100:
+            return [self.close_position(position, float(position.volume)) for position in positions]
+        info = mt5.symbol_info(positions[0].symbol)
+        if info is None:
+            raise RuntimeError(f"Broker symbol unavailable for {canonical}")
+        total_volume = sum(float(position.volume) for position in positions)
+        minimum = float(info.volume_min)
+        maximum_partial = total_volume - minimum
+        if maximum_partial < minimum - 1e-9:
+            raise RuntimeError("Broker minimum lot does not permit a 50% partial close")
+        step = float(info.volume_step)
+        target = math.ceil((total_volume * percent / 100.0) / step - 1e-9) * step
+        target = min(target, maximum_partial)
+        target = round(target, self.volume_digits(float(info.volume_step)))
+        closed: list[str] = []
+        remaining = target
+        for position in positions:
+            if remaining <= 1e-9:
+                break
+            position_volume = float(position.volume)
+            if remaining >= position_volume - 1e-9:
+                close_volume = position_volume
+            else:
+                max_from_position = position_volume - minimum
+                if max_from_position < minimum - 1e-9:
+                    continue
+                close_volume = min(
+                    self.normalise_volume(info, remaining, "nearest"),
+                    max_from_position,
+                )
+            if close_volume < minimum - 1e-9:
+                continue
+            closed.append(self.close_position(position, close_volume))
+            remaining = round(
+                remaining - close_volume,
+                self.volume_digits(float(info.volume_step)),
+            )
+        if remaining > 1e-9:
+            raise RuntimeError("Unable to complete broker-rounded 50% partial close")
+        return closed
+
     def manage_position(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("strategy") != "NORMAL_3M_SOP_V32" or payload.get("schemaVersion") != "32.3-EXIT-STEPLOCK":
+            raise RuntimeError("Unknown management strategy or exit schema")
+        self.assert_demo_terminal(require_execution=True)
         canonical = payload["symbol"]
+        if canonical not in DEMO_EXECUTION_MARKETS:
+            raise RuntimeError("This DEMO execution release only permits XAUUSD")
         changed_sl = 0
         closed: list[str] = []
         for action in payload.get("actions", []):
             if action["type"].startswith("MOVE_SL_"):
-                changed_sl += self.modify_sl(canonical, float(action["activeSl"]))
+                use_entry = action["type"] == "MOVE_SL_ENTRY"
+                changed_sl += self.modify_sl(
+                    canonical,
+                    None if use_entry else float(action["activeSl"]),
+                    use_position_entry=use_entry,
+                )
                 plan = self.ledger.plan(canonical)
                 if plan:
                     plan["lockStage"] = max(int(plan.get("lockStage", 0)), {
@@ -712,15 +920,25 @@ class SecurePod:
                     }.get(action["type"], 0))
                     self.ledger.save_plan(canonical, plan)
             elif action["type"] == "CLOSE_PERCENT":
-                for position in list(self.zencore_positions()):
-                    if self.canonical_symbol(position.symbol) == canonical:
-                        closed.append(self.close_position(position, float(action["percent"])))
+                percent = float(action["percent"])
+                plan = self.ledger.plan(canonical)
+                if percent < 100 and not plan:
+                    raise RuntimeError("Position plan is missing; refusing repeated partial close")
+                if percent < 100 and plan and plan.get("partialCloseDone"):
+                    continue
+                closed.extend(self.close_symbol_percent(canonical, percent))
+                if percent < 100 and plan:
+                    plan["partialCloseDone"] = True
+                    self.ledger.save_plan(canonical, plan)
         if not any(self.canonical_symbol(item.symbol) == canonical for item in self.zencore_positions()):
             self.ledger.delete_plan(canonical)
         return {"changedSl": changed_sl, "closedOrders": closed}
 
     def emergency_close_all(self) -> list[str]:
-        closed = [self.close_position(position, 100) for position in list(self.zencore_positions())]
+        closed = [
+            self.close_position(position, float(position.volume))
+            for position in list(self.zencore_positions())
+        ]
         for plan in self.ledger.plans():
             self.ledger.delete_plan(plan["symbol"])
         return closed
@@ -747,9 +965,9 @@ class SecurePod:
             elif reached(float(plan["tp2"])):
                 target_stage, target_sl = 2, float(plan["tp1"])
             elif reached(float(plan["tp1"])):
-                target_stage, target_sl = 1, float(plan["entry"])
-            if target_stage > stage and target_sl is not None:
-                self.modify_sl(canonical, target_sl)
+                target_stage, target_sl = 1, None
+            if target_stage > stage:
+                self.modify_sl(canonical, target_sl, use_position_entry=target_stage == 1)
                 plan["lockStage"] = target_stage
                 self.ledger.save_plan(canonical, plan)
 
@@ -758,6 +976,13 @@ class SecurePod:
         payload = envelope.get("payload", {})
         try:
             if command_type == "SYSTEM_ON":
+                if not self.config.demo_execution_enabled:
+                    raise RuntimeError("DEMO execution lock is active")
+                if payload.get("mode") != "DEMO" or payload.get("strategy") != "NORMAL_3M_SOP_V32" or payload.get("exitSchema") != "32.3-EXIT-STEPLOCK":
+                    raise RuntimeError("SYSTEM_ON policy does not match this DEMO release")
+                settings = payload.get("settings", {})
+                if any(symbol not in DEMO_EXECUTION_MARKETS for symbol in settings.get("symbols", [])):
+                    raise RuntimeError("SYSTEM_ON includes a symbol outside the XAUUSD Demo rollout")
                 self.initialise_terminal()
                 self.ledger.set_armed(True)
                 return "EXECUTED", {"code": "ARMED", "message": "DEMO Auto Trade armed"}
@@ -769,7 +994,7 @@ class SecurePod:
                 closed = self.emergency_close_all()
                 return "EXECUTED", {"code": "CLOSED_ALL", "message": f"Closed {len(closed)} positions"}
             if command_type == "PLACE_SETUP":
-                orders = self.place_setup(payload)
+                orders = self.place_setup(payload, str(envelope["id"]))
                 return "EXECUTED", {"code": "ORDERS_PLACED", "message": f"Placed {len(orders)} layers", "brokerOrderId": orders[-1] if orders else ""}
             if command_type == "MANAGE_POSITION":
                 result = self.manage_position(payload)
@@ -782,10 +1007,20 @@ class SecurePod:
         command_id = str(command.get("id", ""))
         previous = self.ledger.previous_result(command_id)
         if previous:
+            if previous[0] == "IN_PROGRESS":
+                recovery = {
+                    "code": "REPLAY_BLOCKED",
+                    "message": "A prior execution was interrupted; duplicate broker action was blocked",
+                }
+                self.ledger.save_result(command_id, "FAILED", recovery)
+                self.control.acknowledge(command_id, "FAILED", recovery)
+                return
             self.control.acknowledge(command_id, previous[0], previous[1])
             return
         try:
             envelope = self.verify_command(command)
+            if not self.ledger.claim_command(command_id):
+                raise RuntimeError("Command replay was blocked by the local ledger")
             status, result = self.execute(envelope)
         except Exception as exc:
             status, result = "REJECTED", {"code": "SECURITY_REJECTED", "message": str(exc)[:180]}
@@ -801,7 +1036,9 @@ class SecurePod:
         while True:
             try:
                 self.local_step_lock()
-                self.control.heartbeat(self.heartbeat_payload())
+                heartbeat = self.control.heartbeat(self.heartbeat_payload())
+                if str(heartbeat.get("desiredState", "STOPPED")).upper() != "ON":
+                    self.ledger.set_armed(False)
                 command = self.control.next_command()
                 if command:
                     self.process_command(command)
@@ -818,11 +1055,58 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Exchange a one-time pairing code, protect the pod identity with DPAPI, then exit",
     )
+    parser.add_argument(
+        "--terminal-preflight",
+        action="store_true",
+        help="Verify the local MT5 DEMO terminal without reading or transmitting broker credentials",
+    )
     return parser.parse_args(argv)
+
+
+def run_terminal_preflight(config_path: Path | None) -> int:
+    if config_path is None:
+        raise SystemExit("--terminal-preflight requires --config")
+    file_config = Config._load_file(config_path)
+    terminal_path = str(file_config.get("mt5TerminalPath") or "")
+    symbol_map = file_config.get("symbolMap") if isinstance(file_config.get("symbolMap"), dict) else {}
+    if not terminal_path or not mt5.initialize(path=terminal_path):
+        print(json.dumps({"ok": False, "code": "MT5_INITIALIZE_FAILED"}, separators=(",", ":")))
+        return 1
+    try:
+        account = mt5.account_info()
+        terminal = mt5.terminal_info()
+        if account is None or terminal is None:
+            print(json.dumps({"ok": False, "code": "MT5_STATE_UNAVAILABLE"}, separators=(",", ":")))
+            return 1
+        mapped_xau = str(symbol_map.get("XAUUSD") or "XAUUSD")
+        xau_ready = mt5.symbol_info(mapped_xau) is not None or bool(mt5.symbols_get(group="*XAUUSD*"))
+        demo = account.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
+        server_allowed = SecurePod.server_id(account.server) == INTERSTELLAR_DEMO_SERVER_ID
+        trading_allowed = bool(
+            account.trade_allowed and getattr(account, "trade_expert", False)
+            and terminal.trade_allowed and not terminal.tradeapi_disabled
+        )
+        ready = demo and server_allowed and trading_allowed and xau_ready
+        print(json.dumps({
+            "ok": ready,
+            "tradeMode": "DEMO" if demo else "REAL",
+            "serverAllowed": server_allowed,
+            "tradingAllowed": trading_allowed,
+            "xauusdReady": xau_ready,
+            "accountMask": SecurePod.mask(account.login, 4),
+            "serverMask": SecurePod.mask(account.server, 8),
+            "terminalBuild": str(terminal.build),
+            "connectorVersion": CONNECTOR_VERSION,
+        }, separators=(",", ":")))
+        return 0 if ready else 1
+    finally:
+        mt5.shutdown()
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_arguments(argv)
+    if arguments.terminal_preflight:
+        return run_terminal_preflight(arguments.config)
     if arguments.pair_only:
         pairing_code = getpass.getpass("One-time ZenCore pairing code: ")
         try:

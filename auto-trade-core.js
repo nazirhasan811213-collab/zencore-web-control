@@ -234,7 +234,7 @@
     };
   }
 
-  function podConnectionState(pod, now = Date.now()) {
+  function podConnectionState(pod, now = Date.now(), requirements = {}) {
     if (!pod) return { state: 'UNPROVISIONED', label: 'SECURE POD BELUM DISEDIAKAN', online: false, connected: false, ready: false };
     const lastSeen = number(pod.lastSeenAt);
     const online = lastSeen !== null && now - lastSeen <= 30_000;
@@ -247,6 +247,27 @@
       return {
         state: 'CONNECTED_LOCKED',
         label: 'CONNECTED • EXECUTION LOCKED',
+        online: true,
+        connected: true,
+        ready: false
+      };
+    }
+    const requiredConnectorVersion = String(requirements.connectorVersion || '');
+    if (requiredConnectorVersion && String(pod.connectorVersion || '') !== requiredConnectorVersion) {
+      return {
+        state: 'UPDATE_REQUIRED',
+        label: 'SECURE POD PERLU DIKEMAS KINI',
+        online: true,
+        connected: true,
+        ready: false
+      };
+    }
+    const allowedOwnershipModes = Array.isArray(requirements.ownershipModes)
+      ? requirements.ownershipModes : [];
+    if (allowedOwnershipModes.length && !allowedOwnershipModes.includes(String(pod.ownershipMode || ''))) {
+      return {
+        state: 'HOST_BLOCKED',
+        label: 'HOST EXECUTION TIDAK DIBENARKAN',
         online: true,
         connected: true,
         ready: false

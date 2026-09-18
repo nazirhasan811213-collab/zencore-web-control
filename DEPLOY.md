@@ -44,13 +44,15 @@ In `ZenCore_AI_Dashboard_Pro_WebBridge.pine`:
 ## Important for live trading
 TradingView webhook receivers need to respond quickly. An always-on web service is safer than a service that sleeps after inactivity.
 
-## Auto Trade connection-only rollout
+## Auto Trade XAUUSD Demo rollout
 
 After the account layer and PostgreSQL are ready, the MT5 pairing/monitoring control plane requires:
 
 - `ZENCORE_AUTOTRADE_ENABLED=true`
-- `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false`
+- `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` during installation, pairing and preflight
+- `ZENCORE_AUTOTRADE_DEMO_SYMBOLS=XAUUSD`
+- `ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION=1.4.0-demo-execution`
 - `ZENCORE_COMMAND_SIGNING_KEY` with at least 32 random bytes
 - `ZENCORE_POD_PROVISIONING_SECRET` with at least 32 random bytes
 
-Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` during Windows-PC pairing and heartbeat tests. Broker login, password and full server must never be configured on Render.
+Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` during Windows-PC installation, pairing and preflight. After the reviewed worker reports the correct version and the local terminal preflight passes, change only this flag to `true` and perform the XAUUSD Demo smoke test. Broker login, password and full server must never be configured on Render.

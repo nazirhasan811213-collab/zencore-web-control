@@ -1,4 +1,4 @@
-# ZenCore MT5 Secure Pod — DEMO foundation
+# ZenCore MT5 Secure Pod — XAUUSD DEMO execution
 
 This worker runs beside MetaTrader 5 on a trader-owned Windows host. The first connection rollout supports a secured Windows PC; an isolated Azure Confidential VM remains available for the stronger cloud profile. The worker is not deployed on Render and it does not accept broker credentials from the ZenCore control plane.
 
@@ -14,7 +14,7 @@ This worker runs beside MetaTrader 5 on a trader-owned Windows host. The first c
 - A compromised pod cannot derive the control-plane master key or another trader's per-pod key.
 - The worker refuses non-DEMO accounts.
 - Command IDs are stored in a local SQLite ledger so a retry cannot place the same setup twice.
-- The worker starts fail-closed. This release requires both a later reviewed build unlock and an explicit local config change before even DEMO order execution can run.
+- The worker starts fail-closed. DEMO execution requires the reviewed `1.4.0-demo-execution` build, an explicit local switch and the independent server rollout gate.
 
 ## Choose the trader-owned Windows host
 
@@ -47,7 +47,7 @@ Both profiles write only a non-secret config, create a pinned Python environment
 
 The installer creates a full 11-market map. The shortened map above only illustrates the field shape. Broker login, password and full server are not valid config fields. Subsequent starts load the DPAPI-protected pod identity from `%PROGRAMDATA%\ZenCoreSecurePod\machine-credentials.dpapi`.
 
-`demoExecutionEnabled` must remain `false` during connection and heartbeat testing. The worker reports this lock to the control plane, which keeps the website ON button disabled. This release also compiles in `DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False`, so changing config or environment alone cannot place an order.
+`demoExecutionEnabled` remains `false` unless the installer is run with `-EnableDemoExecution`. Even when it is true, the worker only accepts XAUUSD on `InterStellarFinancial-Demo`; the website ON button also remains disabled until the independent server gate is enabled.
 
 ## Command behavior
 

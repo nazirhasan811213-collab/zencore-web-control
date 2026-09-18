@@ -20,6 +20,11 @@ const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
 const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
+const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS || 'XAUUSD')
+  .split(',').map(value => value.trim()).filter(Boolean);
+const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
+  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '1.4.0-demo-execution'
+);
 
 process.env.PORT = String(V17_PORT);
 require('./server-v17.js');
@@ -71,7 +76,9 @@ if (AUTH_ENABLED) {
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         commandSigningKey: COMMAND_SIGNING_KEY,
-        allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED
+        allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
+        allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
+        requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION
       });
       autoTradeState.ready = true;
       console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'}`);

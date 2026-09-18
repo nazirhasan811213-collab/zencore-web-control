@@ -12,6 +12,7 @@ async function setup() {
     store,
     commandSigningKey: SIGNING_KEY,
     allowDemoExecution: true,
+    allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
     now: () => currentTime
   });
   const userId = '11111111-1111-4111-8111-111111111111';
@@ -25,7 +26,7 @@ async function setup() {
     accountTradeAllowed: true,
     expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '1.0.0',
+    connectorVersion: '1.4.0-demo-execution',
     terminalBuild: '5000',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
@@ -266,6 +267,92 @@ test('high-risk READY signal is queued once because risk is warning-only', async
   assert.equal(setupCommand.command.type, 'PLACE_SETUP');
   assert.equal(setupCommand.command.payload.risk.level, 'HIGH');
   assert.equal(setupCommand.command.payload.risk.blocksOrder, false);
+});
+
+test('reviewed connector version is mandatory before Demo execution can arm', async () => {
+  const { service, userId, token } = await setup();
+  await service.heartbeat(token, {
+    accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+    tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: true,
+    connectorVersion: '1.3.0-demo', positions: []
+  });
+  await service.saveSettings(userId, {
+    capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+    symbols: ['XAUUSD'], riskAcknowledged: true
+  });
+  const state = await service.state(userId);
+  assert.equal(state.connection.state, 'UPDATE_REQUIRED');
+  assert.equal(state.control.canTurnOn, false);
+  await assert.rejects(
+    () => service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' }),
+    error => error.code === 'POD_NOT_READY'
+  );
+});
+
+test('first Demo execution rollout blocks unvalidated symbols as a technical safeguard', async () => {
+  const { service, userId } = await setup();
+  await service.saveSettings(userId, {
+    capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+    symbols: ['EURUSD'], riskAcknowledged: true
+  });
+  await assert.rejects(
+    () => service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' }),
+    error => error.code === 'DEMO_SYMBOL_NOT_VALIDATED'
+  );
+});
+
+test('STOP cancels queued entries and is delivered before any broker setup', async () => {
+  const { service, userId, token } = await setup();
+  await service.saveSettings(userId, {
+    capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+    symbols: ['XAUUSD'], riskAcknowledged: true
+  });
+  await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
+  let command = await service.nextCommand(token);
+  await service.acknowledgeCommand(token, command.command.id, { status: 'EXECUTED' });
+  await service.dispatchMarkets([{
+    symbol: 'XAUUSD', receivedAt: 1_790_000_001_000,
+    strategyNormal: {
+      state: 'READY', side: 'BUY',
+      plan: { entry: 2500, sl: 2495, tp1: 2505, tp2: 2510, tp3: 2515 }
+    }
+  }]);
+  await service.stop(userId);
+  command = await service.nextCommand(token);
+  assert.equal(command.command.type, 'SYSTEM_STOP');
+  await service.acknowledgeCommand(token, command.command.id, { status: 'EXECUTED' });
+  const afterStop = await service.nextCommand(token);
+  assert.equal(afterStop.command, null);
+});
+
+test('an open symbol position blocks a second setup command', async () => {
+  const { service, userId, token } = await setup();
+  await service.saveSettings(userId, {
+    capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+    symbols: ['XAUUSD'], riskAcknowledged: true
+  });
+  await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
+  const onCommand = await service.nextCommand(token);
+  await service.acknowledgeCommand(token, onCommand.command.id, { status: 'EXECUTED' });
+  await service.heartbeat(token, {
+    accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+    tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: true,
+    connectorVersion: '1.4.0-demo-execution',
+    positions: [{
+      ticket: '900010', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
+      entry: 2500, currentPrice: 2501, activeSl: 2495
+    }]
+  });
+  const result = await service.dispatchMarkets([{
+    symbol: 'XAUUSD', receivedAt: 1_790_000_003_000,
+    strategyNormal: {
+      state: 'READY', side: 'BUY',
+      plan: { entry: 2501, sl: 2496, tp1: 2506, tp2: 2511, tp3: 2516 }
+    }
+  }]);
+  assert.deepEqual(result, { queued: 0 });
 });
 
 test('emergency close requires step-up and exact phrase', async () => {
