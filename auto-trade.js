@@ -21,6 +21,10 @@
   let settingsDirty = false;
   let toastTimer = null;
   let lastPairingCode = '';
+  let credentialEncryption = null;
+  let currentRecommendation = null;
+  let workspaceOptedIn = false;
+  try { workspaceOptedIn = sessionStorage.getItem('zencore_auto_trade_open') === '1'; } catch (_) {}
 
   function goToLogin() { window.location.replace('/login'); }
 
@@ -35,7 +39,7 @@
         ...(options.headers || {})
       }
     });
-    if (response.status === 401 && !path.includes('emergency-close')) return goToLogin();
+    if (response.status === 401 && !path.includes('emergency-close') && !path.includes('hosted-account')) return goToLogin();
     let body = {};
     try { body = await response.json(); } catch (_) {}
     if (!response.ok) {
@@ -89,7 +93,7 @@
   function ownershipLabel(mode) {
     if (mode === 'TRADER_OWNED_AZURE') return 'AZURE TRADER';
     if (mode === 'TRADER_OWNED_WINDOWS_PC') return 'WINDOWS PC';
-    return mode ? 'INTERNAL DEMO' : 'WINDOWS PC';
+    return mode ? 'INTERNAL DEMO' : 'ZENCORE MANAGED';
   }
 
   function ownershipDescription(mode) {
@@ -101,18 +105,22 @@
   function renderConnection(state) {
     const connection = state.connection || {};
     const pod = state.pod;
+    const hosted = state.hostedAccount;
+    const identity = hosted || pod;
     const badge = byId('connectionBadge');
     if (badge) {
       badge.textContent = connection.state || 'OFFLINE';
       badge.className = `mini-status ${connection.ready ? 'ready' : connection.state === 'CONNECTED_LOCKED' ? 'locked' : connection.state === 'BLOCKED_REAL' ? 'blocked' : 'offline'}`;
     }
     setText('summaryPod', connection.ready ? 'READY' : connection.label || 'BELUM CONNECT');
-    setText('summaryHeartbeat', pod?.lastSeenAt ? `Heartbeat ${timeText(pod.lastSeenAt)}` : 'Tiada heartbeat');
-    setText('accountMask', pod?.accountMask || 'Belum dipautkan');
-    setText('serverMask', pod?.serverMask || '—');
-    setText('brokerMask', pod?.brokerMask || '—');
-    setText('tradeMode', pod?.tradeMode || 'DEMO');
-    setText('podOwner', ownershipLabel(pod?.ownershipMode));
+    setText('summaryHeartbeat', pod?.lastSeenAt
+      ? `Heartbeat ${timeText(pod.lastSeenAt)}`
+      : hosted ? String(hosted.status || 'PENDING').replaceAll('_', ' ') : 'Tiada heartbeat');
+    setText('accountMask', identity?.accountMask || 'Belum dipautkan');
+    setText('serverMask', identity?.serverMask || '—');
+    setText('brokerMask', identity?.brokerMask || '—');
+    setText('tradeMode', identity?.tradeMode || 'DEMO');
+    setText('podOwner', hosted ? 'ZENCORE MANAGED' : ownershipLabel(pod?.ownershipMode));
     const health = (id, enabled) => {
       const el = byId(id);
       if (!el) return;
@@ -125,15 +133,26 @@
     const waitingPair = state.pairing?.status === 'WAITING_FOR_SECURE_POD';
     const pairedHost = ownershipDescription(pod?.ownershipMode);
     const waitingHost = ownershipDescription(state.pairing?.ownershipMode);
-    setText('podNotice', pod
+    setText('podNotice', hosted
+      ? `${state.hostedMt5?.message || 'Encrypted account envelope saved.'} Status: ${String(hosted.status || 'PENDING').replaceAll('_', ' ')}. Execution kekal dikunci sehingga worker Demo mengesahkan akaun.`
+      : pod
       ? `${connection.label}. ${pairedHost} • connector ${pod.connectorVersion || '—'} • terminal build ${pod.terminalBuild || '—'}.${pod.demoExecutionUnlocked ? '' : ' Build execution masih dikunci; pairing dan monitoring sahaja.'}`
       : waitingPair
         ? `Kod pairing aktif sehingga ${timeText(state.pairing.expiresAt)}. Jalankan pairing hanya dari ${waitingHost}.`
-        : 'Secure Pod belum disediakan. Pairing dibuat dari PC Windows sendiri atau Azure milik trader—bukan melalui password form web.');
+        : state.hostedMt5?.message || 'Akaun MT5 belum disambungkan.');
     const pairingActions = byId('pairingActions');
-    if (pairingActions) pairingActions.classList.toggle('hidden', !!pod);
+    if (pairingActions) pairingActions.classList.toggle('hidden', !!pod && !hosted);
+    const connectButton = byId('connectMt5Button');
+    if (connectButton) connectButton.textContent = hosted ? 'KEMAS KINI MT5' : 'SAMBUNG MT5';
     const pairButton = byId('pairPodButton');
     if (pairButton) pairButton.textContent = waitingPair ? 'JANA SEMULA' : 'JANA KOD PAIRING';
+  }
+
+  function renderVisibility(state) {
+    const configured = state.ui?.autoTradeConfigured === true;
+    const showWorkspace = configured || workspaceOptedIn;
+    byId('autoTradeGate')?.classList.toggle('hidden', showWorkspace);
+    byId('autoTradeWorkspace')?.classList.toggle('hidden', !showWorkspace);
   }
 
   function renderMaster(state) {
@@ -244,6 +263,7 @@
       SYSTEM_STOPPED: 'Sistem dihentikan.',
       EMERGENCY_CLOSE_REQUESTED: 'Emergency Close All dihantar ke MT5.',
       SETUP_QUEUED: `${detail.symbol || 'Pair'} ${detail.side || ''} dihantar • ${detail.totalLot || '—'} lot • risk ${detail.riskLevel || 'PENDING'}.`,
+      HOSTED_MT5_ENVELOPE_SAVED: `Credential envelope disimpan untuk ${detail.accountMask || 'akaun MT5'} • plaintext tidak disimpan.`,
       COMMAND_ACKNOWLEDGED: `${detail.commandType || 'Command'}: ${detail.status || 'ACK'}.`
     };
     return descriptions[item.type] || String(item.type || 'Aktiviti').replaceAll('_', ' ');
@@ -262,6 +282,7 @@
 
   function render(state) {
     currentState = state;
+    renderVisibility(state);
     renderConnection(state);
     renderMaster(state);
     renderSettings(state);
@@ -279,6 +300,7 @@
       control: { desiredState: 'STOPPED', effectiveState: 'ERROR', canEnter: false, canTurnOn: false, lastError: message },
       connection: { state: 'UNAVAILABLE', label: 'CONTROL PLANE OFFLINE', ready: false },
       pod: null, settings: null, positions: [], audit: [],
+      hostedAccount: null, hostedMt5: { available: false }, ui: { autoTradeConfigured: false },
       summary: { openPositions: 0, floatingProfitUsd: 0, totalVolume: 0 },
       generatedAt: Date.now()
     };
@@ -338,6 +360,97 @@
     setText('riskEntry', price(plan?.entry, symbol));
     setText('riskSl', price(plan?.sl, symbol));
     setText('riskMessage', risk.message);
+    const recommendation = Core.recommendPositionSizes({
+      capitalUsd: input.capitalUsd,
+      preferredLayers: input.layers,
+      entry: plan?.entry,
+      sl: plan?.sl,
+      tickSize: spec?.tickSize,
+      tickValue: spec?.tickValue,
+      volumeMin: spec?.volumeMin,
+      volumeMax: spec?.volumeMax,
+      volumeStep: spec?.volumeStep,
+      targetRiskPercent: 1
+    });
+    currentRecommendation = recommendation.recommended;
+    const apply = byId('applyRecommendationButton');
+    if (currentRecommendation) {
+      setText('recommendedSize', `${currentRecommendation.layers} LAYER × ${currentRecommendation.lotPerLayer} LOT`);
+      setText('recommendationMessage', `${recommendation.message} Anggaran ${currentRecommendation.estimatedRiskPercent.toFixed(2)}% / ${money(currentRecommendation.estimatedRiskUsd)}.`);
+      if (apply) apply.disabled = false;
+    } else {
+      setText('recommendedSize', 'BELUM TERSEDIA');
+      setText('recommendationMessage', recommendation.message);
+      if (apply) apply.disabled = true;
+    }
+  }
+
+  function bytesToBase64url(bytes) {
+    let binary = '';
+    for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(String(value || '').replace(/\s/g, ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function encryptMt5Credential(value, config) {
+    if (!window.crypto?.subtle) throw new Error('Browser ini tidak menyokong WebCrypto yang diperlukan.');
+    const publicKey = await crypto.subtle.importKey(
+      'spki',
+      base64ToBytes(config.publicKeySpki),
+      { name: 'RSA-OAEP', hash: 'SHA-256' },
+      false,
+      ['wrapKey']
+    );
+    const aesKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(value));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext);
+    plaintext.fill(0);
+    const wrappedKey = await crypto.subtle.wrapKey('raw', aesKey, publicKey, { name: 'RSA-OAEP' });
+    return {
+      version: 1,
+      algorithm: 'RSA-OAEP-256+A256GCM',
+      keyId: config.keyId,
+      wrappedKey: bytesToBase64url(wrappedKey),
+      iv: bytesToBase64url(iv),
+      ciphertext: bytesToBase64url(ciphertext)
+    };
+  }
+
+  function masked(value, tailLength, fallback) {
+    const safe = String(value || '').replace(/[^A-Za-z0-9._-]/g, '');
+    const tail = safe.slice(-tailLength);
+    return tail.length >= 2 ? `****${tail}` : fallback;
+  }
+
+  function clearMt5Fields() {
+    ['mt5LoginId', 'mt5Password', 'mt5Server', 'mt5ZenCorePassword', 'mt5ConnectConfirmation']
+      .forEach(id => { if (byId(id)) byId(id).value = ''; });
+  }
+
+  async function openMt5ConnectDialog() {
+    clearMt5Fields();
+    setText('mt5ConnectError', '');
+    setText('mt5EncryptionNotice', 'Memuatkan public encryption key…');
+    const button = byId('confirmMt5ConnectButton');
+    if (button) button.disabled = true;
+    byId('mt5ConnectDialog')?.showModal();
+    try {
+      const result = await api('/api/auto-trade/credential-key');
+      credentialEncryption = result.encryption;
+      setText('mt5EncryptionNotice', `Encryption ready • ${credentialEncryption.algorithm} • key ${credentialEncryption.keyId}. Plaintext tidak dihantar ke web server.`);
+      if (button) button.disabled = false;
+    } catch (error) {
+      credentialEncryption = null;
+      setText('mt5ConnectError', error.message);
+      setText('mt5EncryptionNotice', 'Hosted MT5 belum boleh menerima credential. Execution kekal dikunci.');
+    }
   }
 
   function initialiseSymbols() {
@@ -352,6 +465,93 @@
     }));
     riskSelect.addEventListener('change', updateRiskPreview);
   }
+
+  byId('startAutoTradeButton')?.addEventListener('click', () => {
+    workspaceOptedIn = true;
+    try { sessionStorage.setItem('zencore_auto_trade_open', '1'); } catch (_) {}
+    renderVisibility(currentState || { ui: {} });
+    if (!currentState?.hostedAccount && !currentState?.pod) openMt5ConnectDialog();
+  });
+
+  byId('connectMt5Button')?.addEventListener('click', openMt5ConnectDialog);
+
+  byId('mt5ConnectDialog')?.addEventListener('close', () => {
+    clearMt5Fields();
+    credentialEncryption = null;
+  });
+
+  byId('confirmMt5ConnectButton')?.addEventListener('click', async () => {
+    const button = byId('confirmMt5ConnectButton');
+    button.disabled = true;
+    setText('mt5ConnectError', '');
+    let loginId = String(byId('mt5LoginId')?.value || '').trim();
+    let mt5Password = String(byId('mt5Password')?.value || '');
+    let server = String(byId('mt5Server')?.value || '').trim();
+    let zencorePassword = String(byId('mt5ZenCorePassword')?.value || '');
+    const confirmation = String(byId('mt5ConnectConfirmation')?.value || '').trim();
+    try {
+      if (!credentialEncryption) throw new Error('Public encryption key belum tersedia.');
+      if (!/^[0-9]{2,32}$/.test(loginId)) throw new Error('MT5 Login ID tidak sah.');
+      if (!mt5Password || mt5Password.length > 128) throw new Error('Masukkan password MT5 yang sah.');
+      if (server.length < 2 || server.length > 120) throw new Error('Masukkan nama server MT5 yang sah.');
+      if (!zencorePassword) throw new Error('Masukkan password akaun ZenCore untuk pengesahan.');
+      if (confirmation.toUpperCase() !== 'CONNECT MT5 DEMO') throw new Error('Taip CONNECT MT5 DEMO untuk meneruskan.');
+
+      const credentialPayload = {
+        login: loginId,
+        password: mt5Password,
+        server,
+        tradeMode: 'DEMO',
+        createdAt: Date.now()
+      };
+      const credentialEnvelope = await encryptMt5Credential(credentialPayload, credentialEncryption);
+      const accountMask = masked(loginId, 6, '****MT5');
+      const serverMask = masked(server, 12, '****Server');
+      const brokerMask = masked(server.split('-')[0], 16, '****Broker');
+      credentialPayload.login = '';
+      credentialPayload.password = '';
+      credentialPayload.server = '';
+      loginId = '';
+      mt5Password = '';
+      server = '';
+      clearMt5Fields();
+
+      const state = await api('/api/auto-trade/hosted-account', {
+        method: 'POST',
+        body: JSON.stringify({
+          credentialEnvelope,
+          accountMask,
+          serverMask,
+          brokerMask,
+          tradeMode: 'DEMO',
+          confirmation,
+          zencorePassword
+        })
+      });
+      zencorePassword = '';
+      credentialEncryption = null;
+      byId('mt5ConnectDialog').close();
+      render(state);
+      toast('Encrypted MT5 envelope disimpan. Menunggu managed Demo worker.');
+    } catch (error) {
+      setText('mt5ConnectError', error.message);
+    } finally {
+      loginId = '';
+      mt5Password = '';
+      server = '';
+      zencorePassword = '';
+      if (button && byId('mt5ConnectDialog')?.open) button.disabled = !credentialEncryption;
+    }
+  });
+
+  byId('applyRecommendationButton')?.addEventListener('click', () => {
+    if (!currentRecommendation) return;
+    byId('lotPerLayer').value = currentRecommendation.lotPerLayer;
+    byId('layers').value = currentRecommendation.layers;
+    settingsDirty = true;
+    updateRiskPreview();
+    toast('Cadangan lot dan layer digunakan. Simpan konfigurasi untuk confirm.');
+  });
 
   byId('settingsForm')?.addEventListener('submit', async event => {
     event.preventDefault();

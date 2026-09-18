@@ -1,6 +1,6 @@
 # ZenCore Total Trade System — DEMO security and execution contract
 
-This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod worker. It does not place MT5 inside the existing Render process.
+This phase adds the hosted-MT5 control-plane foundation while keeping all broker execution outside Render. Hosted order execution remains locked.
 
 ## Trust boundaries
 
@@ -8,8 +8,14 @@ This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod 
    - Authenticates the ZenCore user.
    - Stores capital, lot, layers, allowed symbols, desired control state, masked pod identity, positions and audit events.
    - Dispatches Normal 3M SOP V32 entry commands and EXIT 32.3 StepLock management commands.
-   - Rejects broker credential keys recursively.
-2. **Trader-owned Windows Secure Pod**
+   - Accepts only a validated hybrid-encryption envelope for the optional hosted account flow; it has no credential private key or decrypt function.
+   - Rejects plaintext broker credential keys recursively.
+2. **Managed Windows execution cell (required; not yet provisioned)**
+   - One isolated execution cell per trader account.
+   - Receives a short-lived encrypted envelope lease and unwraps the AES key only through external workload identity plus attestation policy.
+   - Runs MT5 and verifies every command against `ZENCORE_ANALYSIS_EXECUTION_V1` before broker translation.
+   - `hosted-mt5-worker/security_boundary.py` is implemented, tested and build-locked; the cloud cell/orchestrator is not yet live.
+3. **Legacy trader-owned Windows Secure Pod (rollback)**
    - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py` on the trader's secured PC for the XAUUSD Demo execution rollout, or inside a trader-owned Azure Confidential VM for future phases.
    - The trader retains host ownership, Windows administrator access and encryption keys.
    - ZenCore administrators are not granted Azure RBAC, RDP, Windows admin or disk-key access.
@@ -19,11 +25,19 @@ This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod 
    - Uses outbound HTTPS only. The Azure profile additionally uses a NIC with no public IP and a trader-owned NAT Gateway.
    - Loads only a strict non-secret JSON config. Broker credential environment variables and long-lived pod-secret environment variables are rejected by preflight.
    - Pins the production control origin and rejects redirects for pairing and authenticated pod requests.
-3. **Attested key service / HSM (required before production execution)**
+4. **Attested key service / HSM (required before hosted execution)**
    - Releases machine secrets only to an approved measured worker image.
    - Is not implemented by the current Render repository and must be provisioned separately.
 
-The current web UI intentionally contains no MT5 login, broker-password or full-server input. A malicious operator that controls both a web page and a guest operating system could capture typed credentials; therefore broker credentials are enrolled only in MT5 inside the trader-owned VM. Do not add broker credential fields to ZenCore.
+The hosted popup contains MT5 login, password and server fields, but WebCrypto encrypts them before the request is created. The API receives ciphertext only. This protects database dumps and ordinary web-tier access; it does not make a centrally operated website absolutely administrator-proof because a privileged operator able to replace frontend code could attempt to capture future input. Production therefore also requires deployment separation, signed/reviewed frontend releases, immutable audit and attested key release.
+
+## Analysis execution contract
+
+- Analysis remains the only owner of entry and exit decisions.
+- `READY` means Analysis has already completed its Normal 3M gates and Entry Line rule. Execution never infers readiness.
+- The command carries `decision=ENTRY_AUTHORIZED`, `decisionOwner=ZENCORE_ANALYSIS`, schema `32.3-EXIT-STEPLOCK`, exact Entry/SL/TP1/TP2/TP3 and source time.
+- The worker rejects any flattened field that differs from the embedded Analysis snapshot.
+- StepLock moves, Close Separuh and remaining/full exits are accepted only as explicit Analysis position actions.
 
 ## BYOC pairing contract
 
@@ -98,6 +112,16 @@ ZENCORE_AUTOTRADE_MEMORY=true
 
 Never configure broker login, password or full server as a Render environment variable.
 
+The hosted popup remains locked unless all three values are deliberately configured:
+
+```text
+ZENCORE_HOSTED_MT5_ENABLED=false
+ZENCORE_MT5_CREDENTIAL_KEY_ID=<external HSM RSA key version>
+ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY=<public RSA key only>
+```
+
+`ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY` is public material. The matching private key must never be present in Render, PostgreSQL, repository files or Windows disk.
+
 ## Deployment gate
 
 Release `1.4.0-demo-execution` opens a deliberately narrow broker-test lane:
@@ -113,4 +137,4 @@ Release `1.4.0-demo-execution` opens a deliberately narrow broker-test lane:
 - the local SQLite ledger claims a command before broker execution to block crash/retry duplication;
 - 3 × 0.01 partial close is rounded to 0.02, leaving one 0.01 runner when the broker volume step is 0.01.
 
-Live-money execution, non-XAUUSD symbols and administrator-hosted shared execution remain locked. A trader-owned Azure Confidential VM, attested secret release, outbound-only private networking, broader broker tests and an independent security review remain prerequisites for any future live-account release. The infrastructure foundation remains in `infra/azure-trader-pod`.
+Live-money execution remains locked. The legacy worker stays XAUUSD/InterStellar Demo only. The hosted worker declares all 11 canonical symbols but cannot place any order until a per-user confidential Windows cell, attested secret release, outbound-only private networking, broker symbol/server discovery, full Demo test matrix and independent security review pass.

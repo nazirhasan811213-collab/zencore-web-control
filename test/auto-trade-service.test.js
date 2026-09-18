@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { MemoryAutoTradeStore } = require('../auto-trade-store');
 const { createAutoTradeService } = require('../auto-trade-service');
 
@@ -133,6 +134,7 @@ test('trader-owned Windows PC pairs without exposing broker credentials and stay
   assert.equal(state.pod.demoExecutionUnlocked, false);
   assert.equal(state.connection.state, 'CONNECTED_LOCKED');
   assert.equal(state.control.canTurnOn, false);
+  assert.equal(state.safeguards.brokerCredentialsInControlPlane, 'ENCRYPTED_ENVELOPE_ONLY');
   assert.equal(JSON.stringify(state).includes(paired.podToken), false);
 });
 
@@ -403,5 +405,84 @@ test('pod heartbeat rejects raw broker credential fields', async () => {
       nested: { login: 1234, password: 'do-not-store' }
     }),
     error => error.code === 'INVALID_HEARTBEAT' && !!error.fields.credential
+  );
+});
+
+test('hosted MT5 stores only a validated encrypted envelope and never returns it', async () => {
+  const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    credentialKeyId: 'zencore-demo-key-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' })
+  });
+  const userId = '99999999-9999-4999-8999-999999999999';
+  const encryption = service.credentialEncryptionConfig();
+  assert.equal(encryption.encryption.algorithm, 'RSA-OAEP-256+A256GCM');
+  assert.equal(encryption.encryption.keyId, 'zencore-demo-key-v1');
+  assert.ok(encryption.encryption.publicKeySpki.length > 100);
+  assert.equal(JSON.stringify(encryption).includes('PRIVATE'), false);
+
+  const credentialEnvelope = {
+    version: 1,
+    algorithm: 'RSA-OAEP-256+A256GCM',
+    keyId: 'zencore-demo-key-v1',
+    wrappedKey: crypto.randomBytes(256).toString('base64url'),
+    iv: crypto.randomBytes(12).toString('base64url'),
+    ciphertext: crypto.randomBytes(80).toString('base64url')
+  };
+  const state = await service.connectHostedAccount(userId, {
+    credentialEnvelope,
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    confirmation: 'CONNECT MT5 DEMO'
+  }, true);
+  assert.equal(state.hostedAccount.status, 'PENDING_VERIFICATION');
+  assert.equal(state.hostedAccount.accountMask, '****123456');
+  assert.equal(state.ui.autoTradeConfigured, true);
+  assert.equal(state.control.canTurnOn, false);
+  assert.equal(JSON.stringify(state).includes(credentialEnvelope.ciphertext), false);
+  assert.deepEqual(store.hostedAccounts.get(userId).credentialEnvelope, credentialEnvelope);
+  assert.equal(JSON.stringify(store.hostedAccounts.get(userId)).includes('broker-secret'), false);
+});
+
+test('hosted MT5 rejects plaintext credential fields and wrong envelope keys', async () => {
+  const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const service = createAutoTradeService({
+    store: new MemoryAutoTradeStore(),
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    credentialKeyId: 'zencore-demo-key-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' })
+  });
+  const base = {
+    credentialEnvelope: {
+      version: 1,
+      algorithm: 'RSA-OAEP-256+A256GCM',
+      keyId: 'wrong-key',
+      wrappedKey: crypto.randomBytes(256).toString('base64url'),
+      iv: crypto.randomBytes(12).toString('base64url'),
+      ciphertext: crypto.randomBytes(80).toString('base64url')
+    },
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    confirmation: 'CONNECT MT5 DEMO'
+  };
+  await assert.rejects(
+    () => service.connectHostedAccount('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
+      ...base,
+      password: 'must-never-reach-service'
+    }, true),
+    error => error.code === 'PLAINTEXT_CREDENTIAL_REJECTED'
+  );
+  await assert.rejects(
+    () => service.connectHostedAccount('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', base, true),
+    error => error.code === 'INVALID_CREDENTIAL_ENVELOPE' && !!error.fields.keyId
   );
 });

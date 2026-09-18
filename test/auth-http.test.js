@@ -156,6 +156,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const analysisPage = await response.text();
     assert.match(analysisPage, /ZenCore Precision Entry/);
     assert.match(analysisPage, /MT5 Live Execution Monitor/);
+    assert.match(analysisPage, /mt5LiveMonitor[^>]+hidden/);
     assert.match(analysisPage, /auto-trade-monitor\.js/);
 
     response = await fetch(`${BASE}/results`, { headers: { Cookie: cookie } });
@@ -183,7 +184,13 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const autoTradePage = await response.text();
     assert.match(autoTradePage, /ZenCore Total Trade System/);
     assert.match(autoTradePage, /EMERGENCY CLOSE ALL/);
+    assert.match(autoTradePage, /mt5ConnectDialog/);
+    assert.match(autoTradePage, /Credential MT5 dienkripsi dalam browser/);
     assert.doesNotMatch(autoTradePage, /name="(?:login|password|server)"/i);
+
+    response = await fetch(`${BASE}/analysis-execution-contract.js`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /ZENCORE_ANALYSIS_EXECUTION_V1/);
 
     response = await fetch(`${BASE}/auto-trade-core.js`);
     assert.equal(response.status, 200);
@@ -194,6 +201,11 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     let autoState = await response.json();
     assert.equal(autoState.control.effectiveState, 'UNPROVISIONED');
     assert.equal(autoState.safeguards.brokerCredentialsInControlPlane, false);
+    assert.equal(autoState.hostedMt5.available, false);
+
+    response = await fetch(`${BASE}/api/auto-trade/credential-key`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).code, 'HOSTED_MT5_LOCKED');
 
     response = await fetch(`${BASE}/api/auto-trade/settings`, {
       method: 'PUT',

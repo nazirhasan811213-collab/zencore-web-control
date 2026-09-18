@@ -65,6 +65,10 @@
 
   function render(next) {
     state = next;
+    const monitor = byId('mt5LiveMonitor');
+    const configured = next.ui?.autoTradeConfigured === true || (next.positions || []).length > 0;
+    if (monitor) monitor.hidden = !configured;
+    if (!configured) return;
     const control = next.control || {};
     const effective = control.effectiveState || 'STOPPED';
     const badge = byId('mt5MonitorBadge');
@@ -75,8 +79,9 @@
     setText('mt5SystemState', effective.replaceAll('_', ' '));
     setText('mt5SystemCopy', control.lastError || (control.canEnter ? 'Entry automatik dibenarkan.' : 'Entry baharu disekat.'));
     setText('mt5PodState', next.connection?.label || 'BELUM CONNECT');
-    setText('mt5AccountMask', next.pod?.accountMask || '—');
-    setText('mt5ServerMask', next.pod?.serverMask || '—');
+    const identity = next.hostedAccount || next.pod;
+    setText('mt5AccountMask', identity?.accountMask || '—');
+    setText('mt5ServerMask', identity?.serverMask || '—');
     setText('mt5FloatingPnl', money(next.summary?.floatingProfitUsd));
     const on = byId('mt5TurnOn');
     const stop = byId('mt5Stop');

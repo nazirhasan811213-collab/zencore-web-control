@@ -43,12 +43,62 @@ function canonicalCommand(command) {
   });
 }
 
+function base64urlBytes(value) {
+  const text = String(value || '');
+  if (!/^[A-Za-z0-9_-]+$/.test(text)) return -1;
+  try { return Buffer.from(text, 'base64url').length; } catch (_) { return -1; }
+}
+
+function validateCredentialEnvelope(input, expectedKeyId) {
+  const envelope = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const allowed = new Set(['version', 'algorithm', 'keyId', 'wrappedKey', 'iv', 'ciphertext']);
+  const errors = {};
+  if (Object.keys(envelope).some(key => !allowed.has(key))) errors.envelope = 'Credential envelope mengandungi field yang tidak dibenarkan.';
+  if (envelope.version !== 1) errors.version = 'Versi credential envelope tidak disokong.';
+  if (envelope.algorithm !== 'RSA-OAEP-256+A256GCM') errors.algorithm = 'Algoritma credential envelope tidak disokong.';
+  if (String(envelope.keyId || '') !== expectedKeyId) errors.keyId = 'Encryption key telah berubah. Buka semula popup MT5.';
+  const wrappedBytes = base64urlBytes(envelope.wrappedKey);
+  const ivBytes = base64urlBytes(envelope.iv);
+  const cipherBytes = base64urlBytes(envelope.ciphertext);
+  if (wrappedBytes < 128 || wrappedBytes > 1024) errors.wrappedKey = 'Wrapped key tidak sah.';
+  if (ivBytes !== 12) errors.iv = 'Encryption IV tidak sah.';
+  if (cipherBytes < 32 || cipherBytes > 8192) errors.ciphertext = 'Encrypted credential tidak sah.';
+  return { ok: Object.keys(errors).length === 0, errors };
+}
+
+function buildCredentialEncryptionConfig(enabled, keyId, publicKeyPem) {
+  if (!enabled) return { enabled: false, algorithm: 'RSA-OAEP-256+A256GCM' };
+  if (!keyId || !/^[A-Za-z0-9._:-]{3,80}$/.test(keyId)) {
+    throw new Error('ZENCORE_MT5_CREDENTIAL_KEY_ID is required for hosted MT5.');
+  }
+  let key;
+  try { key = crypto.createPublicKey(publicKeyPem); } catch (_) {
+    throw new Error('ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY must be a valid RSA public key.');
+  }
+  if (key.asymmetricKeyType !== 'rsa' || Number(key.asymmetricKeyDetails?.modulusLength || 0) < 2048) {
+    throw new Error('Hosted MT5 credential key must be RSA.');
+  }
+  return {
+    enabled: true,
+    version: 1,
+    algorithm: 'RSA-OAEP-256+A256GCM',
+    keyId,
+    publicKeySpki: key.export({ type: 'spki', format: 'der' }).toString('base64')
+  };
+}
+
 function createAutoTradeService(options = {}) {
   const store = options.store;
   if (!store) throw new Error('Auto Trade store is required');
   const signingKey = String(options.commandSigningKey || '');
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const allowDemoExecution = options.allowDemoExecution === true;
+  const hostedMt5Enabled = options.hostedMt5Enabled === true;
+  const credentialEncryption = buildCredentialEncryptionConfig(
+    hostedMt5Enabled,
+    String(options.credentialKeyId || ''),
+    String(options.credentialPublicKey || '')
+  );
   const requiredDemoConnectorVersion = String(
     options.requiredDemoConnectorVersion || '1.4.0-demo-execution'
   );
@@ -108,15 +158,25 @@ function createAutoTradeService(options = {}) {
   }
 
   async function state(userId) {
-    const [profile, pod, positions, audit, pairing] = await Promise.all([
+    const [profile, pod, positions, audit, pairing, hostedAccount] = await Promise.all([
       store.getProfile(userId),
       store.getPodForUser(userId),
       store.listPositions(userId),
       store.listAudit(userId, 30),
       typeof store.getActivePairingForUser === 'function'
-        ? store.getActivePairingForUser(userId, now()) : null
+        ? store.getActivePairingForUser(userId, now()) : null,
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
-    const connection = connectionState(pod);
+    const podConnection = connectionState(pod);
+    const connection = hostedAccount ? {
+      state: hostedAccount.status === 'ERROR' ? 'HOSTED_ERROR' : 'HOSTED_PENDING',
+      label: hostedAccount.status === 'ERROR'
+        ? 'MT5 HOSTED PERLU PERHATIAN'
+        : 'MT5 HOSTED MENUNGGU WORKER',
+      online: false,
+      connected: false,
+      ready: false
+    } : podConnection;
     const settings = profile ? {
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
@@ -126,7 +186,7 @@ function createAutoTradeService(options = {}) {
         ? Math.round(profile.lotPerLayer * profile.layers * 100000) / 100000 : null,
       riskAcknowledgedAt: profile.riskAcknowledgedAt
     } : null;
-    const effectiveState = !pod ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
+    const effectiveState = !pod && !hostedAccount ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
     const desiredState = profile?.desiredState || 'STOPPED';
     const settingsReady = !!profile && Core.validateSettings(profile).ok && !!profile.riskAcknowledgedAt;
     return {
@@ -166,6 +226,20 @@ function createAutoTradeService(options = {}) {
         ownershipMode: pairing.ownershipMode,
         expiresAt: pairing.expiresAt
       } : null,
+      hostedAccount,
+      hostedMt5: {
+        available: hostedMt5Enabled,
+        executionReady: false,
+        status: hostedAccount?.status || 'NOT_CONNECTED',
+        encryptionAlgorithm: credentialEncryption.algorithm,
+        keyId: credentialEncryption.keyId || null,
+        message: hostedMt5Enabled
+          ? 'Credential plaintext dienkripsi dalam browser dan hanya envelope disimpan. Worker hosted masih perlu lulus Demo.'
+          : 'Hosted MT5 masih dikunci sehingga external vault dan managed Windows worker tersedia.'
+      },
+      ui: {
+        autoTradeConfigured: !!profile || !!pod || !!hostedAccount || positions.length > 0
+      },
       settings,
       positions,
       summary: {
@@ -175,9 +249,12 @@ function createAutoTradeService(options = {}) {
       },
       audit,
       safeguards: {
-        brokerCredentialsInControlPlane: false,
-        traderOwnsExecutionHost: true,
-        brokerCredentialsStayOnExecutionHost: true,
+        brokerCredentialsInControlPlane: hostedAccount ? 'ENCRYPTED_ENVELOPE_ONLY' : false,
+        plaintextBrokerCredentialsInControlPlane: false,
+        hostedCredentialEnvelopeOnly: true,
+        hostedCredentialPrivateKeyInWebApp: false,
+        traderOwnsExecutionHost: !hostedAccount,
+        brokerCredentialsStayOnExecutionHost: !hostedAccount,
         controlPlaneExecutionUnlocked: allowDemoExecution,
         demoOnly: true,
         allowedDemoSymbols,
@@ -189,6 +266,82 @@ function createAutoTradeService(options = {}) {
       },
       generatedAt: now()
     };
+  }
+
+  function credentialEncryptionConfig() {
+    if (!credentialEncryption.enabled) {
+      throw serviceError(
+        'HOSTED_MT5_LOCKED',
+        'Hosted MT5 masih dikunci sehingga external vault dan managed Windows worker tersedia.',
+        409
+      );
+    }
+    return { ok: true, encryption: { ...credentialEncryption } };
+  }
+
+  async function connectHostedAccount(userId, input = {}, stepUpVerified = false) {
+    if (!hostedMt5Enabled) {
+      throw serviceError(
+        'HOSTED_MT5_LOCKED',
+        'Hosted MT5 masih dikunci sehingga external vault dan managed Windows worker tersedia.',
+        409
+      );
+    }
+    if (!stepUpVerified) throw serviceError('STEP_UP_REQUIRED', 'Pengesahan password ZenCore diperlukan.', 401);
+    if (String(input.confirmation || '').trim().toUpperCase() !== 'CONNECT MT5 DEMO') {
+      throw serviceError('CONFIRMATION_REQUIRED', 'Taip CONNECT MT5 DEMO untuk menyimpan sambungan terenkripsi.', 400);
+    }
+    if (Core.containsForbiddenCredentialKey(input)) {
+      throw serviceError('PLAINTEXT_CREDENTIAL_REJECTED', 'Plaintext ID, password atau server MT5 tidak dibenarkan ke web server.', 400);
+    }
+    const identity = Core.validateMaskedIdentity(input);
+    if (!identity.ok) throw serviceError('INVALID_MASKED_IDENTITY', 'Identiti bertopeng tidak sah.', 400, identity.errors);
+    const tradeMode = String(input.tradeMode || '').toUpperCase();
+    if (tradeMode !== 'DEMO') {
+      throw serviceError('DEMO_ONLY', 'Fasa hosted MT5 ini hanya menerima akaun DEMO.', 409);
+    }
+    const envelopeValidation = validateCredentialEnvelope(
+      input.credentialEnvelope,
+      credentialEncryption.keyId
+    );
+    if (!envelopeValidation.ok) {
+      throw serviceError('INVALID_CREDENTIAL_ENVELOPE', 'Credential envelope ditolak.', 400, envelopeValidation.errors);
+    }
+    if (typeof store.saveHostedAccountEnvelope !== 'function') {
+      throw serviceError('HOSTED_MT5_STORE_UNAVAILABLE', 'Encrypted account vault belum tersedia.', 503);
+    }
+    const positions = await store.listPositions(userId);
+    if (positions.length) {
+      throw serviceError(
+        'OPEN_POSITIONS',
+        'Akaun execution tidak boleh ditukar ketika posisi ZenCore masih terbuka.',
+        409
+      );
+    }
+    if (typeof store.cancelPendingEntryCommands === 'function') {
+      await store.cancelPendingEntryCommands(userId, 'HOSTED_MT5_MIGRATION');
+    }
+    await store.setControl(userId, {
+      desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
+    });
+    const saved = await store.saveHostedAccountEnvelope({
+      id: crypto.randomUUID(),
+      userId,
+      ...identity.value,
+      tradeMode,
+      keyId: credentialEncryption.keyId,
+      credentialEnvelope: input.credentialEnvelope,
+      now: now()
+    });
+    await store.appendAudit(userId, 'HOSTED_MT5_ENVELOPE_SAVED', {
+      accountMask: saved.accountMask,
+      serverMask: saved.serverMask,
+      tradeMode: saved.tradeMode,
+      keyId: saved.keyId,
+      plaintextStored: false,
+      status: saved.status
+    });
+    return state(userId);
   }
 
   async function createPairingSession(userId, input = {}) {
@@ -318,7 +471,18 @@ function createAutoTradeService(options = {}) {
     if (String(input.confirmation || '').trim().toUpperCase() !== 'AKTIFKAN DEMO') {
       throw serviceError('CONFIRMATION_REQUIRED', 'Taip AKTIFKAN DEMO untuk menghidupkan sistem.', 400);
     }
-    const [profile, pod] = await Promise.all([store.getProfile(userId), store.getPodForUser(userId)]);
+    const [profile, pod, hostedAccount] = await Promise.all([
+      store.getProfile(userId),
+      store.getPodForUser(userId),
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+    ]);
+    if (hostedAccount) {
+      throw serviceError(
+        'HOSTED_WORKER_NOT_READY',
+        'Managed Windows worker belum mengesahkan akaun Demo. Sistem kekal STOPPED.',
+        409
+      );
+    }
     const settingsValidation = Core.validateSettings(profile || {});
     if (!settingsValidation.ok || !profile?.riskAcknowledgedAt) {
       throw serviceError('SETTINGS_REQUIRED', 'Simpan konfigurasi dan pengesahan risiko dahulu.', 409);
@@ -508,10 +672,12 @@ function createAutoTradeService(options = {}) {
     const profiles = allowDemoExecution ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
-      const [pod, positions] = await Promise.all([
+      const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
-        store.listPositions(profile.userId)
+        store.listPositions(profile.userId),
+        typeof store.getHostedAccount === 'function' ? store.getHostedAccount(profile.userId) : null
       ]);
+      if (hostedAccount) continue;
       if (!connectionState(pod).ready) continue;
       const openSymbols = new Set(positions.map(position => Core.normaliseSymbol(position.symbol)));
       for (const market of Array.isArray(markets) ? markets : []) {
@@ -545,10 +711,12 @@ function createAutoTradeService(options = {}) {
     const managedProfiles = typeof store.listManagedProfiles === 'function'
       ? await store.listManagedProfiles() : [];
     for (const profile of managedProfiles) {
-      const [pod, positions] = await Promise.all([
+      const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
-        store.listPositions(profile.userId)
+        store.listPositions(profile.userId),
+        typeof store.getHostedAccount === 'function' ? store.getHostedAccount(profile.userId) : null
       ]);
+      if (hostedAccount) continue;
       if (!pod) continue;
       const positionSymbols = new Set(positions.map(position => position.symbol));
       for (const market of Array.isArray(markets) ? markets : []) {
@@ -579,6 +747,8 @@ function createAutoTradeService(options = {}) {
 
   return {
     state,
+    credentialEncryptionConfig,
+    connectHostedAccount,
     saveSettings,
     turnOn,
     stop,
@@ -600,5 +770,7 @@ module.exports = {
   createAutoTradeService,
   serviceError,
   tokenHash,
-  canonicalCommand
+  canonicalCommand,
+  validateCredentialEnvelope,
+  buildCredentialEncryptionConfig
 };

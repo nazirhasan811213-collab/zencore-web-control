@@ -56,3 +56,21 @@ After the account layer and PostgreSQL are ready, the MT5 pairing/monitoring con
 - `ZENCORE_POD_PROVISIONING_SECRET` with at least 32 random bytes
 
 Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` during Windows-PC installation, pairing and preflight. After the reviewed worker reports the correct version and the local terminal preflight passes, change only this flag to `true` and perform the XAUUSD Demo smoke test. Broker login, password and full server must never be configured on Render.
+
+## Hosted MT5 staged rollout
+
+Keep both execution gates false when deploying the hosted UI/API foundation:
+
+```text
+ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false
+ZENCORE_HOSTED_MT5_ENABLED=false
+```
+
+Do not enable `ZENCORE_HOSTED_MT5_ENABLED` until an external RSA/HSM key and a managed confidential Windows Demo worker exist. Render may receive only the public key and key ID:
+
+```text
+ZENCORE_MT5_CREDENTIAL_KEY_ID=<external key version>
+ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY=<RSA public key PEM>
+```
+
+The matching private key is prohibited from Render, PostgreSQL, source files, environment variables and VM disk. Enabling the hosted popup does not enable orders; the hosted worker build gate is separately hard-coded `False` in this release.
