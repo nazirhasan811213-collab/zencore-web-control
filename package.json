@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node -r ./compat-v17.js server-analysis.js",
     "test": "node --test test/*.test.js",
-    "test:secure-pod": "python -m unittest mt5-secure-pod/test_secure_pod.py"
+    "test:secure-pod": "python -m unittest mt5-secure-pod/test_secure_pod.py",
+    "test:hosted-worker": "PYTHONPATH=hosted-mt5-worker python -m unittest hosted-mt5-worker/test_security_boundary.py"
   },
   "engines": {
     "node": ">=20"

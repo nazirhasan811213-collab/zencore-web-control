@@ -41,8 +41,10 @@ The protected `/results` page combines Normal 3M validation from all 11 markets.
 
 ## Auto Trade DEMO control plane
 
-The protected `/auto-trade` page now provides capital/lot/layer settings, all 11 allowed markets, risk reminders, master ON/STOP controls, step-up protected Emergency Close All, live masked MT5 status, open positions and an audit view. The Analysis Page includes the same live execution status and current-pair positions.
+The protected `/auto-trade` page is opt-in. It shows the MT5 area only after the trader selects Auto Trade or already has an Auto Trade profile. It provides capital/lot/layer settings, broker-aware size recommendations, all 11 canonical markets, warning-only risk reminders, master ON/STOP controls, step-up protected Emergency Close All, positions and audit. The Analysis Page shows its MT5 monitor only after Auto Trade is configured.
 
-The Render process never accepts broker login, password or full server. Execution is handled by a separate DEMO-only worker on a trader-owned Windows PC or confidential Windows VM. The user page supports a ten-minute, single-use pairing flow; pod tokens and per-pod command keys are delivered directly to the worker and never exposed in normal user state. Auto Trade remains disabled by default. The PC connection rollout has independent server, worker-build and local-config execution locks, so pairing and monitoring can be tested without permitting an order.
+`analysis-execution-contract.js` is the only Analysis-to-execution boundary. It copies a `READY` decision and the exact Analysis Entry/SL/TP values into an immutable `ZENCORE_ANALYSIS_EXECUTION_V1` snapshot. The execution module does not recalculate indicators, scoring, Entry Line touch, TP, SL or exit signals.
 
-See `AUTOTRADE_SECURITY.md` for trust boundaries, commands, environment flags and deployment gates. The PC guide is `mt5-secure-pod/README-PC-WINDOWS.md`; the stronger Azure foundation remains in `infra/azure-trader-pod`. These are a DEMO connection foundation only; `demoExecutionEnabled` remains false.
+The hosted-MT5 redesign is staged and disabled by default. The browser uses hybrid encryption (RSA-OAEP SHA-256 + AES-256-GCM); Render/PostgreSQL receive only ciphertext plus masked identity, and the private key is forbidden from the web tier. `hosted-mt5-worker/` contains the external-unwrapper security boundary with a hard-coded order gate set to `False`. A confidential Windows worker, attested external key release and Demo broker matrix are still required before hosted execution can be unlocked.
+
+The earlier trader-owned Windows/Azure Secure Pod remains in `mt5-secure-pod/` as a hidden rollback path. See `AUTOTRADE_SECURITY.md` and `hosted-mt5-worker/README.md` for exact trust boundaries and gates.

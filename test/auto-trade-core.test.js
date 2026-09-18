@@ -31,6 +31,42 @@ test('high risk produces a warning and never blocks the order', () => {
   assert.ok(risk.riskPercent > 2);
 });
 
+test('recommended lot and layers round down to broker step and stay warning-only', () => {
+  const result = Core.recommendPositionSizes({
+    capitalUsd: 1000,
+    preferredLayers: 3,
+    entry: 1.1,
+    sl: 1.099,
+    tickSize: 0.00001,
+    tickValue: 1,
+    volumeMin: 0.01,
+    volumeMax: 100,
+    volumeStep: 0.01,
+    targetRiskPercent: 1
+  });
+  assert.equal(result.available, true);
+  assert.equal(result.recommended.layers, 3);
+  assert.equal(result.recommended.lotPerLayer, 0.03);
+  assert.ok(result.recommended.estimatedRiskPercent <= 1);
+});
+
+test('recommendation waits when broker minimum lot is above the selected risk target', () => {
+  const result = Core.recommendPositionSizes({
+    capitalUsd: 100,
+    preferredLayers: 3,
+    entry: 2500,
+    sl: 2495,
+    tickSize: 0.01,
+    tickValue: 1,
+    volumeMin: 0.01,
+    volumeMax: 100,
+    volumeStep: 0.01,
+    targetRiskPercent: 1
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.recommended, null);
+});
+
 test('credential-bearing payloads are rejected recursively', () => {
   const result = Core.normaliseHeartbeat({
     accountMask: '****1234',

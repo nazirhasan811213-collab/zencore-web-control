@@ -25,6 +25,11 @@ const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
   process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '1.4.0-demo-execution'
 );
+const HOSTED_MT5_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(
+  String(process.env.ZENCORE_HOSTED_MT5_ENABLED || '')
+);
+const MT5_CREDENTIAL_KEY_ID = String(process.env.ZENCORE_MT5_CREDENTIAL_KEY_ID || '');
+const MT5_CREDENTIAL_PUBLIC_KEY = String(process.env.ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY || '').replace(/\\n/g, '\n');
 
 process.env.PORT = String(V17_PORT);
 require('./server-v17.js');
@@ -78,10 +83,13 @@ if (AUTH_ENABLED) {
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
-        requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION
+        requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
+        hostedMt5Enabled: HOSTED_MT5_ENABLED,
+        credentialKeyId: MT5_CREDENTIAL_KEY_ID,
+        credentialPublicKey: MT5_CREDENTIAL_PUBLIC_KEY
       });
       autoTradeState.ready = true;
-      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'}`);
+      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'}`);
       startAutoTradeDispatcher();
     }
   }).catch(error => {
@@ -405,6 +413,9 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
     if (req.method === 'GET' && pathname === '/api/auto-trade/state') {
       return sendJson(res, 200, await autoTradeState.service.state(userId));
     }
+    if (req.method === 'GET' && pathname === '/api/auto-trade/credential-key') {
+      return sendJson(res, 200, autoTradeState.service.credentialEncryptionConfig());
+    }
     if (!requestOriginAllowed(req)) {
       return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
     }
@@ -425,6 +436,26 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
         }, { 'Retry-After': String(limit.retryAfter) });
       }
       return sendJson(res, 201, await autoTradeState.service.createPairingSession(userId, body));
+    }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/hosted-account') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      const key = attemptKey(req, pathname, userId);
+      const limit = consumeAttempt(key);
+      if (!limit.allowed) {
+        return sendJson(res, 429, {
+          ok: false,
+          error: 'Terlalu banyak cubaan sambungan MT5. Tunggu sebentar dan cuba semula.'
+        }, { 'Retry-After': String(limit.retryAfter) });
+      }
+      const stepUp = await authState.service.reauthenticate(userId, body.zencorePassword);
+      if (stepUp) authAttempts.delete(key);
+      const { zencorePassword: _discardedPassword, ...encryptedOnly } = body;
+      return sendJson(res, 202, await autoTradeState.service.connectHostedAccount(
+        userId,
+        encryptedOnly,
+        stepUp
+      ));
     }
     if (req.method === 'POST' && pathname === '/api/auto-trade/on') {
       const body = await parseApiJson(req, res);
@@ -614,6 +645,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/results-core.js') return sendAuthAsset(res, 'results-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/results.js') return sendAuthAsset(res, 'results.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade.css') return sendAuthAsset(res, 'auto-trade.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/analysis-execution-contract.js') return sendAuthAsset(res, 'analysis-execution-contract.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade-core.js') return sendAuthAsset(res, 'auto-trade-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade.js') return sendAuthAsset(res, 'auto-trade.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade-monitor.css') return sendAuthAsset(res, 'auto-trade-monitor.css', 'text/css; charset=utf-8');

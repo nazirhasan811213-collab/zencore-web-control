@@ -66,6 +66,24 @@ function publicPairing(row) {
   };
 }
 
+function publicHostedAccount(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id || row.userId,
+    status: row.status || 'PENDING_VERIFICATION',
+    accountMask: row.account_mask ?? row.accountMask ?? null,
+    serverMask: row.server_mask ?? row.serverMask ?? null,
+    brokerMask: row.broker_mask ?? row.brokerMask ?? null,
+    tradeMode: row.trade_mode ?? row.tradeMode ?? 'DEMO',
+    keyId: row.key_id ?? row.keyId ?? null,
+    lastError: row.last_error ?? row.lastError ?? null,
+    verifiedAt: timestamp(row.verified_at ?? row.verifiedAt),
+    createdAt: timestamp(row.created_at ?? row.createdAt),
+    updatedAt: timestamp(row.updated_at ?? row.updatedAt)
+  };
+}
+
 function publicCommand(row) {
   if (!row) return null;
   return {
@@ -157,6 +175,24 @@ class PostgresAutoTradeStore {
       CREATE INDEX IF NOT EXISTS zencore_mt5_pairing_user_idx
         ON zencore_mt5_pairing_sessions(user_id, created_at DESC);
 
+      CREATE TABLE IF NOT EXISTS zencore_mt5_hosted_accounts (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL UNIQUE REFERENCES zencore_users(id) ON DELETE CASCADE,
+        status VARCHAR(32) NOT NULL DEFAULT 'PENDING_VERIFICATION',
+        account_mask VARCHAR(20) NOT NULL,
+        server_mask VARCHAR(32) NOT NULL,
+        broker_mask VARCHAR(40) NOT NULL,
+        trade_mode VARCHAR(12) NOT NULL DEFAULT 'DEMO',
+        key_id VARCHAR(80) NOT NULL,
+        credential_envelope JSONB NOT NULL,
+        last_error VARCHAR(240),
+        verified_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS zencore_mt5_hosted_account_status_idx
+        ON zencore_mt5_hosted_accounts(status, updated_at);
+
       CREATE TABLE IF NOT EXISTS zencore_mt5_positions (
         user_id UUID NOT NULL REFERENCES zencore_users(id) ON DELETE CASCADE,
         ticket VARCHAR(32) NOT NULL,
@@ -227,6 +263,42 @@ class PostgresAutoTradeStore {
         JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null]
     );
     return publicProfile(result.rows[0]);
+  }
+
+  async getHostedAccount(userId) {
+    const result = await this.pool.query(
+      `SELECT id, user_id, status, account_mask, server_mask, broker_mask,
+              trade_mode, key_id, last_error, verified_at, created_at, updated_at
+       FROM zencore_mt5_hosted_accounts WHERE user_id = $1`,
+      [userId]
+    );
+    return publicHostedAccount(result.rows[0]);
+  }
+
+  async saveHostedAccountEnvelope(input) {
+    const result = await this.pool.query(
+      `INSERT INTO zencore_mt5_hosted_accounts
+        (id, user_id, status, account_mask, server_mask, broker_mask, trade_mode,
+         key_id, credential_envelope, last_error, verified_at, created_at, updated_at)
+       VALUES ($1, $2, 'PENDING_VERIFICATION', $3, $4, $5, $6, $7, $8::jsonb,
+               NULL, NULL, $9, $9)
+       ON CONFLICT (user_id) DO UPDATE SET
+         status = 'PENDING_VERIFICATION',
+         account_mask = EXCLUDED.account_mask,
+         server_mask = EXCLUDED.server_mask,
+         broker_mask = EXCLUDED.broker_mask,
+         trade_mode = EXCLUDED.trade_mode,
+         key_id = EXCLUDED.key_id,
+         credential_envelope = EXCLUDED.credential_envelope,
+         last_error = NULL,
+         verified_at = NULL,
+         updated_at = EXCLUDED.updated_at
+       RETURNING id, user_id, status, account_mask, server_mask, broker_mask,
+                 trade_mode, key_id, last_error, verified_at, created_at, updated_at`,
+      [input.id, input.userId, input.accountMask, input.serverMask, input.brokerMask,
+        input.tradeMode, input.keyId, JSON.stringify(input.credentialEnvelope), new Date(input.now)]
+    );
+    return publicHostedAccount(result.rows[0]);
   }
 
   async setControl(userId, update) {
@@ -521,6 +593,7 @@ class MemoryAutoTradeStore {
     this.podsByToken = new Map();
     this.pairingsByUser = new Map();
     this.pairingsByCode = new Map();
+    this.hostedAccounts = new Map();
     this.positions = new Map();
     this.commands = new Map();
     this.audit = new Map();
@@ -541,6 +614,31 @@ class MemoryAutoTradeStore {
     };
     this.profiles.set(userId, next);
     return publicProfile(next);
+  }
+
+  async getHostedAccount(userId) {
+    return publicHostedAccount(this.hostedAccounts.get(userId));
+  }
+
+  async saveHostedAccountEnvelope(input) {
+    const old = this.hostedAccounts.get(input.userId);
+    const row = {
+      id: old?.id || input.id,
+      userId: input.userId,
+      status: 'PENDING_VERIFICATION',
+      accountMask: input.accountMask,
+      serverMask: input.serverMask,
+      brokerMask: input.brokerMask,
+      tradeMode: input.tradeMode,
+      keyId: input.keyId,
+      credentialEnvelope: JSON.parse(JSON.stringify(input.credentialEnvelope)),
+      lastError: null,
+      verifiedAt: null,
+      createdAt: old?.createdAt || input.now,
+      updatedAt: input.now
+    };
+    this.hostedAccounts.set(input.userId, row);
+    return publicHostedAccount(row);
   }
 
   async setControl(userId, update) {
@@ -733,5 +831,6 @@ module.exports = {
   publicProfile,
   publicPod,
   publicPairing,
+  publicHostedAccount,
   publicCommand
 };

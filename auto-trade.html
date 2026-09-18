@@ -39,7 +39,7 @@
             <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
           </div>
           <h1>Analysis ZenCore. Execution MT5. Satu kawalan.</h1>
-          <p>Normal 3M SOP V32 menentukan entry. EXIT 32.3 StepLock mengurus posisi. Control plane ini tidak menerima ID, password atau nama server penuh broker.</p>
+          <p>Normal 3M SOP V32 menentukan entry. EXIT 32.3 StepLock mengurus posisi. MT5 hanya melaksanakan arahan yang telah disahkan oleh Analysis.</p>
         </div>
         <div class="hero-mode">
           <span>ROLLOUT MODE</span>
@@ -51,15 +51,26 @@
       <aside class="security-banner" aria-label="Perlindungan credential">
         <div class="security-icon" aria-hidden="true">◇</div>
         <div>
-          <b>Credential broker tidak disimpan dalam ZenCore Control Plane.</b>
-          <span>Secure Pod hanya menghantar identiti bertopeng dan status execution. Jangan masukkan ID, password atau server MT5 pada mana-mana ruangan halaman ini.</span>
+          <b>Credential MT5 dienkripsi dalam browser sebelum dihantar.</b>
+          <span>Web server hanya menerima encrypted envelope dan identiti bertopeng. Private key mesti kekal di external vault/managed worker—bukan di aplikasi web atau database.</span>
         </div>
-        <span class="security-lock">CONTROL PLANE CLEAN</span>
+        <span class="security-lock">ENVELOPE ONLY</span>
       </aside>
+
+      <section id="autoTradeGate" class="auto-trade-gate">
+        <div>
+          <span class="eyebrow">Auto Trade ialah pilihan trader</span>
+          <h2>Sambungkan MT5 hanya apabila anda mahu aktifkan Auto Trade.</h2>
+          <p>Analysis ZenCore kekal seperti sekarang. Selepas dipilih, bahagian akaun MT5, cadangan saiz dan kawalan ON/STOP akan muncul.</p>
+        </div>
+        <button id="startAutoTradeButton" type="button">MULA AUTO TRADE</button>
+      </section>
+
+      <div id="autoTradeWorkspace" class="auto-trade-workspace hidden">
 
       <section class="auto-summary" aria-label="Ringkasan Auto Trade">
         <article><span>SYSTEM</span><b id="summarySystem">STOPPED</b><small id="summarySystemNote">Entry baharu disekat</small></article>
-        <article><span>SECURE POD</span><b id="summaryPod">BELUM CONNECT</b><small id="summaryHeartbeat">Tiada heartbeat</small></article>
+        <article><span>MT5 EXECUTION</span><b id="summaryPod">BELUM CONNECT</b><small id="summaryHeartbeat">Tiada heartbeat</small></article>
         <article><span>OPEN POSITION</span><b id="summaryPositions">0</b><small id="summaryVolume">0.00 total lot</small></article>
         <article id="summaryProfitCard"><span>FLOATING P/L</span><b id="summaryProfit">USD 0.00</b><small>Daripada snapshot MT5</small></article>
         <article><span>EXPOSURE / SETUP</span><b id="summaryExposure">—</b><small id="summaryLayers">Belum dikonfigurasi</small></article>
@@ -68,7 +79,7 @@
       <section class="auto-grid">
         <article class="auto-panel account-panel">
           <div class="panel-heading">
-            <div><span class="eyebrow">Secure Execution</span><h2>Akaun MT5</h2></div>
+            <div><span class="eyebrow">Secure Execution</span><h2>Akaun MT5 Hosted</h2></div>
             <span id="connectionBadge" class="mini-status offline">UNPROVISIONED</span>
           </div>
           <div class="account-identity">
@@ -76,7 +87,7 @@
             <div><span>SERVER</span><b id="serverMask">—</b></div>
             <div><span>BROKER</span><b id="brokerMask">—</b></div>
             <div><span>MODE</span><b id="tradeMode">DEMO</b></div>
-            <div><span>HOST</span><b id="podOwner">WINDOWS PC</b></div>
+            <div><span>HOST</span><b id="podOwner">ZENCORE MANAGED</b></div>
           </div>
           <div class="pod-health">
             <div><span>Terminal</span><b id="terminalState">WAIT</b></div>
@@ -84,12 +95,17 @@
             <div><span>Expert Trade</span><b id="expertTradeState">WAIT</b></div>
           </div>
           <div id="podNotice" class="panel-notice">
-            Secure Pod belum disediakan. Provisioning dibuat dalam execution environment terasing—bukan melalui password form web.
+            Akaun MT5 belum disambungkan. Plaintext credential tidak boleh masuk ke web server.
           </div>
           <div id="pairingActions" class="pairing-actions">
-            <div><b>Windows milik trader</b><span>Gunakan PC sendiri sekarang atau Azure kemudian. ZenCore tidak menerima Windows admin atau credential MT5.</span></div>
-            <button id="pairPodButton" type="button">JANA KOD PAIRING</button>
+            <div><b>Sambung dalam ZenCore</b><span>Masukkan login, password dan server dalam popup. Browser akan enkripsi sebelum request dihantar.</span></div>
+            <button id="connectMt5Button" type="button">SAMBUNG MT5</button>
           </div>
+          <details class="legacy-pod" id="legacyPod" hidden>
+            <summary>Legacy Secure Pod (rollback sahaja)</summary>
+            <p>Aliran PC/Azure lama dikekalkan sementara sebagai rollback dan tidak digunakan oleh reka bentuk hosted baharu.</p>
+            <button id="pairPodButton" type="button">JANA KOD LEGACY</button>
+          </details>
         </article>
 
         <article class="auto-panel master-panel">
@@ -160,6 +176,11 @@
             <div><span>TOTAL LOT</span><b id="riskTotalLot">0.03</b></div>
           </div>
           <p id="riskMessage">Menunggu Entry, SL dan spesifikasi broker untuk kira risiko sebenar.</p>
+          <div class="size-recommendation">
+            <div><span>CADANGAN ZENCORE</span><b id="recommendedSize">MENUNGGU DATA</b></div>
+            <small id="recommendationMessage">Cadangan memerlukan active plan dan spesifikasi volume broker.</small>
+            <button id="applyRecommendationButton" type="button" disabled>GUNA CADANGAN</button>
+          </div>
           <div class="warning-policy"><b>Tiada hard block kerana risk level.</b><span>Security, invalid command atau Secure Pod offline tetap boleh menghalang execution.</span></div>
         </article>
       </section>
@@ -184,9 +205,10 @@
         </div>
         <div id="auditList" class="audit-list"><div class="audit-empty">Belum ada aktiviti Auto Trade.</div></div>
       </section>
+      </div>
 
       <footer class="portal-foot autotrade-foot">
-        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • DEMO Secure Pod</span>
+        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • Hosted MT5 staged</span>
         <span>Auto Trade tidak menjamin profit. Semua execution tertakluk kepada broker, spread dan slippage.</span>
       </footer>
     </div>
@@ -201,6 +223,23 @@
       <label><span>TAIP AKTIFKAN DEMO</span><input id="onConfirmation" autocomplete="off" placeholder="AKTIFKAN DEMO"></label>
       <div id="onError" class="form-error" role="alert"></div>
       <div class="dialog-actions"><button value="cancel" class="dialog-cancel">BATAL</button><button id="confirmOnButton" value="default" class="dialog-confirm" type="button">CONFIRM ON</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="mt5ConnectDialog" class="control-dialog mt5-connect-dialog">
+    <form method="dialog" autocomplete="off">
+      <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
+      <span class="eyebrow">ZenCore Hosted MT5</span>
+      <h2>Sambungkan akaun MT5 Demo</h2>
+      <p id="mt5EncryptionNotice">Memuatkan public encryption key…</p>
+      <label><span>MT5 LOGIN ID</span><input id="mt5LoginId" inputmode="numeric" autocomplete="off" maxlength="32"></label>
+      <label><span>MT5 PASSWORD</span><input id="mt5Password" type="password" autocomplete="new-password" maxlength="128"></label>
+      <label><span>MT5 SERVER</span><input id="mt5Server" autocomplete="off" maxlength="120" placeholder="Contoh: InterStellarFinancial-Demo"></label>
+      <label><span>PASSWORD AKAUN ZENCORE</span><input id="mt5ZenCorePassword" type="password" autocomplete="current-password"></label>
+      <label><span>TAIP CONNECT MT5 DEMO</span><input id="mt5ConnectConfirmation" autocomplete="off" placeholder="CONNECT MT5 DEMO"></label>
+      <div class="credential-boundary"><b>Sebelum submit:</b> Login, password dan server dienkripsi menggunakan RSA-OAEP + AES-256-GCM. ZenCore web hanya menerima ciphertext.</div>
+      <div id="mt5ConnectError" class="form-error" role="alert"></div>
+      <div class="dialog-actions"><button value="cancel" class="dialog-cancel">BATAL</button><button id="confirmMt5ConnectButton" value="default" class="dialog-confirm" type="button">ENKRIP &amp; SAMBUNG</button></div>
     </form>
   </dialog>
 
@@ -247,7 +286,8 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/auto-trade-core.js?v=1.0" defer></script>
-  <script src="/auto-trade.js?v=1.1" defer></script>
+  <script src="/analysis-execution-contract.js?v=1.0" defer></script>
+  <script src="/auto-trade-core.js?v=1.2" defer></script>
+  <script src="/auto-trade.js?v=1.2" defer></script>
 </body>
 </html>

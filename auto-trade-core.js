@@ -1,14 +1,16 @@
 (function (root, factory) {
-  const api = factory();
+  const contract = typeof module === 'object' && module.exports
+    ? require('./analysis-execution-contract')
+    : root.ZenCoreAnalysisExecutionContract;
+  const api = factory(contract);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ZenCoreAutoTrade = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (Contract) {
   'use strict';
 
-  const SUPPORTED_MARKETS = [
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
-  ];
+  if (!Contract) throw new Error('ZenCore Analysis Execution Contract is required.');
+
+  const SUPPORTED_MARKETS = [...Contract.SUPPORTED_MARKETS];
   const CONTROL_STATES = [
     'UNPROVISIONED', 'STOPPED', 'ARMING', 'ON', 'STOPPING',
     'EMERGENCY_CLOSING', 'ERROR'
@@ -52,6 +54,18 @@
   function round(value, digits = 2) {
     const factor = 10 ** digits;
     return Math.round(value * factor) / factor;
+  }
+
+  function decimalPlaces(value) {
+    const text = String(value);
+    if (text.includes('e-')) return Number(text.split('e-')[1]) || 0;
+    return (text.split('.')[1] || '').length;
+  }
+
+  function floorToStep(value, step) {
+    const digits = Math.min(8, decimalPlaces(step));
+    const units = Math.floor((value + Number.EPSILON) / step);
+    return round(units * step, digits);
   }
 
   function validateSettings(input = {}) {
@@ -129,6 +143,59 @@
       costBufferPct,
       blocksOrder: false,
       message
+    };
+  }
+
+  function recommendPositionSizes(input = {}) {
+    const capitalUsd = number(input.capitalUsd);
+    const entry = number(input.entry);
+    const sl = number(input.sl);
+    const tickSize = number(input.tickSize);
+    const tickValue = number(input.tickValue);
+    const volumeMin = number(input.volumeMin);
+    const volumeMax = number(input.volumeMax);
+    const volumeStep = number(input.volumeStep);
+    const targetRiskPercent = clamp(number(input.targetRiskPercent) ?? 1, 0.1, 5);
+    const costBufferPct = clamp(number(input.costBufferPct) ?? 10, 0, 100);
+    const pending = {
+      available: false,
+      targetRiskPercent,
+      options: [],
+      recommended: null,
+      message: 'Menunggu active plan dan spesifikasi volume broker.'
+    };
+    if ([capitalUsd, entry, sl, tickSize, tickValue, volumeMin, volumeMax, volumeStep]
+      .some(value => value === null || value <= 0) || entry === sl) return pending;
+
+    const riskPerLot = (Math.abs(entry - sl) / tickSize) * tickValue * (1 + costBufferPct / 100);
+    if (!Number.isFinite(riskPerLot) || riskPerLot <= 0) return pending;
+    const targetRiskUsd = capitalUsd * targetRiskPercent / 100;
+    const maxTotalLot = Math.min(volumeMax * 10, targetRiskUsd / riskPerLot);
+    const requestedLayers = clamp(Math.trunc(number(input.preferredLayers) || 3), 1, 10);
+    const layerCandidates = [...new Set([requestedLayers, 3, 2, 1])]
+      .filter(layers => layers >= 1 && layers <= 10);
+    const options = layerCandidates.map(layers => {
+      const lotPerLayer = floorToStep(Math.min(volumeMax, maxTotalLot / layers), volumeStep);
+      if (lotPerLayer < volumeMin) return null;
+      const totalLot = round(lotPerLayer * layers, 5);
+      const riskUsd = riskPerLot * totalLot;
+      return {
+        layers,
+        lotPerLayer,
+        totalLot,
+        estimatedRiskUsd: round(riskUsd),
+        estimatedRiskPercent: round(riskUsd / capitalUsd * 100),
+        targetRiskPercent
+      };
+    }).filter(Boolean);
+    return {
+      available: options.length > 0,
+      targetRiskPercent,
+      options,
+      recommended: options[0] || null,
+      message: options.length
+        ? `Cadangan dikira pada sasaran risiko ${targetRiskPercent}% termasuk buffer kos ${costBufferPct}%.`
+        : `Lot minimum broker melebihi sasaran risiko ${targetRiskPercent}% untuk modal dan SL ini.`
     };
   }
 
@@ -277,79 +344,61 @@
   }
 
   function makeSignalKey(market = {}) {
-    const normal = market.strategyNormal || {};
-    const plan = normal.plan || {};
-    const symbol = normaliseSymbol(market.symbol);
-    const side = String(normal.side || plan.side || '').toUpperCase();
-    const entry = number(plan.entry);
-    const receivedAt = Math.trunc(number(market.receivedAt) || 0);
-    if (!SUPPORTED_MARKETS.includes(symbol) || !['BUY', 'SELL'].includes(side) || entry === null) return null;
-    return [symbol, side, entry, receivedAt].join('|');
+    return Contract.createEntryDecision(market)?.signalKey || null;
   }
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null) {
     const validation = validateSettings(settings);
-    const normal = market.strategyNormal || {};
-    const plan = normal.plan || {};
-    const signalKey = makeSignalKey(market);
-    if (!validation.ok || !signalKey || String(normal.state || '').toUpperCase() !== 'READY') return null;
-    const symbol = normaliseSymbol(market.symbol);
+    const decision = Contract.createEntryDecision(market);
+    if (!validation.ok || !decision) return null;
+    const { snapshot } = decision;
+    const symbol = snapshot.symbol;
     if (!validation.value.symbols.includes(symbol)) return null;
     const risk = calculateRisk({
       ...validation.value,
-      entry: plan.entry,
-      sl: plan.sl,
+      entry: snapshot.entry,
+      sl: snapshot.sl,
       tickSize: symbolSpec?.tickSize,
       tickValue: symbolSpec?.tickValue
     });
     return {
-      signalKey,
+      signalKey: decision.signalKey,
       payload: {
-        schemaVersion: '32.3-EXIT-STEPLOCK',
-        strategy: 'NORMAL_3M_SOP_V32',
+        analysisContractVersion: Contract.CONTRACT_VERSION,
+        analysisSnapshot: snapshot,
+        schemaVersion: snapshot.schemaVersion,
+        strategy: snapshot.strategy,
         symbol,
-        side: String(normal.side || plan.side).toUpperCase(),
-        entry: number(plan.entry),
-        sl: number(plan.sl),
-        tp1: number(plan.tp1),
-        tp2: number(plan.tp2),
-        tp3: number(plan.tp3),
+        side: snapshot.side,
+        entry: snapshot.entry,
+        sl: snapshot.sl,
+        tp1: snapshot.tp1,
+        tp2: snapshot.tp2,
+        tp3: snapshot.tp3,
         lotPerLayer: validation.value.lotPerLayer,
         layers: validation.value.layers,
         totalLot: validation.value.totalLot,
         risk,
-        signalReceivedAt: Math.trunc(number(market.receivedAt) || Date.now())
+        signalReceivedAt: snapshot.sourceReceivedAt
       }
     };
   }
 
   function buildManagementCommand(market = {}) {
-    const symbol = normaliseSymbol(market.symbol);
-    const management = market.positionManagement || {};
-    if (!SUPPORTED_MARKETS.includes(symbol)) return null;
-    const actions = [];
-    const slMoveAction = String(management.slMoveAction || 'NONE').toUpperCase();
-    if (management.slMoveTriggered === true && ['MOVE_SL_ENTRY', 'MOVE_SL_TP1', 'MOVE_SL_TP2'].includes(slMoveAction)) {
-      const activeSl = number(management.activeSl);
-      if (activeSl !== null) actions.push({ type: slMoveAction, activeSl, lockLabel: String(management.slLockLabel || 'PROTECTED').slice(0, 32) });
-    }
-    const exitAction = String(management.action || 'IDLE').toUpperCase();
-    if (exitAction === 'CLOSE_50_NOW') actions.push({ type: 'CLOSE_PERCENT', percent: 50, reason: 'CLOSE_SEPARUH' });
-    if (['EXIT_REMAINING', 'EXIT_ALL', 'EXIT_SL'].includes(exitAction)) {
-      actions.push({ type: 'CLOSE_PERCENT', percent: 100, reason: exitAction });
-    }
-    if (!actions.length) return null;
-    const receivedAt = Math.trunc(number(market.receivedAt) || 0);
-    const actionKey = actions.map(action => `${action.type}:${action.activeSl ?? action.percent ?? ''}:${action.reason || ''}`).join(',');
+    const decision = Contract.createManagementDecision(market);
+    if (!decision) return null;
+    const { snapshot } = decision;
     return {
-      managementKey: [symbol, receivedAt, actionKey].join('|'),
+      managementKey: decision.managementKey,
       payload: {
-        schemaVersion: '32.3-EXIT-STEPLOCK',
-        strategy: 'NORMAL_3M_SOP_V32',
-        symbol,
-        actions,
-        reason: String(management.reason || '').slice(0, 180),
-        signalReceivedAt: receivedAt || Date.now()
+        analysisContractVersion: Contract.CONTRACT_VERSION,
+        analysisSnapshot: snapshot,
+        schemaVersion: snapshot.schemaVersion,
+        strategy: snapshot.strategy,
+        symbol: snapshot.symbol,
+        actions: snapshot.actions,
+        reason: snapshot.reason,
+        signalReceivedAt: snapshot.sourceReceivedAt
       }
     };
   }
@@ -365,6 +414,7 @@
     escapeHtml,
     validateSettings,
     calculateRisk,
+    recommendPositionSizes,
     containsForbiddenCredentialKey,
     validateMaskedIdentity,
     sanitisePosition,
