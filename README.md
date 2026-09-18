@@ -27,3 +27,10 @@ This package uses the exact Pine Script supplied by the user as the calculation 
 ## Important
 TradingView cannot send a webhook to `localhost`. For live use, deploy `server.js` to a public HTTPS host/domain.
 The browser dashboard does not recalculate the trading logic. It displays the values calculated by your Pine Script.
+
+## Phase 1 account layer
+
+The Login, Register and first Page Utama shell are implemented behind `ZENCORE_AUTH_ENABLED=true`.
+Authentication is OFF by default so the existing Precision Entry deployment is unchanged until PostgreSQL is attached and the feature is deliberately enabled.
+
+See `AUTH_SETUP.md` for the Render environment variables, local test mode and security model.
