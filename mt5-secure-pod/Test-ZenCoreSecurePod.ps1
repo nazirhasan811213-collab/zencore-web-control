@@ -116,8 +116,8 @@ if ($null -ne $config) {
         Add-Check 'HTTPS control origin' 'FAIL' 'controlUrl is invalid.'
     }
 
-    $executionLocked = $config.demoExecutionEnabled -eq $false
-    Add-Check 'DEMO execution gate' ($(if ($executionLocked) { 'PASS' } else { 'FAIL' })) ($(if ($executionLocked) { 'Locked (false)' } else { 'Must remain false before broker tests.' }))
+    $executionEnabled = $config.demoExecutionEnabled -eq $true
+    Add-Check 'DEMO execution gate' ($(if ($executionEnabled) { 'PASS' } else { 'WARN' })) ($(if ($executionEnabled) { 'Enabled locally; server gate and signed ON command are still required.' } else { 'Locked (connection/monitoring only).' }))
 
     if (Test-Path -LiteralPath ([string]$config.mt5TerminalPath) -PathType Leaf) {
         $terminalSignature = Get-AuthenticodeSignature -LiteralPath ([string]$config.mt5TerminalPath)
@@ -142,6 +142,19 @@ if (Test-Path -LiteralPath $pythonPath -PathType Leaf) {
         Add-Check 'MetaTrader5 package' 'PASS' $packageVersion
     } else {
         Add-Check 'MetaTrader5 package' 'FAIL' "Expected 5.0.6180; found $packageVersion"
+    }
+    if ($null -ne $config -and $config.demoExecutionEnabled -eq $true) {
+        $workerPath = Join-Path $InstallRoot 'ZenCoreSecurePod.py'
+        try {
+            $terminalProbeText = ([string](& $pythonPath $workerPath --config $ConfigPath --terminal-preflight 2>$null)).Trim()
+            $terminalProbeExit = $LASTEXITCODE
+            $terminalProbe = $terminalProbeText | ConvertFrom-Json
+            $terminalReady = $terminalProbeExit -eq 0 -and $terminalProbe.ok -eq $true
+            $probeDetail = "mode=$($terminalProbe.tradeMode); serverAllowed=$($terminalProbe.serverAllowed); algo=$($terminalProbe.tradingAllowed); XAUUSD=$($terminalProbe.xauusdReady); $($terminalProbe.serverMask)"
+            Add-Check 'InterStellar MT5 Demo execution' ($(if ($terminalReady) { 'PASS' } else { 'FAIL' })) $probeDetail
+        } catch {
+            Add-Check 'InterStellar MT5 Demo execution' 'FAIL' 'Unable to validate the running MT5 Demo terminal.'
+        }
     }
 } else {
     Add-Check 'Secure Pod Python' 'FAIL' "Missing: $pythonPath"

@@ -18,6 +18,8 @@ param(
 
     [string]$PythonLauncher = 'py.exe',
 
+    [switch]$EnableDemoExecution,
+
     [string]$SymbolMapJson = '{"XAUUSD":"XAUUSD","EURUSD":"EURUSD","GBPUSD":"GBPUSD","USDJPY":"USDJPY","US30":"US30","USDCAD":"USDCAD","USDCHF":"USDCHF","EURJPY":"EURJPY","GBPJPY":"GBPJPY","EURGBP":"EURGBP","BTCUSD":"BTCUSD"}'
 )
 
@@ -62,6 +64,9 @@ if ($controlOrigin.Scheme -ne 'https' -or $controlOrigin.Host -ne 'zencore-preci
 }
 if (-not (Test-Path -LiteralPath $Mt5TerminalPath -PathType Leaf)) {
     throw "MT5 terminal was not found at: $Mt5TerminalPath"
+}
+if ($EnableDemoExecution -and $HostProfile -ne 'WINDOWS_PC') {
+    throw 'This reviewed DEMO execution rollout only permits hostProfile WINDOWS_PC.'
 }
 
 try {
@@ -129,7 +134,7 @@ $config = [ordered]@{
     mt5TerminalPath = $Mt5TerminalPath
     symbolMap = $symbolMap
     pollSeconds = 2
-    demoExecutionEnabled = $false
+    demoExecutionEnabled = [bool]$EnableDemoExecution
     dataRoot = $DataRoot
 }
 $config | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding UTF8
@@ -140,6 +145,8 @@ Write-Host "Install root : $InstallRoot"
 Write-Host "Data root    : $DataRoot"
 Write-Host "Config       : $configPath"
 Write-Host "Host profile : $HostProfile"
-Write-Host 'Execution    : LOCKED (DEMO execution is false)' -ForegroundColor Yellow
+$executionLabel = if ($EnableDemoExecution) { 'DEMO ENABLED (XAUUSD only)' } else { 'LOCKED (connection/monitoring only)' }
+$executionColour = if ($EnableDemoExecution) { 'Green' } else { 'Yellow' }
+Write-Host "Execution    : $executionLabel" -ForegroundColor $executionColour
 Write-Host ''
 Write-Host 'Next: run Test-ZenCoreSecurePod.ps1, pair from the ZenCore page, then register the scheduled task.'

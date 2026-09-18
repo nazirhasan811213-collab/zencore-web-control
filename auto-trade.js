@@ -180,6 +180,21 @@
     updateRiskPreview();
   }
 
+  function renderExecutionScope(state) {
+    const allowed = Array.isArray(state.control?.executionSymbols)
+      ? state.control.executionSymbols : Core.SUPPORTED_MARKETS;
+    document.querySelectorAll('[name="symbols"]').forEach(input => {
+      const enabled = allowed.includes(input.value);
+      input.disabled = !enabled;
+      if (!enabled) input.checked = false;
+      input.closest('.symbol-option')?.classList.toggle('disabled', !enabled);
+    });
+    setText(
+      'executionSymbolNotice',
+      `Fasa Demo execution semasa: ${allowed.join(', ') || 'tiada pair'}. Pair lain kekal untuk analysis.`
+    );
+  }
+
   function renderSummary(state) {
     setText('summaryPositions', state.summary?.openPositions || 0);
     setText('summaryVolume', `${Number(state.summary?.totalVolume || 0).toFixed(2)} total lot`);
@@ -250,6 +265,7 @@
     renderConnection(state);
     renderMaster(state);
     renderSettings(state);
+    renderExecutionScope(state);
     renderSummary(state);
     renderPositions(state);
     renderAudit(state);

@@ -281,7 +281,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
         accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
         tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
         expertTradeAllowed: true, demoExecutionUnlocked,
-        connectorVersion: '1.0.0', terminalBuild: '5000',
+        connectorVersion: '1.4.0-demo-execution', terminalBuild: '5000',
         symbolSpecs: [{ symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 }],
         positions
       })

@@ -10,7 +10,7 @@ This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod 
    - Dispatches Normal 3M SOP V32 entry commands and EXIT 32.3 StepLock management commands.
    - Rejects broker credential keys recursively.
 2. **Trader-owned Windows Secure Pod**
-   - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py` on the trader's secured PC for the Demo connection rollout, or inside a trader-owned Azure Confidential VM.
+   - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py` on the trader's secured PC for the XAUUSD Demo execution rollout, or inside a trader-owned Azure Confidential VM for future phases.
    - The trader retains host ownership, Windows administrator access and encryption keys.
    - ZenCore administrators are not granted Azure RBAC, RDP, Windows admin or disk-key access.
    - Owns the enrolled terminal session.
@@ -82,7 +82,7 @@ ZENCORE_COMMAND_SIGNING_KEY=<minimum 32 random bytes>
 ZENCORE_POD_PROVISIONING_SECRET=<minimum 32 random bytes>
 ```
 
-The connection-only rollout must keep the independent server execution gate disabled:
+Installation, pairing and preflight keep the independent server execution gate disabled:
 
 ```text
 ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false
@@ -100,15 +100,17 @@ Never configure broker login, password or full server as a Render environment va
 
 ## Deployment gate
 
-The control plane, UI and worker contract can be tested from a secured trader-owned Windows PC now. The heartbeat explicitly reports the immutable execution gate, so the control plane remains `CONNECTED_LOCKED` and cannot arm while this release is locked. Broker execution must stay locked with `demoExecutionEnabled=false` and the source build gate set to false until all of the following exist:
+Release `1.4.0-demo-execution` opens a deliberately narrow broker-test lane:
 
-- trader-owned isolated Azure Windows confidential VM per account;
-- direct terminal enrolment inside that trader-owned VM;
-- attested secret release/vTPM;
-- outbound-only private worker networking;
-- InterStellar demo symbol mapping;
-- three-layer and partial-close broker tests;
-- restart/replay/disconnection tests;
-- independent security review and audit-log review.
+- trader-owned Windows PC only;
+- MetaTrader account type must be DEMO;
+- normalized server identity must equal `InterStellarFinancial-Demo`;
+- XAUUSD only;
+- reviewed connector version must match the control-plane requirement;
+- local `demoExecutionEnabled=true` and server `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=true` are both required;
+- a user must save risk settings and explicitly type `AKTIFKAN DEMO`;
+- STOP cancels queued entries and disarms the worker from the next heartbeat;
+- the local SQLite ledger claims a command before broker execution to block crash/retry duplication;
+- 3 × 0.01 partial close is rounded to 0.02, leaving one 0.01 runner when the broker volume step is 0.01.
 
-The infrastructure foundation is in `infra/azure-trader-pod`. It provisions a trader-owned Windows Server 2022 Generation 2 confidential VM with Secure Boot, vTPM, `DiskWithVMGuestState`, no public IP on the VM NIC, no inbound allow rule and an outbound NAT Gateway. The package deliberately does not accept broker credentials, auto-install MT5 or enable DEMO execution. This worker release has a second immutable build gate set to false, so config/environment edits alone cannot enable orders.
+Live-money execution, non-XAUUSD symbols and administrator-hosted shared execution remain locked. A trader-owned Azure Confidential VM, attested secret release, outbound-only private networking, broader broker tests and an independent security review remain prerequisites for any future live-account release. The infrastructure foundation remains in `infra/azure-trader-pod`.

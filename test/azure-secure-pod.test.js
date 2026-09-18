@@ -84,8 +84,9 @@ test('local config covers all 11 markets and starts with execution locked', () =
   assert.deepEqual(forbiddenKeys, []);
 });
 
-test('Windows setup keeps pairing and long-lived pod identity out of environment variables', () => {
-  assert.match(installer, /demoExecutionEnabled = \$false/);
+test('Windows DEMO execution requires an explicit local switch and keeps machine identity protected', () => {
+  assert.match(installer, /\[switch\]\$EnableDemoExecution/);
+  assert.match(installer, /demoExecutionEnabled = \[bool\]\$EnableDemoExecution/);
   assert.match(installer, /hostProfile = \$HostProfile/);
   assert.match(installer, /pip --isolated install/);
   assert.match(requirements, /--index-url https:\/\/pypi\.org\/simple/);
@@ -99,7 +100,9 @@ test('Windows setup keeps pairing and long-lived pod identity out of environment
   assert.equal(worker.includes('os.environ.get("ZENCORE_COMMAND_SIGNING_KEY")'), false);
   assert.match(worker, /getpass\.getpass/);
   assert.match(worker, /UserCredentialStore/);
-  assert.match(worker, /DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False/);
+  assert.match(worker, /DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = True/);
+  assert.match(worker, /DEMO_EXECUTION_MARKETS = \("XAUUSD",\)/);
+  assert.match(worker, /INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"/);
   assert.match(worker, /environment_mode = config_path is None/);
   assert.match(worker, /visible_count = min\(visible, max\(2, len\(safe\) \/\/ 2\)\)/);
   assert.match(worker, /PRODUCTION_CONTROL_HOST = "zencore-precision-entry\.onrender\.com"/);
@@ -107,16 +110,20 @@ test('Windows setup keeps pairing and long-lived pod identity out of environment
   assert.match(worker, /ProxyHandler\(\{\}\)/);
   assert.match(worker, /minimum_version = ssl\.TLSVersion\.TLSv1_2/);
   assert.match(worker, /"WINDOWS_PC": "TRADER_OWNED_WINDOWS_PC"/);
-  assert.match(worker, /"demoExecutionUnlocked": bool\(self\.config\.demo_execution_enabled\)/);
+  assert.match(worker, /"demoExecutionUnlocked": bool\(/);
+  assert.match(worker, /self\.server_id\(account\.server\) == INTERSTELLAR_DEMO_SERVER_ID/);
+  assert.match(worker, /claim_command/);
+  assert.match(worker, /close_symbol_percent/);
   assert.match(preflightScript, /BitLocker system drive/);
   assert.match(preflightScript, /Windows Firewall/);
+  assert.match(preflightScript, /--terminal-preflight/);
 });
 
-test('scheduled worker is bound to the paired Windows identity and remains demo locked', () => {
+test('scheduled worker stays bound to the paired Windows identity in explicit DEMO mode', () => {
   assert.match(taskScript, /WindowsIdentity\]::GetCurrent\(\)\.Name/);
   assert.match(taskScript, /-LogonType Password -RunLevel Limited/);
   assert.match(taskScript, /New-ScheduledTaskTrigger -AtLogOn/);
-  assert.match(taskScript, /demoExecutionEnabled -ne \$false/);
+  assert.match(taskScript, /XAUUSD DEMO execution/);
   assert.match(taskScript, /ZeroFreeBSTR/);
   assert.match(worker, /NORMAL_3M_SOP_V32/);
   assert.match(worker, /32\.3-EXIT-STEPLOCK/);

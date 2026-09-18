@@ -19,9 +19,7 @@ if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
     throw "Secure Pod config was not found: $ConfigPath"
 }
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-if ($config.demoExecutionEnabled -ne $false) {
-    throw 'Task registration is blocked because demoExecutionEnabled is not false.'
-}
+$executionMode = if ($config.demoExecutionEnabled -eq $true) { 'XAUUSD DEMO execution' } else { 'connection/monitoring only' }
 $credentialPath = Join-Path ([string]$config.dataRoot) 'machine-credentials.dpapi'
 if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
     throw 'Pair this Windows user before registering the worker task.'
@@ -36,6 +34,11 @@ if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf) -or -not (Test-Path
 $windowsIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 Write-Host "The task must run as the same dedicated Windows user that performed pairing: $windowsIdentity"
 Write-Host 'Enter this Windows user password. It is passed only to Windows Task Scheduler and never sent to ZenCore.' -ForegroundColor Yellow
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($null -ne $existingTask -and $existingTask.State -eq 'Running') {
+    Stop-ScheduledTask -TaskName $TaskName
+    Start-Sleep -Seconds 2
+}
 $securePassword = Read-Host 'Dedicated Windows user password' -AsSecureString
 $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
 $plainPassword = $null
@@ -56,7 +59,7 @@ try {
         -ExecutionTimeLimit ([TimeSpan]::Zero) `
         -MultipleInstances IgnoreNew
     $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings `
-        -Description 'Trader-owned Windows ZenCore MT5 Secure Pod (DEMO locked until broker validation).'
+        -Description "Trader-owned Windows ZenCore MT5 Secure Pod ($executionMode)."
     Register-ScheduledTask -TaskName $TaskName -InputObject $task -User $windowsIdentity -Password $plainPassword -Force | Out-Null
 } finally {
     $plainPassword = $null
@@ -71,4 +74,4 @@ if ($StartNow) {
 }
 Write-Host 'Secure Pod scheduled task registered under the paired Windows identity.' -ForegroundColor Green
 Write-Host "Host profile: $($config.hostProfile)"
-Write-Host 'DEMO order execution remains locked by pod-config.json.' -ForegroundColor Yellow
+Write-Host "Mode: $executionMode" -ForegroundColor $(if ($config.demoExecutionEnabled -eq $true) { 'Green' } else { 'Yellow' })

@@ -49,6 +49,22 @@ function createAutoTradeService(options = {}) {
   const signingKey = String(options.commandSigningKey || '');
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const allowDemoExecution = options.allowDemoExecution === true;
+  const requiredDemoConnectorVersion = String(
+    options.requiredDemoConnectorVersion || '1.4.0-demo-execution'
+  );
+  const allowedDemoSymbols = [...new Set(
+    (Array.isArray(options.allowedDemoSymbols) ? options.allowedDemoSymbols : ['XAUUSD'])
+      .map(Core.normaliseSymbol)
+      .filter(symbol => Core.SUPPORTED_MARKETS.includes(symbol))
+  )];
+  if (!allowedDemoSymbols.length) throw new Error('At least one DEMO execution symbol is required.');
+  const allowedDemoOwnershipModes = [...new Set(
+    (Array.isArray(options.allowedDemoOwnershipModes)
+      ? options.allowedDemoOwnershipModes : ['TRADER_OWNED_WINDOWS_PC'])
+      .map(value => String(value || '').toUpperCase())
+      .filter(value => Core.POD_OWNERSHIP_MODES.includes(value) || value === 'INTERNAL_DEMO')
+  )];
+  if (!allowedDemoOwnershipModes.length) throw new Error('At least one DEMO execution host mode is required.');
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
   const pairingTtlMs = Math.max(2 * 60 * 1000, Math.min(30 * 60 * 1000,
@@ -63,6 +79,13 @@ function createAutoTradeService(options = {}) {
   function signCommand(command) {
     return crypto.createHmac('sha256', commandSigningKeyForPod(command.podId))
       .update(canonicalCommand(command)).digest('hex');
+  }
+
+  function connectionState(pod) {
+    return Core.podConnectionState(pod, now(), allowDemoExecution ? {
+      connectorVersion: requiredDemoConnectorVersion,
+      ownershipModes: allowedDemoOwnershipModes
+    } : {});
   }
 
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
@@ -93,7 +116,7 @@ function createAutoTradeService(options = {}) {
       typeof store.getActivePairingForUser === 'function'
         ? store.getActivePairingForUser(userId, now()) : null
     ]);
-    const connection = Core.podConnectionState(pod, now());
+    const connection = connectionState(pod);
     const settings = profile ? {
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
@@ -113,6 +136,8 @@ function createAutoTradeService(options = {}) {
         desiredState,
         effectiveState,
         executionRolloutUnlocked: allowDemoExecution,
+        executionSymbols: allowedDemoSymbols,
+        requiredConnectorVersion: allowDemoExecution ? requiredDemoConnectorVersion : null,
         stateVersion: profile?.stateVersion || 0,
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
@@ -154,6 +179,9 @@ function createAutoTradeService(options = {}) {
         traderOwnsExecutionHost: true,
         brokerCredentialsStayOnExecutionHost: true,
         controlPlaneExecutionUnlocked: allowDemoExecution,
+        demoOnly: true,
+        allowedDemoSymbols,
+        requiredConnectorVersion: allowDemoExecution ? requiredDemoConnectorVersion : null,
         podCommandKeyIsPerPod: true,
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
@@ -295,7 +323,17 @@ function createAutoTradeService(options = {}) {
     if (!settingsValidation.ok || !profile?.riskAcknowledgedAt) {
       throw serviceError('SETTINGS_REQUIRED', 'Simpan konfigurasi dan pengesahan risiko dahulu.', 409);
     }
-    const connection = Core.podConnectionState(pod, now());
+    const unsupportedSymbols = settingsValidation.value.symbols
+      .filter(symbol => !allowedDemoSymbols.includes(symbol));
+    if (unsupportedSymbols.length) {
+      throw serviceError(
+        'DEMO_SYMBOL_NOT_VALIDATED',
+        `Fasa Demo execution ini hanya dibuka untuk ${allowedDemoSymbols.join(', ')}.`,
+        409,
+        { symbols: `Belum divalidasi: ${unsupportedSymbols.join(', ')}` }
+      );
+    }
+    const connection = connectionState(pod);
     if (!connection.ready) {
       throw serviceError('POD_NOT_READY', connection.label, 409);
     }
@@ -318,6 +356,9 @@ function createAutoTradeService(options = {}) {
 
   async function stop(userId) {
     const pod = await store.getPodForUser(userId);
+    if (typeof store.cancelPendingEntryCommands === 'function') {
+      await store.cancelPendingEntryCommands(userId, 'SYSTEM_STOP_REQUESTED');
+    }
     if (!pod) {
       await store.setControl(userId, {
         desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
@@ -346,6 +387,9 @@ function createAutoTradeService(options = {}) {
     }
     const pod = await store.getPodForUser(userId);
     if (!pod) throw serviceError('POD_NOT_READY', 'Secure Pod belum disediakan.', 409);
+    if (typeof store.cancelPendingEntryCommands === 'function') {
+      await store.cancelPendingEntryCommands(userId, 'EMERGENCY_CLOSE_REQUESTED');
+    }
     const issued = await issueCommand({
       userId, podId: pod.id, type: 'EMERGENCY_CLOSE_ALL',
       payload: { scope: 'ALL_OPEN_POSITIONS', blockNewEntriesImmediately: true },
@@ -395,7 +439,7 @@ function createAutoTradeService(options = {}) {
     await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt);
     return {
       ok: true,
-      podState: Core.podConnectionState(updated, seenAt),
+      podState: connectionState(updated),
       desiredState: (await store.getProfile(pod.userId))?.desiredState || 'STOPPED',
       serverTime: seenAt
     };
@@ -464,10 +508,17 @@ function createAutoTradeService(options = {}) {
     const profiles = allowDemoExecution ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
-      const pod = await store.getPodForUser(profile.userId);
-      if (!Core.podConnectionState(pod, now()).ready) continue;
+      const [pod, positions] = await Promise.all([
+        store.getPodForUser(profile.userId),
+        store.listPositions(profile.userId)
+      ]);
+      if (!connectionState(pod).ready) continue;
+      const openSymbols = new Set(positions.map(position => Core.normaliseSymbol(position.symbol)));
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
+        if (!allowedDemoSymbols.includes(symbol) || openSymbols.has(symbol)) continue;
+        if (typeof store.hasRecentEntryCommand === 'function' &&
+            await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
         const setup = Core.buildSetupCommand(market, profile, pod.symbolSpecs?.[symbol]);
         if (!setup) continue;
         const issued = await issueCommand({

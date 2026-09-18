@@ -414,6 +414,32 @@ class PostgresAutoTradeStore {
     }
   }
 
+  async hasRecentEntryCommand(userId, symbol, since) {
+    const result = await this.pool.query(
+      `SELECT 1 FROM zencore_autotrade_commands
+       WHERE user_id = $1 AND command_type = 'PLACE_SETUP'
+         AND payload->>'symbol' = $2 AND created_at >= $3
+         AND status NOT IN ('FAILED','REJECTED','EXPIRED','CANCELLED')
+       LIMIT 1`,
+      [userId, symbol, new Date(since)]
+    );
+    return result.rowCount > 0;
+  }
+
+  async cancelPendingEntryCommands(userId, reason) {
+    const safeReason = String(reason || 'CANCELLED').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40);
+    const result = await this.pool.query(
+      `UPDATE zencore_autotrade_commands SET
+         status = 'CANCELLED', acknowledged_at = NOW(),
+         result = jsonb_build_object('code', $2::text, 'message', 'Cancelled before broker execution')
+       WHERE user_id = $1 AND command_type IN ('PLACE_SETUP','SYSTEM_ON')
+         AND status = 'PENDING'
+       RETURNING id`,
+      [userId, safeReason]
+    );
+    return result.rowCount;
+  }
+
   async nextCommandForPod(podId, now) {
     const client = await this.pool.connect();
     try {
@@ -426,7 +452,15 @@ class PostgresAutoTradeStore {
       const result = await client.query(
         `SELECT * FROM zencore_autotrade_commands
          WHERE pod_id = $1 AND status IN ('PENDING','DELIVERED') AND expires_at > $2
-         ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
+         ORDER BY CASE command_type
+           WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
+           WHEN 'SYSTEM_STOP' THEN 1
+           WHEN 'MANAGE_POSITION' THEN 2
+           WHEN 'SYSTEM_ON' THEN 3
+           WHEN 'PLACE_SETUP' THEN 4
+           ELSE 5 END,
+           created_at ASC
+         LIMIT 1 FOR UPDATE SKIP LOCKED`,
         [podId, new Date(now)]
       );
       if (!result.rows[0]) {
@@ -608,12 +642,55 @@ class MemoryAutoTradeStore {
     return { created: true, command: publicCommand(row) };
   }
 
+  async hasRecentEntryCommand(userId, symbol, since) {
+    for (const rows of this.commands.values()) {
+      const existing = rows.find(item =>
+        item.userId === userId &&
+        item.type === 'PLACE_SETUP' &&
+        item.payload?.symbol === symbol &&
+        item.createdAt >= since &&
+        !['FAILED', 'REJECTED', 'EXPIRED', 'CANCELLED'].includes(item.status)
+      );
+      if (existing) return true;
+    }
+    return false;
+  }
+
+  async cancelPendingEntryCommands(userId, reason) {
+    let cancelled = 0;
+    for (const rows of this.commands.values()) {
+      for (const item of rows) {
+        if (item.userId !== userId || !['PLACE_SETUP', 'SYSTEM_ON'].includes(item.type) ||
+            item.status !== 'PENDING') continue;
+        item.status = 'CANCELLED';
+        item.acknowledgedAt = Date.now();
+        item.result = {
+          code: String(reason || 'CANCELLED').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40),
+          message: 'Cancelled before broker execution'
+        };
+        cancelled += 1;
+      }
+    }
+    return cancelled;
+  }
+
   async nextCommandForPod(podId, now) {
     const rows = this.commands.get(podId) || [];
     for (const row of rows) {
       if (['PENDING', 'DELIVERED'].includes(row.status) && row.expiresAt <= now) row.status = 'EXPIRED';
     }
-    const row = rows.find(item => ['PENDING', 'DELIVERED'].includes(item.status) && item.expiresAt > now);
+    const priority = {
+      EMERGENCY_CLOSE_ALL: 0,
+      SYSTEM_STOP: 1,
+      MANAGE_POSITION: 2,
+      SYSTEM_ON: 3,
+      PLACE_SETUP: 4
+    };
+    const row = rows
+      .filter(item => ['PENDING', 'DELIVERED'].includes(item.status) && item.expiresAt > now)
+      .sort((left, right) =>
+        (priority[left.type] ?? 5) - (priority[right.type] ?? 5) || left.createdAt - right.createdAt
+      )[0];
     if (!row) return null;
     row.status = 'DELIVERED';
     row.deliveredAt = now;

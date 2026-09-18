@@ -1,6 +1,6 @@
 # ZenCore Secure Pod on a trader-owned Windows PC
 
-This profile connects ZenCore to MetaTrader 5 already installed on the trader's own PC. It is intended for the InterStellar **DEMO connection and monitoring rollout**. Order execution remains locked in this release.
+This profile connects ZenCore to MetaTrader 5 already installed on the trader's own PC. Release `1.4.0-demo-execution` can execute **XAUUSD on InterStellar Demo only** after both the local and server rollout gates are enabled.
 
 ## Security boundary
 
@@ -10,7 +10,8 @@ This profile connects ZenCore to MetaTrader 5 already installed on the trader's 
 - The one-time pairing code expires after 10 minutes. It is not a broker password.
 - The resulting pod token and command verification key are encrypted by Windows DPAPI for the Windows user that performs pairing.
 - The worker makes outbound HTTPS requests only. No router port-forwarding or inbound web server is required.
-- The worker refuses real accounts and this build reports `demoExecutionUnlocked=false`, so the website cannot turn Auto Trade on.
+- The worker refuses real accounts, any server other than `InterStellarFinancial-Demo`, and every execution symbol except XAUUSD.
+- Order execution requires all of: the reviewed worker build, `-EnableDemoExecution`, a signed ZenCore command, the server rollout gate and an explicit **AKTIFKAN DEMO** confirmation.
 
 ## PC requirements
 
@@ -30,6 +31,7 @@ Open Windows PowerShell as Administrator from the extracted release folder:
 Set-Location '.\mt5-secure-pod'
 .\Install-ZenCoreSecurePod.ps1 `
   -HostProfile WINDOWS_PC `
+  -EnableDemoExecution `
   -Mt5TerminalPath 'C:\Program Files\InterStellar MT5\terminal64.exe'
 ```
 
@@ -53,13 +55,17 @@ When the pairing script prompts:
 3. Generate the one-time pairing code.
 4. Paste it only into the hidden PowerShell prompt on the same PC.
 
-After pairing, ZenCore should show `CONNECTED • EXECUTION LOCKED`, the masked InterStellar Demo identity and a recent heartbeat. That is the expected successful state for this release.
+Before preflight, open InterStellar MT5, log in to `InterStellarFinancial-Demo`, enable Algo Trading and allow the external Python API. The preflight must report `InterStellar MT5 Demo execution = PASS`.
 
-## What this release cannot do
+After pairing and after the server rollout gate is enabled, ZenCore should show `MT5 SECURE POD READY`, a masked Demo identity and a recent heartbeat. Save XAUUSD settings and type **AKTIFKAN DEMO** on the website before the worker accepts a valid Normal 3M SOP V32 setup.
 
-- It cannot place, modify or close an MT5 order.
-- The website ON button remains disabled because the worker reports execution locked.
-- Changing `pod-config.json` cannot bypass the lock; the Python build contains a second immutable `DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False` gate.
+## Demo execution behaviour
 
-Order execution will be unlocked only in a separately reviewed Demo broker-test release after symbol mapping, three-layer entry, partial close, StepLock, restart, replay and disconnection tests pass.
+- Entry remains Normal 3M SOP V32; this release does not add a manual or test entry that bypasses the SOP.
+- Each setup opens the configured layers with the same broker-side initial SL and no broker-side TP close.
+- EXIT 32.3 StepLock moves SL to each layer's actual entry at TP1, TP1 at TP2, and TP2 at TP3.
+- Close Separuh is executed only once. With 3 × 0.01 and a 0.01 broker lot step, 0.015 cannot be traded, so the worker safely rounds the close to 0.02 and leaves a 0.01 runner.
+- STOP immediately disarms new entries while StepLock and exit management continue for existing ZenCore positions.
+- An interrupted command is recorded locally before broker execution; a replay is blocked rather than risking a duplicate order.
 
+This is a Demo broker-test release. It must not be used with a real-money MT5 account. Other pairs remain analysis-only until separate broker validation is completed.
