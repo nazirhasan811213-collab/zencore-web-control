@@ -63,7 +63,7 @@ function stopServer(child) {
   });
 }
 
-test('HTTP auth flow protects Page Utama, Analysis and analysis APIs', { timeout: 30000 }, async () => {
+test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', { timeout: 30000 }, async () => {
   const { child, output } = await startServer();
   try {
     let response = await fetch(`${BASE}/`, { redirect: 'manual' });
@@ -76,6 +76,10 @@ test('HTTP auth flow protects Page Utama, Analysis and analysis APIs', { timeout
 
     response = await fetch(`${BASE}/api/markets`);
     assert.equal(response.status, 401);
+
+    response = await fetch(`${BASE}/results`, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/login');
 
     const registration = {
       displayName: 'HTTP Test Trader',
@@ -123,6 +127,7 @@ test('HTTP auth flow protects Page Utama, Analysis and analysis APIs', { timeout
     assert.match(home, /Market Radar/);
     assert.match(home, /marketGrid/);
     assert.match(home, /\/analysis\?pair=XAUUSD/);
+    assert.match(home, /href="\/results"/);
 
     response = await fetch(`${BASE}/market-radar-core.js`);
     assert.equal(response.status, 200);
@@ -135,6 +140,32 @@ test('HTTP auth flow protects Page Utama, Analysis and analysis APIs', { timeout
     response = await fetch(`${BASE}/analysis`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
     assert.match(await response.text(), /ZenCore Precision Entry/);
+
+    response = await fetch(`${BASE}/results`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
+    const results = await response.text();
+    assert.match(results, /ZenCore Signal Validation/);
+    assert.match(results, /Bukan trade broker atau rekod P\/L MT5/);
+
+    response = await fetch(`${BASE}/results-core.js`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /aggregatePerformance/);
+
+    response = await fetch(`${BASE}/results.css`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /result-summary/);
+
+    response = await fetch(`${BASE}/results.js`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /refreshResults/);
+
+    response = await fetch(`${BASE}/api/strategy-performance/XAUUSD/NORMAL`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    const performance = await response.json();
+    assert.equal(performance.ok, true);
+    assert.equal(performance.symbol, 'XAUUSD');
+    assert.equal(performance.mode, 'NORMAL');
 
     response = await fetch(`${BASE}/api/markets`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
@@ -149,6 +180,10 @@ test('HTTP auth flow protects Page Utama, Analysis and analysis APIs', { timeout
     assert.equal(response.status, 200);
 
     response = await fetch(`${BASE}/app`, { headers: { Cookie: cookie }, redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/login');
+
+    response = await fetch(`${BASE}/results`, { headers: { Cookie: cookie }, redirect: 'manual' });
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
   } finally {

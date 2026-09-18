@@ -36,3 +36,5 @@ Authentication is OFF by default so the existing Precision Entry deployment is u
 See `AUTH_SETUP.md` for the Render environment variables, local test mode and security model.
 
 The protected `/app` Page Utama renders the existing Normal 3M state for all 11 markets from `/api/markets` and `/market-events`. Selecting a card opens the completed Analysis Page with the same pair through `/analysis?pair=SYMBOL`.
+
+The protected `/results` page combines Normal 3M validation from all 11 markets. It shows backend totals, per-pair performance, open signals, recent outcomes, filters and CSV export. These are ZenCore signal-validation records, not broker trades or MT5 profit-and-loss. The current validation store is in memory and can reset after a service restart.

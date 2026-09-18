@@ -326,6 +326,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/market-radar-core.js') return sendAuthAsset(res, 'market-radar-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/portal.js') return sendAuthAsset(res, 'portal.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/results.css') return sendAuthAsset(res, 'results.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/results-core.js') return sendAuthAsset(res, 'results-core.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/results.js') return sendAuthAsset(res, 'results.js', 'application/javascript; charset=utf-8');
 
   if (AUTH_ENABLED && pathname.startsWith('/auth/')) {
     return handleAuthApi(req, res, pathname);
@@ -370,6 +373,12 @@ const server = http.createServer(async (req, res) => {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
     return sendAsset(res, 'precision-entry.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/results') {
+    const session = await requireSession(req, res, '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'results.html', 'text/html; charset=utf-8');
   }
 
   const publicProxy = (req.method === 'POST' && pathname === '/webhook') ||

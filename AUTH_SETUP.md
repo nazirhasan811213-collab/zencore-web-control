@@ -31,6 +31,7 @@ When authentication is enabled:
 - `/login` and `/register` are public account pages.
 - `/app` is the Page Utama Market Radar for all 11 supported markets.
 - `/analysis` is the protected existing Analysis Page.
+- `/results` is the protected 11-market signal-validation Result Page.
 - Analysis APIs and live event streams require a valid user session.
 - `/webhook` remains public at the network layer because TradingView must reach it; the existing webhook secret validation remains inside the analysis stack.
 - `/health` remains public for Render health checks.
@@ -58,3 +59,4 @@ The memory store is blocked when `NODE_ENV=production` and must never be used fo
 - Registration and login requests have same-origin checks and rate limiting.
 - Duplicate-email errors never expose passwords or session data.
 - MT5 credentials and Auto Trade are not part of Phase 1.
+- Result history is engine validation held in server memory; it is not user-specific broker P/L and may reset on service restart.
