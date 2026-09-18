@@ -45,4 +45,4 @@ The protected `/auto-trade` page now provides capital/lot/layer settings, all 11
 
 The Render process never accepts broker login, password or full server. Execution is handled by a separate DEMO-only worker in a confidential Windows VM owned by the trader's Azure subscription. The user page now supports a ten-minute, single-use BYOC pairing flow; pod tokens and per-pod command keys are delivered directly to the worker and never exposed in normal user state. Auto Trade remains disabled by default and real broker execution remains locked pending Azure attestation/HSM infrastructure and broker execution tests.
 
-See `AUTOTRADE_SECURITY.md` for trust boundaries, commands, environment flags and deployment gates.
+See `AUTOTRADE_SECURITY.md` for trust boundaries, commands, environment flags and deployment gates. The trader-owned Azure template, private-access runbook, Windows installer, preflight, hidden pairing flow and scheduled-worker registration are in `infra/azure-trader-pod` and `mt5-secure-pod`. These are a DEMO foundation only; `demoExecutionEnabled` remains false.

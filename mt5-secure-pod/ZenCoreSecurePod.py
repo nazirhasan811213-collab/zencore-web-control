@@ -7,14 +7,17 @@ control-plane API. The terminal must already have an enrolled DEMO session.
 
 from __future__ import annotations
 
+import argparse
 import base64
 import ctypes
+import getpass
 import hashlib
 import hmac
 import json
 import os
 import re
 import sqlite3
+import ssl
 import sys
 import time
 import urllib.error
@@ -22,6 +25,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 try:
     import MetaTrader5 as mt5
@@ -34,16 +38,49 @@ SUPPORTED_MARKETS = (
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
 )
 MAGIC = 3233001
-CONNECTOR_VERSION = "1.1.0-demo"
+CONNECTOR_VERSION = "1.2.0-demo"
 PAIRING_OWNERSHIP_MODE = "TRADER_OWNED_AZURE"
+CONFIG_SCHEMA_VERSION = 1
+PRODUCTION_CONTROL_HOST = "zencore-precision-entry.onrender.com"
+# This source release is intentionally unable to place even DEMO orders. A later,
+# separately reviewed release must change this build gate after broker validation.
+DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False
+FORBIDDEN_CREDENTIAL_ENVIRONMENT = (
+    "MT5_LOGIN",
+    "MT5_PASSWORD",
+    "MT5_SERVER",
+    "ZENCORE_BROKER_LOGIN",
+    "ZENCORE_BROKER_PASSWORD",
+    "ZENCORE_BROKER_SERVER",
+    "ZENCORE_PAIRING_CODE",
+    "ZENCORE_POD_TOKEN",
+    "ZENCORE_COMMAND_SIGNING_KEY",
+)
 
 
 class _DataBlob(ctypes.Structure):
     _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
 
 
-class MachineCredentialStore:
-    """DPAPI-protected machine credential storage for the trader-owned Windows pod."""
+class _RejectRedirects(urllib.request.HTTPRedirectHandler):
+    """Fail closed instead of forwarding pairing material or pod auth on redirects."""
+
+    def redirect_request(self, request: Any, file_pointer: Any, code: int, message: str,
+                         headers: Any, new_url: str) -> None:
+        return None
+
+
+TLS_CONTEXT = ssl.create_default_context()
+TLS_CONTEXT.minimum_version = ssl.TLSVersion.TLSv1_2
+NO_REDIRECT_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
+    _RejectRedirects(),
+    urllib.request.HTTPSHandler(context=TLS_CONTEXT),
+)
+
+
+class UserCredentialStore:
+    """DPAPI-protected pod identity bound to the dedicated trader Windows user."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -58,7 +95,7 @@ class MachineCredentialStore:
     def _protect(data: bytes) -> bytes:
         if os.name != "nt":
             raise RuntimeError("Secure Pod machine credentials require Windows DPAPI")
-        source, source_buffer = MachineCredentialStore._blob(data)
+        source, source_buffer = UserCredentialStore._blob(data)
         output = _DataBlob()
         description = "ZenCore Secure Pod machine credentials"
         flags = 0x1  # no UI; default DPAPI scope binds to this Windows user profile
@@ -76,7 +113,7 @@ class MachineCredentialStore:
     def _unprotect(data: bytes) -> bytes:
         if os.name != "nt":
             raise RuntimeError("Secure Pod machine credentials require Windows DPAPI")
-        source, source_buffer = MachineCredentialStore._blob(data)
+        source, source_buffer = UserCredentialStore._blob(data)
         output = _DataBlob()
         flags = 0x1
         if not ctypes.windll.crypt32.CryptUnprotectData(
@@ -114,7 +151,7 @@ class MachineCredentialStore:
 
 def pair_trader_owned_pod(control_url: str, pairing_code: str) -> dict[str, str]:
     if not re.fullmatch(r"zcpair_[A-Za-z0-9_-]{40,}", pairing_code):
-        raise RuntimeError("ZENCORE_PAIRING_CODE is invalid")
+        raise RuntimeError("One-time pairing code is invalid")
     body = json.dumps({
         "pairingCode": pairing_code,
         "ownershipMode": PAIRING_OWNERSHIP_MODE,
@@ -127,7 +164,7 @@ def pair_trader_owned_pod(control_url: str, pairing_code: str) -> dict[str, str]
         headers={"Accept": "application/json", "Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with NO_REDIRECT_OPENER.open(request, timeout=15) as response:
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"Secure Pod pairing rejected (HTTP {exc.code})") from exc
@@ -151,40 +188,135 @@ class Config:
     credential_path: Path
 
     @staticmethod
-    def load() -> "Config":
-        control_url = os.environ.get("ZENCORE_CONTROL_URL", "").rstrip("/")
-        terminal_path = os.environ.get("MT5_TERMINAL_PATH", "")
-        if not control_url.startswith("https://") and not control_url.startswith("http://127.0.0.1"):
-            raise SystemExit("ZENCORE_CONTROL_URL must use HTTPS")
-        if not terminal_path:
-            raise SystemExit("MT5_TERMINAL_PATH is required")
-        raw_map = os.environ.get("ZENCORE_SYMBOL_MAP_JSON", "{}")
+    def _load_file(config_path: Path | None) -> dict[str, Any]:
+        if config_path is None:
+            return {}
         try:
-            parsed_map = json.loads(raw_map)
-        except json.JSONDecodeError as exc:
-            raise SystemExit("ZENCORE_SYMBOL_MAP_JSON is invalid") from exc
+            parsed = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"Unable to read Secure Pod config: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise SystemExit("Secure Pod config must be a JSON object")
+        allowed = {
+            "schemaVersion",
+            "controlUrl",
+            "mt5TerminalPath",
+            "symbolMap",
+            "pollSeconds",
+            "demoExecutionEnabled",
+            "dataRoot",
+        }
+        unknown = sorted(set(parsed) - allowed)
+        if unknown:
+            raise SystemExit(f"Unsupported Secure Pod config fields: {', '.join(unknown)}")
+        if parsed.get("schemaVersion") != CONFIG_SCHEMA_VERSION:
+            raise SystemExit(f"Secure Pod config schemaVersion must be {CONFIG_SCHEMA_VERSION}")
+        return parsed
+
+    @staticmethod
+    def load(config_path: Path | None = None, pairing_code: str = "") -> "Config":
+        file_config = Config._load_file(config_path)
+        environment_mode = config_path is None
+        present_forbidden = [name for name in FORBIDDEN_CREDENTIAL_ENVIRONMENT if os.environ.get(name)]
+        if present_forbidden:
+            raise SystemExit(
+                "Credential material is forbidden in Secure Pod environment variables; remove: "
+                + ", ".join(present_forbidden)
+            )
+
+        control_url = str(
+            (os.environ.get("ZENCORE_CONTROL_URL") if environment_mode else None)
+            or file_config.get("controlUrl")
+            or ""
+        ).rstrip("/")
+        terminal_path = str(
+            (os.environ.get("MT5_TERMINAL_PATH") if environment_mode else None)
+            or file_config.get("mt5TerminalPath")
+            or ""
+        )
+        parsed_control_url = urlparse(control_url)
+        try:
+            control_port = parsed_control_url.port
+        except ValueError as exc:
+            raise SystemExit("Secure Pod controlUrl port is invalid") from exc
+        loopback_http = (
+            environment_mode
+            and parsed_control_url.scheme == "http"
+            and parsed_control_url.hostname in {"127.0.0.1", "localhost"}
+        )
+        approved_production_origin = (
+            parsed_control_url.scheme == "https"
+            and parsed_control_url.hostname == PRODUCTION_CONTROL_HOST
+            and control_port in {None, 443}
+        )
+        if (
+            (not approved_production_origin and not loopback_http)
+            or not parsed_control_url.hostname
+            or parsed_control_url.username is not None
+            or parsed_control_url.password is not None
+            or parsed_control_url.path not in {"", "/"}
+            or parsed_control_url.query
+            or parsed_control_url.fragment
+        ):
+            raise SystemExit("Secure Pod controlUrl must be the approved ZenCore HTTPS origin")
+        if not terminal_path:
+            raise SystemExit("Secure Pod mt5TerminalPath is required")
+
+        raw_map = os.environ.get("ZENCORE_SYMBOL_MAP_JSON") if environment_mode else None
+        if raw_map is not None:
+            try:
+                parsed_map = json.loads(raw_map)
+            except json.JSONDecodeError as exc:
+                raise SystemExit("ZENCORE_SYMBOL_MAP_JSON is invalid") from exc
+        else:
+            parsed_map = file_config.get("symbolMap", {})
+        if not isinstance(parsed_map, dict):
+            raise SystemExit("Secure Pod symbolMap must be a JSON object")
         symbol_map = {
             str(key).upper(): str(value)
             for key, value in parsed_map.items()
-            if str(key).upper() in SUPPORTED_MARKETS
+            if str(key).upper() in SUPPORTED_MARKETS and str(value).strip()
         }
-        default_root = Path(os.environ.get("PROGRAMDATA", Path.cwd())) / "ZenCoreSecurePod"
-        credential_path = Path(os.environ.get(
-            "ZENCORE_MACHINE_CREDENTIAL_PATH", default_root / "machine-credentials.dpapi"
-        ))
-        credential_store = MachineCredentialStore(credential_path)
-        pod_token = os.environ.get("ZENCORE_POD_TOKEN", "")
-        signing_key_text = os.environ.get("ZENCORE_COMMAND_SIGNING_KEY", "")
+
+        poll_seconds_value = (
+            os.environ.get("ZENCORE_POLL_SECONDS") if environment_mode else None
+        ) or file_config.get("pollSeconds", 2)
+        try:
+            poll_seconds = max(0.5, float(poll_seconds_value))
+        except (TypeError, ValueError) as exc:
+            raise SystemExit("Secure Pod pollSeconds must be numeric") from exc
+
+        demo_environment_value = os.environ.get("ZENCORE_DEMO_EXECUTION") if environment_mode else None
+        if demo_environment_value is None:
+            demo_execution_enabled = file_config.get("demoExecutionEnabled", False)
+            if not isinstance(demo_execution_enabled, bool):
+                raise SystemExit("Secure Pod demoExecutionEnabled must be true or false")
+        else:
+            normalised_demo_value = demo_environment_value.strip().lower()
+            if normalised_demo_value not in {"0", "1", "false", "true", "no", "yes", "off", "on"}:
+                raise SystemExit("ZENCORE_DEMO_EXECUTION must be true or false")
+            demo_execution_enabled = normalised_demo_value in {"1", "true", "yes", "on"}
+        if demo_execution_enabled and not DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
+            raise SystemExit("This Secure Pod build cannot unlock DEMO order execution")
+
+        platform_data_root = Path(os.environ.get("PROGRAMDATA", Path.cwd())) / "ZenCoreSecurePod"
+        default_root = Path(
+            (os.environ.get("ZENCORE_DATA_ROOT") if environment_mode else None)
+            or file_config.get("dataRoot")
+            or platform_data_root
+        )
+        credential_path = Path(
+            (os.environ.get("ZENCORE_MACHINE_CREDENTIAL_PATH") if environment_mode else None)
+            or default_root / "machine-credentials.dpapi"
+        )
+        credential_store = UserCredentialStore(credential_path)
+        try:
+            protected_credentials = credential_store.load()
+        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"Unable to unlock Secure Pod machine credentials: {exc}") from exc
+        pod_token = protected_credentials["podToken"] if protected_credentials else ""
+        signing_key_text = protected_credentials["commandSigningKey"] if protected_credentials else ""
         if not pod_token or not signing_key_text:
-            try:
-                protected_credentials = credential_store.load()
-            except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
-                raise SystemExit(f"Unable to unlock Secure Pod machine credentials: {exc}") from exc
-            if protected_credentials:
-                pod_token = protected_credentials["podToken"]
-                signing_key_text = protected_credentials["commandSigningKey"]
-        if not pod_token or not signing_key_text:
-            pairing_code = os.environ.get("ZENCORE_PAIRING_CODE", "")
             if not pairing_code:
                 raise SystemExit("Run one-time Secure Pod pairing before starting the worker")
             try:
@@ -192,8 +324,6 @@ class Config:
                 credential_store.save(paired)
             except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 raise SystemExit(f"Secure Pod pairing failed: {exc}") from exc
-            finally:
-                os.environ.pop("ZENCORE_PAIRING_CODE", None)
             pod_token = paired["podToken"]
             signing_key_text = paired["commandSigningKey"]
         signing_key = signing_key_text.encode("utf-8")
@@ -201,15 +331,18 @@ class Config:
             raise SystemExit("Secure Pod token is missing or invalid")
         if len(signing_key) < 32:
             raise SystemExit("Secure Pod command signing key is invalid")
-        ledger_path = Path(os.environ.get("ZENCORE_LEDGER_PATH", default_root / "command-ledger.db"))
+        ledger_path = Path(
+            (os.environ.get("ZENCORE_LEDGER_PATH") if environment_mode else None)
+            or default_root / "command-ledger.db"
+        )
         return Config(
             control_url=control_url,
             pod_token=pod_token,
             signing_key=signing_key,
             terminal_path=terminal_path,
             ledger_path=ledger_path,
-            poll_seconds=max(0.5, float(os.environ.get("ZENCORE_POLL_SECONDS", "2"))),
-            demo_execution_enabled=os.environ.get("ZENCORE_DEMO_EXECUTION", "false").lower() in {"1", "true", "yes", "on"},
+            poll_seconds=poll_seconds,
+            demo_execution_enabled=(demo_execution_enabled and DEMO_ORDER_EXECUTION_BUILD_UNLOCKED),
             symbol_map=symbol_map,
             credential_path=credential_path,
         )
@@ -292,7 +425,7 @@ class ControlPlane:
                 **({"Content-Type": "application/json"} if encoded is not None else {}),
             },
         )
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with NO_REDIRECT_OPENER.open(request, timeout=10) as response:
             return json.loads(response.read().decode("utf-8"))
 
     def heartbeat(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -314,7 +447,12 @@ class SecurePod:
     @staticmethod
     def mask(value: Any, visible: int = 4) -> str:
         safe = "".join(character for character in str(value or "") if character.isalnum() or character in "._- ")
-        tail = safe[-visible:] if safe else "MT5"
+        if len(safe) <= 2:
+            return "****MT5"
+        # Never return the full source value, even for unusually short account or
+        # server identifiers. At most half of a short value is revealed.
+        visible_count = min(visible, max(2, len(safe) // 2))
+        tail = safe[-visible_count:]
         return f"****{tail}"
 
     def initialise_terminal(self) -> None:
@@ -648,10 +786,35 @@ class SecurePod:
             time.sleep(self.config.poll_seconds)
 
 
-if __name__ == "__main__":
-    configuration = Config.load()
+def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="ZenCore trader-owned MT5 Secure Pod")
+    parser.add_argument("--config", type=Path, help="Path to the non-secret Secure Pod JSON config")
+    parser.add_argument(
+        "--pair-only",
+        action="store_true",
+        help="Exchange a one-time pairing code, protect the pod identity with DPAPI, then exit",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = parse_arguments(argv)
+    if arguments.pair_only:
+        pairing_code = getpass.getpass("One-time ZenCore pairing code: ")
+        try:
+            configuration = Config.load(arguments.config, pairing_code=pairing_code)
+        finally:
+            pairing_code = ""
+        print("Secure Pod pairing completed; no broker credentials were requested or transmitted.", flush=True)
+        return 0
+    configuration = Config.load(arguments.config)
     pod = SecurePod(configuration)
     try:
         pod.run()
     finally:
         mt5.shutdown()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

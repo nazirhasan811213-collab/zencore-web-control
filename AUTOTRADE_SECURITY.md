@@ -16,6 +16,9 @@ This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod 
    - Owns the enrolled terminal session.
    - Never returns the broker login, password or full server to Render.
    - Rejects a non-DEMO MT5 account.
+   - Uses an Azure NIC with no public IP; a trader-owned NAT Gateway provides outbound-only connectivity.
+   - Loads only a strict non-secret JSON config. Broker credential environment variables and long-lived pod-secret environment variables are rejected by preflight.
+   - Pins the production control origin and rejects redirects for pairing and authenticated pod requests.
 3. **Attested key service / HSM (required before production execution)**
    - Releases machine secrets only to an approved measured worker image.
    - Is not implemented by the current Render repository and must be provisioned separately.
@@ -27,7 +30,7 @@ The current web UI intentionally contains no MT5 login, broker-password or full-
 - The authenticated trader creates a cryptographically random `zcpair_...` code. Only its SHA-256 hash is stored.
 - The code expires after 10 minutes, is single-use, and cannot replace a pod while ZenCore positions remain open.
 - The Azure worker exchanges it directly at `/api/execution/pair`.
-- The long-lived pod token and per-pod command verification key are returned only to that worker and protected locally by Windows user-scope DPAPI. The worker and MT5 run under the same dedicated trader-owned Windows account.
+- The long-lived pod token and per-pod command verification key are returned only to that worker and protected locally by Windows user-scope DPAPI. The worker and MT5 run under the same dedicated trader-owned Windows account. Pairing input is hidden and is not passed through the command line or environment.
 - Public user state exposes neither the pairing code, pod token, verification key nor their hashes.
 - Re-pairing revokes the previous pod token and forces control state to `STOPPED`.
 
@@ -88,7 +91,7 @@ Never configure broker login, password or full server as a Render environment va
 
 ## Deployment gate
 
-The control plane, UI and worker contract can be tested locally now. Broker execution must stay locked with `ZENCORE_DEMO_EXECUTION=false` until all of the following exist:
+The control plane, UI and worker contract can be tested locally now. Broker execution must stay locked with `demoExecutionEnabled=false` and the source build gate set to false until all of the following exist:
 
 - trader-owned isolated Azure Windows confidential VM per account;
 - direct terminal enrolment inside that trader-owned VM;
@@ -98,3 +101,5 @@ The control plane, UI and worker contract can be tested locally now. Broker exec
 - three-layer and partial-close broker tests;
 - restart/replay/disconnection tests;
 - independent security review and audit-log review.
+
+The infrastructure foundation is in `infra/azure-trader-pod`. It provisions a trader-owned Windows Server 2022 Generation 2 confidential VM with Secure Boot, vTPM, `DiskWithVMGuestState`, no public IP on the VM NIC, no inbound allow rule and an outbound NAT Gateway. The package deliberately does not accept broker credentials, auto-install MT5 or enable DEMO execution. This worker release has a second immutable build gate set to false, so config/environment edits alone cannot enable orders.
