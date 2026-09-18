@@ -20,6 +20,7 @@
   let settingsHydrated = false;
   let settingsDirty = false;
   let toastTimer = null;
+  let lastPairingCode = '';
 
   function goToLogin() { window.location.replace('/login'); }
 
@@ -99,6 +100,7 @@
     setText('serverMask', pod?.serverMask || '—');
     setText('brokerMask', pod?.brokerMask || '—');
     setText('tradeMode', pod?.tradeMode || 'DEMO');
+    setText('podOwner', pod?.ownershipMode === 'TRADER_OWNED_AZURE' ? 'TRADER AZURE' : pod ? 'INTERNAL DEMO' : 'TRADER AZURE');
     const health = (id, enabled) => {
       const el = byId(id);
       if (!el) return;
@@ -108,9 +110,16 @@
     health('terminalState', !!pod?.terminalTradeAllowed);
     health('accountTradeState', !!pod?.accountTradeAllowed);
     health('expertTradeState', !!pod?.expertTradeAllowed);
+    const waitingPair = state.pairing?.status === 'WAITING_FOR_SECURE_POD';
     setText('podNotice', pod
-      ? `${connection.label}. Connector ${pod.connectorVersion || '—'} • terminal build ${pod.terminalBuild || '—'}. Identiti penuh kekal di Secure Pod.`
-      : 'Secure Pod belum disediakan. Provisioning dibuat dalam execution environment terasing—bukan melalui password form web.');
+      ? `${connection.label}. Connector ${pod.connectorVersion || '—'} • terminal build ${pod.terminalBuild || '—'}. Azure, Windows dan identiti penuh kekal di bawah kawalan trader.`
+      : waitingPair
+        ? `Kod pairing aktif sehingga ${timeText(state.pairing.expiresAt)}. Jalankan pairing hanya dari Secure Pod Azure milik trader.`
+        : 'Secure Pod belum disediakan. Pairing dibuat dari Azure Confidential VM milik trader—bukan melalui password form web.');
+    const pairingActions = byId('pairingActions');
+    if (pairingActions) pairingActions.classList.toggle('hidden', !!pod);
+    const pairButton = byId('pairPodButton');
+    if (pairButton) pairButton.textContent = waitingPair ? 'JANA SEMULA' : 'JANA KOD PAIRING';
   }
 
   function renderMaster(state) {
@@ -194,6 +203,8 @@
     const detail = item.detail || {};
     const descriptions = {
       SECURE_POD_PROVISIONED: 'Secure Pod DEMO disediakan.',
+      PAIRING_CODE_CREATED: 'Kod pairing sekali guna dijana untuk Azure milik trader.',
+      SECURE_POD_PAIRED: 'Secure Pod Azure milik trader berjaya dipautkan.',
       SETTINGS_SAVED: `Konfigurasi disimpan: ${detail.layers || '—'} layer × ${detail.lotPerLayer || '—'} lot.`,
       SYSTEM_ON_REQUESTED: 'Arahan ON dihantar; menunggu acknowledgement.',
       SYSTEM_STOP_REQUESTED: 'Entry baharu disekat; EXIT management dikekalkan.',
@@ -336,6 +347,57 @@
     setText('onError', '');
     byId('onConfirmation').value = '';
     byId('onDialog').showModal();
+  });
+
+  byId('pairPodButton')?.addEventListener('click', () => {
+    lastPairingCode = '';
+    setText('pairingError', '');
+    setText('pairingCode', '—');
+    setText('pairingExpiry', '—');
+    byId('pairingConfirmation').value = '';
+    byId('pairingConfirmationField').classList.remove('hidden');
+    byId('pairingResult').classList.add('hidden');
+    byId('generatePairingButton').classList.remove('hidden');
+    byId('pairingDialog').showModal();
+  });
+
+  byId('generatePairingButton')?.addEventListener('click', async () => {
+    const button = byId('generatePairingButton');
+    button.disabled = true;
+    setText('pairingError', '');
+    try {
+      const result = await api('/api/auto-trade/pairing', {
+        method: 'POST',
+        body: JSON.stringify({ confirmation: byId('pairingConfirmation').value })
+      });
+      lastPairingCode = result.pairing?.code || '';
+      setText('pairingCode', lastPairingCode || '—');
+      setText('pairingExpiry', `Tamat: ${timeText(result.pairing?.expiresAt)} • dipaparkan sekali sahaja`);
+      byId('pairingConfirmationField').classList.add('hidden');
+      byId('pairingResult').classList.remove('hidden');
+      button.classList.add('hidden');
+      await refreshState(true);
+    } catch (error) {
+      setText('pairingError', error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId('copyPairingCode')?.addEventListener('click', async () => {
+    if (!lastPairingCode) return;
+    try {
+      await navigator.clipboard.writeText(lastPairingCode);
+      toast('Kod pairing disalin. Jangan kongsi dengan pihak lain.');
+    } catch (_) {
+      setText('pairingError', 'Browser tidak membenarkan salin automatik. Pilih dan salin kod secara manual.');
+    }
+  });
+
+  byId('pairingDialog')?.addEventListener('close', () => {
+    lastPairingCode = '';
+    setText('pairingCode', '—');
+    byId('pairingConfirmation').value = '';
   });
 
   byId('confirmOnButton')?.addEventListener('click', async () => {

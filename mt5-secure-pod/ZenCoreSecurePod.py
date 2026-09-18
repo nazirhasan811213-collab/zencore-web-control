@@ -8,10 +8,12 @@ control-plane API. The terminal must already have an enrolled DEMO session.
 from __future__ import annotations
 
 import base64
+import ctypes
 import hashlib
 import hmac
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -32,7 +34,108 @@ SUPPORTED_MARKETS = (
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
 )
 MAGIC = 3233001
-CONNECTOR_VERSION = "1.0.0-demo"
+CONNECTOR_VERSION = "1.1.0-demo"
+PAIRING_OWNERSHIP_MODE = "TRADER_OWNED_AZURE"
+
+
+class _DataBlob(ctypes.Structure):
+    _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+
+class MachineCredentialStore:
+    """DPAPI-protected machine credential storage for the trader-owned Windows pod."""
+
+    def __init__(self, path: Path):
+        self.path = path
+
+    @staticmethod
+    def _blob(data: bytes) -> tuple[_DataBlob, Any]:
+        buffer = ctypes.create_string_buffer(data)
+        blob = _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte)))
+        return blob, buffer
+
+    @staticmethod
+    def _protect(data: bytes) -> bytes:
+        if os.name != "nt":
+            raise RuntimeError("Secure Pod machine credentials require Windows DPAPI")
+        source, source_buffer = MachineCredentialStore._blob(data)
+        output = _DataBlob()
+        description = "ZenCore Secure Pod machine credentials"
+        flags = 0x1  # no UI; default DPAPI scope binds to this Windows user profile
+        if not ctypes.windll.crypt32.CryptProtectData(
+            ctypes.byref(source), description, None, None, None, flags, ctypes.byref(output)
+        ):
+            raise ctypes.WinError()
+        try:
+            return ctypes.string_at(output.pbData, output.cbData)
+        finally:
+            ctypes.windll.kernel32.LocalFree(output.pbData)
+            ctypes.memset(source_buffer, 0, len(data))
+
+    @staticmethod
+    def _unprotect(data: bytes) -> bytes:
+        if os.name != "nt":
+            raise RuntimeError("Secure Pod machine credentials require Windows DPAPI")
+        source, source_buffer = MachineCredentialStore._blob(data)
+        output = _DataBlob()
+        flags = 0x1
+        if not ctypes.windll.crypt32.CryptUnprotectData(
+            ctypes.byref(source), None, None, None, None, flags, ctypes.byref(output)
+        ):
+            raise ctypes.WinError()
+        try:
+            return ctypes.string_at(output.pbData, output.cbData)
+        finally:
+            ctypes.windll.kernel32.LocalFree(output.pbData)
+            ctypes.memset(source_buffer, 0, len(data))
+
+    def load(self) -> dict[str, str] | None:
+        if not self.path.exists():
+            return None
+        raw = self._unprotect(self.path.read_bytes())
+        try:
+            parsed = json.loads(raw.decode("utf-8"))
+        finally:
+            raw = b""
+        token = str(parsed.get("podToken", ""))
+        signing_key = str(parsed.get("commandSigningKey", ""))
+        if not token.startswith("zcpod_") or len(signing_key.encode("utf-8")) < 32:
+            raise RuntimeError("Protected Secure Pod machine credentials are invalid")
+        return {"podToken": token, "commandSigningKey": signing_key}
+
+    def save(self, credentials: dict[str, str]) -> None:
+        encoded = json.dumps(credentials, separators=(",", ":")).encode("utf-8")
+        protected = self._protect(encoded)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_bytes(protected)
+        os.replace(temporary, self.path)
+
+
+def pair_trader_owned_pod(control_url: str, pairing_code: str) -> dict[str, str]:
+    if not re.fullmatch(r"zcpair_[A-Za-z0-9_-]{40,}", pairing_code):
+        raise RuntimeError("ZENCORE_PAIRING_CODE is invalid")
+    body = json.dumps({
+        "pairingCode": pairing_code,
+        "ownershipMode": PAIRING_OWNERSHIP_MODE,
+        "connectorVersion": CONNECTOR_VERSION,
+    }, separators=(",", ":")).encode("utf-8")
+    request = urllib.request.Request(
+        f"{control_url}/api/execution/pair",
+        data=body,
+        method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"Secure Pod pairing rejected (HTTP {exc.code})") from exc
+    token = str(result.get("podToken", ""))
+    signing_key = str(result.get("commandSigningKey", ""))
+    if not token.startswith("zcpod_") or len(signing_key.encode("utf-8")) < 32:
+        raise RuntimeError("Secure Pod pairing response is invalid")
+    return {"podToken": token, "commandSigningKey": signing_key}
 
 
 @dataclass(frozen=True)
@@ -45,19 +148,14 @@ class Config:
     poll_seconds: float
     demo_execution_enabled: bool
     symbol_map: dict[str, str]
+    credential_path: Path
 
     @staticmethod
     def load() -> "Config":
         control_url = os.environ.get("ZENCORE_CONTROL_URL", "").rstrip("/")
-        pod_token = os.environ.get("ZENCORE_POD_TOKEN", "")
-        signing_key = os.environ.get("ZENCORE_COMMAND_SIGNING_KEY", "").encode("utf-8")
         terminal_path = os.environ.get("MT5_TERMINAL_PATH", "")
         if not control_url.startswith("https://") and not control_url.startswith("http://127.0.0.1"):
             raise SystemExit("ZENCORE_CONTROL_URL must use HTTPS")
-        if not pod_token.startswith("zcpod_"):
-            raise SystemExit("ZENCORE_POD_TOKEN is missing or invalid")
-        if len(signing_key) < 32:
-            raise SystemExit("ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes")
         if not terminal_path:
             raise SystemExit("MT5_TERMINAL_PATH is required")
         raw_map = os.environ.get("ZENCORE_SYMBOL_MAP_JSON", "{}")
@@ -71,6 +169,38 @@ class Config:
             if str(key).upper() in SUPPORTED_MARKETS
         }
         default_root = Path(os.environ.get("PROGRAMDATA", Path.cwd())) / "ZenCoreSecurePod"
+        credential_path = Path(os.environ.get(
+            "ZENCORE_MACHINE_CREDENTIAL_PATH", default_root / "machine-credentials.dpapi"
+        ))
+        credential_store = MachineCredentialStore(credential_path)
+        pod_token = os.environ.get("ZENCORE_POD_TOKEN", "")
+        signing_key_text = os.environ.get("ZENCORE_COMMAND_SIGNING_KEY", "")
+        if not pod_token or not signing_key_text:
+            try:
+                protected_credentials = credential_store.load()
+            except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                raise SystemExit(f"Unable to unlock Secure Pod machine credentials: {exc}") from exc
+            if protected_credentials:
+                pod_token = protected_credentials["podToken"]
+                signing_key_text = protected_credentials["commandSigningKey"]
+        if not pod_token or not signing_key_text:
+            pairing_code = os.environ.get("ZENCORE_PAIRING_CODE", "")
+            if not pairing_code:
+                raise SystemExit("Run one-time Secure Pod pairing before starting the worker")
+            try:
+                paired = pair_trader_owned_pod(control_url, pairing_code)
+                credential_store.save(paired)
+            except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                raise SystemExit(f"Secure Pod pairing failed: {exc}") from exc
+            finally:
+                os.environ.pop("ZENCORE_PAIRING_CODE", None)
+            pod_token = paired["podToken"]
+            signing_key_text = paired["commandSigningKey"]
+        signing_key = signing_key_text.encode("utf-8")
+        if not pod_token.startswith("zcpod_"):
+            raise SystemExit("Secure Pod token is missing or invalid")
+        if len(signing_key) < 32:
+            raise SystemExit("Secure Pod command signing key is invalid")
         ledger_path = Path(os.environ.get("ZENCORE_LEDGER_PATH", default_root / "command-ledger.db"))
         return Config(
             control_url=control_url,
@@ -81,6 +211,7 @@ class Config:
             poll_seconds=max(0.5, float(os.environ.get("ZENCORE_POLL_SECONDS", "2"))),
             demo_execution_enabled=os.environ.get("ZENCORE_DEMO_EXECUTION", "false").lower() in {"1", "true", "yes", "on"},
             symbol_map=symbol_map,
+            credential_path=credential_path,
         )
 
 

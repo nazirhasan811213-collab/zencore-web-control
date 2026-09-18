@@ -404,6 +404,19 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
       if (body === null) return;
       return sendJson(res, 200, await autoTradeState.service.saveSettings(userId, body));
     }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/pairing') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      const key = attemptKey(req, pathname, userId);
+      const limit = consumeAttempt(key);
+      if (!limit.allowed) {
+        return sendJson(res, 429, {
+          ok: false,
+          error: 'Terlalu banyak kod pairing dijana. Tunggu sebentar dan cuba semula.'
+        }, { 'Retry-After': String(limit.retryAfter) });
+      }
+      return sendJson(res, 201, await autoTradeState.service.createPairingSession(userId, body));
+    }
     if (req.method === 'POST' && pathname === '/api/auto-trade/on') {
       const body = await parseApiJson(req, res);
       if (body === null) return;
@@ -441,6 +454,25 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
 
 async function handleExecutionApi(req, res, pathname) {
   if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
+  if (req.method === 'POST' && pathname === '/api/execution/pair') {
+    const key = attemptKey(req, pathname, 'secure-pod');
+    const limit = consumeAttempt(key);
+    if (!limit.allowed) {
+      return sendJson(res, 429, {
+        ok: false,
+        error: 'Terlalu banyak cubaan pairing. Tunggu sebentar dan cuba semula.'
+      }, { 'Retry-After': String(limit.retryAfter) });
+    }
+    const body = await parseApiJson(req, res);
+    if (body === null) return;
+    try {
+      const result = await autoTradeState.service.pairTraderOwnedPod(body);
+      authAttempts.delete(key);
+      return sendJson(res, 201, result);
+    } catch (error) {
+      return autoTradeError(res, error);
+    }
+  }
   const token = bearerToken(req) || String(req.headers['x-zencore-pod-token'] || '');
   if (!token || token.length > 256) {
     return sendJson(res, 401, { ok: false, error: 'Secure Pod tidak dibenarkan.' });
@@ -487,7 +519,8 @@ async function handlePodProvisioning(req, res) {
       ok: true,
       pod: result.pod,
       token: result.token,
-      tokenNotice: 'Token ini dipaparkan sekali sahaja dan mesti dihantar terus ke Secure Pod.'
+      commandSigningKey: result.commandSigningKey,
+      tokenNotice: 'Machine credentials ini dipaparkan sekali sahaja dan mesti dihantar terus ke Secure Pod.'
     });
   } catch (error) {
     return autoTradeError(res, error);

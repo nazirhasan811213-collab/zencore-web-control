@@ -48,6 +48,73 @@ test('pod token is one-time and public state exposes masked identity only', asyn
   assert.equal(JSON.stringify([...store.podsByUser.values()]).includes(token), false);
 });
 
+test('trader-owned Azure pairing is one-time and never exposes machine credentials in state', async () => {
+  let currentTime = 1_790_000_000_000;
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    now: () => currentTime,
+    pairingTtlMs: 5 * 60 * 1000
+  });
+  const userId = '22222222-2222-4222-8222-222222222222';
+
+  await assert.rejects(
+    () => service.createPairingSession(userId, {
+      confirmation: 'PAIR SECURE POD', nested: { password: 'must-never-enter-pairing' }
+    }),
+    error => error.code === 'CREDENTIAL_REJECTED'
+  );
+  const created = await service.createPairingSession(userId, { confirmation: 'PAIR SECURE POD' });
+  assert.match(created.pairing.code, /^zcpair_/);
+  let state = await service.state(userId);
+  assert.equal(state.pairing.ownershipMode, 'TRADER_OWNED_AZURE');
+  assert.equal(JSON.stringify(state).includes(created.pairing.code), false);
+
+  const paired = await service.pairTraderOwnedPod({
+    pairingCode: created.pairing.code,
+    ownershipMode: 'TRADER_OWNED_AZURE'
+  });
+  assert.match(paired.podToken, /^zcpod_/);
+  assert.ok(paired.commandSigningKey.length >= 32);
+  await assert.rejects(
+    () => service.pairTraderOwnedPod({
+      pairingCode: created.pairing.code,
+      ownershipMode: 'TRADER_OWNED_AZURE'
+    }),
+    error => error.code === 'INVALID_PAIRING_CODE'
+  );
+
+  state = await service.state(userId);
+  assert.equal(state.pod.ownershipMode, 'TRADER_OWNED_AZURE');
+  const publicState = JSON.stringify(state);
+  assert.equal(publicState.includes(paired.podToken), false);
+  assert.equal(publicState.includes(paired.commandSigningKey), false);
+
+  await service.heartbeat(paired.podToken, {
+    accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+    tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+    expertTradeAllowed: true, positions: [{
+      ticket: '900003', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
+      entry: 2500, currentPrice: 2501, activeSl: 2495
+    }]
+  });
+  await assert.rejects(
+    () => service.createPairingSession(userId, { confirmation: 'PAIR SECURE POD' }),
+    error => error.code === 'OPEN_POSITIONS'
+  );
+});
+
+test('each Secure Pod receives an isolated command signing key', async () => {
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({ store, commandSigningKey: SIGNING_KEY });
+  const first = await service.provisionDemoPod('33333333-3333-4333-8333-333333333333', 'First');
+  const second = await service.provisionDemoPod('44444444-4444-4444-8444-444444444444', 'Second');
+  assert.notEqual(first.commandSigningKey, second.commandSigningKey);
+  assert.equal(first.commandSigningKey, service.commandSigningKeyForPod(first.pod.id));
+  assert.equal(second.commandSigningKey, service.commandSigningKeyForPod(second.pod.id));
+});
+
 test('ON waits for pod acknowledgement and STOP preserves open position management', async () => {
   const { service, userId, token } = await setup();
   await service.saveSettings(userId, {

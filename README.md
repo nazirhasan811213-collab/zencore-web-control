@@ -43,6 +43,6 @@ The protected `/results` page combines Normal 3M validation from all 11 markets.
 
 The protected `/auto-trade` page now provides capital/lot/layer settings, all 11 allowed markets, risk reminders, master ON/STOP controls, step-up protected Emergency Close All, live masked MT5 status, open positions and an audit view. The Analysis Page includes the same live execution status and current-pair positions.
 
-The Render process never accepts broker login, password or full server. Execution is handled by the separate DEMO-only worker in `mt5-secure-pod/`. Auto Trade remains disabled by default and real broker execution remains locked pending confidential Windows VM and HSM infrastructure.
+The Render process never accepts broker login, password or full server. Execution is handled by a separate DEMO-only worker in a confidential Windows VM owned by the trader's Azure subscription. The user page now supports a ten-minute, single-use BYOC pairing flow; pod tokens and per-pod command keys are delivered directly to the worker and never exposed in normal user state. Auto Trade remains disabled by default and real broker execution remains locked pending Azure attestation/HSM infrastructure and broker execution tests.
 
 See `AUTOTRADE_SECURITY.md` for trust boundaries, commands, environment flags and deployment gates.

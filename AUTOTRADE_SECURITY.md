@@ -9,16 +9,27 @@ This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod 
    - Stores capital, lot, layers, allowed symbols, desired control state, masked pod identity, positions and audit events.
    - Dispatches Normal 3M SOP V32 entry commands and EXIT 32.3 StepLock management commands.
    - Rejects broker credential keys recursively.
-2. **Confidential Windows Secure Pod**
+2. **Trader-owned confidential Windows Secure Pod**
    - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py`.
+   - Exists in the trader's Azure subscription; the trader retains cloud ownership, Windows administrator access and encryption keys.
+   - ZenCore administrators are not granted Azure RBAC, RDP, Windows admin or disk-key access.
    - Owns the enrolled terminal session.
    - Never returns the broker login, password or full server to Render.
    - Rejects a non-DEMO MT5 account.
-3. **Attested key service / HSM (required before remote credential enrolment)**
+3. **Attested key service / HSM (required before production execution)**
    - Releases machine secrets only to an approved measured worker image.
    - Is not implemented by the current Render repository and must be provisioned separately.
 
-The current web UI intentionally contains no MT5 login, broker-password or full-server input. Do not add such fields until the confidential VM, attestation and HSM path has passed an independent security review.
+The current web UI intentionally contains no MT5 login, broker-password or full-server input. A malicious operator that controls both a web page and a guest operating system could capture typed credentials; therefore broker credentials are enrolled only in MT5 inside the trader-owned VM. Do not add broker credential fields to ZenCore.
+
+## BYOC pairing contract
+
+- The authenticated trader creates a cryptographically random `zcpair_...` code. Only its SHA-256 hash is stored.
+- The code expires after 10 minutes, is single-use, and cannot replace a pod while ZenCore positions remain open.
+- The Azure worker exchanges it directly at `/api/execution/pair`.
+- The long-lived pod token and per-pod command verification key are returned only to that worker and protected locally by Windows user-scope DPAPI. The worker and MT5 run under the same dedicated trader-owned Windows account.
+- Public user state exposes neither the pairing code, pod token, verification key nor their hashes.
+- Re-pairing revokes the previous pod token and forces control state to `STOPPED`.
 
 ## User controls
 
@@ -47,7 +58,7 @@ The UI never reports `ON` or `STOPPED` merely because a button was clicked. Effe
 - `MANAGE_POSITION`
 - `EMERGENCY_CLOSE_ALL`
 
-Every command has a UUID, creation time, expiry, signature and signed envelope. Setup and management commands also have a per-user deduplication key. The worker maintains an encrypted-disk SQLite ledger to avoid replaying a broker action if an acknowledgement is lost.
+Every command has a UUID, creation time, expiry, signature and signed envelope. The control plane derives a separate HMAC verification key for each pod from its server-side master key; the master key is never sent to a trader VM. Setup and management commands also have a per-user deduplication key. The worker maintains an encrypted-disk SQLite ledger to avoid replaying a broker action if an acknowledgement is lost.
 
 `MANAGE_POSITION` carries only explicit actions derived from the existing feed:
 
@@ -79,8 +90,8 @@ Never configure broker login, password or full server as a Render environment va
 
 The control plane, UI and worker contract can be tested locally now. Broker execution must stay locked with `ZENCORE_DEMO_EXECUTION=false` until all of the following exist:
 
-- isolated Windows confidential VM per account;
-- direct secure terminal enrolment;
+- trader-owned isolated Azure Windows confidential VM per account;
+- direct terminal enrolment inside that trader-owned VM;
 - attested secret release/vTPM;
 - outbound-only private worker networking;
 - InterStellar demo symbol mapping;

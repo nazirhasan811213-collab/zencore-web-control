@@ -33,6 +33,7 @@ function publicPod(row, includePrivate = false) {
     id: row.id,
     userId: row.user_id || row.userId,
     label: row.label,
+    ownershipMode: row.ownership_mode || row.ownershipMode || 'INTERNAL_DEMO',
     accountMask: row.account_mask ?? row.accountMask ?? null,
     serverMask: row.server_mask ?? row.serverMask ?? null,
     brokerMask: row.broker_mask ?? row.brokerMask ?? null,
@@ -49,6 +50,19 @@ function publicPod(row, includePrivate = false) {
   };
   if (includePrivate) value.tokenHash = row.token_hash || row.tokenHash;
   return value;
+}
+
+function publicPairing(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id || row.userId,
+    label: row.label,
+    ownershipMode: row.ownership_mode || row.ownershipMode || 'TRADER_OWNED_AZURE',
+    expiresAt: timestamp(row.expires_at ?? row.expiresAt),
+    consumedAt: timestamp(row.consumed_at ?? row.consumedAt),
+    createdAt: timestamp(row.created_at ?? row.createdAt)
+  };
 }
 
 function publicCommand(row) {
@@ -105,6 +119,7 @@ class PostgresAutoTradeStore {
         id UUID PRIMARY KEY,
         user_id UUID NOT NULL UNIQUE REFERENCES zencore_users(id) ON DELETE CASCADE,
         label VARCHAR(60) NOT NULL,
+        ownership_mode VARCHAR(32) NOT NULL DEFAULT 'INTERNAL_DEMO',
         token_hash CHAR(64) NOT NULL UNIQUE,
         account_mask VARCHAR(20),
         server_mask VARCHAR(32),
@@ -120,6 +135,22 @@ class PostgresAutoTradeStore {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         revoked_at TIMESTAMPTZ
       );
+
+      ALTER TABLE zencore_mt5_secure_pods
+        ADD COLUMN IF NOT EXISTS ownership_mode VARCHAR(32) NOT NULL DEFAULT 'INTERNAL_DEMO';
+
+      CREATE TABLE IF NOT EXISTS zencore_mt5_pairing_sessions (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES zencore_users(id) ON DELETE CASCADE,
+        label VARCHAR(60) NOT NULL,
+        ownership_mode VARCHAR(32) NOT NULL,
+        code_hash CHAR(64) NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS zencore_mt5_pairing_user_idx
+        ON zencore_mt5_pairing_sessions(user_id, created_at DESC);
 
       CREATE TABLE IF NOT EXISTS zencore_mt5_positions (
         user_id UUID NOT NULL REFERENCES zencore_users(id) ON DELETE CASCADE,
@@ -228,21 +259,68 @@ class PostgresAutoTradeStore {
     return result.rows.map(publicProfile);
   }
 
-  async provisionPod({ id, userId, label, tokenHash }) {
+  async provisionPod({ id, userId, label, tokenHash, ownershipMode = 'INTERNAL_DEMO' }) {
     const result = await this.pool.query(
-      `INSERT INTO zencore_mt5_secure_pods (id, user_id, label, token_hash)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO zencore_mt5_secure_pods (id, user_id, label, ownership_mode, token_hash)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id) DO UPDATE SET
-         label = EXCLUDED.label, token_hash = EXCLUDED.token_hash,
+         label = EXCLUDED.label, ownership_mode = EXCLUDED.ownership_mode,
+         token_hash = EXCLUDED.token_hash,
          account_mask = NULL, server_mask = NULL, broker_mask = NULL, trade_mode = NULL,
          terminal_trade_allowed = FALSE, account_trade_allowed = FALSE,
          expert_trade_allowed = FALSE, symbol_specs = '{}'::jsonb,
          connector_version = NULL, terminal_build = NULL, last_seen_at = NULL,
          created_at = NOW(), revoked_at = NULL
        RETURNING *`,
-      [id, userId, label, tokenHash]
+      [id, userId, label, ownershipMode, tokenHash]
     );
     return publicPod(result.rows[0], true);
+  }
+
+  async createPairingSession({ id, userId, label, ownershipMode, codeHash, expiresAt, createdAt }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE zencore_mt5_pairing_sessions SET consumed_at = $2
+         WHERE user_id = $1 AND consumed_at IS NULL`,
+        [userId, new Date(createdAt)]
+      );
+      const result = await client.query(
+        `INSERT INTO zencore_mt5_pairing_sessions
+          (id, user_id, label, ownership_mode, code_hash, expires_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [id, userId, label, ownershipMode, codeHash, new Date(expiresAt), new Date(createdAt)]
+      );
+      await client.query('COMMIT');
+      return publicPairing(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getActivePairingForUser(userId, now) {
+    const result = await this.pool.query(
+      `SELECT * FROM zencore_mt5_pairing_sessions
+       WHERE user_id = $1 AND consumed_at IS NULL AND expires_at > $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId, new Date(now)]
+    );
+    return publicPairing(result.rows[0]);
+  }
+
+  async consumePairingSession(codeHash, now) {
+    const result = await this.pool.query(
+      `UPDATE zencore_mt5_pairing_sessions SET consumed_at = $2
+       WHERE code_hash = $1 AND consumed_at IS NULL AND expires_at > $2
+       RETURNING *`,
+      [codeHash, new Date(now)]
+    );
+    return publicPairing(result.rows[0]);
   }
 
   async findPodByTokenHash(tokenHash) {
@@ -401,6 +479,8 @@ class MemoryAutoTradeStore {
     this.profiles = new Map();
     this.podsByUser = new Map();
     this.podsByToken = new Map();
+    this.pairingsByUser = new Map();
+    this.pairingsByCode = new Map();
     this.positions = new Map();
     this.commands = new Map();
     this.audit = new Map();
@@ -449,11 +529,12 @@ class MemoryAutoTradeStore {
       .map(publicProfile);
   }
 
-  async provisionPod({ id, userId, label, tokenHash }) {
+  async provisionPod({ id, userId, label, tokenHash, ownershipMode = 'INTERNAL_DEMO' }) {
     const old = this.podsByUser.get(userId);
     if (old) this.podsByToken.delete(old.tokenHash);
     const row = {
-      id: old?.id || id, userId, label, tokenHash, accountMask: null, serverMask: null,
+      id: old?.id || id, userId, label, ownershipMode, tokenHash,
+      accountMask: null, serverMask: null,
       brokerMask: null, tradeMode: null, terminalTradeAllowed: false,
       accountTradeAllowed: false, expertTradeAllowed: false, symbolSpecs: {},
       connectorVersion: null, terminalBuild: null, lastSeenAt: null,
@@ -462,6 +543,31 @@ class MemoryAutoTradeStore {
     this.podsByUser.set(userId, row);
     this.podsByToken.set(tokenHash, row);
     return publicPod(row, true);
+  }
+
+  async createPairingSession({ id, userId, label, ownershipMode, codeHash, expiresAt, createdAt }) {
+    const old = this.pairingsByUser.get(userId);
+    if (old && !old.consumedAt) old.consumedAt = createdAt;
+    const row = {
+      id, userId, label, ownershipMode, codeHash,
+      expiresAt, consumedAt: null, createdAt
+    };
+    this.pairingsByUser.set(userId, row);
+    this.pairingsByCode.set(codeHash, row);
+    return publicPairing(row);
+  }
+
+  async getActivePairingForUser(userId, now) {
+    const row = this.pairingsByUser.get(userId);
+    if (!row || row.consumedAt || row.expiresAt <= now) return null;
+    return publicPairing(row);
+  }
+
+  async consumePairingSession(codeHash, now) {
+    const row = this.pairingsByCode.get(codeHash);
+    if (!row || row.consumedAt || row.expiresAt <= now) return null;
+    row.consumedAt = now;
+    return publicPairing(row);
   }
 
   async findPodByTokenHash(tokenHash) {
@@ -542,5 +648,6 @@ module.exports = {
   createAutoTradeStore,
   publicProfile,
   publicPod,
+  publicPairing,
   publicCommand
 };

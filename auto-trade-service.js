@@ -32,9 +32,18 @@ function createAutoTradeService(options = {}) {
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
+  const pairingTtlMs = Math.max(2 * 60 * 1000, Math.min(30 * 60 * 1000,
+    Number(options.pairingTtlMs) || 10 * 60 * 1000));
+
+  function commandSigningKeyForPod(podId) {
+    return crypto.createHmac('sha256', signingKey)
+      .update(`zencore-pod-command-v1:${String(podId || '')}`)
+      .digest('base64url');
+  }
 
   function signCommand(command) {
-    return crypto.createHmac('sha256', signingKey).update(canonicalCommand(command)).digest('hex');
+    return crypto.createHmac('sha256', commandSigningKeyForPod(command.podId))
+      .update(canonicalCommand(command)).digest('hex');
   }
 
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
@@ -57,11 +66,13 @@ function createAutoTradeService(options = {}) {
   }
 
   async function state(userId) {
-    const [profile, pod, positions, audit] = await Promise.all([
+    const [profile, pod, positions, audit, pairing] = await Promise.all([
       store.getProfile(userId),
       store.getPodForUser(userId),
       store.listPositions(userId),
-      store.listAudit(userId, 30)
+      store.listAudit(userId, 30),
+      typeof store.getActivePairingForUser === 'function'
+        ? store.getActivePairingForUser(userId, now()) : null
     ]);
     const connection = Core.podConnectionState(pod, now());
     const settings = profile ? {
@@ -91,6 +102,7 @@ function createAutoTradeService(options = {}) {
       connection,
       pod: pod ? {
         label: pod.label,
+        ownershipMode: pod.ownershipMode,
         accountMask: pod.accountMask,
         serverMask: pod.serverMask,
         brokerMask: pod.brokerMask,
@@ -103,6 +115,11 @@ function createAutoTradeService(options = {}) {
         lastSeenAt: pod.lastSeenAt,
         symbolSpecs: pod.symbolSpecs || {}
       } : null,
+      pairing: pairing ? {
+        status: 'WAITING_FOR_SECURE_POD',
+        ownershipMode: pairing.ownershipMode,
+        expiresAt: pairing.expiresAt
+      } : null,
       settings,
       positions,
       summary: {
@@ -113,11 +130,97 @@ function createAutoTradeService(options = {}) {
       audit,
       safeguards: {
         brokerCredentialsInControlPlane: false,
+        traderOwnsCloudAndWindows: true,
+        podCommandKeyIsPerPod: true,
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
         emergencyRequiresStepUp: true
       },
       generatedAt: now()
+    };
+  }
+
+  async function createPairingSession(userId, input = {}) {
+    if (Core.containsForbiddenCredentialKey(input)) {
+      throw serviceError('CREDENTIAL_REJECTED', 'Pairing tidak menerima ID, password atau server MT5.', 400);
+    }
+    if (String(input.confirmation || '').trim().toUpperCase() !== 'PAIR SECURE POD') {
+      throw serviceError('CONFIRMATION_REQUIRED', 'Taip PAIR SECURE POD untuk menjana kod pairing.', 400);
+    }
+    const positions = await store.listPositions(userId);
+    if (positions.length) {
+      throw serviceError(
+        'OPEN_POSITIONS',
+        'Secure Pod tidak boleh diganti ketika posisi ZenCore masih terbuka.',
+        409
+      );
+    }
+    const createdAt = now();
+    const pairingCode = `zcpair_${crypto.randomBytes(32).toString('base64url')}`;
+    const label = String(input.label || 'Trader-owned Azure Secure Pod')
+      .replace(/[^A-Za-z0-9 ._-]/g, '').trim().slice(0, 60) || 'Trader-owned Azure Secure Pod';
+    const pairing = await store.createPairingSession({
+      id: crypto.randomUUID(),
+      userId,
+      label,
+      ownershipMode: 'TRADER_OWNED_AZURE',
+      codeHash: tokenHash(pairingCode),
+      createdAt,
+      expiresAt: createdAt + pairingTtlMs
+    });
+    await store.appendAudit(userId, 'PAIRING_CODE_CREATED', {
+      pairingId: pairing.id,
+      ownershipMode: pairing.ownershipMode,
+      expiresAt: pairing.expiresAt
+    });
+    return {
+      ok: true,
+      pairing: {
+        code: pairingCode,
+        ownershipMode: pairing.ownershipMode,
+        expiresAt: pairing.expiresAt,
+        displayedOnce: true
+      }
+    };
+  }
+
+  async function pairTraderOwnedPod(input = {}) {
+    if (Core.containsForbiddenCredentialKey(input)) {
+      throw serviceError('CREDENTIAL_REJECTED', 'Pairing Secure Pod tidak menerima credential broker.', 400);
+    }
+    const pairingCode = String(input.pairingCode || '');
+    if (!/^zcpair_[A-Za-z0-9_-]{40,}$/.test(pairingCode)) {
+      throw serviceError('INVALID_PAIRING_CODE', 'Kod pairing tidak sah atau telah tamat.', 401);
+    }
+    if (String(input.ownershipMode || '').toUpperCase() !== 'TRADER_OWNED_AZURE') {
+      throw serviceError('INVALID_OWNERSHIP_MODE', 'Secure Pod mesti dimiliki oleh Azure trader.', 400);
+    }
+    const pairing = await store.consumePairingSession(tokenHash(pairingCode), now());
+    if (!pairing) throw serviceError('INVALID_PAIRING_CODE', 'Kod pairing tidak sah atau telah tamat.', 401);
+
+    const rawToken = `zcpod_${crypto.randomBytes(32).toString('base64url')}`;
+    const podId = crypto.randomUUID();
+    const pod = await store.provisionPod({
+      id: podId,
+      userId: pairing.userId,
+      label: pairing.label,
+      ownershipMode: pairing.ownershipMode,
+      tokenHash: tokenHash(rawToken)
+    });
+    await store.setControl(pairing.userId, {
+      desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
+    });
+    await store.appendAudit(pairing.userId, 'SECURE_POD_PAIRED', {
+      podId: pod.id,
+      ownershipMode: pod.ownershipMode,
+      mode: 'DEMO'
+    });
+    return {
+      ok: true,
+      ownershipMode: pod.ownershipMode,
+      podToken: rawToken,
+      commandSigningKey: commandSigningKeyForPod(pod.id),
+      tokenNotice: 'Machine credentials are returned once and must remain inside the trader-owned Secure Pod.'
     };
   }
 
@@ -224,13 +327,18 @@ function createAutoTradeService(options = {}) {
     const pod = await store.provisionPod({
       id: crypto.randomUUID(), userId,
       label: String(label || 'ZenCore MT5 Secure Pod').slice(0, 60),
+      ownershipMode: 'INTERNAL_DEMO',
       tokenHash: tokenHash(rawToken)
     });
     await store.setControl(userId, {
       desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
     });
     await store.appendAudit(userId, 'SECURE_POD_PROVISIONED', { podId: pod.id, mode: 'DEMO' });
-    return { pod: { id: pod.id, label: pod.label }, token: rawToken };
+    return {
+      pod: { id: pod.id, label: pod.label, ownershipMode: pod.ownershipMode },
+      token: rawToken,
+      commandSigningKey: commandSigningKeyForPod(pod.id)
+    };
   }
 
   async function authenticatePod(rawToken) {
@@ -387,13 +495,16 @@ function createAutoTradeService(options = {}) {
     turnOn,
     stop,
     emergencyCloseAll,
+    createPairingSession,
+    pairTraderOwnedPod,
     provisionDemoPod,
     authenticatePod,
     heartbeat,
     nextCommand,
     acknowledgeCommand,
     dispatchMarkets,
-    signCommand
+    signCommand,
+    commandSigningKeyForPod
   };
 }
 

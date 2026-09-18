@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -221,15 +222,44 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     });
     assert.equal(response.status, 401);
 
-    response = await fetch(`${BASE}/internal/auto-trade/provision-demo`, {
+    response = await fetch(`${BASE}/api/auto-trade/pairing`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${POD_PROVISIONING_SECRET}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, label: 'HTTP Test Secure Pod' })
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'PAIR SECURE POD' })
+    });
+    assert.equal(response.status, 201);
+    const pairing = await response.json();
+    assert.match(pairing.pairing.code, /^zcpair_/);
+
+    response = await fetch(`${BASE}/api/auto-trade/state`, { headers: { Cookie: cookie } });
+    autoState = await response.json();
+    assert.equal(autoState.pairing.ownershipMode, 'TRADER_OWNED_AZURE');
+    assert.equal(JSON.stringify(autoState).includes(pairing.pairing.code), false);
+
+    response = await fetch(`${BASE}/api/execution/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pairingCode: pairing.pairing.code,
+        ownershipMode: 'TRADER_OWNED_AZURE'
+      })
     });
     assert.equal(response.status, 201);
     const provisioned = await response.json();
-    const podToken = provisioned.token;
+    const podToken = provisioned.podToken;
+    const podSigningKey = provisioned.commandSigningKey;
     assert.match(podToken, /^zcpod_/);
+    assert.ok(podSigningKey.length >= 32);
+
+    response = await fetch(`${BASE}/api/execution/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pairingCode: pairing.pairing.code,
+        ownershipMode: 'TRADER_OWNED_AZURE'
+      })
+    });
+    assert.equal(response.status, 401);
 
     response = await fetch(`${BASE}/api/execution/heartbeat`, {
       method: 'POST',
@@ -272,6 +302,9 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(command.type, 'SYSTEM_ON');
     assert.match(command.signature, /^[a-f0-9]{64}$/);
     assert.match(command.signedEnvelope, /^[A-Za-z0-9_-]+$/);
+    const expectedSignature = crypto.createHmac('sha256', podSigningKey)
+      .update(Buffer.from(command.signedEnvelope, 'base64url')).digest('hex');
+    assert.equal(command.signature, expectedSignature);
 
     response = await fetch(`${BASE}/api/execution/commands/${command.id}/ack`, {
       method: 'POST',
@@ -295,6 +328,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(autoState.positions[0].slLock, 'BREAK_EVEN');
     const stateText = JSON.stringify(autoState);
     assert.equal(stateText.includes(podToken), false);
+    assert.equal(stateText.includes(podSigningKey), false);
     assert.equal(stateText.includes('must-never-be-stored'), false);
 
     response = await fetch(`${BASE}/api/auto-trade/stop`, {

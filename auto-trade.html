@@ -8,7 +8,7 @@
   <title>Auto Trade — ZenCore Precision Entry</title>
   <link rel="stylesheet" href="/auth.css?v=1.0">
   <link rel="stylesheet" href="/home.css?v=2.0">
-  <link rel="stylesheet" href="/auto-trade.css?v=1.0">
+  <link rel="stylesheet" href="/auto-trade.css?v=1.1">
 </head>
 <body>
   <main class="portal-shell autotrade-shell">
@@ -76,6 +76,7 @@
             <div><span>SERVER</span><b id="serverMask">—</b></div>
             <div><span>BROKER</span><b id="brokerMask">—</b></div>
             <div><span>MODE</span><b id="tradeMode">DEMO</b></div>
+            <div><span>OWNER</span><b id="podOwner">TRADER AZURE</b></div>
           </div>
           <div class="pod-health">
             <div><span>Terminal</span><b id="terminalState">WAIT</b></div>
@@ -84,6 +85,10 @@
           </div>
           <div id="podNotice" class="panel-notice">
             Secure Pod belum disediakan. Provisioning dibuat dalam execution environment terasing—bukan melalui password form web.
+          </div>
+          <div id="pairingActions" class="pairing-actions">
+            <div><b>Azure milik trader</b><span>ZenCore tidak menerima akses cloud, Windows admin atau credential MT5.</span></div>
+            <button id="pairPodButton" type="button">JANA KOD PAIRING</button>
           </div>
         </article>
 
@@ -198,6 +203,24 @@
     </form>
   </dialog>
 
+  <dialog id="pairingDialog" class="control-dialog pairing-dialog">
+    <form method="dialog">
+      <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
+      <span class="eyebrow">Trader-owned Azure</span>
+      <h2>Pautkan Secure Pod</h2>
+      <p>Kod sekali guna ini hanya memasangkan worker dalam Azure Confidential VM milik trader. Ia bukan ID atau password MT5.</p>
+      <label id="pairingConfirmationField"><span>TAIP PAIR SECURE POD</span><input id="pairingConfirmation" autocomplete="off" placeholder="PAIR SECURE POD"></label>
+      <div id="pairingResult" class="pairing-result hidden">
+        <span>KOD PAIRING SEKALI GUNA</span>
+        <b id="pairingCode">—</b>
+        <small id="pairingExpiry">—</small>
+        <button id="copyPairingCode" type="button">SALIN KOD</button>
+      </div>
+      <div id="pairingError" class="form-error" role="alert"></div>
+      <div class="dialog-actions"><button value="cancel" class="dialog-cancel">TUTUP</button><button id="generatePairingButton" value="default" class="dialog-confirm" type="button">JANA KOD</button></div>
+    </form>
+  </dialog>
+
   <dialog id="emergencyDialog" class="control-dialog danger-dialog">
     <form method="dialog">
       <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
@@ -213,6 +236,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/auto-trade-core.js?v=1.0" defer></script>
-  <script src="/auto-trade.js?v=1.0" defer></script>
+  <script src="/auto-trade.js?v=1.1" defer></script>
 </body>
 </html>
