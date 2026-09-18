@@ -134,7 +134,7 @@ test('trader-owned Windows PC pairs without exposing broker credentials and stay
   assert.equal(state.pod.demoExecutionUnlocked, false);
   assert.equal(state.connection.state, 'CONNECTED_LOCKED');
   assert.equal(state.control.canTurnOn, false);
-  assert.equal(state.safeguards.brokerCredentialsInControlPlane, 'ENCRYPTED_ENVELOPE_ONLY');
+  assert.equal(state.safeguards.brokerCredentialsInControlPlane, false);
   assert.equal(JSON.stringify(state).includes(paired.podToken), false);
 });
 
@@ -445,6 +445,7 @@ test('hosted MT5 stores only a validated encrypted envelope and never returns it
   assert.equal(state.hostedAccount.accountMask, '****123456');
   assert.equal(state.ui.autoTradeConfigured, true);
   assert.equal(state.control.canTurnOn, false);
+  assert.equal(state.safeguards.brokerCredentialsInControlPlane, 'ENCRYPTED_ENVELOPE_ONLY');
   assert.equal(JSON.stringify(state).includes(credentialEnvelope.ciphertext), false);
   assert.deepEqual(store.hostedAccounts.get(userId).credentialEnvelope, credentialEnvelope);
   assert.equal(JSON.stringify(store.hostedAccounts.get(userId)).includes('broker-secret'), false);
