@@ -323,6 +323,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname === '/auth.css') return sendAuthAsset(res, 'auth.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/market-radar-core.js') return sendAuthAsset(res, 'market-radar-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/portal.js') return sendAuthAsset(res, 'portal.js', 'application/javascript; charset=utf-8');
 
   if (AUTH_ENABLED && pathname.startsWith('/auth/')) {

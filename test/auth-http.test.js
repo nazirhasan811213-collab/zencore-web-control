@@ -118,7 +118,19 @@ test('HTTP auth flow protects Page Utama, Analysis and analysis APIs', { timeout
 
     response = await fetch(`${BASE}/app`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /Page Utama/);
+    assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
+    const home = await response.text();
+    assert.match(home, /Market Radar/);
+    assert.match(home, /marketGrid/);
+    assert.match(home, /\/analysis\?pair=XAUUSD/);
+
+    response = await fetch(`${BASE}/market-radar-core.js`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /SUPPORTED_MARKETS/);
+
+    response = await fetch(`${BASE}/home.css`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /market-grid/);
 
     response = await fetch(`${BASE}/analysis`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);

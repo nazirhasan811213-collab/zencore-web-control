@@ -16,8 +16,8 @@ Login failure stays on the Login Page with a generic error. Register is a delibe
 |---|---|---|
 | 0 | Analysis Page | Complete and protected from unrelated changes |
 | 1 | Login, Register, secure session and basic Page Utama shell | Implemented on `codex/auth-foundation-v1`; not deployed |
-| 2 | Full Page Utama / 11-market radar navigation | Next |
-| 3 | User-specific Result Page and signal history | Planned |
+| 2 | Full Page Utama / 11-market radar navigation | Implemented on `codex/market-radar-home-v1`; not deployed |
+| 3 | User-specific Result Page and signal history | Next |
 | 4 | End-to-end validation and operational controls | Planned |
 | 5 | Optional MT5 Auto Trade connector | Parked for a new approved design |
 
@@ -28,5 +28,6 @@ Login failure stays on the Login Page with a generic error. Register is a delibe
 - The 11-market Pine feed and pair selector remain unchanged.
 - Auto Trade is OFF and is not part of the Phase 1 account system.
 - ZenCore quality scores are not presented as guaranteed win rates.
+- Market Radar ranks and filters the existing `strategyNormal` state; it does not generate a new signal.
 
 Stable restore point before Phase 1: `backup-stable-20260917` at commit `bd99019`.

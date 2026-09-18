@@ -29,7 +29,7 @@ When authentication is enabled:
 
 - `/` sends a signed-in user to `/app` and everyone else to `/login`.
 - `/login` and `/register` are public account pages.
-- `/app` is the first Page Utama shell.
+- `/app` is the Page Utama Market Radar for all 11 supported markets.
 - `/analysis` is the protected existing Analysis Page.
 - Analysis APIs and live event streams require a valid user session.
 - `/webhook` remains public at the network layer because TradingView must reach it; the existing webhook secret validation remains inside the analysis stack.

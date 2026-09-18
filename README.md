@@ -34,3 +34,5 @@ The Login, Register and first Page Utama shell are implemented behind `ZENCORE_A
 Authentication is OFF by default so the existing Precision Entry deployment is unchanged until PostgreSQL is attached and the feature is deliberately enabled.
 
 See `AUTH_SETUP.md` for the Render environment variables, local test mode and security model.
+
+The protected `/app` Page Utama renders the existing Normal 3M state for all 11 markets from `/api/markets` and `/market-events`. Selecting a card opens the completed Analysis Page with the same pair through `/analysis?pair=SYMBOL`.
