@@ -52,6 +52,7 @@ test('heartbeat only retains masked identity and sanitised positions', () => {
     terminalTradeAllowed: true,
     accountTradeAllowed: true,
     expertTradeAllowed: true,
+    demoExecutionUnlocked: false,
     connectorVersion: '1.0.0',
     positions: [{
       ticket: '123456', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
@@ -64,6 +65,7 @@ test('heartbeat only retains masked identity and sanitised positions', () => {
   assert.equal(result.value.accountMask, '****1234');
   assert.equal(result.value.positions.length, 1);
   assert.equal(result.value.positions[0].ticket, '123456');
+  assert.equal(result.value.demoExecutionUnlocked, false);
   assert.equal(JSON.stringify(result.value).includes('must-not-enter'), false);
 });
 
@@ -89,14 +91,26 @@ test('ready Normal 3M signal becomes a StepLock command without changing SOP', (
   assert.equal(command.payload.risk.blocksOrder, false);
 });
 
-test('STOP connection states fail closed until a demo pod is ready', () => {
+test('STOP connection states fail closed until a demo pod is reviewed and ready', () => {
   assert.equal(Core.podConnectionState(null).state, 'UNPROVISIONED');
+  const connectedLocked = Core.podConnectionState({
+    lastSeenAt: Date.now(),
+    tradeMode: 'DEMO',
+    terminalTradeAllowed: true,
+    accountTradeAllowed: true,
+    expertTradeAllowed: true,
+    demoExecutionUnlocked: false
+  });
+  assert.equal(connectedLocked.connected, true);
+  assert.equal(connectedLocked.ready, false);
+  assert.equal(connectedLocked.state, 'CONNECTED_LOCKED');
   const ready = Core.podConnectionState({
     lastSeenAt: Date.now(),
     tradeMode: 'DEMO',
     terminalTradeAllowed: true,
     accountTradeAllowed: true,
-    expertTradeAllowed: true
+    expertTradeAllowed: true,
+    demoExecutionUnlocked: true
   });
   assert.equal(ready.ready, true);
   assert.equal(ready.state, 'READY');

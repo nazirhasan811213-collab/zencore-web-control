@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+#Requires -RunAsAdministrator
 
 [CmdletBinding()]
 param(
@@ -54,15 +55,11 @@ try {
 }
 
 try {
-    $metadata = Invoke-RestMethod -Headers @{ Metadata = 'true' } -Method Get -TimeoutSec 3 -Uri 'http://169.254.169.254/metadata/instance/compute?api-version=2021-12-13'
-    $vmSize = [string]$metadata.vmSize
-    if ($vmSize -match '^Standard_DC.*v5$') {
-        Add-Check 'Azure confidential size' 'PASS' $vmSize
-    } else {
-        Add-Check 'Azure confidential size' 'WARN' "Azure reported $vmSize; verify ConfidentialVM in the portal."
-    }
+    $firewallProfiles = @(Get-NetFirewallProfile)
+    $firewallReady = $firewallProfiles.Count -gt 0 -and @($firewallProfiles | Where-Object { -not $_.Enabled }).Count -eq 0
+    Add-Check 'Windows Firewall' ($(if ($firewallReady) { 'PASS' } else { 'FAIL' })) ($(if ($firewallReady) { 'All firewall profiles are enabled.' } else { 'Enable every Windows Firewall profile.' }))
 } catch {
-    Add-Check 'Azure metadata' 'WARN' 'Azure Instance Metadata Service was not reachable.'
+    Add-Check 'Windows Firewall' 'FAIL' 'Unable to verify Windows Firewall profiles.'
 }
 
 $config = $null
@@ -78,6 +75,39 @@ if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
 }
 
 if ($null -ne $config) {
+    $hostProfile = [string]$config.hostProfile
+    if ($hostProfile -notin @('WINDOWS_PC', 'AZURE_CONFIDENTIAL_VM')) {
+        Add-Check 'Host profile' 'FAIL' 'hostProfile must be WINDOWS_PC or AZURE_CONFIDENTIAL_VM.'
+    } else {
+        Add-Check 'Host profile' 'PASS' $hostProfile
+    }
+
+    if ($hostProfile -eq 'WINDOWS_PC') {
+        try {
+            $bitLocker = Get-BitLockerVolume -MountPoint $env:SystemDrive
+            $bitLockerReady = $bitLocker.ProtectionStatus -eq 'On' -and $bitLocker.VolumeStatus -in @('FullyEncrypted', 'EncryptionInProgress')
+            Add-Check 'BitLocker system drive' ($(if ($bitLockerReady) { 'PASS' } else { 'FAIL' })) ($(if ($bitLockerReady) { 'Protection is on.' } else { 'Enable BitLocker before pairing the PC.' }))
+        } catch {
+            Add-Check 'BitLocker system drive' 'FAIL' 'Unable to verify BitLocker protection.'
+        }
+        try {
+            $rdpDisabled = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections).fDenyTSConnections -eq 1
+            Add-Check 'Remote Desktop exposure' ($(if ($rdpDisabled) { 'PASS' } else { 'WARN' })) ($(if ($rdpDisabled) { 'Remote Desktop is disabled.' } else { 'Remote Desktop is enabled; restrict access and require MFA/VPN.' }))
+        } catch {
+            Add-Check 'Remote Desktop exposure' 'WARN' 'Unable to verify Remote Desktop state.'
+        }
+    }
+
+    if ($hostProfile -eq 'AZURE_CONFIDENTIAL_VM') {
+        try {
+            $metadata = Invoke-RestMethod -Headers @{ Metadata = 'true' } -Method Get -TimeoutSec 3 -Uri 'http://169.254.169.254/metadata/instance/compute?api-version=2021-12-13'
+            $vmSize = [string]$metadata.vmSize
+            Add-Check 'Azure confidential size' ($(if ($vmSize -match '^Standard_DC.*v5$') { 'PASS' } else { 'FAIL' })) $vmSize
+        } catch {
+            Add-Check 'Azure metadata' 'FAIL' 'Azure Instance Metadata Service was not reachable.'
+        }
+    }
+
     try {
         $controlUri = [Uri]$config.controlUrl
         $validOrigin = $controlUri.Scheme -eq 'https' -and $controlUri.Host -eq 'zencore-precision-entry.onrender.com' -and $controlUri.Port -eq 443 -and -not $controlUri.UserInfo -and $controlUri.AbsolutePath -eq '/' -and -not $controlUri.Query -and -not $controlUri.Fragment

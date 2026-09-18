@@ -43,3 +43,14 @@ In `ZenCore_AI_Dashboard_Pro_WebBridge.pine`:
 
 ## Important for live trading
 TradingView webhook receivers need to respond quickly. An always-on web service is safer than a service that sleeps after inactivity.
+
+## Auto Trade connection-only rollout
+
+After the account layer and PostgreSQL are ready, the MT5 pairing/monitoring control plane requires:
+
+- `ZENCORE_AUTOTRADE_ENABLED=true`
+- `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false`
+- `ZENCORE_COMMAND_SIGNING_KEY` with at least 32 random bytes
+- `ZENCORE_POD_PROVISIONING_SECRET` with at least 32 random bytes
+
+Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` during Windows-PC pairing and heartbeat tests. Broker login, password and full server must never be configured on Render.

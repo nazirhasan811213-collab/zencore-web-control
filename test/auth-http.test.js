@@ -23,6 +23,7 @@ function startServer() {
         ZENCORE_AUTH_MEMORY: 'true',
         ZENCORE_INSECURE_COOKIE: 'true',
         ZENCORE_AUTOTRADE_ENABLED: 'true',
+        ZENCORE_AUTOTRADE_EXECUTION_ENABLED: 'true',
         ZENCORE_AUTOTRADE_MEMORY: 'true',
         ZENCORE_POD_PROVISIONING_SECRET: POD_PROVISIONING_SECRET,
         ZENCORE_COMMAND_SIGNING_KEY: COMMAND_SIGNING_KEY
@@ -225,7 +226,9 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     response = await fetch(`${BASE}/api/auto-trade/pairing`, {
       method: 'POST',
       headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ confirmation: 'PAIR SECURE POD' })
+      body: JSON.stringify({
+        confirmation: 'PAIR SECURE POD', ownershipMode: 'TRADER_OWNED_WINDOWS_PC'
+      })
     });
     assert.equal(response.status, 201);
     const pairing = await response.json();
@@ -233,7 +236,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
 
     response = await fetch(`${BASE}/api/auto-trade/state`, { headers: { Cookie: cookie } });
     autoState = await response.json();
-    assert.equal(autoState.pairing.ownershipMode, 'TRADER_OWNED_AZURE');
+    assert.equal(autoState.pairing.ownershipMode, 'TRADER_OWNED_WINDOWS_PC');
     assert.equal(JSON.stringify(autoState).includes(pairing.pairing.code), false);
 
     response = await fetch(`${BASE}/api/execution/pair`, {
@@ -241,7 +244,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pairingCode: pairing.pairing.code,
-        ownershipMode: 'TRADER_OWNED_AZURE'
+        ownershipMode: 'TRADER_OWNED_WINDOWS_PC'
       })
     });
     assert.equal(response.status, 201);
@@ -256,7 +259,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pairingCode: pairing.pairing.code,
-        ownershipMode: 'TRADER_OWNED_AZURE'
+        ownershipMode: 'TRADER_OWNED_WINDOWS_PC'
       })
     });
     assert.equal(response.status, 401);
@@ -271,18 +274,34 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     });
     assert.equal(response.status, 400);
 
-    const heartbeat = positions => fetch(`${BASE}/api/execution/heartbeat`, {
+    const heartbeat = (positions, demoExecutionUnlocked = true) => fetch(`${BASE}/api/execution/heartbeat`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${podToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
         tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
-        expertTradeAllowed: true, connectorVersion: '1.0.0', terminalBuild: '5000',
+        expertTradeAllowed: true, demoExecutionUnlocked,
+        connectorVersion: '1.0.0', terminalBuild: '5000',
         symbolSpecs: [{ symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 }],
         positions
       })
     });
-    response = await heartbeat([]);
+    response = await heartbeat([], false);
+    assert.equal(response.status, 200);
+
+    response = await fetch(`${BASE}/api/auto-trade/state`, { headers: { Cookie: cookie } });
+    autoState = await response.json();
+    assert.equal(autoState.connection.state, 'CONNECTED_LOCKED');
+    assert.equal(autoState.control.canTurnOn, false);
+
+    response = await fetch(`${BASE}/api/auto-trade/on`, {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'AKTIFKAN DEMO' })
+    });
+    assert.equal(response.status, 409);
+
+    response = await heartbeat([], true);
     assert.equal(response.status, 200);
 
     response = await fetch(`${BASE}/api/auto-trade/on`, {

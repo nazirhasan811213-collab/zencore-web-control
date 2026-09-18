@@ -9,14 +9,14 @@ This phase adds the Auto Trade control plane and a DEMO-only Windows Secure Pod 
    - Stores capital, lot, layers, allowed symbols, desired control state, masked pod identity, positions and audit events.
    - Dispatches Normal 3M SOP V32 entry commands and EXIT 32.3 StepLock management commands.
    - Rejects broker credential keys recursively.
-2. **Trader-owned confidential Windows Secure Pod**
-   - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py`.
-   - Exists in the trader's Azure subscription; the trader retains cloud ownership, Windows administrator access and encryption keys.
+2. **Trader-owned Windows Secure Pod**
+   - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py` on the trader's secured PC for the Demo connection rollout, or inside a trader-owned Azure Confidential VM.
+   - The trader retains host ownership, Windows administrator access and encryption keys.
    - ZenCore administrators are not granted Azure RBAC, RDP, Windows admin or disk-key access.
    - Owns the enrolled terminal session.
    - Never returns the broker login, password or full server to Render.
    - Rejects a non-DEMO MT5 account.
-   - Uses an Azure NIC with no public IP; a trader-owned NAT Gateway provides outbound-only connectivity.
+   - Uses outbound HTTPS only. The Azure profile additionally uses a NIC with no public IP and a trader-owned NAT Gateway.
    - Loads only a strict non-secret JSON config. Broker credential environment variables and long-lived pod-secret environment variables are rejected by preflight.
    - Pins the production control origin and rejects redirects for pairing and authenticated pod requests.
 3. **Attested key service / HSM (required before production execution)**
@@ -33,6 +33,7 @@ The current web UI intentionally contains no MT5 login, broker-password or full-
 - The long-lived pod token and per-pod command verification key are returned only to that worker and protected locally by Windows user-scope DPAPI. The worker and MT5 run under the same dedicated trader-owned Windows account. Pairing input is hidden and is not passed through the command line or environment.
 - Public user state exposes neither the pairing code, pod token, verification key nor their hashes.
 - Re-pairing revokes the previous pod token and forces control state to `STOPPED`.
+- Pairing is bound to the selected host type. A Windows-PC code cannot be consumed by an Azure-profile worker or vice versa.
 
 ## User controls
 
@@ -81,6 +82,14 @@ ZENCORE_COMMAND_SIGNING_KEY=<minimum 32 random bytes>
 ZENCORE_POD_PROVISIONING_SECRET=<minimum 32 random bytes>
 ```
 
+The connection-only rollout must keep the independent server execution gate disabled:
+
+```text
+ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false
+```
+
+The ON command and new setup dispatch require both this server gate and the worker build/config gate. Changing the trader PC alone cannot unlock the control plane.
+
 Production uses the same PostgreSQL `DATABASE_URL` as the account layer. Memory mode is test/development only:
 
 ```text
@@ -91,7 +100,7 @@ Never configure broker login, password or full server as a Render environment va
 
 ## Deployment gate
 
-The control plane, UI and worker contract can be tested locally now. Broker execution must stay locked with `demoExecutionEnabled=false` and the source build gate set to false until all of the following exist:
+The control plane, UI and worker contract can be tested from a secured trader-owned Windows PC now. The heartbeat explicitly reports the immutable execution gate, so the control plane remains `CONNECTED_LOCKED` and cannot arm while this release is locked. Broker execution must stay locked with `demoExecutionEnabled=false` and the source build gate set to false until all of the following exist:
 
 - trader-owned isolated Azure Windows confidential VM per account;
 - direct terminal enrolment inside that trader-owned VM;

@@ -16,6 +16,7 @@ const INSECURE_COOKIE = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_I
 const ALLOW_ORIGINLESS_AUTH = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_ALLOW_ORIGINLESS_AUTH || ''));
 const REGISTRATION_ENABLED = !/^(?:0|false|no|off)$/i.test(String(process.env.ZENCORE_REGISTRATION_ENABLED || 'true'));
 const AUTOTRADE_ENABLED = AUTH_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_ENABLED || ''));
+const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_EXECUTION_ENABLED || ''));
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
 const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
@@ -69,10 +70,11 @@ if (AUTH_ENABLED) {
       autoTradeState.store = autoStore;
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
-        commandSigningKey: COMMAND_SIGNING_KEY
+        commandSigningKey: COMMAND_SIGNING_KEY,
+        allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED
       });
       autoTradeState.ready = true;
-      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
+      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'}`);
       startAutoTradeDispatcher();
     }
   }).catch(error => {

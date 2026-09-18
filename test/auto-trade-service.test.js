@@ -11,6 +11,7 @@ async function setup() {
   const service = createAutoTradeService({
     store,
     commandSigningKey: SIGNING_KEY,
+    allowDemoExecution: true,
     now: () => currentTime
   });
   const userId = '11111111-1111-4111-8111-111111111111';
@@ -23,6 +24,7 @@ async function setup() {
     terminalTradeAllowed: true,
     accountTradeAllowed: true,
     expertTradeAllowed: true,
+    demoExecutionUnlocked: true,
     connectorVersion: '1.0.0',
     terminalBuild: '5000',
     symbolSpecs: [{
@@ -65,7 +67,9 @@ test('trader-owned Azure pairing is one-time and never exposes machine credentia
     }),
     error => error.code === 'CREDENTIAL_REJECTED'
   );
-  const created = await service.createPairingSession(userId, { confirmation: 'PAIR SECURE POD' });
+  const created = await service.createPairingSession(userId, {
+    confirmation: 'PAIR SECURE POD', ownershipMode: 'TRADER_OWNED_AZURE'
+  });
   assert.match(created.pairing.code, /^zcpair_/);
   let state = await service.state(userId);
   assert.equal(state.pairing.ownershipMode, 'TRADER_OWNED_AZURE');
@@ -94,7 +98,7 @@ test('trader-owned Azure pairing is one-time and never exposes machine credentia
   await service.heartbeat(paired.podToken, {
     accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
     tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
-    expertTradeAllowed: true, positions: [{
+    expertTradeAllowed: true, demoExecutionUnlocked: true, positions: [{
       ticket: '900003', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
       entry: 2500, currentPrice: 2501, activeSl: 2495
     }]
@@ -102,6 +106,78 @@ test('trader-owned Azure pairing is one-time and never exposes machine credentia
   await assert.rejects(
     () => service.createPairingSession(userId, { confirmation: 'PAIR SECURE POD' }),
     error => error.code === 'OPEN_POSITIONS'
+  );
+});
+
+test('trader-owned Windows PC pairs without exposing broker credentials and stays execution locked', async () => {
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({ store, commandSigningKey: SIGNING_KEY });
+  const userId = '55555555-5555-4555-8555-555555555555';
+  const created = await service.createPairingSession(userId, {
+    confirmation: 'PAIR SECURE POD',
+    ownershipMode: 'TRADER_OWNED_WINDOWS_PC'
+  });
+  assert.equal(created.pairing.ownershipMode, 'TRADER_OWNED_WINDOWS_PC');
+  const paired = await service.pairTraderOwnedPod({
+    pairingCode: created.pairing.code,
+    ownershipMode: 'TRADER_OWNED_WINDOWS_PC'
+  });
+  await service.heartbeat(paired.podToken, {
+    accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+    tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: false, positions: []
+  });
+  const state = await service.state(userId);
+  assert.equal(state.pod.ownershipMode, 'TRADER_OWNED_WINDOWS_PC');
+  assert.equal(state.pod.demoExecutionUnlocked, false);
+  assert.equal(state.connection.state, 'CONNECTED_LOCKED');
+  assert.equal(state.control.canTurnOn, false);
+  assert.equal(JSON.stringify(state).includes(paired.podToken), false);
+});
+
+test('server-side rollout gate blocks ON and setup dispatch independently of the worker', async () => {
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({ store, commandSigningKey: SIGNING_KEY });
+  const userId = '77777777-7777-4777-8777-777777777777';
+  const provisioned = await service.provisionDemoPod(userId, 'Locked rollout pod');
+  await service.heartbeat(provisioned.token, {
+    accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+    tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: true, positions: []
+  });
+  await service.saveSettings(userId, {
+    capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+    symbols: ['XAUUSD'], riskAcknowledged: true
+  });
+  await assert.rejects(
+    () => service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' }),
+    error => error.code === 'EXECUTION_ROLLOUT_LOCKED'
+  );
+  const state = await service.state(userId);
+  assert.equal(state.control.executionRolloutUnlocked, false);
+  assert.equal(state.control.canTurnOn, false);
+  assert.deepEqual(await service.dispatchMarkets([{
+    symbol: 'XAUUSD', receivedAt: 1_790_000_008_000,
+    strategyNormal: {
+      state: 'READY', side: 'BUY',
+      plan: { entry: 2500, sl: 2495, tp1: 2505, tp2: 2510, tp3: 2515 }
+    }
+  }]), { queued: 0 });
+});
+
+test('pairing code cannot cross from the selected Windows host profile to another host type', async () => {
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({ store, commandSigningKey: SIGNING_KEY });
+  const created = await service.createPairingSession(
+    '66666666-6666-4666-8666-666666666666',
+    { confirmation: 'PAIR SECURE POD', ownershipMode: 'TRADER_OWNED_WINDOWS_PC' }
+  );
+  await assert.rejects(
+    () => service.pairTraderOwnedPod({
+      pairingCode: created.pairing.code,
+      ownershipMode: 'TRADER_OWNED_AZURE'
+    }),
+    error => error.code === 'PAIRING_HOST_MISMATCH'
   );
 });
 
@@ -144,7 +220,7 @@ test('ON waits for pod acknowledgement and STOP preserves open position manageme
   await service.heartbeat(token, {
     accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
     tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
-    expertTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: true,
     positions: [{
       ticket: '900001', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
       layers: 3, entry: 2500, currentPrice: 2505, initialSl: 2495,
@@ -212,7 +288,7 @@ test('STOPPED users still receive StepLock management for open positions', async
   await service.heartbeat(token, {
     accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
     tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
-    expertTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: true,
     positions: [{
       ticket: '900002', symbol: 'XAUUSD', side: 'BUY', volume: 0.02,
       entry: 2500, currentPrice: 2510, initialSl: 2495, activeSl: 2500,
