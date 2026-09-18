@@ -43,7 +43,11 @@ try {
     $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
     $argument = '"' + $workerPath + '" --config "' + $ConfigPath + '"'
     $action = New-ScheduledTaskAction -Execute $pythonPath -Argument $argument -WorkingDirectory $InstallRoot
-    $trigger = New-ScheduledTaskTrigger -AtStartup
+    $trigger = if ([string]$config.hostProfile -eq 'WINDOWS_PC') {
+        New-ScheduledTaskTrigger -AtLogOn -User $windowsIdentity
+    } else {
+        New-ScheduledTaskTrigger -AtStartup
+    }
     $principal = New-ScheduledTaskPrincipal -UserId $windowsIdentity -LogonType Password -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet `
         -StartWhenAvailable `
@@ -52,7 +56,7 @@ try {
         -ExecutionTimeLimit ([TimeSpan]::Zero) `
         -MultipleInstances IgnoreNew
     $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings `
-        -Description 'Trader-owned ZenCore MT5 Secure Pod (DEMO locked until broker validation).'
+        -Description 'Trader-owned Windows ZenCore MT5 Secure Pod (DEMO locked until broker validation).'
     Register-ScheduledTask -TaskName $TaskName -InputObject $task -User $windowsIdentity -Password $plainPassword -Force | Out-Null
 } finally {
     $plainPassword = $null
@@ -66,4 +70,5 @@ if ($StartNow) {
     Start-ScheduledTask -TaskName $TaskName
 }
 Write-Host 'Secure Pod scheduled task registered under the paired Windows identity.' -ForegroundColor Green
+Write-Host "Host profile: $($config.hostProfile)"
 Write-Host 'DEMO order execution remains locked by pod-config.json.' -ForegroundColor Yellow

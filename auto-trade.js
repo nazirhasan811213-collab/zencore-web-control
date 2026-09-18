@@ -86,13 +86,25 @@
     return copy[effective] || 'Status belum tersedia.';
   }
 
+  function ownershipLabel(mode) {
+    if (mode === 'TRADER_OWNED_AZURE') return 'AZURE TRADER';
+    if (mode === 'TRADER_OWNED_WINDOWS_PC') return 'WINDOWS PC';
+    return mode ? 'INTERNAL DEMO' : 'WINDOWS PC';
+  }
+
+  function ownershipDescription(mode) {
+    return mode === 'TRADER_OWNED_AZURE'
+      ? 'Azure Confidential VM milik trader'
+      : 'PC Windows milik trader';
+  }
+
   function renderConnection(state) {
     const connection = state.connection || {};
     const pod = state.pod;
     const badge = byId('connectionBadge');
     if (badge) {
       badge.textContent = connection.state || 'OFFLINE';
-      badge.className = `mini-status ${connection.ready ? 'ready' : connection.state === 'BLOCKED_REAL' ? 'blocked' : 'offline'}`;
+      badge.className = `mini-status ${connection.ready ? 'ready' : connection.state === 'CONNECTED_LOCKED' ? 'locked' : connection.state === 'BLOCKED_REAL' ? 'blocked' : 'offline'}`;
     }
     setText('summaryPod', connection.ready ? 'READY' : connection.label || 'BELUM CONNECT');
     setText('summaryHeartbeat', pod?.lastSeenAt ? `Heartbeat ${timeText(pod.lastSeenAt)}` : 'Tiada heartbeat');
@@ -100,7 +112,7 @@
     setText('serverMask', pod?.serverMask || '—');
     setText('brokerMask', pod?.brokerMask || '—');
     setText('tradeMode', pod?.tradeMode || 'DEMO');
-    setText('podOwner', pod?.ownershipMode === 'TRADER_OWNED_AZURE' ? 'TRADER AZURE' : pod ? 'INTERNAL DEMO' : 'TRADER AZURE');
+    setText('podOwner', ownershipLabel(pod?.ownershipMode));
     const health = (id, enabled) => {
       const el = byId(id);
       if (!el) return;
@@ -111,11 +123,13 @@
     health('accountTradeState', !!pod?.accountTradeAllowed);
     health('expertTradeState', !!pod?.expertTradeAllowed);
     const waitingPair = state.pairing?.status === 'WAITING_FOR_SECURE_POD';
+    const pairedHost = ownershipDescription(pod?.ownershipMode);
+    const waitingHost = ownershipDescription(state.pairing?.ownershipMode);
     setText('podNotice', pod
-      ? `${connection.label}. Connector ${pod.connectorVersion || '—'} • terminal build ${pod.terminalBuild || '—'}. Azure, Windows dan identiti penuh kekal di bawah kawalan trader.`
+      ? `${connection.label}. ${pairedHost} • connector ${pod.connectorVersion || '—'} • terminal build ${pod.terminalBuild || '—'}.${pod.demoExecutionUnlocked ? '' : ' Build execution masih dikunci; pairing dan monitoring sahaja.'}`
       : waitingPair
-        ? `Kod pairing aktif sehingga ${timeText(state.pairing.expiresAt)}. Jalankan pairing hanya dari Secure Pod Azure milik trader.`
-        : 'Secure Pod belum disediakan. Pairing dibuat dari Azure Confidential VM milik trader—bukan melalui password form web.');
+        ? `Kod pairing aktif sehingga ${timeText(state.pairing.expiresAt)}. Jalankan pairing hanya dari ${waitingHost}.`
+        : 'Secure Pod belum disediakan. Pairing dibuat dari PC Windows sendiri atau Azure milik trader—bukan melalui password form web.');
     const pairingActions = byId('pairingActions');
     if (pairingActions) pairingActions.classList.toggle('hidden', !!pod);
     const pairButton = byId('pairPodButton');
@@ -134,9 +148,13 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', control.lastError || stateCopy(effective));
+    setText('masterStateCopy', control.lastError || (control.executionRolloutUnlocked === false
+      ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
+      : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));
-    setText('summarySystemNote', control.canEnter ? 'Entry automatik dibenarkan' : 'Entry baharu disekat');
+    setText('summarySystemNote', control.executionRolloutUnlocked === false
+      ? 'Connection-only • order locked'
+      : control.canEnter ? 'Entry automatik dibenarkan' : 'Entry baharu disekat');
     const pending = byId('pendingBadge');
     if (pending) pending.classList.toggle('hidden', !control.pendingCommandId);
 
@@ -203,8 +221,8 @@
     const detail = item.detail || {};
     const descriptions = {
       SECURE_POD_PROVISIONED: 'Secure Pod DEMO disediakan.',
-      PAIRING_CODE_CREATED: 'Kod pairing sekali guna dijana untuk Azure milik trader.',
-      SECURE_POD_PAIRED: 'Secure Pod Azure milik trader berjaya dipautkan.',
+      PAIRING_CODE_CREATED: `Kod pairing sekali guna dijana untuk ${ownershipDescription(detail.ownershipMode)}.`,
+      SECURE_POD_PAIRED: `Secure Pod ${ownershipDescription(detail.ownershipMode)} berjaya dipautkan.`,
       SETTINGS_SAVED: `Konfigurasi disimpan: ${detail.layers || '—'} layer × ${detail.lotPerLayer || '—'} lot.`,
       SYSTEM_ON_REQUESTED: 'Arahan ON dihantar; menunggu acknowledgement.',
       SYSTEM_STOP_REQUESTED: 'Entry baharu disekat; EXIT management dikekalkan.',
@@ -355,6 +373,8 @@
     setText('pairingCode', '—');
     setText('pairingExpiry', '—');
     byId('pairingConfirmation').value = '';
+    const pcOption = document.querySelector('[name="ownershipMode"][value="TRADER_OWNED_WINDOWS_PC"]');
+    if (pcOption) pcOption.checked = true;
     byId('pairingConfirmationField').classList.remove('hidden');
     byId('pairingResult').classList.add('hidden');
     byId('generatePairingButton').classList.remove('hidden');
@@ -368,7 +388,10 @@
     try {
       const result = await api('/api/auto-trade/pairing', {
         method: 'POST',
-        body: JSON.stringify({ confirmation: byId('pairingConfirmation').value })
+        body: JSON.stringify({
+          confirmation: byId('pairingConfirmation').value,
+          ownershipMode: document.querySelector('[name="ownershipMode"]:checked')?.value || 'TRADER_OWNED_WINDOWS_PC'
+        })
       });
       lastPairingCode = result.pairing?.code || '';
       setText('pairingCode', lastPairingCode || '—');

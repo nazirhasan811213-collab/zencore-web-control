@@ -16,6 +16,9 @@
   const COMMAND_TYPES = [
     'SYSTEM_ON', 'SYSTEM_STOP', 'EMERGENCY_CLOSE_ALL', 'PLACE_SETUP', 'MANAGE_POSITION'
   ];
+  const POD_OWNERSHIP_MODES = [
+    'TRADER_OWNED_WINDOWS_PC', 'TRADER_OWNED_AZURE'
+  ];
   const FORBIDDEN_CREDENTIAL_KEYS = new Set([
     'password', 'pass', 'passwd', 'login', 'accountid', 'account_id',
     'server', 'servername', 'server_name', 'fullserver', 'full_server',
@@ -222,6 +225,7 @@
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,
         expertTradeAllowed: input.expertTradeAllowed === true,
+        demoExecutionUnlocked: input.demoExecutionUnlocked === true,
         symbolSpecs: sanitiseSymbolSpecs(input.symbolSpecs),
         positions,
         connectorVersion: String(input.connectorVersion || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 32),
@@ -231,15 +235,24 @@
   }
 
   function podConnectionState(pod, now = Date.now()) {
-    if (!pod) return { state: 'UNPROVISIONED', label: 'SECURE POD BELUM DISEDIAKAN', online: false, ready: false };
+    if (!pod) return { state: 'UNPROVISIONED', label: 'SECURE POD BELUM DISEDIAKAN', online: false, connected: false, ready: false };
     const lastSeen = number(pod.lastSeenAt);
     const online = lastSeen !== null && now - lastSeen <= 30_000;
-    if (!online) return { state: 'OFFLINE', label: 'SECURE POD OFFLINE', online: false, ready: false };
-    if (String(pod.tradeMode).toUpperCase() !== 'DEMO') return { state: 'BLOCKED_REAL', label: 'REAL ACCOUNT DIKUNCI', online: true, ready: false };
+    if (!online) return { state: 'OFFLINE', label: 'SECURE POD OFFLINE', online: false, connected: false, ready: false };
+    if (String(pod.tradeMode).toUpperCase() !== 'DEMO') return { state: 'BLOCKED_REAL', label: 'REAL ACCOUNT DIKUNCI', online: true, connected: true, ready: false };
     if (!pod.terminalTradeAllowed || !pod.accountTradeAllowed || !pod.expertTradeAllowed) {
-      return { state: 'CHECK_MT5', label: 'SEMAK ALGO TRADING', online: true, ready: false };
+      return { state: 'CHECK_MT5', label: 'SEMAK ALGO TRADING', online: true, connected: true, ready: false };
     }
-    return { state: 'READY', label: 'MT5 SECURE POD READY', online: true, ready: true };
+    if (pod.demoExecutionUnlocked !== true) {
+      return {
+        state: 'CONNECTED_LOCKED',
+        label: 'CONNECTED • EXECUTION LOCKED',
+        online: true,
+        connected: true,
+        ready: false
+      };
+    }
+    return { state: 'READY', label: 'MT5 SECURE POD READY', online: true, connected: true, ready: true };
   }
 
   function makeSignalKey(market = {}) {
@@ -324,6 +337,7 @@
     SUPPORTED_MARKETS,
     CONTROL_STATES,
     COMMAND_TYPES,
+    POD_OWNERSHIP_MODES,
     FORBIDDEN_CREDENTIAL_KEYS,
     number,
     normaliseSymbol,

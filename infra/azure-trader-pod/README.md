@@ -61,6 +61,7 @@ Before deployment, confirm that the selected VM size is available in the selecte
 ```powershell
 Set-Location '.\mt5-secure-pod'
 .\Install-ZenCoreSecurePod.ps1 `
+  -HostProfile AZURE_CONFIDENTIAL_VM `
   -Mt5TerminalPath 'C:\Program Files\InterStellar MT5\terminal64.exe'
 ```
 

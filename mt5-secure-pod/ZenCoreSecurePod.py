@@ -1,6 +1,7 @@
 """ZenCore MT5 Secure Pod agent (DEMO-only first rollout).
 
-This process runs inside an isolated Windows confidential VM beside MetaTrader 5.
+This process runs beside MetaTrader 5 on a trader-owned Windows PC or inside a
+trader-owned Windows confidential VM.
 It never accepts broker login, password, or full server values from ZenCore's
 control-plane API. The terminal must already have an enrolled DEMO session.
 """
@@ -38,8 +39,11 @@ SUPPORTED_MARKETS = (
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
 )
 MAGIC = 3233001
-CONNECTOR_VERSION = "1.2.0-demo"
-PAIRING_OWNERSHIP_MODE = "TRADER_OWNED_AZURE"
+CONNECTOR_VERSION = "1.3.0-demo"
+HOST_OWNERSHIP_MODES = {
+    "WINDOWS_PC": "TRADER_OWNED_WINDOWS_PC",
+    "AZURE_CONFIDENTIAL_VM": "TRADER_OWNED_AZURE",
+}
 CONFIG_SCHEMA_VERSION = 1
 PRODUCTION_CONTROL_HOST = "zencore-precision-entry.onrender.com"
 # This source release is intentionally unable to place even DEMO orders. A later,
@@ -149,12 +153,14 @@ class UserCredentialStore:
         os.replace(temporary, self.path)
 
 
-def pair_trader_owned_pod(control_url: str, pairing_code: str) -> dict[str, str]:
+def pair_trader_owned_pod(
+    control_url: str, pairing_code: str, ownership_mode: str
+) -> dict[str, str]:
     if not re.fullmatch(r"zcpair_[A-Za-z0-9_-]{40,}", pairing_code):
         raise RuntimeError("One-time pairing code is invalid")
     body = json.dumps({
         "pairingCode": pairing_code,
-        "ownershipMode": PAIRING_OWNERSHIP_MODE,
+        "ownershipMode": ownership_mode,
         "connectorVersion": CONNECTOR_VERSION,
     }, separators=(",", ":")).encode("utf-8")
     request = urllib.request.Request(
@@ -180,6 +186,7 @@ class Config:
     control_url: str
     pod_token: str
     signing_key: bytes
+    host_profile: str
     terminal_path: str
     ledger_path: Path
     poll_seconds: float
@@ -200,6 +207,7 @@ class Config:
         allowed = {
             "schemaVersion",
             "controlUrl",
+            "hostProfile",
             "mt5TerminalPath",
             "symbolMap",
             "pollSeconds",
@@ -234,6 +242,15 @@ class Config:
             or file_config.get("mt5TerminalPath")
             or ""
         )
+        host_profile = str(
+            (os.environ.get("ZENCORE_HOST_PROFILE") if environment_mode else None)
+            or file_config.get("hostProfile")
+            or "AZURE_CONFIDENTIAL_VM"
+        ).strip().upper()
+        if host_profile not in HOST_OWNERSHIP_MODES:
+            raise SystemExit(
+                "Secure Pod hostProfile must be WINDOWS_PC or AZURE_CONFIDENTIAL_VM"
+            )
         parsed_control_url = urlparse(control_url)
         try:
             control_port = parsed_control_url.port
@@ -320,7 +337,9 @@ class Config:
             if not pairing_code:
                 raise SystemExit("Run one-time Secure Pod pairing before starting the worker")
             try:
-                paired = pair_trader_owned_pod(control_url, pairing_code)
+                paired = pair_trader_owned_pod(
+                    control_url, pairing_code, HOST_OWNERSHIP_MODES[host_profile]
+                )
                 credential_store.save(paired)
             except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 raise SystemExit(f"Secure Pod pairing failed: {exc}") from exc
@@ -339,6 +358,7 @@ class Config:
             control_url=control_url,
             pod_token=pod_token,
             signing_key=signing_key,
+            host_profile=host_profile,
             terminal_path=terminal_path,
             ledger_path=ledger_path,
             poll_seconds=poll_seconds,
@@ -549,6 +569,7 @@ class SecurePod:
             "terminalTradeAllowed": bool(terminal.trade_allowed),
             "accountTradeAllowed": bool(account.trade_allowed),
             "expertTradeAllowed": bool(terminal.trade_allowed and not terminal.tradeapi_disabled),
+            "demoExecutionUnlocked": bool(self.config.demo_execution_enabled),
             "connectorVersion": CONNECTOR_VERSION,
             "terminalBuild": str(terminal.build),
             "symbolSpecs": self.symbol_specs(),
@@ -773,7 +794,10 @@ class SecurePod:
 
     def run(self) -> None:
         self.initialise_terminal()
-        print("ZenCore Secure Pod started in DEMO mode", flush=True)
+        print(
+            f"ZenCore Secure Pod started in DEMO mode ({self.config.host_profile})",
+            flush=True,
+        )
         while True:
             try:
                 self.local_step_lock()
@@ -787,7 +811,7 @@ class SecurePod:
 
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="ZenCore trader-owned MT5 Secure Pod")
+    parser = argparse.ArgumentParser(description="ZenCore trader-owned Windows MT5 Secure Pod")
     parser.add_argument("--config", type=Path, help="Path to the non-secret Secure Pod JSON config")
     parser.add_argument(
         "--pair-only",

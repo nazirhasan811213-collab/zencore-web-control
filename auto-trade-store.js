@@ -41,6 +41,7 @@ function publicPod(row, includePrivate = false) {
     terminalTradeAllowed: row.terminal_trade_allowed ?? row.terminalTradeAllowed ?? false,
     accountTradeAllowed: row.account_trade_allowed ?? row.accountTradeAllowed ?? false,
     expertTradeAllowed: row.expert_trade_allowed ?? row.expertTradeAllowed ?? false,
+    demoExecutionUnlocked: row.demo_execution_unlocked ?? row.demoExecutionUnlocked ?? false,
     symbolSpecs: row.symbol_specs ?? row.symbolSpecs ?? {},
     connectorVersion: row.connector_version ?? row.connectorVersion ?? null,
     terminalBuild: row.terminal_build ?? row.terminalBuild ?? null,
@@ -58,7 +59,7 @@ function publicPairing(row) {
     id: row.id,
     userId: row.user_id || row.userId,
     label: row.label,
-    ownershipMode: row.ownership_mode || row.ownershipMode || 'TRADER_OWNED_AZURE',
+    ownershipMode: row.ownership_mode || row.ownershipMode || 'TRADER_OWNED_WINDOWS_PC',
     expiresAt: timestamp(row.expires_at ?? row.expiresAt),
     consumedAt: timestamp(row.consumed_at ?? row.consumedAt),
     createdAt: timestamp(row.created_at ?? row.createdAt)
@@ -128,6 +129,7 @@ class PostgresAutoTradeStore {
         terminal_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
         account_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
         expert_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        demo_execution_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
         symbol_specs JSONB NOT NULL DEFAULT '{}'::jsonb,
         connector_version VARCHAR(32),
         terminal_build VARCHAR(24),
@@ -138,6 +140,9 @@ class PostgresAutoTradeStore {
 
       ALTER TABLE zencore_mt5_secure_pods
         ADD COLUMN IF NOT EXISTS ownership_mode VARCHAR(32) NOT NULL DEFAULT 'INTERNAL_DEMO';
+
+      ALTER TABLE zencore_mt5_secure_pods
+        ADD COLUMN IF NOT EXISTS demo_execution_unlocked BOOLEAN NOT NULL DEFAULT FALSE;
 
       CREATE TABLE IF NOT EXISTS zencore_mt5_pairing_sessions (
         id UUID PRIMARY KEY,
@@ -268,7 +273,7 @@ class PostgresAutoTradeStore {
          token_hash = EXCLUDED.token_hash,
          account_mask = NULL, server_mask = NULL, broker_mask = NULL, trade_mode = NULL,
          terminal_trade_allowed = FALSE, account_trade_allowed = FALSE,
-         expert_trade_allowed = FALSE, symbol_specs = '{}'::jsonb,
+         expert_trade_allowed = FALSE, demo_execution_unlocked = FALSE, symbol_specs = '{}'::jsonb,
          connector_version = NULL, terminal_build = NULL, last_seen_at = NULL,
          created_at = NOW(), revoked_at = NULL
        RETURNING *`,
@@ -344,14 +349,15 @@ class PostgresAutoTradeStore {
       `UPDATE zencore_mt5_secure_pods SET
         account_mask = $2, server_mask = $3, broker_mask = $4, trade_mode = $5,
         terminal_trade_allowed = $6, account_trade_allowed = $7,
-        expert_trade_allowed = $8, symbol_specs = $9::jsonb,
-        connector_version = $10, terminal_build = $11, last_seen_at = $12
+        expert_trade_allowed = $8, demo_execution_unlocked = $9, symbol_specs = $10::jsonb,
+        connector_version = $11, terminal_build = $12, last_seen_at = $13
        WHERE id = $1 AND revoked_at IS NULL
        RETURNING *`,
       [podId, heartbeat.accountMask, heartbeat.serverMask, heartbeat.brokerMask,
         heartbeat.tradeMode, heartbeat.terminalTradeAllowed, heartbeat.accountTradeAllowed,
-        heartbeat.expertTradeAllowed, JSON.stringify(heartbeat.symbolSpecs || {}),
-        heartbeat.connectorVersion || null, heartbeat.terminalBuild || null, new Date(now)]
+        heartbeat.expertTradeAllowed, heartbeat.demoExecutionUnlocked === true,
+        JSON.stringify(heartbeat.symbolSpecs || {}), heartbeat.connectorVersion || null,
+        heartbeat.terminalBuild || null, new Date(now)]
     );
     return publicPod(result.rows[0]);
   }
@@ -536,7 +542,8 @@ class MemoryAutoTradeStore {
       id: old?.id || id, userId, label, ownershipMode, tokenHash,
       accountMask: null, serverMask: null,
       brokerMask: null, tradeMode: null, terminalTradeAllowed: false,
-      accountTradeAllowed: false, expertTradeAllowed: false, symbolSpecs: {},
+      accountTradeAllowed: false, expertTradeAllowed: false,
+      demoExecutionUnlocked: false, symbolSpecs: {},
       connectorVersion: null, terminalBuild: null, lastSeenAt: null,
       createdAt: Date.now(), revokedAt: null
     };

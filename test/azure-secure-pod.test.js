@@ -17,6 +17,7 @@ const worker = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'ZenCoreSecureP
 const installer = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'Install-ZenCoreSecurePod.ps1'), 'utf8');
 const pairScript = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'Pair-ZenCoreSecurePod.ps1'), 'utf8');
 const taskScript = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'Register-ZenCoreSecurePodTask.ps1'), 'utf8');
+const preflightScript = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'Test-ZenCoreSecurePod.ps1'), 'utf8');
 const requirements = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'requirements.txt'), 'utf8');
 
 const markets = [
@@ -74,6 +75,7 @@ test('deployment contract accepts no broker credentials or pairing material', ()
 test('local config covers all 11 markets and starts with execution locked', () => {
   assert.equal(podConfig.schemaVersion, 1);
   assert.equal(podConfig.controlUrl.startsWith('https://'), true);
+  assert.equal(podConfig.hostProfile, 'WINDOWS_PC');
   assert.equal(podConfig.demoExecutionEnabled, false);
   assert.deepEqual(Object.keys(podConfig.symbolMap), markets);
   const forbiddenKeys = Object.keys(podConfig).filter(name =>
@@ -84,6 +86,7 @@ test('local config covers all 11 markets and starts with execution locked', () =
 
 test('Windows setup keeps pairing and long-lived pod identity out of environment variables', () => {
   assert.match(installer, /demoExecutionEnabled = \$false/);
+  assert.match(installer, /hostProfile = \$HostProfile/);
   assert.match(installer, /pip --isolated install/);
   assert.match(requirements, /--index-url https:\/\/pypi\.org\/simple/);
   assert.match(requirements, /--only-binary=:all:/);
@@ -103,11 +106,16 @@ test('Windows setup keeps pairing and long-lived pod identity out of environment
   assert.match(worker, /NO_REDIRECT_OPENER\.open/);
   assert.match(worker, /ProxyHandler\(\{\}\)/);
   assert.match(worker, /minimum_version = ssl\.TLSVersion\.TLSv1_2/);
+  assert.match(worker, /"WINDOWS_PC": "TRADER_OWNED_WINDOWS_PC"/);
+  assert.match(worker, /"demoExecutionUnlocked": bool\(self\.config\.demo_execution_enabled\)/);
+  assert.match(preflightScript, /BitLocker system drive/);
+  assert.match(preflightScript, /Windows Firewall/);
 });
 
 test('scheduled worker is bound to the paired Windows identity and remains demo locked', () => {
   assert.match(taskScript, /WindowsIdentity\]::GetCurrent\(\)\.Name/);
   assert.match(taskScript, /-LogonType Password -RunLevel Limited/);
+  assert.match(taskScript, /New-ScheduledTaskTrigger -AtLogOn/);
   assert.match(taskScript, /demoExecutionEnabled -ne \$false/);
   assert.match(taskScript, /ZeroFreeBSTR/);
   assert.match(worker, /NORMAL_3M_SOP_V32/);

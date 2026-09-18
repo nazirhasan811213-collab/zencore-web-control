@@ -13,6 +13,24 @@ function tokenHash(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex');
 }
 
+function ownershipMode(input, fallback = 'TRADER_OWNED_WINDOWS_PC') {
+  const value = String(input || fallback).trim().toUpperCase();
+  if (!Core.POD_OWNERSHIP_MODES.includes(value)) {
+    throw serviceError(
+      'INVALID_OWNERSHIP_MODE',
+      'Pilih Secure Pod PC Windows sendiri atau Azure milik trader.',
+      400
+    );
+  }
+  return value;
+}
+
+function defaultPodLabel(mode) {
+  return mode === 'TRADER_OWNED_AZURE'
+    ? 'Trader-owned Azure Secure Pod'
+    : 'Trader-owned Windows PC Secure Pod';
+}
+
 function canonicalCommand(command) {
   return JSON.stringify({
     id: command.id,
@@ -30,6 +48,7 @@ function createAutoTradeService(options = {}) {
   if (!store) throw new Error('Auto Trade store is required');
   const signingKey = String(options.commandSigningKey || '');
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
+  const allowDemoExecution = options.allowDemoExecution === true;
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
   const pairingTtlMs = Math.max(2 * 60 * 1000, Math.min(30 * 60 * 1000,
@@ -93,11 +112,12 @@ function createAutoTradeService(options = {}) {
       control: {
         desiredState,
         effectiveState,
+        executionRolloutUnlocked: allowDemoExecution,
         stateVersion: profile?.stateVersion || 0,
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
-        canEnter: desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: settingsReady && connection.ready
+        canEnter: allowDemoExecution && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: allowDemoExecution && settingsReady && connection.ready
       },
       connection,
       pod: pod ? {
@@ -110,6 +130,7 @@ function createAutoTradeService(options = {}) {
         terminalTradeAllowed: pod.terminalTradeAllowed,
         accountTradeAllowed: pod.accountTradeAllowed,
         expertTradeAllowed: pod.expertTradeAllowed,
+        demoExecutionUnlocked: pod.demoExecutionUnlocked === true,
         connectorVersion: pod.connectorVersion,
         terminalBuild: pod.terminalBuild,
         lastSeenAt: pod.lastSeenAt,
@@ -130,7 +151,9 @@ function createAutoTradeService(options = {}) {
       audit,
       safeguards: {
         brokerCredentialsInControlPlane: false,
-        traderOwnsCloudAndWindows: true,
+        traderOwnsExecutionHost: true,
+        brokerCredentialsStayOnExecutionHost: true,
+        controlPlaneExecutionUnlocked: allowDemoExecution,
         podCommandKeyIsPerPod: true,
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
@@ -156,14 +179,16 @@ function createAutoTradeService(options = {}) {
       );
     }
     const createdAt = now();
+    const requestedOwnershipMode = ownershipMode(input.ownershipMode);
     const pairingCode = `zcpair_${crypto.randomBytes(32).toString('base64url')}`;
-    const label = String(input.label || 'Trader-owned Azure Secure Pod')
-      .replace(/[^A-Za-z0-9 ._-]/g, '').trim().slice(0, 60) || 'Trader-owned Azure Secure Pod';
+    const fallbackLabel = defaultPodLabel(requestedOwnershipMode);
+    const label = String(input.label || fallbackLabel)
+      .replace(/[^A-Za-z0-9 ._-]/g, '').trim().slice(0, 60) || fallbackLabel;
     const pairing = await store.createPairingSession({
       id: crypto.randomUUID(),
       userId,
       label,
-      ownershipMode: 'TRADER_OWNED_AZURE',
+      ownershipMode: requestedOwnershipMode,
       codeHash: tokenHash(pairingCode),
       createdAt,
       expiresAt: createdAt + pairingTtlMs
@@ -192,11 +217,16 @@ function createAutoTradeService(options = {}) {
     if (!/^zcpair_[A-Za-z0-9_-]{40,}$/.test(pairingCode)) {
       throw serviceError('INVALID_PAIRING_CODE', 'Kod pairing tidak sah atau telah tamat.', 401);
     }
-    if (String(input.ownershipMode || '').toUpperCase() !== 'TRADER_OWNED_AZURE') {
-      throw serviceError('INVALID_OWNERSHIP_MODE', 'Secure Pod mesti dimiliki oleh Azure trader.', 400);
-    }
+    const requestedOwnershipMode = ownershipMode(input.ownershipMode, '');
     const pairing = await store.consumePairingSession(tokenHash(pairingCode), now());
     if (!pairing) throw serviceError('INVALID_PAIRING_CODE', 'Kod pairing tidak sah atau telah tamat.', 401);
+    if (pairing.ownershipMode !== requestedOwnershipMode) {
+      throw serviceError(
+        'PAIRING_HOST_MISMATCH',
+        'Jenis Secure Pod tidak sepadan dengan kod pairing. Jana kod baharu untuk host ini.',
+        409
+      );
+    }
 
     const rawToken = `zcpod_${crypto.randomBytes(32).toString('base64url')}`;
     const podId = crypto.randomUUID();
@@ -250,6 +280,13 @@ function createAutoTradeService(options = {}) {
   }
 
   async function turnOn(userId, input = {}) {
+    if (!allowDemoExecution) {
+      throw serviceError(
+        'EXECUTION_ROLLOUT_LOCKED',
+        'Fasa ini hanya membenarkan pairing dan monitoring. Execution DEMO masih dikunci.',
+        409
+      );
+    }
     if (String(input.confirmation || '').trim().toUpperCase() !== 'AKTIFKAN DEMO') {
       throw serviceError('CONFIRMATION_REQUIRED', 'Taip AKTIFKAN DEMO untuk menghidupkan sistem.', 400);
     }
@@ -424,7 +461,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function dispatchMarkets(markets = []) {
-    const profiles = await store.listOnProfiles();
+    const profiles = allowDemoExecution ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
       const pod = await store.getPodForUser(profile.userId);

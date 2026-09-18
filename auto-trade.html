@@ -76,7 +76,7 @@
             <div><span>SERVER</span><b id="serverMask">—</b></div>
             <div><span>BROKER</span><b id="brokerMask">—</b></div>
             <div><span>MODE</span><b id="tradeMode">DEMO</b></div>
-            <div><span>OWNER</span><b id="podOwner">TRADER AZURE</b></div>
+            <div><span>HOST</span><b id="podOwner">WINDOWS PC</b></div>
           </div>
           <div class="pod-health">
             <div><span>Terminal</span><b id="terminalState">WAIT</b></div>
@@ -87,7 +87,7 @@
             Secure Pod belum disediakan. Provisioning dibuat dalam execution environment terasing—bukan melalui password form web.
           </div>
           <div id="pairingActions" class="pairing-actions">
-            <div><b>Azure milik trader</b><span>ZenCore tidak menerima akses cloud, Windows admin atau credential MT5.</span></div>
+            <div><b>Windows milik trader</b><span>Gunakan PC sendiri sekarang atau Azure kemudian. ZenCore tidak menerima Windows admin atau credential MT5.</span></div>
             <button id="pairPodButton" type="button">JANA KOD PAIRING</button>
           </div>
         </article>
@@ -206,9 +206,20 @@
   <dialog id="pairingDialog" class="control-dialog pairing-dialog">
     <form method="dialog">
       <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
-      <span class="eyebrow">Trader-owned Azure</span>
+      <span class="eyebrow">Trader-owned Windows</span>
       <h2>Pautkan Secure Pod</h2>
-      <p>Kod sekali guna ini hanya memasangkan worker dalam Azure Confidential VM milik trader. Ia bukan ID atau password MT5.</p>
+      <p>Kod sekali guna ini memasangkan worker pada Windows milik trader. Ia bukan ID atau password MT5.</p>
+      <fieldset class="host-profile-fieldset">
+        <legend>HOST SECURE POD</legend>
+        <label class="host-profile-option">
+          <input type="radio" name="ownershipMode" value="TRADER_OWNED_WINDOWS_PC" checked>
+          <span><b>PC WINDOWS SENDIRI</b><small>Sesuai untuk sambungan Demo sekarang. PC dan MT5 mesti sentiasa hidup.</small></span>
+        </label>
+        <label class="host-profile-option">
+          <input type="radio" name="ownershipMode" value="TRADER_OWNED_AZURE">
+          <span><b>AZURE CONFIDENTIAL VM</b><small>Untuk host Windows terasing milik trader.</small></span>
+        </label>
+      </fieldset>
       <label id="pairingConfirmationField"><span>TAIP PAIR SECURE POD</span><input id="pairingConfirmation" autocomplete="off" placeholder="PAIR SECURE POD"></label>
       <div id="pairingResult" class="pairing-result hidden">
         <span>KOD PAIRING SEKALI GUNA</span>

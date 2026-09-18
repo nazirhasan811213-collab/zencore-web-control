@@ -9,6 +9,9 @@ param(
     [ValidatePattern('^https://')]
     [string]$ControlUrl = 'https://zencore-precision-entry.onrender.com',
 
+    [ValidateSet('WINDOWS_PC', 'AZURE_CONFIDENTIAL_VM')]
+    [string]$HostProfile = 'WINDOWS_PC',
+
     [string]$InstallRoot = "$env:ProgramFiles\ZenCore Secure Pod",
 
     [string]$DataRoot = "$env:ProgramData\ZenCoreSecurePod",
@@ -75,6 +78,8 @@ if ($unknownMarkets.Count -gt 0 -or $missingMarkets.Count -gt 0 -or $emptyMappin
 }
 
 $requiredSourceFiles = @(
+    'VERSION',
+    'README-PC-WINDOWS.md',
     'ZenCoreSecurePod.py',
     'requirements.txt',
     'Test-ZenCoreSecurePod.ps1',
@@ -120,6 +125,7 @@ $configPath = Join-Path $DataRoot 'pod-config.json'
 $config = [ordered]@{
     schemaVersion = 1
     controlUrl = $ControlUrl.TrimEnd('/')
+    hostProfile = $HostProfile
     mt5TerminalPath = $Mt5TerminalPath
     symbolMap = $symbolMap
     pollSeconds = 2
@@ -133,6 +139,7 @@ Write-Host 'ZenCore Secure Pod files installed.' -ForegroundColor Green
 Write-Host "Install root : $InstallRoot"
 Write-Host "Data root    : $DataRoot"
 Write-Host "Config       : $configPath"
+Write-Host "Host profile : $HostProfile"
 Write-Host 'Execution    : LOCKED (DEMO execution is false)' -ForegroundColor Yellow
 Write-Host ''
 Write-Host 'Next: run Test-ZenCoreSecurePod.ps1, pair from the ZenCore page, then register the scheduled task.'
