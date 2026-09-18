@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Daftar Akaun — ZenCore Precision Entry</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+</head>
+<body data-auth-page="register">
+  <main class="auth-shell">
+    <section class="auth-story" aria-label="Pengenalan ZenCore">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+        <div><b>ZenCore Precision Entry</b><span>Professional Trading Analysis Workspace</span></div>
+      </div>
+
+      <div class="story-copy">
+        <div class="eyebrow">Bina disiplin. Ikut proses.</div>
+        <h1>Mulakan dengan analysis yang sama untuk setiap keputusan.</h1>
+        <p>Akaun ZenCore menyimpan akses pengguna secara berasingan sebelum modul Page Utama dan Result Page disambungkan.</p>
+        <div class="feature-row" aria-label="Ciri utama">
+          <span>SECURE ACCOUNT</span><span>11 MARKET</span><span>SOP CHECKLIST</span><span>RESULT TRACKING</span>
+        </div>
+      </div>
+
+      <p class="risk-note">Daftar akaun ZenCore tidak membuka akaun broker dan tidak mengaktifkan Auto Trade. Modul MT5 kekal tidak aktif dalam fasa ini.</p>
+    </section>
+
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div class="brand mobile-brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Trading Analysis Workspace</span></div>
+        </div>
+        <div class="eyebrow">Akaun baharu</div>
+        <h2>Daftar ZenCore</h2>
+        <p class="auth-lead">Sediakan akaun untuk masuk ke pusat kawalan ZenCore.</p>
+
+        <form id="authForm" class="form-grid" novalidate>
+          <div class="field">
+            <label for="displayName">Nama</label>
+            <div class="input-wrap">
+              <input id="displayName" name="displayName" type="text" autocomplete="name" minlength="2" maxlength="60" placeholder="Nama anda" required>
+            </div>
+            <span class="field-error" data-error-for="displayName"></span>
+          </div>
+
+          <div class="field">
+            <label for="email">E-mel</label>
+            <div class="input-wrap">
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="nama@email.com" required>
+            </div>
+            <span class="field-error" data-error-for="email"></span>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input id="password" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Minimum 10 aksara" required>
+              <button class="password-toggle" type="button" data-password-toggle="password" aria-label="Tunjukkan password">LIHAT</button>
+            </div>
+            <div class="password-meter" aria-hidden="true"><i id="passwordMeter"></i></div>
+            <span class="field-error" data-error-for="password"></span>
+          </div>
+
+          <div class="field">
+            <label for="confirmPassword">Ulang password</label>
+            <div class="input-wrap">
+              <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Masukkan semula password" required>
+              <button class="password-toggle" type="button" data-password-toggle="confirmPassword" aria-label="Tunjukkan password">LIHAT</button>
+            </div>
+            <span class="field-error" data-error-for="confirmPassword"></span>
+          </div>
+
+          <label class="ack">
+            <input id="riskAck" name="riskAck" type="checkbox" required>
+            <span>Saya faham ZenCore ialah alat analisis dan bukan jaminan keuntungan.</span>
+          </label>
+          <span class="field-error" data-error-for="riskAck"></span>
+
+          <div id="formStatus" class="form-status" role="alert" aria-live="polite"></div>
+          <button id="submitButton" class="primary-btn" type="submit">DAFTAR &amp; TERUSKAN</button>
+        </form>
+
+        <p class="auth-switch">Sudah mempunyai akaun? <a href="/login">Log masuk</a></p>
+      </div>
+    </section>
+  </main>
+  <script src="/auth.js?v=1.0" defer></script>
+</body>
+</html>

@@ -11,7 +11,7 @@ Create a Render **Web Service** from a GitHub repository containing these files.
 
 Recommended fields:
 - Runtime: Node
-- Build Command: `npm install`
+- Build Command: `npm ci`
 - Start Command: `npm start`
 - Health Check Path: `/health`
 - Environment variable:

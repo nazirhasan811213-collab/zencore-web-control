@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#071018">
 <title>ZenCore Precision Entry Pro</title>
 <link rel="stylesheet" href="/precision-entry.css?v=5.0">
+<link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0">
 </head>
 <body>
 <div class="pro-bg-grid"></div>
@@ -29,6 +30,12 @@
       </div>
     </div>
     <div class="header-right">
+      <nav class="analysis-nav" aria-label="Navigasi ZenCore">
+        <a href="/app">RADAR</a>
+        <a class="active" href="/analysis">ANALYSIS</a>
+        <a href="/results">RESULT</a>
+        <a href="/auto-trade">AUTO TRADE</a>
+      </nav>
       <div class="symbolbox pro-symbolbox top-pricebox">
         <label for="pairSelector">LIVE MARKET • PILIH PAIR</label>
         <div class="top-price-row">
@@ -174,6 +181,38 @@
     <div id="positionExitReason" class="position-exit-reason">No active position.</div>
   </section>
 
+  <section class="mt5-live-monitor panel" aria-label="MT5 live trade monitor">
+    <div class="panel-head mt5-monitor-head">
+      <div>
+        <span class="eyebrow">ZENCORE TOTAL TRADE SYSTEM</span>
+        <h3>MT5 Live Execution Monitor</h3>
+      </div>
+      <div id="mt5MonitorBadge" class="mt5-monitor-badge stopped"><i></i> STOPPED</div>
+    </div>
+    <div class="mt5-monitor-grid">
+      <div class="mt5-master-tile">
+        <span>AUTO TRADE</span>
+        <b id="mt5SystemState">STOPPED</b>
+        <small id="mt5SystemCopy">Entry baharu disekat.</small>
+        <div class="mt5-monitor-actions">
+          <button id="mt5TurnOn" class="mt5-on" type="button">ON</button>
+          <button id="mt5Stop" class="mt5-stop" type="button">STOP</button>
+        </div>
+      </div>
+      <div class="mt5-connection-tile">
+        <div><span>SECURE POD</span><b id="mt5PodState">BELUM CONNECT</b></div>
+        <div><span>ACCOUNT</span><b id="mt5AccountMask">—</b></div>
+        <div><span>SERVER</span><b id="mt5ServerMask">—</b></div>
+        <div><span>FLOATING P/L</span><b id="mt5FloatingPnl">USD 0.00</b></div>
+      </div>
+      <div class="mt5-position-tile">
+        <div class="mt5-position-title"><span>POSISI PAIR SEMASA</span><a href="/auto-trade">BUKA CONTROL CENTER →</a></div>
+        <div id="mt5PairPositions" class="mt5-pair-positions"><div class="mt5-empty">Tiada posisi MT5 untuk pair ini.</div></div>
+      </div>
+    </div>
+    <div class="mt5-monitor-note"><b>STOP policy:</b> sekat entry baharu; posisi terbuka terus diurus oleh EXIT 32.3 StepLock. Emergency Close All hanya tersedia dalam Auto Trade Control Center.</div>
+  </section>
+
   <section class="chart-section panel">
     <div class="panel-head">
       <div>
@@ -292,5 +331,7 @@
   <footer>ZenCore Precision Entry • SOP source signal kekal • A+ Quality = execution ranking, bukan jaminan profit • Gunakan risk management.</footer>
 </div>
 <script src="/precision-entry.js?v=5.0"></script>
+<script src="/auto-trade-core.js?v=1.0"></script>
+<script src="/auto-trade-monitor.js?v=1.0"></script>
 </body>
 </html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Log Masuk — ZenCore Precision Entry</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+</head>
+<body data-auth-page="login">
+  <main class="auth-shell">
+    <section class="auth-story" aria-label="Pengenalan ZenCore">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+        <div><b>ZenCore Precision Entry</b><span>Professional Trading Analysis Workspace</span></div>
+      </div>
+
+      <div class="story-copy">
+        <div class="eyebrow">Analysis dahulu. Entry bila cukup syarat.</div>
+        <h1>Satu pusat kawalan untuk keputusan trade yang lebih tersusun.</h1>
+        <p>Ikuti setup Normal 3M SOP V32, semak 11 market dan urus posisi menggunakan EXIT 32.3 StepLock—semuanya daripada satu ruang kerja.</p>
+        <div class="feature-row" aria-label="Ciri utama">
+          <span>11 MARKET</span><span>NORMAL 3M SOP V32</span><span>EXIT 32.3</span><span>LIVE ANALYSIS</span>
+        </div>
+      </div>
+
+      <p class="risk-note">ZenCore ialah alat analisis dan pengurusan proses. Ia tidak menjamin keuntungan. Gunakan pengurusan risiko dan akaun demo semasa menguji sistem.</p>
+    </section>
+
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div class="brand mobile-brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Trading Analysis Workspace</span></div>
+        </div>
+        <div class="eyebrow">Selamat kembali</div>
+        <h2>Log masuk</h2>
+        <p class="auth-lead">Masukkan akaun ZenCore untuk membuka Page Utama dan Analysis Page.</p>
+
+        <form id="authForm" class="form-grid" novalidate>
+          <div class="field">
+            <label for="email">E-mel</label>
+            <div class="input-wrap">
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="nama@email.com" required>
+            </div>
+            <span class="field-error" data-error-for="email"></span>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="Masukkan password" required>
+              <button class="password-toggle" type="button" data-password-toggle="password" aria-label="Tunjukkan password">LIHAT</button>
+            </div>
+            <span class="field-error" data-error-for="password"></span>
+          </div>
+
+          <div id="formStatus" class="form-status" role="alert" aria-live="polite"></div>
+          <button id="submitButton" class="primary-btn" type="submit">MASUK KE ZENCORE</button>
+        </form>
+
+        <p class="auth-switch">Belum mempunyai akaun? <a href="/register">Daftar akaun baharu</a></p>
+      </div>
+    </section>
+  </main>
+  <script src="/auth.js?v=1.0" defer></script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Signal Result — ZenCore Precision Entry</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+  <link rel="stylesheet" href="/results.css?v=1.0">
+</head>
+<body>
+  <main class="portal-shell results-shell">
+    <div class="portal-wrap results-wrap">
+      <header class="portal-top results-top">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Signal Result • Normal 3M SOP V32</span></div>
+        </div>
+
+        <nav class="top-nav" aria-label="Navigasi utama">
+          <a href="/app">MARKET RADAR</a>
+          <a href="/analysis?pair=XAUUSD">ANALYSIS</a>
+          <a class="active" href="/results">RESULT</a>
+          <a href="/auto-trade">AUTO TRADE</a>
+        </nav>
+
+        <div class="user-actions">
+          <span id="userPill" class="user-pill">Memuatkan akaun...</span>
+          <button id="logoutButton" class="ghost-btn" type="button">LOG KELUAR</button>
+        </div>
+      </header>
+
+      <section class="results-hero">
+        <div>
+          <div class="hero-line">
+            <span class="eyebrow">ZenCore Signal Validation</span>
+            <span id="resultConnection" class="connection-pill connecting"><i></i> MEMUATKAN</span>
+          </div>
+          <h1>Keputusan signal, jelas tanpa teka-teki.</h1>
+          <p>Semua 11 pair dihimpunkan daripada engine validation Normal 3M yang sama. Semak apa yang menang, terkena SL, dilindungi StepLock atau masih berjalan.</p>
+        </div>
+        <div class="validation-stamp">
+          <span>STATUS DATA</span>
+          <b>VALIDATION SAHAJA</b>
+          <small>Bukan trade broker atau rekod P/L MT5</small>
+        </div>
+      </section>
+
+      <aside class="data-notice" aria-label="Penerangan data result">
+        <i aria-hidden="true">i</i>
+        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span>History disimpan dalam memori server semasa dan boleh bermula semula selepas restart. Jumlah sebenar datang daripada engine; jadual memaparkan maksimum 20 keputusan terkini bagi setiap pair.</span></div>
+      </aside>
+
+      <section class="result-summary" aria-label="Ringkasan keputusan signal">
+        <article><span>JUMLAH SAMPLE</span><b id="summarySample">0</b><small>Termasuk ambiguous</small></article>
+        <article><span>RESOLVED</span><b id="summaryResolved">0</b><small>Signal sudah dinilai</small></article>
+        <article class="win"><span>WIN</span><b id="summaryWins">0</b><small>TP / protected win</small></article>
+        <article class="loss"><span>LOSS</span><b id="summaryLosses">0</b><small>SL sebelum TP1</small></article>
+        <article class="rate"><span>WIN RATE</span><b id="summaryWinRate">—</b><small>Validation, bukan jaminan</small></article>
+        <article class="open"><span>MASIH OPEN</span><b id="summaryOpen">0</b><small>Signal sedang dipantau</small></article>
+      </section>
+
+      <section class="results-overview">
+        <article class="result-panel pair-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">11-Pair Scoreboard</span><h2>Prestasi mengikut pair</h2></div>
+            <span id="pairCoverage" class="mini-pill">0/11 tersedia</span>
+          </div>
+          <div class="pair-table-wrap">
+            <table class="pair-table">
+              <thead><tr><th>PAIR</th><th>RESOLVED</th><th>W–L</th><th>WIN RATE</th><th>OPEN</th><th>STATUS</th></tr></thead>
+              <tbody id="pairTableBody">
+                <tr><td colspan="6" class="table-empty">Memuatkan scoreboard...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="result-panel open-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Live Validation</span><h2>Signal masih open</h2></div>
+            <span id="openCount" class="mini-pill open">0 signal</span>
+          </div>
+          <div id="openSignalList" class="open-list" aria-live="polite">
+            <div class="open-empty"><b>Belum ada signal open.</b><span>ZenCore akan paparkan trade validation di sini bila setup aktif.</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="result-controls" aria-label="Kawalan result">
+        <div class="filter-row" role="group" aria-label="Filter outcome">
+          <button class="result-filter active" type="button" data-filter="all">SEMUA</button>
+          <button class="result-filter" type="button" data-filter="win">WIN</button>
+          <button class="result-filter" type="button" data-filter="loss">LOSS</button>
+          <button class="result-filter" type="button" data-filter="protected">PROTECTED</button>
+          <button class="result-filter" type="button" data-filter="managed">MANAGED</button>
+          <button class="result-filter" type="button" data-filter="ambiguous">AMBIGUOUS</button>
+          <button class="result-filter" type="button" data-filter="open">OPEN</button>
+        </div>
+        <div class="control-actions">
+          <label class="select-control" for="pairFilter"><span>PAIR</span><select id="pairFilter"><option value="ALL">SEMUA 11 PAIR</option></select></label>
+          <label class="select-control" for="sideFilter"><span>ARAH</span><select id="sideFilter"><option value="ALL">BUY + SELL</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select></label>
+          <button id="refreshButton" class="action-btn" type="button">REFRESH</button>
+          <button id="exportButton" class="action-btn primary" type="button">EXPORT CSV</button>
+        </div>
+      </section>
+
+      <section class="result-panel history-panel">
+        <div class="panel-heading history-heading">
+          <div><span class="eyebrow">Signal History</span><h2 id="historyTitle">Semua keputusan terkini</h2></div>
+          <div class="history-meta"><span id="visibleCount">0 rekod</span><span id="lastUpdated">Belum dikemas kini</span></div>
+        </div>
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr><th>MASA</th><th>PAIR</th><th>ARAH</th><th>ENTRY</th><th>OUTCOME</th><th>STEPLOCK</th><th>SCORE</th><th>ANALYSIS</th></tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="8" class="table-empty">Memuatkan signal history...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="portal-foot results-foot">
+        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • Auto Trade DEMO</span>
+        <span>Keputusan validation bukan jaminan prestasi masa depan.</span>
+      </footer>
+    </div>
+  </main>
+  <script src="/results-core.js?v=1.0" defer></script>
+  <script src="/results.js?v=1.0" defer></script>
+</body>
+</html>

@@ -27,3 +27,22 @@ This package uses the exact Pine Script supplied by the user as the calculation 
 ## Important
 TradingView cannot send a webhook to `localhost`. For live use, deploy `server.js` to a public HTTPS host/domain.
 The browser dashboard does not recalculate the trading logic. It displays the values calculated by your Pine Script.
+
+## Phase 1 account layer
+
+The Login, Register and first Page Utama shell are implemented behind `ZENCORE_AUTH_ENABLED=true`.
+Authentication is OFF by default so the existing Precision Entry deployment is unchanged until PostgreSQL is attached and the feature is deliberately enabled.
+
+See `AUTH_SETUP.md` for the Render environment variables, local test mode and security model.
+
+The protected `/app` Page Utama renders the existing Normal 3M state for all 11 markets from `/api/markets` and `/market-events`. Selecting a card opens the completed Analysis Page with the same pair through `/analysis?pair=SYMBOL`.
+
+The protected `/results` page combines Normal 3M validation from all 11 markets. It shows backend totals, per-pair performance, open signals, recent outcomes, filters and CSV export. These are ZenCore signal-validation records, not broker trades or MT5 profit-and-loss. The current validation store is in memory and can reset after a service restart.
+
+## Auto Trade DEMO control plane
+
+The protected `/auto-trade` page now provides capital/lot/layer settings, all 11 allowed markets, risk reminders, master ON/STOP controls, step-up protected Emergency Close All, live masked MT5 status, open positions and an audit view. The Analysis Page includes the same live execution status and current-pair positions.
+
+The Render process never accepts broker login, password or full server. Execution is handled by a separate DEMO-only worker in a confidential Windows VM owned by the trader's Azure subscription. The user page now supports a ten-minute, single-use BYOC pairing flow; pod tokens and per-pod command keys are delivered directly to the worker and never exposed in normal user state. Auto Trade remains disabled by default and real broker execution remains locked pending Azure attestation/HSM infrastructure and broker execution tests.
+
+See `AUTOTRADE_SECURITY.md` for trust boundaries, commands, environment flags and deployment gates. The trader-owned Azure template, private-access runbook, Windows installer, preflight, hidden pairing flow and scheduled-worker registration are in `infra/azure-trader-pod` and `mt5-secure-pod`. These are a DEMO foundation only; `demoExecutionEnabled` remains false.

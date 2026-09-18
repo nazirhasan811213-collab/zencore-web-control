@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "controlUrl": "https://zencore-precision-entry.onrender.com",
+  "mt5TerminalPath": "C:\\Program Files\\InterStellar MT5\\terminal64.exe",
+  "symbolMap": {
+    "XAUUSD": "XAUUSD",
+    "EURUSD": "EURUSD",
+    "GBPUSD": "GBPUSD",
+    "USDJPY": "USDJPY",
+    "US30": "US30",
+    "USDCAD": "USDCAD",
+    "USDCHF": "USDCHF",
+    "EURJPY": "EURJPY",
+    "GBPJPY": "GBPJPY",
+    "EURGBP": "EURGBP",
+    "BTCUSD": "BTCUSD"
+  },
+  "pollSeconds": 2,
+  "demoExecutionEnabled": false,
+  "dataRoot": "C:\\ProgramData\\ZenCoreSecurePod"
+}

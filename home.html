@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Market Radar — ZenCore Precision Entry</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+  <link rel="stylesheet" href="/home.css?v=2.0">
+</head>
+<body>
+  <main class="portal-shell radar-shell">
+    <div class="portal-wrap radar-wrap">
+      <header class="portal-top radar-top">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Market Radar • Normal 3M SOP V32</span></div>
+        </div>
+
+        <nav class="top-nav" aria-label="Navigasi utama">
+          <a class="active" href="/app">MARKET RADAR</a>
+          <a href="/analysis?pair=XAUUSD">ANALYSIS</a>
+          <a href="/results">RESULT</a>
+          <a href="/auto-trade">AUTO TRADE</a>
+        </nav>
+
+        <div class="user-actions">
+          <span id="userPill" class="user-pill">Memuatkan akaun...</span>
+          <button id="logoutButton" class="ghost-btn" type="button">LOG KELUAR</button>
+        </div>
+      </header>
+
+      <section class="radar-hero">
+        <div class="radar-intro">
+          <div class="hero-line">
+            <span class="eyebrow">ZenCore Command Center</span>
+            <span id="feedConnection" class="connection-pill connecting"><i></i> MENYAMBUNG</span>
+          </div>
+          <h1>Selamat datang, <span id="welcomeName">Trader</span>.</h1>
+          <p>Pilih market yang perlu diberi perhatian. Radar menyusun 11 pair mengikut state Normal 3M daripada feed ZenCore—bukan signal atau scoring baharu.</p>
+          <div class="hero-note"><strong>Fokus:</strong> ENTRY READY dahulu, WATCH kedua. Bila market serabut, ZenCore kekal WAIT.</div>
+        </div>
+
+        <a id="bestSetupLink" class="best-setup disabled" href="/analysis?pair=XAUUSD" aria-label="Buka setup terbaik">
+          <div class="best-head"><span>SETUP TERBAIK SEKARANG</span><i id="bestTone" class="best-dot wait"></i></div>
+          <div class="best-main"><b id="bestPair">MENUNGGU DATA</b><strong id="bestSide">WAIT</strong></div>
+          <p id="bestReason">Radar sedang membaca feed 11 market.</p>
+          <div class="best-meta">
+            <span>SOP <b id="bestSop">—</b></span>
+            <span>QUALITY <b id="bestScore">—</b></span>
+            <span>ZONE <b id="bestZone">—</b></span>
+          </div>
+          <small id="bestAction">Belum ada setup yang cukup lengkap.</small>
+        </a>
+      </section>
+
+      <section class="radar-summary" aria-label="Ringkasan market">
+        <article><span>MARKET</span><b id="summaryTotal">11</b><small>Dalam radar</small></article>
+        <article><span>LIVE</span><b id="summaryLive">0</b><small>Feed aktif</small></article>
+        <article class="ready"><span>ENTRY READY</span><b id="summaryReady">0</b><small>Setup lengkap</small></article>
+        <article class="watch"><span>WATCH</span><b id="summaryWatch">0</b><small>Tunggu confirm</small></article>
+        <article><span>ACTIVE</span><b id="summaryActive">0</b><small>Trade dipantau</small></article>
+        <article><span>LAST UPDATE</span><b id="summaryUpdated">—</b><small>3M bar-close</small></article>
+      </section>
+
+      <section class="radar-controls" aria-label="Kawalan radar">
+        <div class="filter-row" role="group" aria-label="Filter market">
+          <button class="radar-filter active" type="button" data-filter="all">SEMUA</button>
+          <button class="radar-filter" type="button" data-filter="ready">ENTRY READY</button>
+          <button class="radar-filter" type="button" data-filter="watch">WATCH</button>
+          <button class="radar-filter" type="button" data-filter="active">ACTIVE</button>
+          <button class="radar-filter" type="button" data-filter="buy">BUY</button>
+          <button class="radar-filter" type="button" data-filter="sell">SELL</button>
+          <button class="radar-filter" type="button" data-filter="live">LIVE SAHAJA</button>
+        </div>
+        <label class="radar-search" for="marketSearch">
+          <span>CARI PAIR</span>
+          <input id="marketSearch" type="search" inputmode="search" maxlength="12" placeholder="Contoh: XAUUSD" autocomplete="off">
+        </label>
+      </section>
+
+      <div class="radar-heading">
+        <div><span class="eyebrow">Live Market Overview</span><h2 id="gridTitle">Semua 11 market</h2></div>
+        <div class="radar-legend" aria-label="Petunjuk warna"><span><i class="buy"></i>BUY</span><span><i class="sell"></i>SELL</span><span><i class="wait"></i>WAIT</span></div>
+      </div>
+
+      <section id="marketGrid" class="market-grid" aria-live="polite" aria-busy="true">
+        <div class="radar-empty loading"><b>Memuatkan Market Radar...</b><span>Menunggu data daripada ZenCore.</span></div>
+      </section>
+
+      <footer class="portal-foot radar-foot">
+        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • Auto Trade DEMO</span>
+        <span>Quality score bukan jaminan profit. Gunakan risk management.</span>
+      </footer>
+    </div>
+  </main>
+  <script src="/market-radar-core.js?v=2.0" defer></script>
+  <script src="/portal.js?v=2.0" defer></script>
+</body>
+</html>

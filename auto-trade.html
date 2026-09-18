@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#061019">
+  <title>Auto Trade — ZenCore Precision Entry</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+  <link rel="stylesheet" href="/home.css?v=2.0">
+  <link rel="stylesheet" href="/auto-trade.css?v=1.1">
+</head>
+<body>
+  <main class="portal-shell autotrade-shell">
+    <div class="portal-wrap autotrade-wrap">
+      <header class="portal-top autotrade-top">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Total Trade System • DEMO Control Plane</span></div>
+        </div>
+
+        <nav class="top-nav" aria-label="Navigasi utama">
+          <a href="/app">MARKET RADAR</a>
+          <a href="/analysis?pair=XAUUSD">ANALYSIS</a>
+          <a href="/results">RESULT</a>
+          <a class="active" href="/auto-trade">AUTO TRADE</a>
+        </nav>
+
+        <div class="user-actions">
+          <span id="userPill" class="user-pill">Memuatkan akaun...</span>
+          <button id="logoutButton" class="ghost-btn" type="button">LOG KELUAR</button>
+        </div>
+      </header>
+
+      <section class="auto-hero">
+        <div>
+          <div class="hero-line">
+            <span class="eyebrow">ZenCore Total Trade System</span>
+            <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
+          </div>
+          <h1>Analysis ZenCore. Execution MT5. Satu kawalan.</h1>
+          <p>Normal 3M SOP V32 menentukan entry. EXIT 32.3 StepLock mengurus posisi. Control plane ini tidak menerima ID, password atau nama server penuh broker.</p>
+        </div>
+        <div class="hero-mode">
+          <span>ROLLOUT MODE</span>
+          <b>DEMO ONLY</b>
+          <small>Real account dikunci pada fasa ini</small>
+        </div>
+      </section>
+
+      <aside class="security-banner" aria-label="Perlindungan credential">
+        <div class="security-icon" aria-hidden="true">◇</div>
+        <div>
+          <b>Credential broker tidak disimpan dalam ZenCore Control Plane.</b>
+          <span>Secure Pod hanya menghantar identiti bertopeng dan status execution. Jangan masukkan ID, password atau server MT5 pada mana-mana ruangan halaman ini.</span>
+        </div>
+        <span class="security-lock">CONTROL PLANE CLEAN</span>
+      </aside>
+
+      <section class="auto-summary" aria-label="Ringkasan Auto Trade">
+        <article><span>SYSTEM</span><b id="summarySystem">STOPPED</b><small id="summarySystemNote">Entry baharu disekat</small></article>
+        <article><span>SECURE POD</span><b id="summaryPod">BELUM CONNECT</b><small id="summaryHeartbeat">Tiada heartbeat</small></article>
+        <article><span>OPEN POSITION</span><b id="summaryPositions">0</b><small id="summaryVolume">0.00 total lot</small></article>
+        <article id="summaryProfitCard"><span>FLOATING P/L</span><b id="summaryProfit">USD 0.00</b><small>Daripada snapshot MT5</small></article>
+        <article><span>EXPOSURE / SETUP</span><b id="summaryExposure">—</b><small id="summaryLayers">Belum dikonfigurasi</small></article>
+      </section>
+
+      <section class="auto-grid">
+        <article class="auto-panel account-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Secure Execution</span><h2>Akaun MT5</h2></div>
+            <span id="connectionBadge" class="mini-status offline">UNPROVISIONED</span>
+          </div>
+          <div class="account-identity">
+            <div><span>ACCOUNT</span><b id="accountMask">Belum dipautkan</b></div>
+            <div><span>SERVER</span><b id="serverMask">—</b></div>
+            <div><span>BROKER</span><b id="brokerMask">—</b></div>
+            <div><span>MODE</span><b id="tradeMode">DEMO</b></div>
+            <div><span>OWNER</span><b id="podOwner">TRADER AZURE</b></div>
+          </div>
+          <div class="pod-health">
+            <div><span>Terminal</span><b id="terminalState">WAIT</b></div>
+            <div><span>Account Trade</span><b id="accountTradeState">WAIT</b></div>
+            <div><span>Expert Trade</span><b id="expertTradeState">WAIT</b></div>
+          </div>
+          <div id="podNotice" class="panel-notice">
+            Secure Pod belum disediakan. Provisioning dibuat dalam execution environment terasing—bukan melalui password form web.
+          </div>
+          <div id="pairingActions" class="pairing-actions">
+            <div><b>Azure milik trader</b><span>ZenCore tidak menerima akses cloud, Windows admin atau credential MT5.</span></div>
+            <button id="pairPodButton" type="button">JANA KOD PAIRING</button>
+          </div>
+        </article>
+
+        <article class="auto-panel master-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Master Control</span><h2>Keseluruhan Sistem</h2></div>
+            <span id="pendingBadge" class="mini-status hidden">PENDING ACK</span>
+          </div>
+          <div id="masterState" class="master-state stopped">
+            <span>AUTO TRADE</span>
+            <b id="masterStateText">STOPPED</b>
+            <small id="masterStateCopy">Tiada entry baharu akan dihantar.</small>
+          </div>
+          <div class="master-actions">
+            <button id="turnOnButton" class="control-button on" type="button">ON SISTEM</button>
+            <button id="stopButton" class="control-button stop" type="button">STOP ENTRY</button>
+          </div>
+          <div class="stop-policy">
+            <b>STOP tidak meninggalkan posisi.</b>
+            <span>Entry baharu disekat serta-merta; posisi terbuka terus diurus oleh EXIT 32.3 StepLock.</span>
+          </div>
+          <button id="emergencyButton" class="emergency-button" type="button">EMERGENCY CLOSE ALL</button>
+        </article>
+      </section>
+
+      <section class="auto-grid configuration-grid">
+        <article class="auto-panel settings-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Trade Configuration</span><h2>Modal, lot dan layer</h2></div>
+            <span class="mini-status warning-only">WARNING ONLY</span>
+          </div>
+          <form id="settingsForm" novalidate>
+            <div class="settings-fields">
+              <label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label>
+              <label><span>LOT SETIAP LAYER</span><input id="lotPerLayer" name="lotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
+              <label><span>JUMLAH LAYER</span><input id="layers" name="layers" type="number" min="1" max="10" step="1" value="3" required></label>
+              <div class="total-exposure"><span>TOTAL LOT / SETUP</span><b id="totalLotPreview">0.03</b></div>
+            </div>
+
+            <fieldset class="symbol-fieldset">
+              <legend>PAIR YANG DIBENARKAN</legend>
+              <div id="symbolOptions" class="symbol-options"></div>
+            </fieldset>
+
+            <label class="risk-ack">
+              <input id="riskAcknowledged" type="checkbox">
+              <span>Saya faham saiz lot dan layer boleh menghasilkan risiko tinggi. ZenCore akan memberi warning tetapi tidak menghalang order selepas saya confirm.</span>
+            </label>
+            <div id="settingsError" class="form-error" role="alert"></div>
+            <button id="saveSettingsButton" class="save-settings" type="submit">SIMPAN KONFIGURASI</button>
+          </form>
+        </article>
+
+        <article class="auto-panel risk-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Live Risk Reminder</span><h2>Anggaran setup semasa</h2></div>
+            <span id="riskLevel" class="risk-level pending">PENDING</span>
+          </div>
+          <label class="risk-symbol" for="riskSymbol"><span>PAIR RUJUKAN</span><select id="riskSymbol"></select></label>
+          <div class="risk-figure">
+            <span>ANGGARAN RISIKO</span>
+            <b id="riskPercent">—</b>
+            <strong id="riskUsd">Menunggu active plan</strong>
+          </div>
+          <div class="risk-details">
+            <div><span>ENTRY</span><b id="riskEntry">—</b></div>
+            <div><span>SL</span><b id="riskSl">—</b></div>
+            <div><span>TOTAL LOT</span><b id="riskTotalLot">0.03</b></div>
+          </div>
+          <p id="riskMessage">Menunggu Entry, SL dan spesifikasi broker untuk kira risiko sebenar.</p>
+          <div class="warning-policy"><b>Tiada hard block kerana risk level.</b><span>Security, invalid command atau Secure Pod offline tetap boleh menghalang execution.</span></div>
+        </article>
+      </section>
+
+      <section class="auto-panel positions-panel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">MT5 Live Positions</span><h2>Posisi sedang diurus</h2></div>
+          <span id="positionCountBadge" class="mini-status">0 OPEN</span>
+        </div>
+        <div class="position-table-wrap">
+          <table class="position-table">
+            <thead><tr><th>TICKET / PAIR</th><th>ARAH</th><th>VOLUME</th><th>ENTRY → CURRENT</th><th>ACTIVE SL</th><th>STEPLOCK</th><th>FLOATING P/L</th></tr></thead>
+            <tbody id="positionTableBody"><tr><td colspan="7" class="table-empty">Belum ada posisi MT5 aktif.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="auto-panel audit-panel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">Immutable Activity View</span><h2>Audit Auto Trade</h2></div>
+          <span id="lastRefresh" class="mini-status">BELUM UPDATE</span>
+        </div>
+        <div id="auditList" class="audit-list"><div class="audit-empty">Belum ada aktiviti Auto Trade.</div></div>
+      </section>
+
+      <footer class="portal-foot autotrade-foot">
+        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • DEMO Secure Pod</span>
+        <span>Auto Trade tidak menjamin profit. Semua execution tertakluk kepada broker, spread dan slippage.</span>
+      </footer>
+    </div>
+  </main>
+
+  <dialog id="onDialog" class="control-dialog">
+    <form method="dialog">
+      <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
+      <span class="eyebrow">Activate Demo</span>
+      <h2>Hidupkan keseluruhan sistem?</h2>
+      <p>Selepas Secure Pod mengakui arahan ini, setup Normal 3M yang READY boleh dihantar terus ke MT5.</p>
+      <label><span>TAIP AKTIFKAN DEMO</span><input id="onConfirmation" autocomplete="off" placeholder="AKTIFKAN DEMO"></label>
+      <div id="onError" class="form-error" role="alert"></div>
+      <div class="dialog-actions"><button value="cancel" class="dialog-cancel">BATAL</button><button id="confirmOnButton" value="default" class="dialog-confirm" type="button">CONFIRM ON</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="pairingDialog" class="control-dialog pairing-dialog">
+    <form method="dialog">
+      <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
+      <span class="eyebrow">Trader-owned Azure</span>
+      <h2>Pautkan Secure Pod</h2>
+      <p>Kod sekali guna ini hanya memasangkan worker dalam Azure Confidential VM milik trader. Ia bukan ID atau password MT5.</p>
+      <label id="pairingConfirmationField"><span>TAIP PAIR SECURE POD</span><input id="pairingConfirmation" autocomplete="off" placeholder="PAIR SECURE POD"></label>
+      <div id="pairingResult" class="pairing-result hidden">
+        <span>KOD PAIRING SEKALI GUNA</span>
+        <b id="pairingCode">—</b>
+        <small id="pairingExpiry">—</small>
+        <button id="copyPairingCode" type="button">SALIN KOD</button>
+      </div>
+      <div id="pairingError" class="form-error" role="alert"></div>
+      <div class="dialog-actions"><button value="cancel" class="dialog-cancel">TUTUP</button><button id="generatePairingButton" value="default" class="dialog-confirm" type="button">JANA KOD</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="emergencyDialog" class="control-dialog danger-dialog">
+    <form method="dialog">
+      <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
+      <span class="eyebrow danger">Emergency Action</span>
+      <h2>Tutup semua posisi MT5?</h2>
+      <p>Arahan ini cuba menutup semua posisi terbuka dan mematikan entry baharu. Execution masih tertakluk kepada sambungan broker.</p>
+      <label><span>PASSWORD AKAUN ZENCORE</span><input id="emergencyPassword" type="password" autocomplete="current-password"></label>
+      <label><span>TAIP TUTUP SEMUA</span><input id="emergencyConfirmation" autocomplete="off" placeholder="TUTUP SEMUA"></label>
+      <div id="emergencyError" class="form-error" role="alert"></div>
+      <div class="dialog-actions"><button value="cancel" class="dialog-cancel">BATAL</button><button id="confirmEmergencyButton" value="default" class="dialog-confirm danger" type="button">CLOSE ALL</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/auto-trade-core.js?v=1.0" defer></script>
+  <script src="/auto-trade.js?v=1.1" defer></script>
+</body>
+</html>
