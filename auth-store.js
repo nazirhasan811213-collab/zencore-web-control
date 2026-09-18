@@ -85,6 +85,17 @@ class PostgresAuthStore {
     return result.rows[0] || null;
   }
 
+  async findUserByIdForLogin(userId) {
+    const result = await this.pool.query(
+      `SELECT id, display_name, email, password_hash, status, created_at, last_login_at
+       FROM zencore_users
+       WHERE id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    return result.rows[0] || null;
+  }
+
   async markLogin(userId) {
     await this.pool.query(
       `UPDATE zencore_users SET last_login_at = NOW() WHERE id = $1`,
@@ -166,6 +177,10 @@ class MemoryAuthStore {
 
   async findUserForLogin(email) {
     return this.usersByEmail.get(email) || null;
+  }
+
+  async findUserByIdForLogin(userId) {
+    return this.usersById.get(userId) || null;
   }
 
   async markLogin(userId) {

@@ -60,3 +60,15 @@ test('login uses a generic credential error and logout revokes the session', asy
   await auth.logoutFromRequest(requestWithCookie(cookie));
   assert.equal(await auth.sessionFromRequest(requestWithCookie(cookie)), null);
 });
+
+test('step-up reauthentication verifies the signed-in user password', async () => {
+  const store = new MemoryAuthStore();
+  const auth = createAuthService({ store, secureCookies: false });
+  const created = await auth.register({
+    displayName: 'Emergency Trader',
+    email: 'step-up@example.com',
+    password: 'ZenCore2026!'
+  });
+  assert.equal(await auth.reauthenticate(created.user.id, 'ZenCore2026!'), true);
+  assert.equal(await auth.reauthenticate(created.user.id, 'WrongPassword1'), false);
+});

@@ -110,6 +110,14 @@ function createAuthService(options = {}) {
     return { ...session, token, user: safeUser(session.user) };
   }
 
+  async function reauthenticate(userId, password) {
+    const value = String(password || '');
+    if (!userId || !value || typeof store.findUserByIdForLogin !== 'function') return false;
+    const userRow = await store.findUserByIdForLogin(userId);
+    if (!userRow || userRow.status !== 'active') return false;
+    return verifyPassword(value, userRow.password_hash);
+  }
+
   async function logoutFromRequest(req) {
     const token = parseCookies(req?.headers?.cookie)[cookieName];
     if (token) await store.deleteSession(hashSessionToken(token));
@@ -127,6 +135,7 @@ function createAuthService(options = {}) {
     register,
     login,
     sessionFromRequest,
+    reauthenticate,
     logoutFromRequest,
     createCookie,
     clearCookie,

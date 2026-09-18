@@ -6,6 +6,8 @@ const { spawn } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 const PORT = 18771;
 const BASE = `http://127.0.0.1:${PORT}`;
+const POD_PROVISIONING_SECRET = 'test-pod-provisioning-secret-at-least-32-bytes';
+const COMMAND_SIGNING_KEY = 'test-command-signing-key-at-least-32-bytes';
 
 function startServer() {
   return new Promise((resolve, reject) => {
@@ -18,7 +20,11 @@ function startServer() {
         SITE_MODE: 'precision-entry',
         ZENCORE_AUTH_ENABLED: 'true',
         ZENCORE_AUTH_MEMORY: 'true',
-        ZENCORE_INSECURE_COOKIE: 'true'
+        ZENCORE_INSECURE_COOKIE: 'true',
+        ZENCORE_AUTOTRADE_ENABLED: 'true',
+        ZENCORE_AUTOTRADE_MEMORY: 'true',
+        ZENCORE_POD_PROVISIONING_SECRET: POD_PROVISIONING_SECRET,
+        ZENCORE_COMMAND_SIGNING_KEY: COMMAND_SIGNING_KEY
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -34,7 +40,7 @@ function startServer() {
 
     const onData = chunk => {
       output += chunk.toString();
-      if (!settled && output.includes('gateway running') && output.includes('authentication ready')) {
+      if (!settled && output.includes('gateway running') && output.includes('authentication ready') && output.includes('Auto Trade control plane ready')) {
         settled = true;
         clearTimeout(timer);
         resolve({ child, output: () => output });
@@ -63,7 +69,7 @@ function stopServer(child) {
   });
 }
 
-test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', { timeout: 30000 }, async () => {
+test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', { timeout: 30000 }, async () => {
   const { child, output } = await startServer();
   try {
     let response = await fetch(`${BASE}/`, { redirect: 'manual' });
@@ -78,6 +84,10 @@ test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', {
     assert.equal(response.status, 401);
 
     response = await fetch(`${BASE}/results`, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/login');
+
+    response = await fetch(`${BASE}/auto-trade`, { redirect: 'manual' });
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
 
@@ -114,6 +124,8 @@ test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', {
       })
     });
     assert.equal(response.status, 201, output());
+    const registered = await response.json();
+    const userId = registered.user.id;
     const setCookie = response.headers.get('set-cookie');
     assert.ok(setCookie);
     assert.match(setCookie, /HttpOnly/);
@@ -139,7 +151,10 @@ test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', {
 
     response = await fetch(`${BASE}/analysis`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /ZenCore Precision Entry/);
+    const analysisPage = await response.text();
+    assert.match(analysisPage, /ZenCore Precision Entry/);
+    assert.match(analysisPage, /MT5 Live Execution Monitor/);
+    assert.match(analysisPage, /auto-trade-monitor\.js/);
 
     response = await fetch(`${BASE}/results`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
@@ -159,6 +174,162 @@ test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', {
     response = await fetch(`${BASE}/results.js`);
     assert.equal(response.status, 200);
     assert.match(await response.text(), /refreshResults/);
+
+    response = await fetch(`${BASE}/auto-trade`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
+    const autoTradePage = await response.text();
+    assert.match(autoTradePage, /ZenCore Total Trade System/);
+    assert.match(autoTradePage, /EMERGENCY CLOSE ALL/);
+    assert.doesNotMatch(autoTradePage, /name="(?:login|password|server)"/i);
+
+    response = await fetch(`${BASE}/auto-trade-core.js`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /FORBIDDEN_CREDENTIAL_KEYS/);
+
+    response = await fetch(`${BASE}/api/auto-trade/state`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    let autoState = await response.json();
+    assert.equal(autoState.control.effectiveState, 'UNPROVISIONED');
+    assert.equal(autoState.safeguards.brokerCredentialsInControlPlane, false);
+
+    response = await fetch(`${BASE}/api/auto-trade/settings`, {
+      method: 'PUT',
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+        symbols: ['XAUUSD'], riskAcknowledged: true,
+        server: 'InterStellarFinancial-Demo', password: 'must-never-be-stored'
+      })
+    });
+    assert.equal(response.status, 400);
+
+    response = await fetch(`${BASE}/api/auto-trade/settings`, {
+      method: 'PUT',
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
+        symbols: ['XAUUSD'], riskAcknowledged: true
+      })
+    });
+    assert.equal(response.status, 200);
+
+    response = await fetch(`${BASE}/internal/auto-trade/provision-demo`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer wrong-secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    assert.equal(response.status, 401);
+
+    response = await fetch(`${BASE}/internal/auto-trade/provision-demo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${POD_PROVISIONING_SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, label: 'HTTP Test Secure Pod' })
+    });
+    assert.equal(response.status, 201);
+    const provisioned = await response.json();
+    const podToken = provisioned.token;
+    assert.match(podToken, /^zcpod_/);
+
+    response = await fetch(`${BASE}/api/execution/heartbeat`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${podToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountMask: '****1234', serverMask: '****Demo', tradeMode: 'DEMO',
+        nested: { password: 'must-never-be-stored' }
+      })
+    });
+    assert.equal(response.status, 400);
+
+    const heartbeat = positions => fetch(`${BASE}/api/execution/heartbeat`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${podToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+        tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+        expertTradeAllowed: true, connectorVersion: '1.0.0', terminalBuild: '5000',
+        symbolSpecs: [{ symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 }],
+        positions
+      })
+    });
+    response = await heartbeat([]);
+    assert.equal(response.status, 200);
+
+    response = await fetch(`${BASE}/api/auto-trade/on`, {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'AKTIFKAN DEMO' })
+    });
+    assert.equal(response.status, 202);
+    autoState = await response.json();
+    assert.equal(autoState.control.effectiveState, 'ARMING');
+
+    response = await fetch(`${BASE}/api/execution/commands/next`, {
+      headers: { Authorization: `Bearer ${podToken}` }
+    });
+    assert.equal(response.status, 200);
+    let command = (await response.json()).command;
+    assert.equal(command.type, 'SYSTEM_ON');
+    assert.match(command.signature, /^[a-f0-9]{64}$/);
+    assert.match(command.signedEnvelope, /^[A-Za-z0-9_-]+$/);
+
+    response = await fetch(`${BASE}/api/execution/commands/${command.id}/ack`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${podToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'EXECUTED', code: 'OK' })
+    });
+    assert.equal(response.status, 200);
+
+    response = await heartbeat([{
+      ticket: '900001', symbol: 'XAUUSD', side: 'BUY', volume: 0.03, layers: 3,
+      entry: 2500, currentPrice: 2505, initialSl: 2495, activeSl: 2500,
+      tp1: 2505, tp2: 2510, tp3: 2515, profitUsd: 15,
+      exitStage: 'TP1_HIT', slLock: 'BREAK_EVEN'
+    }]);
+    assert.equal(response.status, 200);
+
+    response = await fetch(`${BASE}/api/auto-trade/state`, { headers: { Cookie: cookie } });
+    autoState = await response.json();
+    assert.equal(autoState.control.effectiveState, 'ON');
+    assert.equal(autoState.positions.length, 1);
+    assert.equal(autoState.positions[0].slLock, 'BREAK_EVEN');
+    const stateText = JSON.stringify(autoState);
+    assert.equal(stateText.includes(podToken), false);
+    assert.equal(stateText.includes('must-never-be-stored'), false);
+
+    response = await fetch(`${BASE}/api/auto-trade/stop`, {
+      method: 'POST', headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' }, body: '{}'
+    });
+    assert.equal(response.status, 202);
+    autoState = await response.json();
+    assert.equal(autoState.control.desiredState, 'STOPPED');
+    assert.equal(autoState.positions.length, 1);
+
+    response = await fetch(`${BASE}/api/execution/commands/next`, { headers: { Authorization: `Bearer ${podToken}` } });
+    command = (await response.json()).command;
+    assert.equal(command.type, 'SYSTEM_STOP');
+    assert.equal(command.payload.keepExitManagement, true);
+    await fetch(`${BASE}/api/execution/commands/${command.id}/ack`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${podToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'EXECUTED', code: 'OK' })
+    });
+
+    response = await fetch(`${BASE}/api/auto-trade/emergency-close`, {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'WrongPassword1', confirmation: 'TUTUP SEMUA' })
+    });
+    assert.equal(response.status, 401);
+
+    response = await fetch(`${BASE}/api/auto-trade/emergency-close`, {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: registration.password, confirmation: 'TUTUP SEMUA' })
+    });
+    assert.equal(response.status, 202);
+    autoState = await response.json();
+    assert.equal(autoState.control.effectiveState, 'EMERGENCY_CLOSING');
 
     response = await fetch(`${BASE}/api/strategy-performance/XAUUSD/NORMAL`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
@@ -184,6 +355,10 @@ test('HTTP auth flow protects Page Utama, Analysis, Result and analysis APIs', {
     assert.equal(response.headers.get('location'), '/login');
 
     response = await fetch(`${BASE}/results`, { headers: { Cookie: cookie }, redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/login');
+
+    response = await fetch(`${BASE}/auto-trade`, { headers: { Cookie: cookie }, redirect: 'manual' });
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
   } finally {

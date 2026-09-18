@@ -4,6 +4,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { createAuthStore } = require('./auth-store');
 const { createAuthService } = require('./auth-service');
+const { createAutoTradeStore } = require('./auto-trade-store');
+const { createAutoTradeService } = require('./auto-trade-service');
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = 10003;
@@ -13,6 +15,10 @@ const AUTH_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTH_
 const INSECURE_COOKIE = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_INSECURE_COOKIE || ''));
 const ALLOW_ORIGINLESS_AUTH = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_ALLOW_ORIGINLESS_AUTH || ''));
 const REGISTRATION_ENABLED = !/^(?:0|false|no|off)$/i.test(String(process.env.ZENCORE_REGISTRATION_ENABLED || 'true'));
+const AUTOTRADE_ENABLED = AUTH_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_ENABLED || ''));
+const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
+const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
+const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
 
 process.env.PORT = String(V17_PORT);
 require('./server-v17.js');
@@ -23,6 +29,15 @@ const authState = {
   error: null,
   store: null,
   service: null
+};
+
+const autoTradeState = {
+  enabled: AUTOTRADE_ENABLED,
+  ready: false,
+  error: null,
+  store: null,
+  service: null,
+  dispatchTimer: null
 };
 
 if (AUTH_ENABLED) {
@@ -41,10 +56,35 @@ if (AUTH_ENABLED) {
     });
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
+
+    if (AUTOTRADE_ENABLED) {
+      if (process.env.NODE_ENV === 'production' && Buffer.byteLength(POD_PROVISIONING_SECRET) < 32) {
+        throw new Error('ZENCORE_POD_PROVISIONING_SECRET must be at least 32 bytes in production.');
+      }
+      const autoStore = createAutoTradeStore({
+        databaseUrl: process.env.DATABASE_URL,
+        allowMemory: AUTOTRADE_MEMORY && process.env.NODE_ENV !== 'production'
+      });
+      await autoStore.init();
+      autoTradeState.store = autoStore;
+      autoTradeState.service = createAutoTradeService({
+        store: autoStore,
+        commandSigningKey: COMMAND_SIGNING_KEY
+      });
+      autoTradeState.ready = true;
+      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
+      startAutoTradeDispatcher();
+    }
   }).catch(error => {
-    authState.error = error;
-    authState.ready = false;
-    console.error('ZenCore authentication failed to initialize:', error.message);
+    if (!authState.ready) {
+      authState.error = error;
+      authState.ready = false;
+      console.error('ZenCore authentication failed to initialize:', error.message);
+      return;
+    }
+    autoTradeState.error = error;
+    autoTradeState.ready = false;
+    console.error('ZenCore Auto Trade failed to initialize:', error.message);
   });
 }
 
@@ -302,6 +342,208 @@ async function handleAuthApi(req, res, pathname) {
   }
 }
 
+function autoTradeUnavailable(res) {
+  return sendJson(res, 503, {
+    ok: false,
+    code: autoTradeState.enabled ? 'AUTOTRADE_STARTING' : 'AUTOTRADE_DISABLED',
+    error: autoTradeState.enabled
+      ? 'Auto Trade control plane belum tersedia.'
+      : 'Auto Trade belum diaktifkan pada environment ini.'
+  });
+}
+
+function autoTradeError(res, error) {
+  if (error?.status) {
+    return sendJson(res, error.status, {
+      ok: false,
+      code: error.code,
+      error: error.message,
+      fields: error.fields || undefined
+    });
+  }
+  console.error('ZenCore Auto Trade request failed:', error?.message || 'Unknown error');
+  return sendJson(res, 500, { ok: false, error: 'Permintaan Auto Trade tidak dapat diselesaikan.' });
+}
+
+function bearerToken(req) {
+  const header = String(req.headers.authorization || '');
+  const match = header.match(/^Bearer\s+([^\s]+)$/i);
+  return match ? match[1] : '';
+}
+
+function safeSecretEqual(actual, expected) {
+  const left = Buffer.from(String(actual || ''));
+  const right = Buffer.from(String(expected || ''));
+  return left.length > 0 && left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+async function parseApiJson(req, res) {
+  try {
+    return await readJson(req, 32 * 1024);
+  } catch (error) {
+    sendJson(res, error.code === 'TOO_LARGE' ? 413 : 400, {
+      ok: false,
+      error: error.code === 'TOO_LARGE' ? 'Permintaan terlalu besar.' : 'Format permintaan tidak sah.'
+    });
+    return null;
+  }
+}
+
+async function handleAutoTradeUserApi(req, res, pathname, session) {
+  if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
+  const userId = session.user.id;
+  try {
+    if (req.method === 'GET' && pathname === '/api/auto-trade/state') {
+      return sendJson(res, 200, await autoTradeState.service.state(userId));
+    }
+    if (!requestOriginAllowed(req)) {
+      return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+    }
+    if (req.method === 'PUT' && pathname === '/api/auto-trade/settings') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      return sendJson(res, 200, await autoTradeState.service.saveSettings(userId, body));
+    }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/on') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      return sendJson(res, 202, await autoTradeState.service.turnOn(userId, body));
+    }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/stop') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      return sendJson(res, 202, await autoTradeState.service.stop(userId));
+    }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/emergency-close') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      const key = attemptKey(req, pathname, userId);
+      const limit = consumeAttempt(key);
+      if (!limit.allowed) {
+        return sendJson(res, 429, {
+          ok: false,
+          error: 'Terlalu banyak cubaan pengesahan. Tunggu sebentar dan cuba semula.'
+        }, { 'Retry-After': String(limit.retryAfter) });
+      }
+      const stepUp = await authState.service.reauthenticate(userId, body.password);
+      if (stepUp) authAttempts.delete(key);
+      return sendJson(res, 202, await autoTradeState.service.emergencyCloseAll(
+        userId,
+        { confirmation: body.confirmation },
+        stepUp
+      ));
+    }
+    return sendJson(res, 404, { ok: false, error: 'Route Auto Trade tidak dijumpai.' });
+  } catch (error) {
+    return autoTradeError(res, error);
+  }
+}
+
+async function handleExecutionApi(req, res, pathname) {
+  if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
+  const token = bearerToken(req) || String(req.headers['x-zencore-pod-token'] || '');
+  if (!token || token.length > 256) {
+    return sendJson(res, 401, { ok: false, error: 'Secure Pod tidak dibenarkan.' });
+  }
+  try {
+    if (req.method === 'POST' && pathname === '/api/execution/heartbeat') {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      return sendJson(res, 200, await autoTradeState.service.heartbeat(token, body));
+    }
+    if (req.method === 'GET' && pathname === '/api/execution/commands/next') {
+      return sendJson(res, 200, await autoTradeState.service.nextCommand(token));
+    }
+    const match = pathname.match(/^\/api\/execution\/commands\/([0-9a-f-]{36})\/ack$/i);
+    if (req.method === 'POST' && match) {
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      return sendJson(res, 200, await autoTradeState.service.acknowledgeCommand(token, match[1], body));
+    }
+    return sendJson(res, 404, { ok: false, error: 'Route Secure Pod tidak dijumpai.' });
+  } catch (error) {
+    return autoTradeError(res, error);
+  }
+}
+
+async function handlePodProvisioning(req, res) {
+  if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
+  if (!safeSecretEqual(bearerToken(req), POD_PROVISIONING_SECRET)) {
+    return sendJson(res, 401, { ok: false, error: 'Provisioning tidak dibenarkan.' });
+  }
+  const body = await parseApiJson(req, res);
+  if (body === null) return;
+  const userId = String(body.userId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+    return sendJson(res, 400, { ok: false, error: 'User ID tidak sah.' });
+  }
+  try {
+    const user = await authState.store.findUserByIdForLogin(userId);
+    if (!user || user.status !== 'active') {
+      return sendJson(res, 404, { ok: false, error: 'Akaun ZenCore tidak dijumpai.' });
+    }
+    const result = await autoTradeState.service.provisionDemoPod(userId, body.label);
+    return sendJson(res, 201, {
+      ok: true,
+      pod: result.pod,
+      token: result.token,
+      tokenNotice: 'Token ini dipaparkan sekali sahaja dan mesti dihantar terus ke Secure Pod.'
+    });
+  } catch (error) {
+    return autoTradeError(res, error);
+  }
+}
+
+function fetchLocalMarkets() {
+  return new Promise((resolve, reject) => {
+    const request = http.get({
+      hostname: '127.0.0.1', port: V17_PORT, path: '/api/markets',
+      headers: { Accept: 'application/json' }, timeout: 3000
+    }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => {
+        if (body.length < 2 * 1024 * 1024) body += chunk;
+      });
+      response.on('end', () => {
+        if (response.statusCode !== 200) return reject(new Error(`Market API HTTP ${response.statusCode}`));
+        try {
+          const parsed = JSON.parse(body);
+          resolve(Array.isArray(parsed.markets) ? parsed.markets : []);
+        } catch (_) {
+          reject(new Error('Market API returned invalid JSON'));
+        }
+      });
+    });
+    request.on('timeout', () => request.destroy(new Error('Market API timeout')));
+    request.on('error', reject);
+  });
+}
+
+function startAutoTradeDispatcher() {
+  if (autoTradeState.dispatchTimer || !autoTradeState.service) return;
+  let running = false;
+  let lastErrorLogAt = 0;
+  const tick = async () => {
+    if (running || !autoTradeState.ready) return;
+    running = true;
+    try {
+      const markets = await fetchLocalMarkets();
+      await autoTradeState.service.dispatchMarkets(markets);
+    } catch (error) {
+      if (Date.now() - lastErrorLogAt > 60_000) {
+        lastErrorLogAt = Date.now();
+        console.error('ZenCore Auto Trade dispatcher waiting:', error.message);
+      }
+    } finally {
+      running = false;
+    }
+  };
+  autoTradeState.dispatchTimer = setInterval(tick, 3000);
+  autoTradeState.dispatchTimer.unref?.();
+  setTimeout(tick, 1000).unref?.();
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
@@ -329,6 +571,18 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/results.css') return sendAuthAsset(res, 'results.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/results-core.js') return sendAuthAsset(res, 'results-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/results.js') return sendAuthAsset(res, 'results.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/auto-trade.css') return sendAuthAsset(res, 'auto-trade.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/auto-trade-core.js') return sendAuthAsset(res, 'auto-trade-core.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/auto-trade.js') return sendAuthAsset(res, 'auto-trade.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/auto-trade-monitor.css') return sendAuthAsset(res, 'auto-trade-monitor.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/auto-trade-monitor.js') return sendAuthAsset(res, 'auto-trade-monitor.js', 'application/javascript; charset=utf-8');
+
+  if (pathname.startsWith('/api/execution/')) {
+    return handleExecutionApi(req, res, pathname);
+  }
+  if (req.method === 'POST' && pathname === '/internal/auto-trade/provision-demo') {
+    return handlePodProvisioning(req, res);
+  }
 
   if (AUTH_ENABLED && pathname.startsWith('/auth/')) {
     return handleAuthApi(req, res, pathname);
@@ -379,6 +633,18 @@ const server = http.createServer(async (req, res) => {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
     return sendAuthAsset(res, 'results.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
+    const session = await requireSession(req, res, '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && pathname.startsWith('/api/auto-trade/')) {
+    const session = await requireSession(req, res);
+    if (!session) return;
+    return handleAutoTradeUserApi(req, res, pathname, session);
   }
 
   const publicProxy = (req.method === 'POST' && pathname === '/webhook') ||

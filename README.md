@@ -38,3 +38,11 @@ See `AUTH_SETUP.md` for the Render environment variables, local test mode and se
 The protected `/app` Page Utama renders the existing Normal 3M state for all 11 markets from `/api/markets` and `/market-events`. Selecting a card opens the completed Analysis Page with the same pair through `/analysis?pair=SYMBOL`.
 
 The protected `/results` page combines Normal 3M validation from all 11 markets. It shows backend totals, per-pair performance, open signals, recent outcomes, filters and CSV export. These are ZenCore signal-validation records, not broker trades or MT5 profit-and-loss. The current validation store is in memory and can reset after a service restart.
+
+## Auto Trade DEMO control plane
+
+The protected `/auto-trade` page now provides capital/lot/layer settings, all 11 allowed markets, risk reminders, master ON/STOP controls, step-up protected Emergency Close All, live masked MT5 status, open positions and an audit view. The Analysis Page includes the same live execution status and current-pair positions.
+
+The Render process never accepts broker login, password or full server. Execution is handled by the separate DEMO-only worker in `mt5-secure-pod/`. Auto Trade remains disabled by default and real broker execution remains locked pending confidential Windows VM and HSM infrastructure.
+
+See `AUTOTRADE_SECURITY.md` for trust boundaries, commands, environment flags and deployment gates.
