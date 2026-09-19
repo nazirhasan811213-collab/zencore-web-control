@@ -4,7 +4,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 6.0, < 8.0"
+      version = "7.46.1"
     }
   }
 }
@@ -14,4 +14,3 @@ provider "google" {
   region  = var.region
   zone    = var.zone
 }
-

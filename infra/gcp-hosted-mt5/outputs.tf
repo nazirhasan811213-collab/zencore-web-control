@@ -16,11 +16,11 @@ output "worker_service_account" {
 output "render_worker_identity_environment" {
   description = "Non-secret exact identity pins for Render. Keep the worker gate false until preflight passes."
   value = {
-    ZENCORE_GCP_WORKER_AUDIENCE        = "${var.control_plane_url}/api/hosted-execution"
-    ZENCORE_GCP_WORKER_PROJECT_ID      = var.project_id
-    ZENCORE_GCP_WORKER_ZONE            = var.zone
-    ZENCORE_GCP_WORKER_INSTANCE        = google_compute_instance.worker.name
-    ZENCORE_GCP_WORKER_SERVICE_ACCOUNT = google_service_account.worker.email
+    ZENCORE_GCP_WORKER_AUDIENCE          = "${var.control_plane_url}/api/hosted-execution"
+    ZENCORE_GCP_WORKER_PROJECT_ID        = var.project_id
+    ZENCORE_GCP_WORKER_ZONE              = var.zone
+    ZENCORE_GCP_WORKER_INSTANCE          = google_compute_instance.worker.name
+    ZENCORE_GCP_WORKER_SERVICE_ACCOUNT   = google_service_account.worker.email
     ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID = var.hosted_account_id
   }
 }

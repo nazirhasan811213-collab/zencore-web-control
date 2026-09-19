@@ -16,23 +16,23 @@ locals {
   }
 
   worker_config = {
-    schemaVersion       = 1
-    cellId              = var.instance_name
-    provider            = "GOOGLE_CLOUD"
-    controlPlaneUrl     = var.control_plane_url
-    controlPlaneAudience = "${var.control_plane_url}/api/hosted-execution"
-    hostedAccountId     = var.hosted_account_id
-    keyAlias            = var.key_alias
-    keyVersionResource  = "${google_kms_crypto_key.credential_envelope.id}/cryptoKeyVersions/1"
-    demoOnly            = true
-    executionEnabled    = var.execution_enabled
-    allowedDemoSymbols  = sort(tolist(var.allowed_demo_symbols))
-    credentialStorage   = "MEMORY_ONLY"
-    privateKeyAvailable = false
-    mt5TerminalPath     = var.mt5_terminal_path
-    approvedDemoServer  = "InterStellarFinancial-Demo"
+    schemaVersion            = 1
+    cellId                   = var.instance_name
+    provider                 = "GOOGLE_CLOUD"
+    controlPlaneUrl          = var.control_plane_url
+    controlPlaneAudience     = "${var.control_plane_url}/api/hosted-execution"
+    hostedAccountId          = var.hosted_account_id
+    keyAlias                 = var.key_alias
+    keyVersionResource       = "${google_kms_crypto_key.credential_envelope.id}/cryptoKeyVersions/1"
+    demoOnly                 = true
+    executionEnabled         = var.execution_enabled
+    allowedDemoSymbols       = sort(tolist(var.allowed_demo_symbols))
+    credentialStorage        = "MEMORY_ONLY"
+    privateKeyAvailable      = false
+    mt5TerminalPath          = var.mt5_terminal_path
+    approvedDemoServer       = "InterStellarFinancial-Demo"
     heartbeatIntervalSeconds = 10
-    connectorVersion    = "2.0.0-gcp-connect"
+    connectorVersion         = "2.0.0-gcp-connect"
   }
 }
 

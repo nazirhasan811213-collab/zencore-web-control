@@ -4,7 +4,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 6.0, < 8.0"
+      version = "7.46.1"
     }
   }
 }
@@ -55,7 +55,8 @@ resource "google_billing_budget" "demo_cell" {
   }
 
   all_updates_rule {
-    enable_project_level_recipients = true
+    enable_project_level_recipients  = true
+    monitoring_notification_channels = []
   }
 
   depends_on = [google_project_service.budgets_api]
