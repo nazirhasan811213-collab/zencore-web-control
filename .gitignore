@@ -3,3 +3,11 @@ node_modules/
 .DS_Store
 __pycache__/
 *.py[cod]
+# Terraform plans and state can contain infrastructure identifiers or sensitive values.
+**/.terraform/
+*.tfvars
+*.tfvars.json
+*.tfstate*
+*.tfplan
+crash.log
+crash.*.log

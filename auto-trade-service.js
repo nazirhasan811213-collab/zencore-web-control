@@ -94,6 +94,12 @@ function createAutoTradeService(options = {}) {
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const allowDemoExecution = options.allowDemoExecution === true;
   const hostedMt5Enabled = options.hostedMt5Enabled === true;
+  const hostedWorkerEnabled = hostedMt5Enabled && options.hostedWorkerEnabled === true;
+  const hostedWorkerAccountId = String(options.hostedWorkerAccountId || '');
+  if (hostedWorkerEnabled &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(hostedWorkerAccountId)) {
+    throw new Error('ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID must be the assigned UUIDv4.');
+  }
   const credentialEncryption = buildCredentialEncryptionConfig(
     hostedMt5Enabled,
     String(options.credentialKeyId || ''),
@@ -117,6 +123,8 @@ function createAutoTradeService(options = {}) {
   if (!allowedDemoOwnershipModes.length) throw new Error('At least one DEMO execution host mode is required.');
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
+  const hostedLeaseTtlMs = Math.max(30_000, Math.min(5 * 60 * 1000,
+    Number(options.hostedLeaseTtlMs) || 2 * 60 * 1000));
   const pairingTtlMs = Math.max(2 * 60 * 1000, Math.min(30 * 60 * 1000,
     Number(options.pairingTtlMs) || 10 * 60 * 1000));
 
@@ -168,15 +176,22 @@ function createAutoTradeService(options = {}) {
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
     const podConnection = connectionState(pod);
-    const connection = hostedAccount ? {
-      state: hostedAccount.status === 'ERROR' ? 'HOSTED_ERROR' : 'HOSTED_PENDING',
-      label: hostedAccount.status === 'ERROR'
-        ? 'MT5 HOSTED PERLU PERHATIAN'
-        : 'MT5 HOSTED MENUNGGU WORKER',
-      online: false,
-      connected: false,
-      ready: false
-    } : podConnection;
+    const hostedOnline = !!hostedAccount?.lastSeenAt && now() - hostedAccount.lastSeenAt <= 30_000;
+    const connection = hostedAccount ? (
+      hostedAccount.status === 'ERROR' ? {
+        state: 'HOSTED_ERROR', label: 'MT5 HOSTED PERLU PERHATIAN',
+        online: hostedOnline, connected: false, ready: false
+      } : hostedOnline && hostedAccount.status === 'CONNECTED_LOCKED' ? {
+        state: 'HOSTED_CONNECTED_LOCKED', label: 'CONNECTED • EXECUTION LOCKED',
+        online: true, connected: true, ready: false
+      } : {
+        state: hostedAccount.status === 'LEASED' ? 'HOSTED_CONNECTING' : 'HOSTED_PENDING',
+        label: hostedAccount.status === 'LEASED'
+          ? 'MT5 HOSTED SEDANG DISAHKAN'
+          : 'MT5 HOSTED MENUNGGU WORKER',
+        online: false, connected: false, ready: false
+      }
+    ) : podConnection;
     const settings = profile ? {
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
@@ -229,6 +244,8 @@ function createAutoTradeService(options = {}) {
       hostedAccount,
       hostedMt5: {
         available: hostedMt5Enabled,
+        workerIdentityEnabled: hostedWorkerEnabled,
+        provider: 'GOOGLE_CLOUD',
         executionReady: false,
         status: hostedAccount?.status || 'NOT_CONNECTED',
         encryptionAlgorithm: credentialEncryption.algorithm,
@@ -253,6 +270,7 @@ function createAutoTradeService(options = {}) {
         plaintextBrokerCredentialsInControlPlane: false,
         hostedCredentialEnvelopeOnly: true,
         hostedCredentialPrivateKeyInWebApp: false,
+        hostedWorkerIdentity: hostedWorkerEnabled ? 'GOOGLE_SIGNED_INSTANCE_JWT' : 'LOCKED',
         traderOwnsExecutionHost: !hostedAccount,
         brokerCredentialsStayOnExecutionHost: !hostedAccount,
         controlPlaneExecutionUnlocked: allowDemoExecution,
@@ -342,6 +360,142 @@ function createAutoTradeService(options = {}) {
       status: saved.status
     });
     return state(userId);
+  }
+
+  async function leaseHostedAccount(workerIdentity, input = {}) {
+    if (!hostedWorkerEnabled) {
+      throw serviceError('HOSTED_WORKER_LOCKED', 'Google hosted worker masih dikunci.', 409);
+    }
+    if (workerIdentity?.provider !== 'GOOGLE_CLOUD') {
+      throw serviceError('INVALID_WORKER_IDENTITY', 'Google worker identity diperlukan.', 403);
+    }
+    const {
+      accountId: _accountId,
+      cellId: _cellId,
+      requestId: _requestId,
+      requestTimestamp: _requestTimestamp,
+      ...leaseOnly
+    } = input;
+    if (Core.containsForbiddenCredentialKey(leaseOnly)) {
+      throw serviceError('PLAINTEXT_CREDENTIAL_REJECTED', 'Hosted lease tidak menerima credential MT5 plaintext.', 400);
+    }
+    const accountId = String(input.accountId || '');
+    const cellId = String(input.cellId || '');
+    if (accountId !== hostedWorkerAccountId || cellId !== workerIdentity.instanceName) {
+      throw serviceError('INVALID_HOSTED_LEASE', 'Hosted account atau cell ID tidak sah.', 400);
+    }
+    if (typeof store.leaseHostedAccount !== 'function') {
+      throw serviceError('HOSTED_MT5_STORE_UNAVAILABLE', 'Hosted account lease belum tersedia.', 503);
+    }
+    const issuedAt = now();
+    const lease = await store.leaseHostedAccount(
+      accountId,
+      workerIdentity,
+      crypto.randomUUID(),
+      issuedAt,
+      issuedAt + hostedLeaseTtlMs
+    );
+    if (!lease) {
+      throw serviceError('HOSTED_ACCOUNT_NOT_AVAILABLE', 'Hosted account tidak tersedia untuk worker ini.', 409);
+    }
+    if (lease.keyId !== credentialEncryption.keyId) {
+      throw serviceError('HOSTED_KEY_MISMATCH', 'Hosted account menggunakan encryption key yang berbeza.', 409);
+    }
+    const validation = validateCredentialEnvelope(lease.credentialEnvelope, credentialEncryption.keyId);
+    if (!validation.ok) {
+      throw serviceError('INVALID_CREDENTIAL_ENVELOPE', 'Credential envelope dalam vault ditolak.', 409);
+    }
+    await store.appendAudit(lease.userId, 'HOSTED_ENVELOPE_LEASED', {
+      provider: workerIdentity.provider,
+      workerCell: workerIdentity.instanceName,
+      leaseId: lease.leaseId,
+      expiresAt: lease.leaseExpiresAt,
+      plaintextReleased: false
+    });
+    return {
+      ok: true,
+      lease: {
+        id: lease.leaseId,
+        accountId: lease.id,
+        keyId: lease.keyId,
+        credentialEnvelope: lease.credentialEnvelope,
+        expiresAt: lease.leaseExpiresAt,
+        demoOnly: true,
+        executionEnabled: false,
+        accountMask: lease.accountMask,
+        serverMask: lease.serverMask,
+        brokerMask: lease.brokerMask
+      },
+      serverTime: issuedAt
+    };
+  }
+
+  async function hostedHeartbeat(workerIdentity, input = {}) {
+    if (!hostedWorkerEnabled) {
+      throw serviceError('HOSTED_WORKER_LOCKED', 'Google hosted worker masih dikunci.', 409);
+    }
+    if (workerIdentity?.provider !== 'GOOGLE_CLOUD') {
+      throw serviceError('INVALID_WORKER_IDENTITY', 'Google worker identity diperlukan.', 403);
+    }
+    const accountId = String(input.accountId || '');
+    const leaseId = String(input.leaseId || '');
+    if (accountId !== hostedWorkerAccountId ||
+        !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(leaseId)) {
+      throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Hosted account atau lease ID tidak sah.', 400);
+    }
+    const {
+      accountId: _accountId,
+      leaseId: _leaseId,
+      connectionStatus: _connectionStatus,
+      lastError: _lastError,
+      requestId: _requestId,
+      requestTimestamp: _requestTimestamp,
+      ...heartbeatOnly
+    } = input;
+    const heartbeatValidation = Core.normaliseHeartbeat(heartbeatOnly);
+    if (!heartbeatValidation.ok) {
+      throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Hosted worker heartbeat ditolak.', 400,
+        heartbeatValidation.errors);
+    }
+    if (heartbeatValidation.value.demoExecutionUnlocked) {
+      throw serviceError('HOSTED_EXECUTION_LOCKED', 'Hosted order execution masih dikunci.', 409);
+    }
+    const reportedStatus = String(input.connectionStatus || 'CONNECTED').toUpperCase();
+    if (!['CONNECTED', 'CONNECTING', 'ERROR'].includes(reportedStatus)) {
+      throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Status hosted worker tidak sah.', 400);
+    }
+    const rawErrorCode = String(input.lastError || '').toUpperCase();
+    if (rawErrorCode && !/^[A-Z][A-Z0-9_.-]{0,63}$/.test(rawErrorCode)) {
+      throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Kod ralat hosted worker tidak sah.', 400);
+    }
+    const lastError = rawErrorCode || 'CONNECTION_FAILED';
+    const connected = reportedStatus !== 'ERROR' &&
+      heartbeatValidation.value.terminalTradeAllowed &&
+      heartbeatValidation.value.accountTradeAllowed &&
+      heartbeatValidation.value.expertTradeAllowed;
+    const status = reportedStatus === 'ERROR' ? 'ERROR' : (connected ? 'CONNECTED_LOCKED' : 'LEASED');
+    const seenAt = now();
+    const updated = await store.updateHostedHeartbeat(
+      accountId, workerIdentity, leaseId, heartbeatValidation.value,
+      status, status === 'ERROR' ? (lastError || 'MT5 hosted connection failed.') : null, seenAt
+    );
+    if (!updated) {
+      throw serviceError('HOSTED_LEASE_NOT_FOUND', 'Hosted worker lease tidak dijumpai.', 404);
+    }
+    await store.replacePositions(updated.userId, heartbeatValidation.value.positions, seenAt);
+    if (status === 'ERROR') {
+      await store.appendAudit(updated.userId, 'HOSTED_WORKER_ERROR', {
+        workerCell: workerIdentity.instanceName,
+        error: lastError || 'CONNECTION_FAILED'
+      });
+    }
+    return {
+      ok: true,
+      connectionState: status,
+      desiredState: (await store.getProfile(updated.userId))?.desiredState || 'STOPPED',
+      executionEnabled: false,
+      serverTime: seenAt
+    };
   }
 
   async function createPairingSession(userId, input = {}) {
@@ -749,6 +903,8 @@ function createAutoTradeService(options = {}) {
     state,
     credentialEncryptionConfig,
     connectHostedAccount,
+    leaseHostedAccount,
+    hostedHeartbeat,
     saveSettings,
     turnOn,
     stop,

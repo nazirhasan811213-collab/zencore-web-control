@@ -6,6 +6,11 @@ const { createAuthStore } = require('./auth-store');
 const { createAuthService } = require('./auth-service');
 const { createAutoTradeStore } = require('./auto-trade-store');
 const { createAutoTradeService } = require('./auto-trade-service');
+const {
+  createGcpInstanceIdentityVerifier,
+  createGcpRequestReplayGuard,
+  identityError
+} = require('./gcp-instance-identity');
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = 10003;
@@ -28,6 +33,9 @@ const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
 const HOSTED_MT5_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(
   String(process.env.ZENCORE_HOSTED_MT5_ENABLED || '')
 );
+const GCP_HOSTED_WORKER_ENABLED = HOSTED_MT5_ENABLED && /^(?:1|true|yes|on)$/i.test(
+  String(process.env.ZENCORE_GCP_HOSTED_WORKER_ENABLED || '')
+);
 const MT5_CREDENTIAL_KEY_ID = String(process.env.ZENCORE_MT5_CREDENTIAL_KEY_ID || '');
 const MT5_CREDENTIAL_PUBLIC_KEY = String(process.env.ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY || '').replace(/\\n/g, '\n');
 
@@ -48,6 +56,8 @@ const autoTradeState = {
   error: null,
   store: null,
   service: null,
+  workerIdentityVerifier: null,
+  workerReplayGuard: null,
   dispatchTimer: null
 };
 
@@ -78,6 +88,16 @@ if (AUTH_ENABLED) {
       });
       await autoStore.init();
       autoTradeState.store = autoStore;
+      if (GCP_HOSTED_WORKER_ENABLED) {
+        autoTradeState.workerIdentityVerifier = createGcpInstanceIdentityVerifier({
+          audience: process.env.ZENCORE_GCP_WORKER_AUDIENCE,
+          projectId: process.env.ZENCORE_GCP_WORKER_PROJECT_ID,
+          zone: process.env.ZENCORE_GCP_WORKER_ZONE,
+          instanceName: process.env.ZENCORE_GCP_WORKER_INSTANCE,
+          serviceAccountEmail: process.env.ZENCORE_GCP_WORKER_SERVICE_ACCOUNT
+        });
+        autoTradeState.workerReplayGuard = createGcpRequestReplayGuard();
+      }
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         commandSigningKey: COMMAND_SIGNING_KEY,
@@ -85,11 +105,13 @@ if (AUTH_ENABLED) {
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
         requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
         hostedMt5Enabled: HOSTED_MT5_ENABLED,
+        hostedWorkerEnabled: GCP_HOSTED_WORKER_ENABLED,
+        hostedWorkerAccountId: process.env.ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID,
         credentialKeyId: MT5_CREDENTIAL_KEY_ID,
         credentialPublicKey: MT5_CREDENTIAL_PUBLIC_KEY
       });
       autoTradeState.ready = true;
-      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'}`);
+      console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'} • GCP worker ${GCP_HOSTED_WORKER_ENABLED ? 'IDENTITY ENABLED' : 'LOCKED'}`);
       startAutoTradeDispatcher();
     }
   }).catch(error => {
@@ -406,6 +428,52 @@ async function parseApiJson(req, res) {
   }
 }
 
+async function handleHostedExecutionApi(req, res, pathname) {
+  if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
+  if (!GCP_HOSTED_WORKER_ENABLED || !autoTradeState.workerIdentityVerifier ||
+      !autoTradeState.workerReplayGuard) {
+    return sendJson(res, 409, {
+      ok: false,
+      code: 'HOSTED_WORKER_LOCKED',
+      error: 'Google hosted worker masih dikunci.'
+    });
+  }
+  if (req.method !== 'POST' || ![
+    '/api/hosted-execution/lease',
+    '/api/hosted-execution/heartbeat'
+  ].includes(pathname)) {
+    return sendJson(res, 404, { ok: false, error: 'Route hosted worker tidak dijumpai.' });
+  }
+  const token = bearerToken(req);
+  if (!token || token.length > 20_000) {
+    return sendJson(res, 401, { ok: false, error: 'Google hosted worker tidak dibenarkan.' });
+  }
+  try {
+    // Compute metadata identity tokens can be cached for their lifetime. The signed
+    // identity is therefore reusable, while each HTTPS request carries a fresh,
+    // instance-bound request ID that is accepted only once.
+    const identity = await autoTradeState.workerIdentityVerifier.verify(token, { consume: false });
+    const body = await parseApiJson(req, res);
+    if (body === null) return;
+    const request = autoTradeState.workerReplayGuard.consume(identity, body);
+    if (typeof autoTradeState.store.consumeHostedWorkerRequest !== 'function') {
+      throw identityError('GCP_REPLAY_STORE_UNAVAILABLE', 'Google worker replay store tidak tersedia.', 503);
+    }
+    const persisted = await autoTradeState.store.consumeHostedWorkerRequest(
+      identity, request.requestId, request.requestTimestamp, Date.now()
+    );
+    if (!persisted) {
+      throw identityError('GCP_REQUEST_REPLAY', 'Google worker request telah digunakan.', 409);
+    }
+    if (pathname === '/api/hosted-execution/lease') {
+      return sendJson(res, 200, await autoTradeState.service.leaseHostedAccount(identity, body));
+    }
+    return sendJson(res, 200, await autoTradeState.service.hostedHeartbeat(identity, body));
+  } catch (error) {
+    return autoTradeError(res, error);
+  }
+}
+
 async function handleAutoTradeUserApi(req, res, pathname, session) {
   if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
   const userId = session.user.id;
@@ -653,6 +721,9 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith('/api/execution/')) {
     return handleExecutionApi(req, res, pathname);
+  }
+  if (pathname.startsWith('/api/hosted-execution/')) {
+    return handleHostedExecutionApi(req, res, pathname);
   }
   if (req.method === 'POST' && pathname === '/internal/auto-trade/provision-demo') {
     return handlePodProvisioning(req, res);

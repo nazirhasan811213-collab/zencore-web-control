@@ -1,0 +1,42 @@
+name: Hosted MT5 Terraform checks
+
+"on":
+  pull_request:
+    paths:
+      - "infra/gcp-hosted-mt5/**"
+      - ".github/workflows/hosted-mt5-terraform-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - infra/gcp-hosted-mt5
+          - infra/gcp-hosted-mt5/billing-budget
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v4
+
+      - name: Install official Terraform CLI
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Check formatting
+        working-directory: ${{ matrix.module }}
+        run: terraform fmt -check -diff
+
+      - name: Initialize without cloud backend
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false -input=false -no-color
+
+      - name: Validate without cloud credentials
+        working-directory: ${{ matrix.module }}
+        run: terraform validate -no-color

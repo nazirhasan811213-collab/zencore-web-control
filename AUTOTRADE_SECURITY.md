@@ -10,11 +10,14 @@ This phase adds the hosted-MT5 control-plane foundation while keeping all broker
    - Dispatches Normal 3M SOP V32 entry commands and EXIT 32.3 StepLock management commands.
    - Accepts only a validated hybrid-encryption envelope for the optional hosted account flow; it has no credential private key or decrypt function.
    - Rejects plaintext broker credential keys recursively.
-2. **Managed Windows execution cell (required; not yet provisioned)**
+2. **Google Cloud managed Windows execution cell (defined; not yet provisioned)**
    - One isolated execution cell per trader account.
-   - Receives a short-lived encrypted envelope lease and unwraps the AES key only through external workload identity plus attestation policy.
+   - Runs Windows Server 2022 as a Shielded VM with Secure Boot, vTPM, integrity monitoring, no public IP and IAP-only temporary RDP.
+   - Receives a short-lived encrypted envelope lease and unwraps the AES key only through an attached keyless service account and an HSM-backed Cloud KMS asymmetric key.
    - Runs MT5 and verifies every command against `ZENCORE_ANALYSIS_EXECUTION_V1` before broker translation.
-   - `hosted-mt5-worker/security_boundary.py` is implemented, tested and build-locked; the cloud cell/orchestrator is not yet live.
+   - `hosted-mt5-worker/security_boundary.py`, `gcp_kms_unwrapper.py`, `gcp_control_plane.py`, `hosted_worker.py` and `infra/gcp-hosted-mt5/` are implemented, tested and build-locked; the billable GCP cell is not provisioned.
+   - The control plane verifies a Google-signed full instance JWT against one exact project, zone, instance, service account and audience. Each request ID is fresh, instance-bound, time-limited and accepted once; the short replay ledger is persisted in PostgreSQL across Render restarts.
+   - Google Cloud Windows does not support Confidential VM. Application admins remain outside the credential path, but the system does not claim protection from a fully privileged GCP project owner.
 3. **Legacy trader-owned Windows Secure Pod (rollback)**
    - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py` on the trader's secured PC for the XAUUSD Demo execution rollout, or inside a trader-owned Azure Confidential VM for future phases.
    - The trader retains host ownership, Windows administrator access and encryption keys.
@@ -25,9 +28,10 @@ This phase adds the hosted-MT5 control-plane foundation while keeping all broker
    - Uses outbound HTTPS only. The Azure profile additionally uses a NIC with no public IP and a trader-owned NAT Gateway.
    - Loads only a strict non-secret JSON config. Broker credential environment variables and long-lived pod-secret environment variables are rejected by preflight.
    - Pins the production control origin and rejects redirects for pairing and authenticated pod requests.
-4. **Attested key service / HSM (required before hosted execution)**
-   - Releases machine secrets only to an approved measured worker image.
-   - Is not implemented by the current Render repository and must be provisioned separately.
+4. **Cloud KMS / HSM (defined; must be provisioned before hosted execution)**
+   - Keeps the asymmetric private key non-exportable and grants decrypt only to the dedicated worker service account.
+   - Uses request/response CRC32C integrity checks. Render receives only the public key and short alias.
+   - Requires separation of duties because a Google Cloud project owner can change IAM or replace the Windows worker image.
 
 The hosted popup contains MT5 login, password and server fields, but WebCrypto encrypts them before the request is created. The API receives ciphertext only. This protects database dumps and ordinary web-tier access; it does not make a centrally operated website absolutely administrator-proof because a privileged operator able to replace frontend code could attempt to capture future input. Production therefore also requires deployment separation, signed/reviewed frontend releases, immutable audit and attested key release.
 
@@ -116,6 +120,7 @@ The hosted popup remains locked unless all three values are deliberately configu
 
 ```text
 ZENCORE_HOSTED_MT5_ENABLED=false
+ZENCORE_GCP_HOSTED_WORKER_ENABLED=false
 ZENCORE_MT5_CREDENTIAL_KEY_ID=<external HSM RSA key version>
 ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY=<public RSA key only>
 ```
@@ -137,4 +142,6 @@ Release `1.4.0-demo-execution` opens a deliberately narrow broker-test lane:
 - the local SQLite ledger claims a command before broker execution to block crash/retry duplication;
 - 3 × 0.01 partial close is rounded to 0.02, leaving one 0.01 runner when the broker volume step is 0.01.
 
-Live-money execution remains locked. The legacy worker stays XAUUSD/InterStellar Demo only. The hosted worker declares all 11 canonical symbols but cannot place any order until a per-user confidential Windows cell, attested secret release, outbound-only private networking, broker symbol/server discovery, full Demo test matrix and independent security review pass.
+Live-money execution remains locked. The legacy worker stays XAUUSD/InterStellar Demo only. The hosted worker declares all 11 canonical symbols but cannot place any order until the per-user Google Shielded Windows cell, HSM key release, outbound-only private networking, broker symbol/server discovery, full Demo test matrix and independent security review pass.
+
+The current hosted executable is connection-only. It has no order API, requires an `EXECUTION_LOCKED` file, rejects REAL accounts and existing ZenCore-magic positions, and reports only masked identity/telemetry. The Windows scheduled task is disabled until account assignment and terminal installation are both present.
