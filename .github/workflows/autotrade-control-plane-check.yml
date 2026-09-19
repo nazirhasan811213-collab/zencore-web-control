@@ -1,0 +1,36 @@
+name: Auto Trade control plane checks
+
+"on":
+  pull_request:
+    paths:
+      - "auto-trade-*.js"
+      - "gcp-instance-identity.js"
+      - "server-analysis.js"
+      - "test/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/autotrade-control-plane-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test control plane without cloud credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v4
+
+      - name: Use supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run server and execution safety tests
+        run: npm test
