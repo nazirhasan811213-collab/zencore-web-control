@@ -24,6 +24,14 @@ test('Google Cloud Demo cell has no public IP and uses Shielded Windows controls
   assert.match(main, /deny_other_egress/);
 });
 
+test('Windows activation has a direct Google KMS route and narrow TCP 1688 egress', () => {
+  const main = read('main.tf');
+  assert.match(main, /dest_range\s*=\s*"35\.190\.247\.13\/32"/);
+  assert.match(main, /next_hop_gateway\s*=\s*"default-internet-gateway"/);
+  assert.match(main, /destination_ranges\s*=\s*\["35\.190\.247\.13\/32"\]/);
+  assert.match(main, /ports\s*=\s*\["1688"\]/);
+});
+
 test('Google Cloud credential key is HSM-backed, non-exported and worker identity is keyless', () => {
   const main = read('main.tf');
   assert.match(main, /purpose\s*=\s*"ASYMMETRIC_DECRYPT"/);
