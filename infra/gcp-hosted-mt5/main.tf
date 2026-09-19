@@ -181,6 +181,33 @@ resource "google_compute_firewall" "metadata_egress" {
   }
 }
 
+resource "google_compute_route" "windows_activation" {
+  name             = "zencore-mt5-windows-kms"
+  network          = google_compute_network.worker.name
+  dest_range       = "35.190.247.13/32"
+  next_hop_gateway = "default-internet-gateway"
+  priority         = 100
+}
+
+resource "google_compute_firewall" "windows_activation_egress" {
+  name      = "zencore-mt5-windows-kms-egress"
+  network   = google_compute_network.worker.name
+  direction = "EGRESS"
+  priority  = 850
+
+  destination_ranges      = ["35.190.247.13/32"]
+  target_service_accounts = [google_service_account.worker.email]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["1688"]
+  }
+
+  log_config {
+    metadata = "INCLUDE_ALL_METADATA"
+  }
+}
+
 resource "google_compute_firewall" "approved_egress" {
   name      = "zencore-mt5-approved-egress"
   network   = google_compute_network.worker.name
