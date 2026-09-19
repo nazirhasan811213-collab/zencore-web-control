@@ -2,20 +2,20 @@
 
 This independent Terraform root only enables the Billing Budgets API and creates a **monthly alerts-only** budget for `zencore-total-trade-system`. It does not create the MT5 VM, disk, NAT, or HSM key. Budget thresholds are 25%, 50%, 80%, and 100% of current spend, plus 100% of forecasted spend. Default recipients are billing account administrators/users and the project's Owners.
 
-An alert **does not cap spending**. The default target is 100 whole units in the **billing account's currency**; change it after reviewing the pricing estimate. There is no billing account ID or payment information in this repository.
+An alert **does not cap spending**. There is deliberately no default budget amount: choose the target in the **billing account's currency** after reviewing the pricing estimate. The example value of zero deliberately fails validation until it is replaced. There is no billing account ID or payment information in this repository.
 
 ## Prepare the read-only plan
 
 1. Confirm that `zencore-total-trade-system` is linked to your billing account. Copy its **Billing Account ID** (format `XXXXXX-XXXXXX-XXXXXX`), not any card or password.
 2. Authenticate the Google Cloud CLI on a trusted operator machine: `gcloud auth application-default login`. Your identity needs project read, `serviceusage.services.use`, permission to enable `billingbudgets.googleapis.com`, and permission to create a budget for the linked billing account. Do not send credentials, access tokens, or payment details into chat or Terraform variables.
-3. Copy `terraform.tfvars.example` to ignored `terraform.tfvars`, set the real billing account ID, and adjust `monthly_budget_units` if needed. Verify the amount against the billing account currency.
+3. Copy `terraform.tfvars.example` to ignored `terraform.tfvars`, set the real billing account ID, and replace the example `monthly_budget_units` with the reviewed amount. Verify the amount against the billing account currency.
 4. In this directory run:
 
 ```text
 terraform init
 terraform fmt -check
 terraform validate
-terraform plan -out zencore-budget.tfplan
+terraform plan -input=false -out zencore-budget.tfplan
 terraform show zencore-budget.tfplan
 ```
 

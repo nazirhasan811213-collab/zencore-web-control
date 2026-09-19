@@ -1,6 +1,6 @@
 project_id         = "zencore-total-trade-system"
 billing_account_id = "000000-000000-000000" # Replace with the linked Google Cloud Billing Account ID.
 
-# Amount is in the billing account's currency (for example, 100 MYR or 100 USD).
-# Adjust after reviewing the Google Cloud Pricing Calculator estimate.
-monthly_budget_units = 100
+# REPLACE 0 with the reviewed monthly alert amount in the billing account's
+# own currency. Zero deliberately fails validation; alerts do not cap spending.
+monthly_budget_units = 0

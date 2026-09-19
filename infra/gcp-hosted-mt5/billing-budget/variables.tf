@@ -19,9 +19,8 @@ variable "billing_account_id" {
 }
 
 variable "monthly_budget_units" {
-  description = "Monthly alert target in whole units of the billing account currency; alerts do not cap spending."
+  description = "Required monthly alert target in whole units of the verified billing account currency; alerts do not cap spending."
   type        = number
-  default     = 100
 
   validation {
     condition     = var.monthly_budget_units >= 1 && var.monthly_budget_units == floor(var.monthly_budget_units)
