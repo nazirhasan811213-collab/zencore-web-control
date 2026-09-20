@@ -608,7 +608,14 @@ function createAutoTradeService(options = {}) {
 
   async function hostedAcknowledgeCommand(workerIdentity, commandId, input = {}) {
     const { context, commandPod } = await hostedCommandContext(workerIdentity, input);
-    if (Core.containsForbiddenCredentialKey(input)) {
+    const {
+      accountId: _accountId,
+      leaseId: _leaseId,
+      requestId: _requestId,
+      requestTimestamp: _requestTimestamp,
+      ...ackOnly
+    } = input;
+    if (Core.containsForbiddenCredentialKey(ackOnly)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Credential broker tidak dibenarkan dalam acknowledgement.', 400);
     }
     const status = String(input.status || '').toUpperCase();
