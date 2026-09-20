@@ -140,7 +140,7 @@ class DemoExecutorTests(unittest.TestCase):
         large = payload()
         large["lotPerLayer"] = 0.5
         large["totalLot"] = 1.5
-        with self.assertRaisesRegex(DemoExecutionError, "VOLUME_LIMIT"):
+        with self.assertRaisesRegex(DemoExecutionError, "ANALYSIS_COMMAND_INVALID"):
             self.executor.execute_place_setup(large)
 
 
