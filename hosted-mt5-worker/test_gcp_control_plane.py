@@ -75,6 +75,7 @@ class GcpControlPlaneClientTests(unittest.TestCase):
         body = json.loads(post_request.data)
         self.assertEqual(body["accountId"], ACCOUNT_ID)
         self.assertEqual(body["cellId"], "zencore-mt5-demo-01")
+        self.assertEqual(body["executionRequested"], False)
         self.assertEqual(body["requestId"], str(REQUEST_ID))
         self.assertEqual(body["requestTimestamp"], 1_790_000_000_125)
 
