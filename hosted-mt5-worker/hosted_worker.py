@@ -1,8 +1,8 @@
-"""ZenCore Google Cloud hosted MT5 worker (DEMO connection-only release).
+"""ZenCore Google Cloud hosted MT5 worker (DEMO execution release).
 
 This build can authenticate the assigned Google VM, lease an encrypted broker
 credential, unwrap it through Cloud HSM, initialize one MT5 Demo terminal and
-report sanitized telemetry.  It deliberately has no order execution method.
+report sanitized telemetry and execute only validated XAUUSD DEMO commands behind explicit gates.
 """
 
 from __future__ import annotations
@@ -538,18 +538,25 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = WorkerConfig.load(Path(args.config))
         assert_clean_worker_environment()
-        if not Path(args.execution_lock).is_file():
-            raise WorkerFailure("EXECUTION_LOCK_MISSING")
+        if not Path(args.execution_gate).is_file():
+            raise WorkerFailure("DEMO_EXECUTION_GATE_MISSING")
         try:
             import MetaTrader5 as mt5  # type: ignore
         except ImportError as exc:
             raise WorkerFailure("MT5_PYTHON_MODULE_MISSING") from exc
+        terminal = MetaTraderConnection(mt5)
         worker = HostedConnectionWorker(
             config,
             GcpControlPlaneClient(config.control_plane_url),
             GcpKmsUnwrapper(config.key_alias, config.key_version_resource),
-            MetaTraderConnection(mt5),
-            execution_lock_path=Path(args.execution_lock),
+            terminal,
+            DemoExecutor(
+                mt5,
+                approved_server=config.approved_demo_server,
+                allowed_symbols=config.allowed_demo_symbols,
+                execution_enabled=config.execution_enabled,
+            ),
+            execution_gate_path=Path(args.execution_gate),
         )
         worker.run_forever()
     except KeyboardInterrupt:
