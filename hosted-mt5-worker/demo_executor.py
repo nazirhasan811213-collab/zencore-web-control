@@ -86,7 +86,10 @@ class DemoExecutor:
         return account, terminal
 
     def execute_place_setup(self, payload: dict[str, Any]) -> ExecutionResult:
-        snapshot = validate_entry_command(payload)
+        try:
+            snapshot = validate_entry_command(payload)
+        except RuntimeError as exc:
+            raise DemoExecutionError("ANALYSIS_COMMAND_INVALID") from exc
         self._assert_demo_boundary()
 
         symbol = str(snapshot["symbol"]).upper()
