@@ -28,7 +28,7 @@ jobs:
             hosted-mt5-worker/requirements.txt
             hosted-mt5-worker/requirements-build.txt
 
-      - name: Test and build connection-only worker
+      - name: Test and build gated DEMO execution worker
         shell: powershell
         run: |
           .\hosted-mt5-worker\Build-ZenCoreHostedWorker.ps1 `
@@ -46,7 +46,7 @@ jobs:
       - name: Upload reviewed build output
         uses: actions/upload-artifact@v4
         with:
-          name: zencore-hosted-worker-gcp-connection-only
+          name: zencore-hosted-worker-gcp-demo-execution
           path: |
             artifacts/*.zip
             artifacts/*.sha256
