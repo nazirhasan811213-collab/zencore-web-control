@@ -114,6 +114,8 @@ class FakeControlPlane:
                 "accountMask": "****123456",
                 "serverMask": "****ncial-Demo",
                 "brokerMask": "****ellarFinancial",
+                "commandPodId": "22222222-3333-4444-8555-666666666666" if self.execution_enabled else "",
+                "commandSigningKey": ("k" * 64) if self.execution_enabled else "",
             },
             "serverTime": 1_790_000_000_000,
         }
@@ -211,15 +213,20 @@ class FakeMt5:
 
 
 class HostedWorkerTests(unittest.TestCase):
-    def test_strict_config_loads_only_locked_single_cell_assignment(self):
+    def test_strict_config_loads_locked_and_explicit_demo_execution_assignment(self):
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
             self.assertEqual(config.hosted_account_id, ACCOUNT_ID)
             self.assertEqual(config.allowed_demo_symbols, ("XAUUSD",))
+            self.assertFalse(config.execution_enabled)
+            execution = WorkerConfig.load(
+                write_config(folder, config_dict(executionEnabled=True))
+            )
+            self.assertTrue(execution.execution_enabled)
             for changed in (
-                {"executionEnabled": True},
                 {"hostedAccountId": ""},
                 {"controlPlaneAudience": "https://different.invalid/audience"},
+                {"connectorVersion": "2.0.0-gcp-connect"},
                 {"unknownField": "rejected"},
             ):
                 with self.subTest(changed=changed):
@@ -235,7 +242,9 @@ class HostedWorkerTests(unittest.TestCase):
             lock = Path(folder, "EXECUTION_LOCKED")
             lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, execution_lock_path=lock
+                config, control, unwrapper, terminal,
+                execution_lock_path=lock,
+                execution_enable_path=Path(folder, "DEMO_EXECUTION_ENABLED"),
             )
             result = worker.connect_once()
         self.assertEqual(result["connectionState"], "CONNECTED_LOCKED")
@@ -259,6 +268,7 @@ class HostedWorkerTests(unittest.TestCase):
             worker = HostedConnectionWorker(
                 config, FakeControlPlane(credential_envelope), unwrapper, terminal,
                 execution_lock_path=missing,
+                execution_enable_path=Path(folder, "DEMO_EXECUTION_ENABLED"),
             )
             with self.assertRaisesRegex(WorkerFailure, "EXECUTION_LOCK_MISSING"):
                 worker.connect_once()
@@ -271,6 +281,44 @@ class HostedWorkerTests(unittest.TestCase):
                 worker.connect_once()
         self.assertEqual(terminal.connect_count, 0)
 
+    def test_execution_mode_requires_enable_marker_and_matching_lease(self):
+        credential_envelope, unwrapper = envelope()
+
+        class FakeExecution:
+            def __init__(self):
+                self.identity = None
+            def set_command_identity(self, pod_id, signing_key):
+                self.identity = (pod_id, signing_key)
+
+        with tempfile.TemporaryDirectory() as folder:
+            config = WorkerConfig.load(
+                write_config(folder, config_dict(executionEnabled=True))
+            )
+            lock = Path(folder, "EXECUTION_LOCKED")
+            enable = Path(folder, "DEMO_EXECUTION_ENABLED")
+            execution = FakeExecution()
+            terminal = CapturingTerminal()
+            worker = HostedConnectionWorker(
+                config,
+                FakeControlPlane(credential_envelope, execution_enabled=True),
+                unwrapper,
+                terminal,
+                execution_lock_path=lock,
+                execution_enable_path=enable,
+                execution=execution,
+            )
+            with self.assertRaisesRegex(
+                WorkerFailure, "EXECUTION_ENABLE_BOUNDARY_INVALID"
+            ):
+                worker.connect_once()
+            enable.write_text("demo-only", encoding="ascii")
+            result = worker.connect_once()
+            self.assertEqual(result["connectionState"], "CONNECTED_LOCKED")
+            self.assertEqual(
+                execution.identity,
+                ("22222222-3333-4444-8555-666666666666", "k" * 64),
+            )
+
     def test_expired_lease_stops_heartbeat_and_forces_reconnect(self):
         credential_envelope, unwrapper = envelope()
         control = FakeControlPlane(credential_envelope)
@@ -281,7 +329,9 @@ class HostedWorkerTests(unittest.TestCase):
             lock = Path(folder, "EXECUTION_LOCKED")
             lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, execution_lock_path=lock,
+                config, control, unwrapper, terminal,
+                execution_lock_path=lock,
+                execution_enable_path=Path(folder, "DEMO_EXECUTION_ENABLED"),
                 clock_ms=lambda: clock[0],
             )
             worker.connect_once()
