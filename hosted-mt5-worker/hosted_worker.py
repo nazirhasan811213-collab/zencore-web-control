@@ -403,7 +403,9 @@ class HostedConnectionWorker:
         assert_clean_worker_environment()
         try:
             result = self.control_plane.lease(
-                self.config.hosted_account_id, self.config.cell_id
+                self.config.hosted_account_id,
+                self.config.cell_id,
+                self.config.execution_enabled,
             )
         except ControlPlaneError as exc:
             raise WorkerFailure("CONTROL_PLANE_LEASE_FAILED") from exc
