@@ -53,6 +53,8 @@ try {
         --name "ZenCoreHostedWorker" `
         --paths $source `
         --collect-all MetaTrader5 `
+        --collect-all numpy `
+        --hidden-import numpy `
         --distpath $release `
         --workpath $pyinstallerWork `
         --specpath $pyinstallerWork `
