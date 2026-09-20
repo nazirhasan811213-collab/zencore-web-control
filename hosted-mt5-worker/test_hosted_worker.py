@@ -277,7 +277,9 @@ class HostedWorkerTests(unittest.TestCase):
             missing.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
                 config, FakeControlPlane(credential_envelope, execution_enabled=True),
-                unwrapper, terminal, execution_lock_path=missing,
+                unwrapper, terminal,
+                execution_lock_path=missing,
+                execution_enable_path=Path(folder, "DEMO_EXECUTION_ENABLED"),
             )
             with self.assertRaisesRegex(WorkerFailure, "LEASE_ASSIGNMENT_INVALID"):
                 worker.connect_once()
@@ -286,9 +288,14 @@ class HostedWorkerTests(unittest.TestCase):
     def test_execution_mode_requires_enable_marker_and_matching_lease(self):
         credential_envelope, unwrapper = envelope()
 
+        class FakeLedger:
+            def set_armed(self, _armed):
+                pass
+
         class FakeExecution:
             def __init__(self):
                 self.identity = None
+                self.ledger = FakeLedger()
             def set_command_identity(self, pod_id, signing_key):
                 self.identity = (pod_id, signing_key)
 
