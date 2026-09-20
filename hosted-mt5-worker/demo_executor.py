@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from security_boundary import validate_entry_command
+from security_boundary import validate_entry_command, validate_management_command
 
 MAGIC = 3233001
 MAX_DEMO_TOTAL_LOT = 1.0
@@ -179,4 +179,122 @@ class DemoExecutor:
             broker_order_ids=tuple(order_ids),
             layers=layers,
             total_lot=total,
+        )
+
+    def _zencore_positions(self, symbol: str | None = None) -> list[Any]:
+        positions = self.mt5.positions_get(symbol=symbol) if symbol else self.mt5.positions_get()
+        if positions is None:
+            raise DemoExecutionError("POSITION_READ_FAILED")
+        return [p for p in positions if int(getattr(p, "magic", 0) or 0) == MAGIC]
+
+    def _close_position(self, position: Any, percent: int) -> str:
+        symbol = str(getattr(position, "symbol", "")).upper()
+        if symbol not in self.allowed_symbols:
+            raise DemoExecutionError("POSITION_SYMBOL_NOT_ALLOWED")
+        info = self.mt5.symbol_info(symbol)
+        tick = self.mt5.symbol_info_tick(symbol)
+        if info is None or tick is None:
+            raise DemoExecutionError("POSITION_MARKET_UNAVAILABLE")
+        volume = _finite(getattr(position, "volume", 0), "POSITION_VOLUME")
+        step = _finite(getattr(info, "volume_step", 0), "VOLUME_STEP")
+        minimum = _finite(getattr(info, "volume_min", 0), "VOLUME_MIN")
+        close_volume = volume if percent == 100 else math.floor((volume * percent / 100.0) / step + 1e-9) * step
+        close_volume = round(close_volume, 8)
+        if close_volume < minimum:
+            if percent == 100:
+                close_volume = volume
+            else:
+                raise DemoExecutionError("PARTIAL_VOLUME_TOO_SMALL")
+        position_type = int(getattr(position, "type", -1))
+        buy_type = int(getattr(self.mt5, "POSITION_TYPE_BUY", 0))
+        if position_type == buy_type:
+            order_type = self.mt5.ORDER_TYPE_SELL
+            price = _finite(getattr(tick, "bid", 0), "PRICE")
+        else:
+            order_type = self.mt5.ORDER_TYPE_BUY
+            price = _finite(getattr(tick, "ask", 0), "PRICE")
+        request = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "position": int(getattr(position, "ticket", 0)),
+            "symbol": symbol,
+            "volume": close_volume,
+            "type": order_type,
+            "price": price,
+            "deviation": 20,
+            "magic": MAGIC,
+            "comment": f"ZenCore DEMO CLOSE {percent}",
+            "type_time": self.mt5.ORDER_TIME_GTC,
+            "type_filling": self.mt5.ORDER_FILLING_IOC,
+        }
+        checked = self.mt5.order_check(request)
+        if checked is None or int(getattr(checked, "retcode", -1)) != 0:
+            raise DemoExecutionError("CLOSE_CHECK_REJECTED")
+        result = self.mt5.order_send(request)
+        good = {
+            int(getattr(self.mt5, "TRADE_RETCODE_DONE", 10009)),
+            int(getattr(self.mt5, "TRADE_RETCODE_DONE_PARTIAL", 10010)),
+        }
+        if result is None or int(getattr(result, "retcode", -1)) not in good:
+            raise DemoExecutionError("CLOSE_SEND_REJECTED")
+        return str(getattr(result, "order", "") or getattr(result, "deal", ""))
+
+    def execute_management(self, payload: dict[str, Any]) -> ExecutionResult:
+        try:
+            snapshot = validate_management_command(payload)
+        except RuntimeError as exc:
+            raise DemoExecutionError("MANAGEMENT_COMMAND_INVALID") from exc
+        self._assert_demo_boundary()
+        if self.clock_ms() - int(snapshot.get("sourceReceivedAt") or 0) > 10 * 60 * 1000:
+            raise DemoExecutionError("MANAGEMENT_SIGNAL_STALE")
+        symbol = str(snapshot["symbol"]).upper()
+        if symbol not in self.allowed_symbols:
+            raise DemoExecutionError("SYMBOL_NOT_ALLOWED")
+        positions = self._zencore_positions(symbol)
+        if not positions:
+            return ExecutionResult("NO_ZENCORE_POSITION", (), 0, 0.0)
+        order_ids: list[str] = []
+        for action in snapshot["actions"]:
+            action_type = str(action["type"]).upper()
+            if action_type in {"MOVE_SL_ENTRY", "MOVE_SL_TP1", "MOVE_SL_TP2"}:
+                new_sl = _finite(action.get("activeSl"), "ACTIVE_SL")
+                for position in self._zencore_positions(symbol):
+                    request = {
+                        "action": self.mt5.TRADE_ACTION_SLTP,
+                        "position": int(getattr(position, "ticket", 0)),
+                        "symbol": symbol,
+                        "sl": new_sl,
+                        "tp": float(getattr(position, "tp", 0) or 0),
+                        "magic": MAGIC,
+                    }
+                    checked = self.mt5.order_check(request)
+                    if checked is None or int(getattr(checked, "retcode", -1)) != 0:
+                        raise DemoExecutionError("SL_MOVE_CHECK_REJECTED")
+                    result = self.mt5.order_send(request)
+                    good = {
+                        int(getattr(self.mt5, "TRADE_RETCODE_DONE", 10009)),
+                        int(getattr(self.mt5, "TRADE_RETCODE_DONE_PARTIAL", 10010)),
+                    }
+                    if result is None or int(getattr(result, "retcode", -1)) not in good:
+                        raise DemoExecutionError("SL_MOVE_SEND_REJECTED")
+                    order_ids.append(str(getattr(result, "order", "") or getattr(result, "deal", "")))
+            elif action_type == "CLOSE_PERCENT":
+                percent = int(action.get("percent") or 0)
+                for position in list(self._zencore_positions(symbol)):
+                    order_ids.append(self._close_position(position, percent))
+        return ExecutionResult(
+            code="DEMO_MANAGEMENT_EXECUTED",
+            broker_order_ids=tuple(order_ids),
+            layers=len(self._zencore_positions(symbol)),
+            total_lot=sum(float(getattr(p, "volume", 0) or 0) for p in self._zencore_positions(symbol)),
+        )
+
+    def emergency_close_all(self) -> ExecutionResult:
+        self._assert_demo_boundary()
+        positions = self._zencore_positions()
+        order_ids = tuple(self._close_position(position, 100) for position in list(positions))
+        return ExecutionResult(
+            code="DEMO_EMERGENCY_CLOSE_EXECUTED",
+            broker_order_ids=order_ids,
+            layers=0,
+            total_lot=0.0,
         )
