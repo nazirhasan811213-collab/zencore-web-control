@@ -21,7 +21,7 @@ CONTRACT_VERSION = "ZENCORE_ANALYSIS_EXECUTION_V1"
 STRATEGY = "NORMAL_3M_SOP_V32"
 SCHEMA_VERSION = "32.3-EXIT-STEPLOCK"
 ENVELOPE_ALGORITHM = "RSA-OAEP-256+A256GCM"
-HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False
+HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = True
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
@@ -193,6 +193,13 @@ def validate_entry_command(payload: Any) -> dict[str, Any]:
             raise RuntimeError(f"payload {key} does not match Analysis snapshot")
     if int(payload.get("signalReceivedAt") or 0) != int(snapshot.get("sourceReceivedAt") or 0):
         raise RuntimeError("payload source time does not match Analysis snapshot")
-    if HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
-        raise RuntimeError("hosted worker build gate must remain locked in this release")
+    lot = _finite_number(payload.get("lotPerLayer"), "lotPerLayer")
+    total_lot = _finite_number(payload.get("totalLot"), "totalLot")
+    layers = payload.get("layers")
+    if not isinstance(layers, int) or isinstance(layers, bool) or layers < 1 or layers > 3:
+        raise RuntimeError("layers are invalid for hosted DEMO execution")
+    if lot <= 0 or total_lot <= 0 or total_lot > 1.0 or abs((lot * layers) - total_lot) > 1e-8:
+        raise RuntimeError("hosted DEMO volume is invalid")
+    if not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
+        raise RuntimeError("hosted DEMO execution build gate is locked")
     return snapshot
