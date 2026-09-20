@@ -927,7 +927,14 @@ function createAutoTradeService(options = {}) {
     if (!allowDemoExecution) {
       throw serviceError('EXECUTION_ROLLOUT_LOCKED', 'Execution DEMO masih dikunci.', 409);
     }
-    if (Core.containsForbiddenCredentialKey(input)) {
+    const {
+      accountId: _accountId,
+      leaseId: _leaseId,
+      requestId: _requestId,
+      requestTimestamp: _requestTimestamp,
+      ...ackOnly
+    } = input;
+    if (Core.containsForbiddenCredentialKey(ackOnly)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Credential broker tidak dibenarkan dalam acknowledgement.', 400);
     }
     const accountId = String(input.accountId || '');
