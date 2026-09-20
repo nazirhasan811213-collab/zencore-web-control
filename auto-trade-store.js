@@ -489,55 +489,6 @@ class PostgresAutoTradeStore {
     };
   }
 
-  async provisionHostedCommandPod(userId, preferredId) {
-    const existing = this.podsByUser.get(userId);
-    if (existing) this.podsByToken.delete(existing.tokenHash);
-    const tokenHashValue = crypto.createHash('sha256')
-      .update(`hosted-command-target:${preferredId}:${crypto.randomUUID()}`)
-      .digest('hex');
-    const row = {
-      id: existing?.id || preferredId,
-      userId,
-      label: 'ZenCore GCP Hosted MT5',
-      ownershipMode: 'INTERNAL_DEMO',
-      tokenHash: tokenHashValue,
-      accountMask: null,
-      serverMask: null,
-      brokerMask: null,
-      tradeMode: null,
-      terminalTradeAllowed: false,
-      accountTradeAllowed: false,
-      expertTradeAllowed: false,
-      demoExecutionUnlocked: false,
-      symbolSpecs: {},
-      connectorVersion: null,
-      terminalBuild: null,
-      lastSeenAt: null,
-      createdAt: existing?.createdAt || Date.now(),
-      revokedAt: null
-    };
-    this.podsByUser.set(userId, row);
-    this.podsByToken.set(tokenHashValue, row);
-    return publicPod(row);
-  }
-
-  async getHostedLeaseContext(accountId, identity, leaseId, now) {
-    const row = [...this.hostedAccounts.values()].find(item =>
-      item.id === accountId &&
-      item.workerInstanceId === identity.instanceId &&
-      item.workerProjectId === identity.projectId &&
-      item.leaseId === leaseId &&
-      Number(item.leaseExpiresAt || 0) > now
-    );
-    if (!row) return null;
-    return {
-      ...publicHostedAccount(row),
-      userId: row.userId,
-      leaseId: row.leaseId,
-      leaseExpiresAt: row.leaseExpiresAt
-    };
-  }
-
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
     await this.pool.query(
       `DELETE FROM zencore_gcp_worker_requests WHERE received_at < $1`,
@@ -962,6 +913,55 @@ class MemoryAutoTradeStore {
       updatedAt: now
     });
     return publicHostedAccount(row);
+  }
+
+  async provisionHostedCommandPod(userId, preferredId) {
+    const existing = this.podsByUser.get(userId);
+    if (existing) this.podsByToken.delete(existing.tokenHash);
+    const tokenHashValue = crypto.createHash('sha256')
+      .update(`hosted-command-target:${preferredId}:${crypto.randomUUID()}`)
+      .digest('hex');
+    const row = {
+      id: existing?.id || preferredId,
+      userId,
+      label: 'ZenCore GCP Hosted MT5',
+      ownershipMode: 'INTERNAL_DEMO',
+      tokenHash: tokenHashValue,
+      accountMask: null,
+      serverMask: null,
+      brokerMask: null,
+      tradeMode: null,
+      terminalTradeAllowed: false,
+      accountTradeAllowed: false,
+      expertTradeAllowed: false,
+      demoExecutionUnlocked: false,
+      symbolSpecs: {},
+      connectorVersion: null,
+      terminalBuild: null,
+      lastSeenAt: null,
+      createdAt: existing?.createdAt || Date.now(),
+      revokedAt: null
+    };
+    this.podsByUser.set(userId, row);
+    this.podsByToken.set(tokenHashValue, row);
+    return publicPod(row);
+  }
+
+  async getHostedLeaseContext(accountId, identity, leaseId, now) {
+    const row = [...this.hostedAccounts.values()].find(item =>
+      item.id === accountId &&
+      item.workerInstanceId === identity.instanceId &&
+      item.workerProjectId === identity.projectId &&
+      item.leaseId === leaseId &&
+      Number(item.leaseExpiresAt || 0) > now
+    );
+    if (!row) return null;
+    return {
+      ...publicHostedAccount(row),
+      userId: row.userId,
+      leaseId: row.leaseId,
+      leaseExpiresAt: row.leaseExpiresAt
+    };
   }
 
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
