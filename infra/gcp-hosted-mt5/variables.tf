@@ -207,12 +207,7 @@ variable "allowed_demo_symbols" {
 }
 
 variable "execution_enabled" {
-  description = "Hard rollout gate. This staged infrastructure release cannot unlock order execution."
+  description = "Independent local rollout gate for the reviewed XAUUSD Demo execution worker. Keep false until the connection-only v2.1 heartbeat is certified."
   type        = bool
   default     = false
-
-  validation {
-    condition     = var.execution_enabled == false
-    error_message = "Order execution must remain false until Demo certification is merged separately."
-  }
 }
