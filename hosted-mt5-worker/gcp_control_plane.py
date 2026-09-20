@@ -189,12 +189,20 @@ class GcpControlPlaneClient:
             raise ControlPlaneError("Control plane rejected request")
         return result
 
-    def lease(self, account_id: str, cell_id: str) -> dict[str, Any]:
+    def lease(
+        self, account_id: str, cell_id: str, execution_requested: bool = False
+    ) -> dict[str, Any]:
         if not _UUID_RE.fullmatch(str(account_id)):
             raise ValueError("account_id must be a UUIDv4")
         if not _CELL_RE.fullmatch(str(cell_id)):
             raise ValueError("cell_id is invalid")
-        return self._post("lease", {"accountId": account_id, "cellId": cell_id})
+        if not isinstance(execution_requested, bool):
+            raise ValueError("execution_requested must be boolean")
+        return self._post("lease", {
+            "accountId": account_id,
+            "cellId": cell_id,
+            "executionRequested": execution_requested,
+        })
 
     def heartbeat(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(payload, dict):
