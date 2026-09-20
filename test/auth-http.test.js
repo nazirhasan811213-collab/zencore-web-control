@@ -25,6 +25,8 @@ function startServer() {
         ZENCORE_AUTOTRADE_ENABLED: 'true',
         ZENCORE_AUTOTRADE_EXECUTION_ENABLED: 'true',
         ZENCORE_AUTOTRADE_MEMORY: 'true',
+        ZENCORE_HOSTED_MT5_ENABLED: 'false',
+        ZENCORE_GCP_HOSTED_WORKER_ENABLED: 'false',
         ZENCORE_POD_PROVISIONING_SECRET: POD_PROVISIONING_SECRET,
         ZENCORE_COMMAND_SIGNING_KEY: COMMAND_SIGNING_KEY
       },
@@ -206,6 +208,14 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     response = await fetch(`${BASE}/api/auto-trade/credential-key`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 409);
     assert.equal((await response.json()).code, 'HOSTED_MT5_LOCKED');
+
+    response = await fetch(`${BASE}/api/hosted-execution/lease`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer not-a-google-token', 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).code, 'HOSTED_WORKER_LOCKED');
 
     response = await fetch(`${BASE}/api/auto-trade/settings`, {
       method: 'PUT',

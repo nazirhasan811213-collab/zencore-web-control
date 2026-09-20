@@ -1,0 +1,54 @@
+name: Hosted MT5 worker build
+
+"on":
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "hosted-mt5-worker/**"
+      - "infra/gcp-hosted-mt5/**"
+      - ".github/workflows/hosted-worker-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-worker:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v4
+
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            hosted-mt5-worker/requirements.txt
+            hosted-mt5-worker/requirements-build.txt
+
+      - name: Test and build connection-only worker
+        shell: powershell
+        run: |
+          .\hosted-mt5-worker\Build-ZenCoreHostedWorker.ps1 `
+            -OutputDirectory .\artifacts
+
+      - name: Verify artifact checksum file
+        shell: powershell
+        run: |
+          $zip = Get-ChildItem .\artifacts\ZenCore_Hosted_Worker_GCP_*.zip -File
+          if ($zip.Count -ne 1) { throw "Expected exactly one hosted worker ZIP." }
+          $expected = ((Get-Content -Raw "$($zip.FullName).sha256") -split "\s+")[0].ToLowerInvariant()
+          $actual = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw "Hosted worker artifact checksum mismatch." }
+
+      - name: Upload reviewed build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: zencore-hosted-worker-gcp-connection-only
+          path: |
+            artifacts/*.zip
+            artifacts/*.sha256
+          if-no-files-found: error
+          retention-days: 14

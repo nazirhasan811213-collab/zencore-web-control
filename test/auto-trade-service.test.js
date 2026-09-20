@@ -487,3 +487,149 @@ test('hosted MT5 rejects plaintext credential fields and wrong envelope keys', a
     error => error.code === 'INVALID_CREDENTIAL_ENVELOPE' && !!error.fields.keyId
   );
 });
+
+test('Google hosted worker leases only ciphertext and reports connection with execution locked', async () => {
+  let currentTime = 1_790_000_100_000;
+  const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const store = new MemoryAutoTradeStore();
+  const connectionService = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    credentialKeyId: 'zencore-gcp-hsm-demo-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' }),
+    now: () => currentTime
+  });
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const credentialEnvelope = {
+    version: 1,
+    algorithm: 'RSA-OAEP-256+A256GCM',
+    keyId: 'zencore-gcp-hsm-demo-v1',
+    wrappedKey: crypto.randomBytes(384).toString('base64url'),
+    iv: crypto.randomBytes(12).toString('base64url'),
+    ciphertext: crypto.randomBytes(96).toString('base64url')
+  };
+  const connected = await connectionService.connectHostedAccount(userId, {
+    credentialEnvelope,
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    confirmation: 'CONNECT MT5 DEMO'
+  }, true);
+  const accountId = connected.hostedAccount.id;
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    hostedWorkerEnabled: true,
+    hostedWorkerAccountId: accountId,
+    credentialKeyId: 'zencore-gcp-hsm-demo-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' }),
+    now: () => currentTime
+  });
+  const identity = {
+    provider: 'GOOGLE_CLOUD',
+    subject: '100000000000000000001',
+    email: 'zencore-mt5-demo-worker@zencore-demo-12345.iam.gserviceaccount.com',
+    projectId: 'zencore-demo-12345',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-01',
+    instanceId: '9876543210987654321'
+  };
+  const leased = await service.leaseHostedAccount(identity, {
+    accountId,
+    cellId: identity.instanceName
+  });
+  assert.deepEqual(leased.lease.credentialEnvelope, credentialEnvelope);
+  assert.equal(leased.lease.executionEnabled, false);
+  assert.equal(leased.lease.demoOnly, true);
+  assert.equal(leased.lease.accountMask, '****123456');
+  assert.equal(leased.lease.serverMask, '****ncial-Demo');
+  assert.equal(leased.lease.brokerMask, '****ellarFinancial');
+  assert.equal(JSON.stringify(await service.state(userId)).includes(credentialEnvelope.ciphertext), false);
+  await assert.rejects(
+    () => service.leaseHostedAccount(identity, {
+      accountId: '11111111-2222-4333-8444-555555555555',
+      cellId: identity.instanceName
+    }),
+    error => error.code === 'INVALID_HOSTED_LEASE'
+  );
+  await assert.rejects(
+    () => service.leaseHostedAccount(identity, {
+      accountId,
+      cellId: identity.instanceName,
+      nested: { password: 'must-never-reach-the-control-plane' }
+    }),
+    error => error.code === 'PLAINTEXT_CREDENTIAL_REJECTED'
+  );
+
+  currentTime += 1000;
+  const heartbeat = await service.hostedHeartbeat(identity, {
+    accountId,
+    leaseId: leased.lease.id,
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    connectionStatus: 'CONNECTED',
+    terminalTradeAllowed: true,
+    accountTradeAllowed: true,
+    expertTradeAllowed: true,
+    demoExecutionUnlocked: false,
+    connectorVersion: '2.0.0-gcp-connect',
+    terminalBuild: '5000',
+    symbolSpecs: [{
+      symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
+      volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01
+    }],
+    positions: []
+  });
+  assert.equal(heartbeat.connectionState, 'CONNECTED_LOCKED');
+  assert.equal(heartbeat.executionEnabled, false);
+  const state = await service.state(userId);
+  assert.equal(state.connection.state, 'HOSTED_CONNECTED_LOCKED');
+  assert.equal(state.hostedAccount.workerProvider, 'GOOGLE_CLOUD');
+  assert.equal(state.hostedAccount.workerCell, identity.instanceName);
+  assert.equal(state.control.canTurnOn, false);
+  assert.equal(state.hostedMt5.executionReady, false);
+
+  await assert.rejects(
+    () => service.hostedHeartbeat(identity, {
+      accountId,
+      leaseId: leased.lease.id,
+      accountMask: '****123456', serverMask: '****ncial-Demo',
+      brokerMask: '****ellarFinancial', tradeMode: 'DEMO',
+      demoExecutionUnlocked: true
+    }),
+    error => error.code === 'HOSTED_EXECUTION_LOCKED'
+  );
+
+  currentTime = leased.lease.expiresAt;
+  await assert.rejects(
+    () => service.hostedHeartbeat(identity, {
+      accountId,
+      leaseId: leased.lease.id,
+      accountMask: '****123456', serverMask: '****ncial-Demo',
+      brokerMask: '****ellarFinancial', tradeMode: 'DEMO',
+      connectionStatus: 'CONNECTED', terminalTradeAllowed: true,
+      accountTradeAllowed: true, expertTradeAllowed: true,
+      demoExecutionUnlocked: false, connectorVersion: '2.0.0-gcp-connect',
+      terminalBuild: '5000', symbolSpecs: [], positions: []
+    }),
+    error => error.code === 'HOSTED_LEASE_NOT_FOUND'
+  );
+});
+
+test('hosted worker replay IDs survive outside the in-process verifier cache', async () => {
+  const store = new MemoryAutoTradeStore();
+  const identity = { instanceId: '9876543210987654321' };
+  const requestId = '99999999-8888-4777-8666-555555555555';
+  const now = 1_790_000_200_000;
+  assert.equal(await store.consumeHostedWorkerRequest(identity, requestId, now - 1000, now), true);
+  assert.equal(await store.consumeHostedWorkerRequest(identity, requestId, now - 1000, now + 1), false);
+  assert.equal(await store.consumeHostedWorkerRequest(
+    identity, '11111111-2222-4333-8444-555555555555', now, now + 11 * 60 * 1000
+  ), true);
+  assert.equal(store.hostedWorkerRequests.has(requestId), false);
+});

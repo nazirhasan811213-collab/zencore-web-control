@@ -2,7 +2,7 @@
 
 This module deliberately contains no local private-key provider and no order
 execution switch. A production worker must receive unwrap capability from an
-external, attested key service and must never persist decrypted MT5 secrets.
+external, identity-scoped key service and must never persist decrypted MT5 secrets.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class ExternalKeyUnwrapper(Protocol):
     """Implemented by an external HSM/attested-key adapter, never by a file key."""
 
     def unwrap_rsa_oaep_sha256(self, key_id: str, wrapped_key: bytes) -> bytes:
-        """Return a 32-byte AES key after workload identity and attestation checks."""
+        """Return a 32-byte AES key after workload identity and IAM checks."""
 
 
 def _decode_base64url(value: Any, label: str, minimum: int, maximum: int) -> bytes:
@@ -196,4 +196,3 @@ def validate_entry_command(payload: Any) -> dict[str, Any]:
     if HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
         raise RuntimeError("hosted worker build gate must remain locked in this release")
     return snapshot
-

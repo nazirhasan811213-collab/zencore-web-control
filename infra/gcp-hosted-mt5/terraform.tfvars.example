@@ -1,0 +1,29 @@
+project_id   = "zencore-total-trade-system"
+region       = "asia-southeast1"
+zone         = "asia-southeast1-b"
+instance_name = "zencore-mt5-demo-01"
+
+# Populate only after the trader creates the encrypted hosted account in ZenCore.
+# One account UUID is assigned to exactly one execution cell.
+hosted_account_id = ""
+
+# Add only a verified temporary deployment operator when an IAP tunnel is needed.
+iap_admin_members = []
+
+control_plane_url = "https://zencore-precision-entry.onrender.com"
+key_alias         = "zencore-gcp-hsm-demo-v1"
+
+# Phase 1 certification scope. Do not add more symbols before broker validation.
+allowed_demo_symbols = ["XAUUSD"]
+execution_enabled     = false
+
+# Keep blank until reviewed artifacts and exact SHA-256 values are available.
+worker_release_url    = ""
+worker_release_sha256 = ""
+mt5_installer_url     = ""
+mt5_installer_sha256  = ""
+mt5_terminal_path     = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
+
+# Start with HTTPS only. Replace 0.0.0.0/0 with discovered broker ranges where viable.
+broker_egress_cidrs    = ["0.0.0.0/0"]
+broker_egress_tcp_ports = ["80", "443"]

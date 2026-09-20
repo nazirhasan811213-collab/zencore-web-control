@@ -1,0 +1,120 @@
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$root = "C:\ProgramData\ZenCore\HostedWorker"
+$staging = Join-Path $root "staging"
+$configPath = Join-Path $root "worker-config.json"
+$logPath = Join-Path $root "bootstrap.log"
+$lockPath = Join-Path $root "EXECUTION_LOCKED"
+
+New-Item -ItemType Directory -Force -Path $root, $staging | Out-Null
+
+function Write-SafeLog {
+    param([string]$Message)
+    $line = "{0} {1}" -f (Get-Date).ToUniversalTime().ToString("o"), $Message
+    Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+}
+
+function Save-VerifiedArtifact {
+    param(
+        [string]$Uri,
+        [string]$ExpectedSha256,
+        [string]$Destination,
+        [string]$Label
+    )
+    if ([string]::IsNullOrWhiteSpace($Uri)) {
+        Write-SafeLog "$Label not configured; cell remains staged."
+        return $false
+    }
+    if (-not $Uri.StartsWith("https://", [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Label URL must use HTTPS."
+    }
+    if ($ExpectedSha256 -notmatch "^[A-Fa-f0-9]{64}$") {
+        throw "$Label SHA-256 is missing or invalid."
+    }
+    $temporary = "$Destination.download"
+    Remove-Item -Force -ErrorAction SilentlyContinue $temporary
+    Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $temporary
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $temporary).Hash.ToLowerInvariant()
+    if ($actual -ne $ExpectedSha256.ToLowerInvariant()) {
+        Remove-Item -Force -ErrorAction SilentlyContinue $temporary
+        throw "$Label SHA-256 verification failed."
+    }
+    Move-Item -Force -LiteralPath $temporary -Destination $Destination
+    Write-SafeLog "$Label downloaded and SHA-256 verified."
+    return $true
+}
+
+try {
+    $configJson = [System.Text.Encoding]::UTF8.GetString(
+        [System.Convert]::FromBase64String("${worker_config_base64}")
+    )
+    $config = $configJson | ConvertFrom-Json
+    if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $false) {
+        throw "Staged worker configuration attempted to unlock execution."
+    }
+    if ($config.privateKeyAvailable -ne $false -or $config.credentialStorage -ne "MEMORY_ONLY") {
+        throw "Credential boundary configuration is invalid."
+    }
+    [System.IO.File]::WriteAllText($configPath, $configJson, (New-Object System.Text.UTF8Encoding($false)))
+    Set-Content -LiteralPath $lockPath -Value "Hosted Demo order execution is locked in this release." -Encoding ASCII
+
+    $workerReady = Save-VerifiedArtifact `
+        -Uri "${worker_release_url}" `
+        -ExpectedSha256 "${worker_release_sha}" `
+        -Destination (Join-Path $staging "zencore-hosted-worker.zip") `
+        -Label "ZenCore worker"
+    $mt5Ready = Save-VerifiedArtifact `
+        -Uri "${mt5_installer_url}" `
+        -ExpectedSha256 "${mt5_installer_sha}" `
+        -Destination (Join-Path $staging "broker-mt5-installer.exe") `
+        -Label "Broker MT5 installer"
+
+    $forbidden = @(
+        "MT5_LOGIN", "MT5_PASSWORD", "MT5_SERVER", "MT5_PRIVATE_KEY",
+        "ZENCORE_MT5_PRIVATE_KEY", "ZENCORE_BROKER_PASSWORD"
+    )
+    foreach ($name in $forbidden) {
+        if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+            throw "A forbidden broker-secret environment variable is present."
+        }
+    }
+
+    $acl = Get-Acl -LiteralPath $root
+    $acl.SetAccessRuleProtection($true, $false)
+    $systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        "NT AUTHORITY\SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
+    )
+    $acl.SetAccessRule($systemRule)
+    $adminReadRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        "BUILTIN\Administrators", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow"
+    )
+    $acl.SetAccessRule($adminReadRule)
+    Set-Acl -LiteralPath $root -AclObject $acl
+
+    if ($workerReady) {
+        $expanded = Join-Path $staging "worker-release"
+        if (Test-Path -LiteralPath $expanded) {
+            Remove-Item -Recurse -Force -LiteralPath $expanded
+        }
+        New-Item -ItemType Directory -Force -Path $expanded | Out-Null
+        Expand-Archive -LiteralPath (Join-Path $staging "zencore-hosted-worker.zip") `
+            -DestinationPath $expanded -Force
+        $installer = Join-Path $expanded "Install-ZenCoreHostedWorker.ps1"
+        if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+            throw "Verified ZenCore worker release has no installer."
+        }
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+            -File $installer `
+            -ConfigPath $configPath `
+            -ExecutionLockPath $lockPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Verified ZenCore worker installation failed."
+        }
+    }
+
+    Write-SafeLog "Shielded Windows cell initialized. WorkerReady=$workerReady Mt5Ready=$mt5Ready Execution=LOCKED"
+} catch {
+    Write-SafeLog "Bootstrap failed closed: $($_.Exception.Message)"
+    throw
+}

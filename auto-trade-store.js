@@ -77,6 +77,15 @@ function publicHostedAccount(row) {
     brokerMask: row.broker_mask ?? row.brokerMask ?? null,
     tradeMode: row.trade_mode ?? row.tradeMode ?? 'DEMO',
     keyId: row.key_id ?? row.keyId ?? null,
+    workerProvider: row.worker_provider ?? row.workerProvider ?? null,
+    workerCell: row.worker_instance_name ?? row.workerCell ?? null,
+    terminalTradeAllowed: row.terminal_trade_allowed ?? row.terminalTradeAllowed ?? false,
+    accountTradeAllowed: row.account_trade_allowed ?? row.accountTradeAllowed ?? false,
+    expertTradeAllowed: row.expert_trade_allowed ?? row.expertTradeAllowed ?? false,
+    connectorVersion: row.connector_version ?? row.connectorVersion ?? null,
+    terminalBuild: row.terminal_build ?? row.terminalBuild ?? null,
+    symbolSpecs: row.symbol_specs ?? row.symbolSpecs ?? {},
+    lastSeenAt: timestamp(row.worker_last_seen_at ?? row.lastSeenAt),
     lastError: row.last_error ?? row.lastError ?? null,
     verifiedAt: timestamp(row.verified_at ?? row.verifiedAt),
     createdAt: timestamp(row.created_at ?? row.createdAt),
@@ -185,6 +194,22 @@ class PostgresAutoTradeStore {
         trade_mode VARCHAR(12) NOT NULL DEFAULT 'DEMO',
         key_id VARCHAR(80) NOT NULL,
         credential_envelope JSONB NOT NULL,
+        worker_provider VARCHAR(32),
+        worker_subject VARCHAR(128),
+        worker_email VARCHAR(160),
+        worker_project_id VARCHAR(64),
+        worker_zone VARCHAR(64),
+        worker_instance_name VARCHAR(63),
+        worker_instance_id VARCHAR(32),
+        lease_id UUID,
+        lease_expires_at TIMESTAMPTZ,
+        terminal_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        account_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        expert_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        symbol_specs JSONB NOT NULL DEFAULT '{}'::jsonb,
+        connector_version VARCHAR(32),
+        terminal_build VARCHAR(24),
+        worker_last_seen_at TIMESTAMPTZ,
         last_error VARCHAR(240),
         verified_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -192,6 +217,33 @@ class PostgresAutoTradeStore {
       );
       CREATE INDEX IF NOT EXISTS zencore_mt5_hosted_account_status_idx
         ON zencore_mt5_hosted_accounts(status, updated_at);
+
+      ALTER TABLE zencore_mt5_hosted_accounts
+        ADD COLUMN IF NOT EXISTS worker_provider VARCHAR(32),
+        ADD COLUMN IF NOT EXISTS worker_subject VARCHAR(128),
+        ADD COLUMN IF NOT EXISTS worker_email VARCHAR(160),
+        ADD COLUMN IF NOT EXISTS worker_project_id VARCHAR(64),
+        ADD COLUMN IF NOT EXISTS worker_zone VARCHAR(64),
+        ADD COLUMN IF NOT EXISTS worker_instance_name VARCHAR(63),
+        ADD COLUMN IF NOT EXISTS worker_instance_id VARCHAR(32),
+        ADD COLUMN IF NOT EXISTS lease_id UUID,
+        ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS terminal_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS account_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS expert_trade_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS symbol_specs JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS connector_version VARCHAR(32),
+        ADD COLUMN IF NOT EXISTS terminal_build VARCHAR(24),
+        ADD COLUMN IF NOT EXISTS worker_last_seen_at TIMESTAMPTZ;
+
+      CREATE TABLE IF NOT EXISTS zencore_gcp_worker_requests (
+        request_id UUID PRIMARY KEY,
+        worker_instance_id VARCHAR(32) NOT NULL,
+        request_timestamp TIMESTAMPTZ NOT NULL,
+        received_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS zencore_gcp_worker_requests_received_idx
+        ON zencore_gcp_worker_requests(received_at);
 
       CREATE TABLE IF NOT EXISTS zencore_mt5_positions (
         user_id UUID NOT NULL REFERENCES zencore_users(id) ON DELETE CASCADE,
@@ -268,7 +320,10 @@ class PostgresAutoTradeStore {
   async getHostedAccount(userId) {
     const result = await this.pool.query(
       `SELECT id, user_id, status, account_mask, server_mask, broker_mask,
-              trade_mode, key_id, last_error, verified_at, created_at, updated_at
+              trade_mode, key_id, worker_provider, worker_instance_name,
+              terminal_trade_allowed, account_trade_allowed, expert_trade_allowed,
+              symbol_specs, connector_version, terminal_build, worker_last_seen_at,
+              last_error, verified_at, created_at, updated_at
        FROM zencore_mt5_hosted_accounts WHERE user_id = $1`,
       [userId]
     );
@@ -290,15 +345,119 @@ class PostgresAutoTradeStore {
          trade_mode = EXCLUDED.trade_mode,
          key_id = EXCLUDED.key_id,
          credential_envelope = EXCLUDED.credential_envelope,
+         worker_provider = NULL,
+         worker_subject = NULL,
+         worker_email = NULL,
+         worker_project_id = NULL,
+         worker_zone = NULL,
+         worker_instance_name = NULL,
+         worker_instance_id = NULL,
+         lease_id = NULL,
+         lease_expires_at = NULL,
+         terminal_trade_allowed = FALSE,
+         account_trade_allowed = FALSE,
+         expert_trade_allowed = FALSE,
+         symbol_specs = '{}'::jsonb,
+         connector_version = NULL,
+         terminal_build = NULL,
+         worker_last_seen_at = NULL,
          last_error = NULL,
          verified_at = NULL,
          updated_at = EXCLUDED.updated_at
        RETURNING id, user_id, status, account_mask, server_mask, broker_mask,
-                 trade_mode, key_id, last_error, verified_at, created_at, updated_at`,
+                 trade_mode, key_id, worker_provider, worker_instance_name,
+                 terminal_trade_allowed, account_trade_allowed, expert_trade_allowed,
+                 symbol_specs, connector_version, terminal_build, worker_last_seen_at,
+                 last_error, verified_at, created_at, updated_at`,
       [input.id, input.userId, input.accountMask, input.serverMask, input.brokerMask,
         input.tradeMode, input.keyId, JSON.stringify(input.credentialEnvelope), new Date(input.now)]
     );
     return publicHostedAccount(result.rows[0]);
+  }
+
+  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        `SELECT * FROM zencore_mt5_hosted_accounts WHERE id = $1 FOR UPDATE`,
+        [accountId]
+      );
+      const row = selected.rows[0];
+      if (!row || String(row.trade_mode).toUpperCase() !== 'DEMO' ||
+          (row.worker_instance_id && row.worker_instance_id !== identity.instanceId)) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const updated = await client.query(
+        `UPDATE zencore_mt5_hosted_accounts SET
+           status = 'LEASED', worker_provider = $2, worker_subject = $3,
+           worker_email = $4, worker_project_id = $5, worker_zone = $6,
+           worker_instance_name = $7, worker_instance_id = $8,
+           lease_id = $9, lease_expires_at = $10,
+           terminal_trade_allowed = FALSE, account_trade_allowed = FALSE,
+           expert_trade_allowed = FALSE, symbol_specs = '{}'::jsonb,
+           connector_version = NULL, terminal_build = NULL,
+           worker_last_seen_at = NULL, last_error = NULL, updated_at = $11
+         WHERE id = $1 RETURNING *`,
+        [accountId, identity.provider, identity.subject, identity.email,
+          identity.projectId, identity.zone, identity.instanceName, identity.instanceId,
+          leaseId, new Date(expiresAt), new Date(now)]
+      );
+      await client.query('COMMIT');
+      const leased = updated.rows[0];
+      return {
+        ...publicHostedAccount(leased),
+        userId: leased.user_id,
+        credentialEnvelope: leased.credential_envelope,
+        leaseId: leased.lease_id,
+        leaseExpiresAt: timestamp(leased.lease_expires_at)
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateHostedHeartbeat(accountId, identity, leaseId, heartbeat, status, lastError, now) {
+    const result = await this.pool.query(
+      `UPDATE zencore_mt5_hosted_accounts SET
+         status = $4, account_mask = $5, server_mask = $6, broker_mask = $7,
+         terminal_trade_allowed = $8, account_trade_allowed = $9,
+         expert_trade_allowed = $10, symbol_specs = $11::jsonb,
+         connector_version = $12, terminal_build = $13,
+         worker_last_seen_at = $14, last_error = $15,
+         verified_at = CASE WHEN $4 = 'CONNECTED_LOCKED' THEN COALESCE(verified_at, $14) ELSE verified_at END,
+         updated_at = $14
+       WHERE id = $1 AND worker_instance_id = $2 AND worker_project_id = $3
+         AND lease_id = $16 AND lease_expires_at > $14
+       RETURNING *`,
+      [accountId, identity.instanceId, identity.projectId, status,
+        heartbeat.accountMask, heartbeat.serverMask, heartbeat.brokerMask,
+        heartbeat.terminalTradeAllowed, heartbeat.accountTradeAllowed,
+        heartbeat.expertTradeAllowed, JSON.stringify(heartbeat.symbolSpecs || {}),
+        heartbeat.connectorVersion || null, heartbeat.terminalBuild || null,
+        new Date(now), lastError || null, leaseId]
+    );
+    return publicHostedAccount(result.rows[0]);
+  }
+
+  async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
+    await this.pool.query(
+      `DELETE FROM zencore_gcp_worker_requests WHERE received_at < $1`,
+      [new Date(now - 10 * 60 * 1000)]
+    );
+    const result = await this.pool.query(
+      `INSERT INTO zencore_gcp_worker_requests
+        (request_id, worker_instance_id, request_timestamp, received_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (request_id) DO NOTHING
+       RETURNING request_id`,
+      [requestId, identity.instanceId, new Date(requestTimestamp), new Date(now)]
+    );
+    return result.rowCount === 1;
   }
 
   async setControl(userId, update) {
@@ -594,6 +753,7 @@ class MemoryAutoTradeStore {
     this.pairingsByUser = new Map();
     this.pairingsByCode = new Map();
     this.hostedAccounts = new Map();
+    this.hostedWorkerRequests = new Map();
     this.positions = new Map();
     this.commands = new Map();
     this.audit = new Map();
@@ -632,6 +792,22 @@ class MemoryAutoTradeStore {
       tradeMode: input.tradeMode,
       keyId: input.keyId,
       credentialEnvelope: JSON.parse(JSON.stringify(input.credentialEnvelope)),
+      workerProvider: null,
+      workerSubject: null,
+      workerEmail: null,
+      workerProjectId: null,
+      workerZone: null,
+      workerCell: null,
+      workerInstanceId: null,
+      leaseId: null,
+      leaseExpiresAt: null,
+      terminalTradeAllowed: false,
+      accountTradeAllowed: false,
+      expertTradeAllowed: false,
+      symbolSpecs: {},
+      connectorVersion: null,
+      terminalBuild: null,
+      lastSeenAt: null,
       lastError: null,
       verifiedAt: null,
       createdAt: old?.createdAt || input.now,
@@ -639,6 +815,77 @@ class MemoryAutoTradeStore {
     };
     this.hostedAccounts.set(input.userId, row);
     return publicHostedAccount(row);
+  }
+
+  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt) {
+    const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+    if (!row || String(row.tradeMode).toUpperCase() !== 'DEMO' ||
+        (row.workerInstanceId && row.workerInstanceId !== identity.instanceId)) return null;
+    Object.assign(row, {
+      status: 'LEASED',
+      workerProvider: identity.provider,
+      workerSubject: identity.subject,
+      workerEmail: identity.email,
+      workerProjectId: identity.projectId,
+      workerZone: identity.zone,
+      workerCell: identity.instanceName,
+      workerInstanceId: identity.instanceId,
+      leaseId,
+      leaseExpiresAt: expiresAt,
+      terminalTradeAllowed: false,
+      accountTradeAllowed: false,
+      expertTradeAllowed: false,
+      symbolSpecs: {},
+      connectorVersion: null,
+      terminalBuild: null,
+      lastSeenAt: null,
+      lastError: null,
+      updatedAt: now
+    });
+    return {
+      ...publicHostedAccount(row),
+      userId: row.userId,
+      credentialEnvelope: JSON.parse(JSON.stringify(row.credentialEnvelope)),
+      leaseId: row.leaseId,
+      leaseExpiresAt: row.leaseExpiresAt
+    };
+  }
+
+  async updateHostedHeartbeat(accountId, identity, leaseId, heartbeat, status, lastError, now) {
+    const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+    if (!row || row.workerInstanceId !== identity.instanceId ||
+        row.workerProjectId !== identity.projectId || row.leaseId !== leaseId ||
+        Number(row.leaseExpiresAt || 0) <= now) return null;
+    Object.assign(row, {
+      status,
+      accountMask: heartbeat.accountMask,
+      serverMask: heartbeat.serverMask,
+      brokerMask: heartbeat.brokerMask,
+      terminalTradeAllowed: heartbeat.terminalTradeAllowed,
+      accountTradeAllowed: heartbeat.accountTradeAllowed,
+      expertTradeAllowed: heartbeat.expertTradeAllowed,
+      symbolSpecs: JSON.parse(JSON.stringify(heartbeat.symbolSpecs || {})),
+      connectorVersion: heartbeat.connectorVersion || null,
+      terminalBuild: heartbeat.terminalBuild || null,
+      lastSeenAt: now,
+      lastError: lastError || null,
+      verifiedAt: status === 'CONNECTED_LOCKED' ? (row.verifiedAt || now) : row.verifiedAt,
+      updatedAt: now
+    });
+    return publicHostedAccount(row);
+  }
+
+  async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
+    for (const [id, request] of this.hostedWorkerRequests) {
+      if (request.receivedAt < now - 10 * 60 * 1000) this.hostedWorkerRequests.delete(id);
+    }
+    if (this.hostedWorkerRequests.has(requestId)) return false;
+    this.hostedWorkerRequests.set(requestId, {
+      instanceId: identity.instanceId,
+      requestTimestamp,
+      receivedAt: now
+    });
+    return true;
   }
 
   async setControl(userId, update) {
