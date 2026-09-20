@@ -270,16 +270,43 @@ class MetaTraderConnection:
             specs.append(values)
         return specs
 
-    def snapshot(self) -> dict[str, Any]:
-        account, terminal = self._account_terminal()
+    def _positions(self) -> list[dict[str, Any]]:
         try:
-            positions = self._mt5.positions_get()
+            rows = self._mt5.positions_get()
         except Exception as exc:
             raise WorkerFailure("MT5_POSITION_READ_FAILED") from exc
-        if positions is None:
+        if rows is None:
             raise WorkerFailure("MT5_POSITION_READ_FAILED")
-        if any(int(getattr(position, "magic", 0) or 0) == MAGIC for position in positions):
-            raise WorkerFailure("UNEXPECTED_ZENCORE_POSITION")
+        result: list[dict[str, Any]] = []
+        buy_type = int(getattr(self._mt5, "POSITION_TYPE_BUY", 0))
+        for position in rows:
+            if int(getattr(position, "magic", 0) or 0) != MAGIC:
+                continue
+            symbol = str(getattr(position, "symbol", "")).upper()
+            if symbol not in self._allowed_symbols:
+                raise WorkerFailure("UNEXPECTED_ZENCORE_POSITION")
+            result.append({
+                "ticket": str(getattr(position, "ticket", "") or ""),
+                "symbol": symbol,
+                "side": "BUY" if int(getattr(position, "type", -1)) == buy_type else "SELL",
+                "volume": float(getattr(position, "volume", 0) or 0),
+                "layers": 1,
+                "entry": float(getattr(position, "price_open", 0) or 0),
+                "currentPrice": float(getattr(position, "price_current", 0) or 0),
+                "initialSl": float(getattr(position, "sl", 0) or 0) or None,
+                "activeSl": float(getattr(position, "sl", 0) or 0) or None,
+                "tp1": float(getattr(position, "tp", 0) or 0) or None,
+                "tp2": None,
+                "tp3": None,
+                "profitUsd": float(getattr(position, "profit", 0) or 0),
+                "openedAt": int(getattr(position, "time_msc", 0) or int(getattr(position, "time", 0) or 0) * 1000),
+                "exitStage": "HOLD",
+                "slLock": "ACTIVE" if float(getattr(position, "sl", 0) or 0) else "INITIAL",
+            })
+        return result
+
+    def snapshot(self) -> dict[str, Any]:
+        account, terminal = self._account_terminal()
         try:
             version = self._mt5.version() or ()
         except Exception as exc:
@@ -298,7 +325,7 @@ class MetaTraderConnection:
             "connectorVersion": self._connector_version,
             "terminalBuild": re.sub(r"[^A-Za-z0-9._-]", "", build)[:24] or "UNKNOWN",
             "symbolSpecs": self._symbol_specs(),
-            "positions": [],
+            "positions": self._positions(),
         }
 
     def shutdown(self) -> None:
@@ -492,10 +519,19 @@ class HostedConnectionWorker:
                     broker_ids=executed.broker_order_ids,
                 )
                 return
-            if command_type in {"MANAGE_POSITION", "EMERGENCY_CLOSE_ALL"}:
+            if command_type == "MANAGE_POSITION":
+                managed = self.executor.execute_management(payload)
                 self._ack_command(
-                    command, "REJECTED", "COMMAND_NOT_IMPLEMENTED",
-                    "Exit-management execution is not enabled in this staged build.",
+                    command, "EXECUTED", managed.code,
+                    broker_ids=managed.broker_order_ids,
+                )
+                return
+            if command_type == "EMERGENCY_CLOSE_ALL":
+                self.entries_enabled = False
+                closed = self.executor.emergency_close_all()
+                self._ack_command(
+                    command, "EXECUTED", closed.code,
+                    broker_ids=closed.broker_order_ids,
                 )
                 return
             self._ack_command(command, "REJECTED", "COMMAND_TYPE_INVALID")
