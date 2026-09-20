@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$ConfigPath = "C:\ProgramData\ZenCore\HostedWorker\worker-config.json",
-    [string]$ExecutionLockPath = "C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED",
+    [string]$ExecutionGatePath = "C:\ProgramData\ZenCore\HostedWorker\DEMO_EXECUTION_ENABLED",
     [string]$ReleaseRoot = "C:\Program Files\ZenCore\HostedWorker"
 )
 
@@ -21,8 +21,8 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.0.0-gcp-connect" -or
-    $manifest.executionUnlocked -ne $false) {
+    $manifest.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
+    $manifest.executionUnlocked -ne $true) {
     throw "Release manifest security boundary is invalid."
 }
 if (-not ($manifest.files -is [System.Array]) -or $manifest.files.Count -lt 1) {
@@ -45,14 +45,20 @@ foreach ($file in $manifest.files) {
 }
 
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $ExecutionLockPath -PathType Leaf)) {
-    throw "Worker config or execution lock is missing."
+    -not (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf)) {
+    throw "Worker config or DEMO execution gate is missing."
+}
+if (Test-Path -LiteralPath "C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED" -PathType Leaf) {
+    throw "Legacy execution lock is still present. DEMO execution release will not install."
 }
 $config = Get-Content -Raw -LiteralPath $ConfigPath | ConvertFrom-Json
-if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $false -or
+if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $true -or
     $config.privateKeyAvailable -ne $false -or $config.credentialStorage -ne "MEMORY_ONLY" -or
-    $config.connectorVersion -ne "2.0.0-gcp-connect") {
-    throw "Worker configuration attempted to cross the connection-only boundary."
+    $config.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
+    @($config.allowedDemoSymbols).Count -ne 1 -or
+    [string]$config.allowedDemoSymbols[0] -ne "XAUUSD" -or
+    [string]$config.approvedDemoServer -ne "InterStellarFinancial-Demo") {
+    throw "Worker configuration failed the DEMO execution boundary."
 }
 
 $releasePath = Join-Path $ReleaseRoot $manifest.connectorVersion
@@ -72,7 +78,7 @@ $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyConti
 if ($null -ne $existingTask) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 }
-$arguments = '--config "{0}" --execution-lock "{1}"' -f $ConfigPath, $ExecutionLockPath
+$arguments = '--config "{0}" --execution-gate "{1}"' -f $ConfigPath, $ExecutionGatePath
 $action = New-ScheduledTaskAction -Execute $workerExe -Argument $arguments -WorkingDirectory $releasePath
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $trigger.Delay = "PT30S"
@@ -100,7 +106,7 @@ $terminalReady = Test-Path -LiteralPath ([string]$config.mt5TerminalPath) -PathT
 if ($accountAssigned -and $terminalReady) {
     Enable-ScheduledTask -TaskName $taskName | Out-Null
     Start-ScheduledTask -TaskName $taskName
-    Write-Host "ZenCore hosted MT5 Demo worker installed and started. Execution remains LOCKED."
+    Write-Host "ZenCore hosted MT5 Demo execution worker installed and started. Orders remain controlled by ZenCore SYSTEM ON."
 } else {
     Disable-ScheduledTask -TaskName $taskName | Out-Null
     Write-Host "ZenCore hosted worker installed but disabled until account assignment and MT5 terminal preflight."
