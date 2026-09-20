@@ -1,8 +1,8 @@
 """Security boundary for the ZenCore managed MT5 worker.
 
-This module deliberately contains no local private-key provider and no order
-execution switch. A production worker must receive unwrap capability from an
-external, identity-scoped key service and must never persist decrypted MT5 secrets.
+This module contains the hard security boundary shared by the managed MT5
+worker.  The DEMO execution release still receives unwrap capability only from
+an external identity-scoped key service and never persists decrypted MT5 secrets.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ CONTRACT_VERSION = "ZENCORE_ANALYSIS_EXECUTION_V1"
 STRATEGY = "NORMAL_3M_SOP_V32"
 SCHEMA_VERSION = "32.3-EXIT-STEPLOCK"
 ENVELOPE_ALGORITHM = "RSA-OAEP-256+A256GCM"
-HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = False
+HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED = True
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
@@ -193,6 +193,4 @@ def validate_entry_command(payload: Any) -> dict[str, Any]:
             raise RuntimeError(f"payload {key} does not match Analysis snapshot")
     if int(payload.get("signalReceivedAt") or 0) != int(snapshot.get("sourceReceivedAt") or 0):
         raise RuntimeError("payload source time does not match Analysis snapshot")
-    if HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
-        raise RuntimeError("hosted worker build gate must remain locked in this release")
     return snapshot
