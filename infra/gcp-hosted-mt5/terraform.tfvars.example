@@ -13,9 +13,13 @@ iap_admin_members = []
 control_plane_url = "https://zencore-precision-entry.onrender.com"
 key_alias         = "zencore-gcp-hsm-demo-v1"
 
-# Phase 1 certification scope. Do not add more symbols before broker validation.
+# Certified DEMO rollout scope. XAUUSD only.
 allowed_demo_symbols = ["XAUUSD"]
-execution_enabled     = false
+
+# Keep FALSE while installing/verifying v2.1 in locked mode.
+# Change to TRUE only after the v2.1 hosted heartbeat is stable and the
+# Render control-plane rollout gate is deliberately enabled.
+execution_enabled = false
 
 # Keep blank until reviewed artifacts and exact SHA-256 values are available.
 worker_release_url    = ""
