@@ -401,6 +401,7 @@ function createAutoTradeService(options = {}) {
     const {
       accountId: _accountId,
       cellId: _cellId,
+      executionRequested: _executionRequested,
       requestId: _requestId,
       requestTimestamp: _requestTimestamp,
       ...leaseOnly
@@ -434,8 +435,13 @@ function createAutoTradeService(options = {}) {
     if (!validation.ok) {
       throw serviceError('INVALID_CREDENTIAL_ENVELOPE', 'Credential envelope dalam vault ditolak.', 409);
     }
-    const commandPod = await store.getPodForUser(lease.userId);
-    const executionEnabled = allowDemoExecution &&
+    let commandPod = await store.getPodForUser(lease.userId);
+    if (!commandPod && typeof store.provisionHostedCommandPod === 'function') {
+      commandPod = await store.provisionHostedCommandPod(lease.userId, lease.id);
+    }
+    const executionRequested = input.executionRequested === true;
+    const executionEnabled = executionRequested &&
+      allowDemoExecution &&
       lease.status === 'CONNECTED_LOCKED' &&
       lease.tradeMode === 'DEMO' &&
       lease.terminalTradeAllowed === true &&
