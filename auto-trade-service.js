@@ -108,6 +108,9 @@ function createAutoTradeService(options = {}) {
   const requiredDemoConnectorVersion = String(
     options.requiredDemoConnectorVersion || '1.4.0-demo-execution'
   );
+  const requiredHostedConnectorVersion = String(
+    options.requiredHostedConnectorVersion || '2.1.0-gcp-demo-execution'
+  );
   const allowedDemoSymbols = [...new Set(
     (Array.isArray(options.allowedDemoSymbols) ? options.allowedDemoSymbols : ['XAUUSD'])
       .map(Core.normaliseSymbol)
@@ -146,6 +149,39 @@ function createAutoTradeService(options = {}) {
     } : {});
   }
 
+  function hostedConnectionState(hostedAccount) {
+    if (!hostedAccount) {
+      return { state: 'HOSTED_PENDING', label: 'MT5 HOSTED MENUNGGU WORKER', online: false, connected: false, ready: false };
+    }
+    const online = !!hostedAccount.lastSeenAt && now() - hostedAccount.lastSeenAt <= 30_000;
+    if (hostedAccount.status === 'ERROR') {
+      return { state: 'HOSTED_ERROR', label: 'MT5 HOSTED PERLU PERHATIAN', online, connected: false, ready: false };
+    }
+    if (online && hostedAccount.status === 'CONNECTED_LOCKED') {
+      const ready = allowDemoExecution &&
+        hostedAccount.demoExecutionUnlocked === true &&
+        hostedAccount.connectorVersion === requiredHostedConnectorVersion &&
+        hostedAccount.tradeMode === 'DEMO' &&
+        hostedAccount.terminalTradeAllowed === true &&
+        hostedAccount.accountTradeAllowed === true &&
+        hostedAccount.expertTradeAllowed === true;
+      return ready ? {
+        state: 'HOSTED_READY', label: 'MT5 HOSTED DEMO READY',
+        online: true, connected: true, ready: true
+      } : {
+        state: 'HOSTED_CONNECTED_LOCKED', label: 'CONNECTED • EXECUTION LOCKED',
+        online: true, connected: true, ready: false
+      };
+    }
+    return {
+      state: hostedAccount.status === 'LEASED' ? 'HOSTED_CONNECTING' : 'HOSTED_PENDING',
+      label: hostedAccount.status === 'LEASED'
+        ? 'MT5 HOSTED SEDANG DISAHKAN'
+        : 'MT5 HOSTED MENUNGGU WORKER',
+      online: false, connected: false, ready: false
+    };
+  }
+
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
     if (Core.containsForbiddenCredentialKey(payload)) {
@@ -176,22 +212,7 @@ function createAutoTradeService(options = {}) {
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
     const podConnection = connectionState(pod);
-    const hostedOnline = !!hostedAccount?.lastSeenAt && now() - hostedAccount.lastSeenAt <= 30_000;
-    const connection = hostedAccount ? (
-      hostedAccount.status === 'ERROR' ? {
-        state: 'HOSTED_ERROR', label: 'MT5 HOSTED PERLU PERHATIAN',
-        online: hostedOnline, connected: false, ready: false
-      } : hostedOnline && hostedAccount.status === 'CONNECTED_LOCKED' ? {
-        state: 'HOSTED_CONNECTED_LOCKED', label: 'CONNECTED • EXECUTION LOCKED',
-        online: true, connected: true, ready: false
-      } : {
-        state: hostedAccount.status === 'LEASED' ? 'HOSTED_CONNECTING' : 'HOSTED_PENDING',
-        label: hostedAccount.status === 'LEASED'
-          ? 'MT5 HOSTED SEDANG DISAHKAN'
-          : 'MT5 HOSTED MENUNGGU WORKER',
-        online: false, connected: false, ready: false
-      }
-    ) : podConnection;
+    const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
     const settings = profile ? {
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
@@ -212,7 +233,9 @@ function createAutoTradeService(options = {}) {
         effectiveState,
         executionRolloutUnlocked: allowDemoExecution,
         executionSymbols: allowedDemoSymbols,
-        requiredConnectorVersion: allowDemoExecution ? requiredDemoConnectorVersion : null,
+        requiredConnectorVersion: allowDemoExecution
+          ? (hostedAccount ? requiredHostedConnectorVersion : requiredDemoConnectorVersion)
+          : null,
         stateVersion: profile?.stateVersion || 0,
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
@@ -246,7 +269,7 @@ function createAutoTradeService(options = {}) {
         available: hostedMt5Enabled,
         workerIdentityEnabled: hostedWorkerEnabled,
         provider: 'GOOGLE_CLOUD',
-        executionReady: false,
+        executionReady: hostedAccount ? hostedConnectionState(hostedAccount).ready : false,
         status: hostedAccount?.status || 'NOT_CONNECTED',
         encryptionAlgorithm: credentialEncryption.algorithm,
         keyId: credentialEncryption.keyId || null,
@@ -276,7 +299,9 @@ function createAutoTradeService(options = {}) {
         controlPlaneExecutionUnlocked: allowDemoExecution,
         demoOnly: true,
         allowedDemoSymbols,
-        requiredConnectorVersion: allowDemoExecution ? requiredDemoConnectorVersion : null,
+        requiredConnectorVersion: allowDemoExecution
+          ? (hostedAccount ? requiredHostedConnectorVersion : requiredDemoConnectorVersion)
+          : null,
         podCommandKeyIsPerPod: true,
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
@@ -351,6 +376,10 @@ function createAutoTradeService(options = {}) {
       credentialEnvelope: input.credentialEnvelope,
       now: now()
     });
+    if (typeof store.provisionHostedCommandPod !== 'function') {
+      throw serviceError('HOSTED_COMMAND_TARGET_UNAVAILABLE', 'Hosted command target belum tersedia.', 503);
+    }
+    await store.provisionHostedCommandPod(userId, saved.id);
     await store.appendAudit(userId, 'HOSTED_MT5_ENVELOPE_SAVED', {
       accountMask: saved.accountMask,
       serverMask: saved.serverMask,
