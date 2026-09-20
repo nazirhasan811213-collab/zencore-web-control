@@ -100,7 +100,9 @@ class FakeControlPlane:
         self.execution_enabled = execution_enabled
         self.heartbeats = []
 
-    def lease(self, account_id, cell_id):
+    def lease(self, account_id, cell_id, execution_requested=False):
+        if execution_requested is not self.execution_enabled:
+            raise AssertionError("worker execution intent did not match test lease")
         return {
             "ok": True,
             "lease": {
