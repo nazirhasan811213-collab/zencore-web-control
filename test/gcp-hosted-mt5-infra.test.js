@@ -60,6 +60,20 @@ test('one hosted account is pinned to one Google worker identity and exact audie
   assert.match(outputs, /ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID/);
 });
 
+test('Hosted worker config remains operator-readable but not operator-writable', () => {
+  const bootstrap = read('bootstrap/Install-ZenCoreGcpHostedWorker.ps1.tftpl');
+  assert.match(bootstrap, /BUILTIN\\Administrators/);
+  assert.match(bootstrap, /"ReadAndExecute"/);
+  assert.match(bootstrap, /"NT AUTHORITY\\SYSTEM", "FullControl"/);
+});
+
+test('Default MT5 terminal path matches the deployed MetaTrader 5 terminal', () => {
+  const variables = read('variables.tf');
+  const example = read('terraform.tfvars.example');
+  assert.match(variables, /C:\\\\Program Files\\\\MetaTrader 5\\\\terminal64\.exe/);
+  assert.match(example, /C:\\\\Program Files\\\\MetaTrader 5\\\\terminal64\.exe/);
+});
+
 test('Terraform and Windows bootstrap hard-lock Demo order execution', () => {
   const variables = read('variables.tf');
   const main = read('main.tf');
