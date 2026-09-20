@@ -395,14 +395,12 @@ class PostgresAutoTradeStore {
       }
       const updated = await client.query(
         `UPDATE zencore_mt5_hosted_accounts SET
-           status = 'LEASED', worker_provider = $2, worker_subject = $3,
+           status = CASE WHEN status = 'CONNECTED_LOCKED' THEN status ELSE 'LEASED' END,
+           worker_provider = $2, worker_subject = $3,
            worker_email = $4, worker_project_id = $5, worker_zone = $6,
            worker_instance_name = $7, worker_instance_id = $8,
            lease_id = $9, lease_expires_at = $10,
-           terminal_trade_allowed = FALSE, account_trade_allowed = FALSE,
-           expert_trade_allowed = FALSE, symbol_specs = '{}'::jsonb,
-           connector_version = NULL, terminal_build = NULL,
-           worker_last_seen_at = NULL, last_error = NULL, updated_at = $11
+           last_error = NULL, updated_at = $11
          WHERE id = $1 RETURNING *`,
         [accountId, identity.provider, identity.subject, identity.email,
           identity.projectId, identity.zone, identity.instanceName, identity.instanceId,
@@ -430,7 +428,8 @@ class PostgresAutoTradeStore {
       `UPDATE zencore_mt5_hosted_accounts SET
          status = $4::varchar(32), account_mask = $5, server_mask = $6, broker_mask = $7,
          terminal_trade_allowed = $8, account_trade_allowed = $9,
-         expert_trade_allowed = $10, symbol_specs = $11::jsonb,
+         expert_trade_allowed = $10, demo_execution_unlocked = $17,
+         symbol_specs = $11::jsonb,
          connector_version = $12, terminal_build = $13,
          worker_last_seen_at = $14, last_error = $15,
          verified_at = CASE WHEN $4::varchar(32) = 'CONNECTED_LOCKED'::varchar(32) THEN COALESCE(verified_at, $14) ELSE verified_at END,
@@ -443,9 +442,51 @@ class PostgresAutoTradeStore {
         heartbeat.terminalTradeAllowed, heartbeat.accountTradeAllowed,
         heartbeat.expertTradeAllowed, JSON.stringify(heartbeat.symbolSpecs || {}),
         heartbeat.connectorVersion || null, heartbeat.terminalBuild || null,
-        new Date(now), lastError || null, leaseId]
+        new Date(now), lastError || null, leaseId, heartbeat.demoExecutionUnlocked === true]
     );
     return publicHostedAccount(result.rows[0]);
+  }
+
+  async provisionHostedCommandPod(userId, preferredId) {
+    const tokenHashValue = crypto.createHash('sha256')
+      .update(`hosted-command-target:${preferredId}:${crypto.randomUUID()}`)
+      .digest('hex');
+    const result = await this.pool.query(
+      `INSERT INTO zencore_mt5_secure_pods
+         (id, user_id, label, ownership_mode, token_hash)
+       VALUES ($1, $2, 'ZenCore GCP Hosted MT5', 'INTERNAL_DEMO', $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         label = EXCLUDED.label,
+         ownership_mode = 'INTERNAL_DEMO',
+         token_hash = EXCLUDED.token_hash,
+         account_mask = NULL, server_mask = NULL, broker_mask = NULL,
+         trade_mode = NULL, terminal_trade_allowed = FALSE,
+         account_trade_allowed = FALSE, expert_trade_allowed = FALSE,
+         demo_execution_unlocked = FALSE, symbol_specs = '{}'::jsonb,
+         connector_version = NULL, terminal_build = NULL,
+         last_seen_at = NULL, revoked_at = NULL
+       RETURNING *`,
+      [preferredId, userId, tokenHashValue]
+    );
+    return publicPod(result.rows[0]);
+  }
+
+  async getHostedLeaseContext(accountId, identity, leaseId, now) {
+    const result = await this.pool.query(
+      `SELECT * FROM zencore_mt5_hosted_accounts
+       WHERE id = $1 AND worker_instance_id = $2 AND worker_project_id = $3
+         AND lease_id = $4 AND lease_expires_at > $5
+       LIMIT 1`,
+      [accountId, identity.instanceId, identity.projectId, leaseId, new Date(now)]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      ...publicHostedAccount(row),
+      userId: row.user_id,
+      leaseId: row.lease_id,
+      leaseExpiresAt: timestamp(row.lease_expires_at)
+    };
   }
 
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
