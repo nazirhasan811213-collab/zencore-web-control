@@ -777,13 +777,6 @@ function createAutoTradeService(options = {}) {
       store.getPodForUser(userId),
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
-    if (hostedAccount) {
-      throw serviceError(
-        'HOSTED_WORKER_NOT_READY',
-        'Managed Windows worker belum mengesahkan akaun Demo. Sistem kekal STOPPED.',
-        409
-      );
-    }
     const settingsValidation = Core.validateSettings(profile || {});
     if (!settingsValidation.ok || !profile?.riskAcknowledgedAt) {
       throw serviceError('SETTINGS_REQUIRED', 'Simpan konfigurasi dan pengesahan risiko dahulu.', 409);
@@ -798,12 +791,17 @@ function createAutoTradeService(options = {}) {
         { symbols: `Belum divalidasi: ${unsupportedSymbols.join(', ')}` }
       );
     }
-    const connection = connectionState(pod);
-    if (!connection.ready) {
-      throw serviceError('POD_NOT_READY', connection.label, 409);
+    const connection = hostedAccount ? hostedConnectionState(hostedAccount) : connectionState(pod);
+    const commandPod = hostedAccount ? await store.getPodForUser(userId) : pod;
+    if (!connection.ready || !commandPod) {
+      throw serviceError(
+        hostedAccount ? 'HOSTED_WORKER_NOT_READY' : 'POD_NOT_READY',
+        connection.label,
+        409
+      );
     }
     const issued = await issueCommand({
-      userId, podId: pod.id, type: 'SYSTEM_ON',
+      userId, podId: commandPod.id, type: 'SYSTEM_ON',
       payload: {
         mode: 'DEMO',
         strategy: 'NORMAL_3M_SOP_V32',
@@ -820,7 +818,10 @@ function createAutoTradeService(options = {}) {
   }
 
   async function stop(userId) {
-    const pod = await store.getPodForUser(userId);
+    const [pod, hostedAccount] = await Promise.all([
+      store.getPodForUser(userId),
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+    ]);
     if (typeof store.cancelPendingEntryCommands === 'function') {
       await store.cancelPendingEntryCommands(userId, 'SYSTEM_STOP_REQUESTED');
     }
@@ -828,7 +829,7 @@ function createAutoTradeService(options = {}) {
       await store.setControl(userId, {
         desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
       });
-      await store.appendAudit(userId, 'SYSTEM_STOPPED', { reason: 'NO_POD' });
+      await store.appendAudit(userId, 'SYSTEM_STOPPED', { reason: hostedAccount ? 'HOSTED_COMMAND_TARGET_MISSING' : 'NO_POD' });
       return state(userId);
     }
     const issued = await issueCommand({
@@ -850,8 +851,17 @@ function createAutoTradeService(options = {}) {
     if (String(input.confirmation || '').trim().toUpperCase() !== 'TUTUP SEMUA') {
       throw serviceError('CONFIRMATION_REQUIRED', 'Taip TUTUP SEMUA untuk mengesahkan tindakan kecemasan.', 400);
     }
-    const pod = await store.getPodForUser(userId);
-    if (!pod) throw serviceError('POD_NOT_READY', 'Secure Pod belum disediakan.', 409);
+    const [pod, hostedAccount] = await Promise.all([
+      store.getPodForUser(userId),
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+    ]);
+    if (!pod) {
+      throw serviceError(
+        hostedAccount ? 'HOSTED_COMMAND_TARGET_INVALID' : 'POD_NOT_READY',
+        hostedAccount ? 'Hosted command target belum tersedia.' : 'Secure Pod belum disediakan.',
+        409
+      );
+    }
     if (typeof store.cancelPendingEntryCommands === 'function') {
       await store.cancelPendingEntryCommands(userId, 'EMERGENCY_CLOSE_REQUESTED');
     }
