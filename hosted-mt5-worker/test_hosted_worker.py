@@ -40,7 +40,7 @@ def config_dict(**overrides):
         "keyAlias": KEY_ALIAS,
         "keyVersionResource": KEY_RESOURCE,
         "demoOnly": True,
-        "executionEnabled": False,
+        "executionEnabled": True,
         "allowedDemoSymbols": ["XAUUSD"],
         "credentialStorage": "MEMORY_ONLY",
         "privateKeyAvailable": False,
@@ -95,7 +95,7 @@ def envelope():
 
 
 class FakeControlPlane:
-    def __init__(self, credential_envelope, execution_enabled=False):
+    def __init__(self, credential_envelope, execution_enabled=True):
         self.credential_envelope = credential_envelope
         self.execution_enabled = execution_enabled
         self.heartbeats = []
@@ -149,7 +149,7 @@ class CapturingTerminal:
             "terminalTradeAllowed": True,
             "accountTradeAllowed": True,
             "expertTradeAllowed": True,
-            "demoExecutionUnlocked": False,
+            "demoExecutionUnlocked": True,
             "connectorVersion": CONNECTOR_VERSION,
             "terminalBuild": "5000",
             "symbolSpecs": [{
@@ -161,6 +161,17 @@ class CapturingTerminal:
 
     def shutdown(self):
         pass
+
+
+class FakeExecutor:
+    def execute_place_setup(self, _payload):
+        return SimpleNamespace(
+            code="DEMO_SETUP_EXECUTED",
+            broker_order_ids=("100001",),
+            layers=1,
+            total_lot=0.01,
+        )
+
 
 
 class FakeMt5:
@@ -217,7 +228,7 @@ class HostedWorkerTests(unittest.TestCase):
             self.assertEqual(config.hosted_account_id, ACCOUNT_ID)
             self.assertEqual(config.allowed_demo_symbols, ("XAUUSD",))
             for changed in (
-                {"executionEnabled": True},
+                {"executionEnabled": False},
                 {"hostedAccountId": ""},
                 {"controlPlaneAudience": "https://different.invalid/audience"},
                 {"unknownField": "rejected"},
@@ -226,7 +237,7 @@ class HostedWorkerTests(unittest.TestCase):
                     with self.assertRaises(WorkerFailure):
                         WorkerConfig.load(write_config(folder, config_dict(**changed)))
 
-    def test_runtime_leases_decrypts_connects_wipes_and_heartbeats_locked(self):
+    def test_runtime_leases_decrypts_connects_wipes_and_heartbeats_demo_execution(self):
         credential_envelope, unwrapper = envelope()
         control = FakeControlPlane(credential_envelope)
         terminal = CapturingTerminal()
@@ -235,7 +246,7 @@ class HostedWorkerTests(unittest.TestCase):
             lock = Path(folder, "EXECUTION_LOCKED")
             lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, execution_lock_path=lock
+                config, control, unwrapper, terminal, FakeExecutor(), execution_gate_path=lock
             )
             result = worker.connect_once()
         self.assertEqual(result["connectionState"], "CONNECTED_LOCKED")
@@ -245,27 +256,27 @@ class HostedWorkerTests(unittest.TestCase):
         self.assertTrue(all(value == 0 for value in terminal.credential.server))
         self.assertEqual(len(control.heartbeats), 1)
         heartbeat = control.heartbeats[0]
-        self.assertFalse(heartbeat["demoExecutionUnlocked"])
+        self.assertTrue(heartbeat["demoExecutionUnlocked"])
         self.assertEqual(heartbeat["accountId"], ACCOUNT_ID)
         self.assertEqual(heartbeat["leaseId"], LEASE_ID)
         self.assertNotIn("password", json.dumps(heartbeat).lower())
 
-    def test_unlocked_or_missing_execution_lock_fails_before_mt5(self):
+    def test_missing_execution_gate_or_locked_lease_fails_before_mt5(self):
         credential_envelope, unwrapper = envelope()
         terminal = CapturingTerminal()
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
             missing = Path(folder, "EXECUTION_LOCKED")
             worker = HostedConnectionWorker(
-                config, FakeControlPlane(credential_envelope), unwrapper, terminal,
-                execution_lock_path=missing,
+                config, FakeControlPlane(credential_envelope), unwrapper, terminal, FakeExecutor(),
+                execution_gate_path=missing,
             )
-            with self.assertRaisesRegex(WorkerFailure, "EXECUTION_LOCK_MISSING"):
+            with self.assertRaisesRegex(WorkerFailure, "DEMO_EXECUTION_GATE_MISSING"):
                 worker.connect_once()
             missing.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, FakeControlPlane(credential_envelope, execution_enabled=True),
-                unwrapper, terminal, execution_lock_path=missing,
+                config, FakeControlPlane(credential_envelope, execution_enabled=False),
+                unwrapper, terminal, FakeExecutor(), execution_gate_path=missing,
             )
             with self.assertRaisesRegex(WorkerFailure, "LEASE_ASSIGNMENT_INVALID"):
                 worker.connect_once()
@@ -281,7 +292,7 @@ class HostedWorkerTests(unittest.TestCase):
             lock = Path(folder, "EXECUTION_LOCKED")
             lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, execution_lock_path=lock,
+                config, control, unwrapper, terminal, FakeExecutor(), execution_gate_path=lock,
                 clock_ms=lambda: clock[0],
             )
             worker.connect_once()
@@ -306,7 +317,7 @@ class HostedWorkerTests(unittest.TestCase):
         telemetry = adapter.snapshot()
         self.assertEqual(telemetry["tradeMode"], "DEMO")
         self.assertEqual(telemetry["symbolSpecs"][0]["symbol"], "XAUUSD")
-        self.assertFalse(telemetry["demoExecutionUnlocked"])
+        self.assertTrue(telemetry["demoExecutionUnlocked"])
         self.assertFalse(hasattr(adapter, "order_send"))
         self.assertEqual(module.initialize_args[1]["server"], "InterStellarFinancial-Demo")
 
