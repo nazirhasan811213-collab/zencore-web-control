@@ -434,11 +434,22 @@ function createAutoTradeService(options = {}) {
     if (!validation.ok) {
       throw serviceError('INVALID_CREDENTIAL_ENVELOPE', 'Credential envelope dalam vault ditolak.', 409);
     }
+    const commandPod = await store.getPodForUser(lease.userId);
+    const executionEnabled = allowDemoExecution &&
+      lease.status === 'CONNECTED_LOCKED' &&
+      lease.tradeMode === 'DEMO' &&
+      lease.terminalTradeAllowed === true &&
+      lease.accountTradeAllowed === true &&
+      lease.expertTradeAllowed === true &&
+      lease.connectorVersion === requiredHostedConnectorVersion &&
+      !!commandPod &&
+      commandPod.ownershipMode === 'INTERNAL_DEMO';
     await store.appendAudit(lease.userId, 'HOSTED_ENVELOPE_LEASED', {
       provider: workerIdentity.provider,
       workerCell: workerIdentity.instanceName,
       leaseId: lease.leaseId,
       expiresAt: lease.leaseExpiresAt,
+      executionEnabled,
       plaintextReleased: false
     });
     return {
@@ -450,10 +461,12 @@ function createAutoTradeService(options = {}) {
         credentialEnvelope: lease.credentialEnvelope,
         expiresAt: lease.leaseExpiresAt,
         demoOnly: true,
-        executionEnabled: false,
+        executionEnabled,
         accountMask: lease.accountMask,
         serverMask: lease.serverMask,
-        brokerMask: lease.brokerMask
+        brokerMask: lease.brokerMask,
+        commandPodId: executionEnabled ? commandPod.id : '',
+        commandSigningKey: executionEnabled ? commandSigningKeyForPod(commandPod.id) : ''
       },
       serverTime: issuedAt
     };
@@ -486,8 +499,15 @@ function createAutoTradeService(options = {}) {
       throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Hosted worker heartbeat ditolak.', 400,
         heartbeatValidation.errors);
     }
-    if (heartbeatValidation.value.demoExecutionUnlocked) {
-      throw serviceError('HOSTED_EXECUTION_LOCKED', 'Hosted order execution masih dikunci.', 409);
+    if (heartbeatValidation.value.demoExecutionUnlocked && (
+      !allowDemoExecution ||
+      heartbeatValidation.value.connectorVersion !== requiredHostedConnectorVersion
+    )) {
+      throw serviceError(
+        'HOSTED_EXECUTION_LOCKED',
+        'Hosted DEMO execution belum dibuka untuk connector ini.',
+        409
+      );
     }
     const reportedStatus = String(input.connectionStatus || 'CONNECTED').toUpperCase();
     if (!['CONNECTED', 'CONNECTING', 'ERROR'].includes(reportedStatus)) {
@@ -522,7 +542,9 @@ function createAutoTradeService(options = {}) {
       ok: true,
       connectionState: status,
       desiredState: (await store.getProfile(updated.userId))?.desiredState || 'STOPPED',
-      executionEnabled: false,
+      executionEnabled: allowDemoExecution &&
+        updated.demoExecutionUnlocked === true &&
+        updated.connectorVersion === requiredHostedConnectorVersion,
       serverTime: seenAt
     };
   }
