@@ -45,6 +45,9 @@ class FakeMt5:
     ORDER_TYPE_BUY = 0
     ORDER_TYPE_SELL = 1
     TRADE_ACTION_DEAL = 1
+    TRADE_ACTION_SLTP = 6
+    POSITION_TYPE_BUY = 0
+    POSITION_TYPE_SELL = 1
     ORDER_TIME_GTC = 0
     ORDER_FILLING_IOC = 1
     TRADE_RETCODE_DONE = 10009
@@ -142,6 +145,48 @@ class DemoExecutorTests(unittest.TestCase):
         large["totalLot"] = 1.5
         with self.assertRaisesRegex(DemoExecutionError, "ANALYSIS_COMMAND_INVALID"):
             self.executor.execute_place_setup(large)
+
+
+    def test_management_moves_sl_and_emergency_closes_only_zencore_positions(self):
+        now = 1_790_000_000_000
+        position = SimpleNamespace(
+            magic=MAGIC, ticket=70001, symbol="XAUUSD", type=0, volume=0.02,
+            sl=2990.0, tp=3030.0,
+        )
+        other = SimpleNamespace(
+            magic=999, ticket=80001, symbol="XAUUSD", type=0, volume=0.02,
+            sl=2990.0, tp=3030.0,
+        )
+        self.mt5.positions = [position, other]
+        snapshot = {
+            "contractVersion": boundary.CONTRACT_VERSION,
+            "decision": "POSITION_ACTION_AUTHORIZED",
+            "decisionOwner": "ZENCORE_ANALYSIS",
+            "strategy": boundary.STRATEGY,
+            "schemaVersion": boundary.SCHEMA_VERSION,
+            "symbol": "XAUUSD",
+            "actions": [{"type": "MOVE_SL_ENTRY", "activeSl": 3000.0, "lockLabel": "ENTRY"}],
+            "reason": "protect",
+            "sourceReceivedAt": now,
+        }
+        command = {
+            "analysisContractVersion": boundary.CONTRACT_VERSION,
+            "analysisSnapshot": snapshot,
+            "strategy": boundary.STRATEGY,
+            "schemaVersion": boundary.SCHEMA_VERSION,
+            "symbol": "XAUUSD",
+            "actions": snapshot["actions"],
+            "reason": snapshot["reason"],
+            "signalReceivedAt": now,
+        }
+        managed = self.executor.execute_management(command)
+        self.assertEqual(managed.code, "DEMO_MANAGEMENT_EXECUTED")
+        self.assertEqual(self.mt5.sent[0]["action"], self.mt5.TRADE_ACTION_SLTP)
+        self.mt5.sent.clear()
+        closed = self.executor.emergency_close_all()
+        self.assertEqual(closed.code, "DEMO_EMERGENCY_CLOSE_EXECUTED")
+        self.assertEqual(len(self.mt5.sent), 1)
+        self.assertEqual(self.mt5.sent[0]["position"], 70001)
 
 
 if __name__ == "__main__":
