@@ -1,4 +1,49 @@
-"""Security boundary for the ZenCore managed MT5 worker.
+"
+def validate_management_command(payload: Any) -> dict[str, Any]:
+    """Verify position-management parity with the ZenCore Analysis snapshot."""
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("management payload must be an object")
+    if payload.get("analysisContractVersion") != CONTRACT_VERSION:
+        raise RuntimeError("analysis contract version is invalid")
+    snapshot = payload.get("analysisSnapshot")
+    if not isinstance(snapshot, dict):
+        raise RuntimeError("management snapshot is missing")
+    if (
+        snapshot.get("contractVersion") != CONTRACT_VERSION
+        or snapshot.get("decision") != "POSITION_ACTION_AUTHORIZED"
+        or snapshot.get("decisionOwner") != "ZENCORE_ANALYSIS"
+        or snapshot.get("strategy") != STRATEGY
+        or snapshot.get("schemaVersion") != SCHEMA_VERSION
+    ):
+        raise RuntimeError("management authorization is invalid")
+    symbol = str(snapshot.get("symbol") or "").upper()
+    if symbol not in SUPPORTED_MARKETS or str(payload.get("symbol") or "").upper() != symbol:
+        raise RuntimeError("management symbol is invalid")
+    if str(payload.get("strategy") or "") != STRATEGY or str(payload.get("schemaVersion") or "") != SCHEMA_VERSION:
+        raise RuntimeError("management strategy/schema mismatch")
+    if int(payload.get("signalReceivedAt") or 0) != int(snapshot.get("sourceReceivedAt") or 0):
+        raise RuntimeError("management source time mismatch")
+    actions = snapshot.get("actions")
+    if not isinstance(actions, list) or not actions or len(actions) > 4 or payload.get("actions") != actions:
+        raise RuntimeError("management actions are invalid")
+    for action in actions:
+        if not isinstance(action, dict):
+            raise RuntimeError("management action is invalid")
+        action_type = str(action.get("type") or "").upper()
+        if action_type in {"MOVE_SL_ENTRY", "MOVE_SL_TP1", "MOVE_SL_TP2"}:
+            if _finite_number(action.get("activeSl"), "activeSl") <= 0:
+                raise RuntimeError("management stop is invalid")
+        elif action_type == "CLOSE_PERCENT":
+            if int(action.get("percent") or 0) not in {50, 100}:
+                raise RuntimeError("management close percent is invalid")
+        else:
+            raise RuntimeError("management action type is invalid")
+    if not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
+        raise RuntimeError("hosted DEMO execution build gate is locked")
+    return snapshot
+
+""Security boundary for the ZenCore managed MT5 worker.
 
 This module deliberately contains no local private-key provider and no order
 execution switch. A production worker must receive unwrap capability from an
