@@ -86,6 +86,10 @@ try {
         "NT AUTHORITY\SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
     )
     $acl.SetAccessRule($systemRule)
+    $adminReadRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        "BUILTIN\Administrators", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow"
+    )
+    $acl.SetAccessRule($adminReadRule)
     Set-Acl -LiteralPath $root -AclObject $acl
 
     if ($workerReady) {
