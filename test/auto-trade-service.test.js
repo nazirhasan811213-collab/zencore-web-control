@@ -621,6 +621,157 @@ test('Google hosted worker leases only ciphertext and reports connection with ex
   );
 });
 
+test('GCP hosted v2.1 requires local intent plus rollout gate before signed DEMO commands', async () => {
+  let currentTime = 1_790_000_300_000;
+  const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const store = new MemoryAutoTradeStore();
+  const bootstrap = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    credentialKeyId: 'zencore-gcp-hsm-demo-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' }),
+    now: () => currentTime
+  });
+  const userId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const credentialEnvelope = {
+    version: 1,
+    algorithm: 'RSA-OAEP-256+A256GCM',
+    keyId: 'zencore-gcp-hsm-demo-v1',
+    wrappedKey: crypto.randomBytes(384).toString('base64url'),
+    iv: crypto.randomBytes(12).toString('base64url'),
+    ciphertext: crypto.randomBytes(96).toString('base64url')
+  };
+  const connected = await bootstrap.connectHostedAccount(userId, {
+    credentialEnvelope,
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    confirmation: 'CONNECT MT5 DEMO'
+  }, true);
+  const accountId = connected.hostedAccount.id;
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    allowDemoExecution: true,
+    allowedDemoSymbols: ['XAUUSD'],
+    requiredHostedConnectorVersion: '2.1.0-gcp-demo-execution',
+    hostedMt5Enabled: true,
+    hostedWorkerEnabled: true,
+    hostedWorkerAccountId: accountId,
+    credentialKeyId: 'zencore-gcp-hsm-demo-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' }),
+    now: () => currentTime
+  });
+  const identity = {
+    provider: 'GOOGLE_CLOUD',
+    subject: '100000000000000000001',
+    email: 'zencore-mt5-demo-worker@zencore-demo-12345.iam.gserviceaccount.com',
+    projectId: 'zencore-demo-12345',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-01',
+    instanceId: '9876543210987654321'
+  };
+
+  let lease = await service.leaseHostedAccount(identity, {
+    accountId,
+    cellId: identity.instanceName,
+    executionRequested: false
+  });
+  assert.equal(lease.lease.executionEnabled, false);
+
+  currentTime += 1000;
+  await service.hostedHeartbeat(identity, {
+    accountId,
+    leaseId: lease.lease.id,
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    connectionStatus: 'CONNECTED',
+    terminalTradeAllowed: true,
+    accountTradeAllowed: true,
+    expertTradeAllowed: true,
+    demoExecutionUnlocked: false,
+    connectorVersion: '2.1.0-gcp-demo-execution',
+    terminalBuild: '6204',
+    symbolSpecs: [{
+      symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
+      volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01
+    }],
+    positions: []
+  });
+  let state = await service.state(userId);
+  assert.equal(state.connection.state, 'HOSTED_CONNECTED_LOCKED');
+  assert.equal(state.connection.ready, false);
+
+  currentTime += 1000;
+  lease = await service.leaseHostedAccount(identity, {
+    accountId,
+    cellId: identity.instanceName,
+    executionRequested: true
+  });
+  assert.equal(lease.lease.executionEnabled, true);
+  assert.match(lease.lease.commandPodId, /^[0-9a-f-]{36}$/i);
+  assert.ok(lease.lease.commandSigningKey.length >= 32);
+
+  currentTime += 1000;
+  const heartbeat = await service.hostedHeartbeat(identity, {
+    accountId,
+    leaseId: lease.lease.id,
+    accountMask: '****123456',
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    connectionStatus: 'CONNECTED',
+    terminalTradeAllowed: true,
+    accountTradeAllowed: true,
+    expertTradeAllowed: true,
+    demoExecutionUnlocked: true,
+    connectorVersion: '2.1.0-gcp-demo-execution',
+    terminalBuild: '6204',
+    symbolSpecs: [{
+      symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
+      volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01
+    }],
+    positions: []
+  });
+  assert.equal(heartbeat.executionEnabled, true);
+  state = await service.state(userId);
+  assert.equal(state.connection.state, 'HOSTED_READY');
+  assert.equal(state.connection.ready, true);
+
+  await service.saveSettings(userId, {
+    capitalUsd: 100,
+    lotPerLayer: 0.01,
+    layers: 3,
+    symbols: ['XAUUSD'],
+    riskAcknowledged: true
+  });
+  state = await service.state(userId);
+  assert.equal(state.control.canTurnOn, true);
+
+  state = await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
+  assert.equal(state.control.effectiveState, 'STARTING');
+  const next = await service.hostedNextCommand(identity, {
+    accountId,
+    leaseId: lease.lease.id
+  });
+  assert.equal(next.command.type, 'SYSTEM_ON');
+  const ack = await service.hostedAcknowledgeCommand(identity, next.command.id, {
+    accountId,
+    leaseId: lease.lease.id,
+    status: 'EXECUTED',
+    code: 'ARMED',
+    message: 'Hosted DEMO Auto Trade armed'
+  });
+  assert.equal(ack.status, 'EXECUTED');
+  state = await service.state(userId);
+  assert.equal(state.control.effectiveState, 'ON');
+  assert.equal(state.control.canEnter, true);
+});
+
 test('hosted worker replay IDs survive outside the in-process verifier cache', async () => {
   const store = new MemoryAutoTradeStore();
   const identity = { instanceId: '9876543210987654321' };
