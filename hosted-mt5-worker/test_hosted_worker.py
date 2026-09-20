@@ -176,6 +176,7 @@ class FakeExecutor:
 
 class FakeMt5:
     ACCOUNT_TRADE_MODE_DEMO = 0
+    POSITION_TYPE_BUY = 0
 
     def __init__(self, positions=()):
         self.initialize_args = None
@@ -321,7 +322,7 @@ class HostedWorkerTests(unittest.TestCase):
         self.assertFalse(hasattr(adapter, "order_send"))
         self.assertEqual(module.initialize_args[1]["server"], "InterStellarFinancial-Demo")
 
-    def test_metatrader_adapter_rejects_real_account_and_unexpected_zencore_position(self):
+    def test_metatrader_adapter_reports_zencore_positions_and_rejects_real_account(self):
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
         credential = Mt5Credential(
@@ -329,9 +330,17 @@ class HostedWorkerTests(unittest.TestCase):
             server=bytearray(b"InterStellarFinancial-Demo"), trade_mode="DEMO",
             created_at=1_790_000_000_000,
         )
-        positioned = FakeMt5((SimpleNamespace(magic=3233001),))
-        with self.assertRaisesRegex(WorkerFailure, "UNEXPECTED_ZENCORE_POSITION"):
-            MetaTraderConnection(positioned).connect(config, credential)
+        position = SimpleNamespace(
+            magic=3233001, ticket=90001, symbol="XAUUSD", type=0, volume=0.01,
+            price_open=3000.0, price_current=3005.0, sl=2990.0, tp=3010.0,
+            profit=5.0, time=1_790_000_000, time_msc=1_790_000_000_000,
+        )
+        positioned = FakeMt5((position,))
+        adapter = MetaTraderConnection(positioned)
+        adapter.connect(config, credential)
+        telemetry = adapter.snapshot()
+        self.assertEqual(telemetry["positions"][0]["ticket"], "90001")
+        self.assertEqual(telemetry["positions"][0]["symbol"], "XAUUSD")
         real = FakeMt5()
         real.account_info = lambda: SimpleNamespace(
             login=123456, server="InterStellarFinancial-Demo", company="InterStellar",
