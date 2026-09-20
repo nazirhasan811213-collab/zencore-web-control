@@ -146,6 +146,31 @@ function createAutoTradeService(options = {}) {
     } : {});
   }
 
+  function hostedConnectionState(hostedAccount) {
+    if (!hostedAccount) return null;
+    const online = !!hostedAccount.lastSeenAt && now() - hostedAccount.lastSeenAt <= 30_000;
+    if (hostedAccount.status === 'ERROR') {
+      return { state: 'HOSTED_ERROR', label: 'MT5 HOSTED PERLU PERHATIAN', online, connected: false, ready: false };
+    }
+    if (!online || hostedAccount.status !== 'CONNECTED_LOCKED') {
+      return {
+        state: hostedAccount.status === 'LEASED' ? 'HOSTED_CONNECTING' : 'HOSTED_PENDING',
+        label: hostedAccount.status === 'LEASED' ? 'MT5 HOSTED SEDANG DISAHKAN' : 'MT5 HOSTED MENUNGGU WORKER',
+        online: false, connected: false, ready: false
+      };
+    }
+    const executionReady = allowDemoExecution &&
+      String(hostedAccount.connectorVersion || '') === requiredDemoConnectorVersion &&
+      hostedAccount.terminalTradeAllowed === true &&
+      hostedAccount.accountTradeAllowed === true &&
+      hostedAccount.expertTradeAllowed === true;
+    return {
+      state: executionReady ? 'HOSTED_READY' : 'HOSTED_CONNECTED_LOCKED',
+      label: executionReady ? 'MT5 HOSTED READY • DEMO' : 'CONNECTED • EXECUTION LOCKED',
+      online: true, connected: true, ready: executionReady
+    };
+  }
+
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
     if (Core.containsForbiddenCredentialKey(payload)) {
@@ -165,6 +190,19 @@ function createAutoTradeService(options = {}) {
     return store.createCommand(command);
   }
 
+  async function issueHostedCommand({ userId, accountId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
+    if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
+    if (Core.containsForbiddenCredentialKey(payload)) {
+      throw serviceError('CREDENTIAL_REJECTED', 'Credential broker tidak dibenarkan dalam arahan ZenCore.', 400);
+    }
+    const createdAt = now();
+    return store.createHostedCommand({
+      id: crypto.randomUUID(), userId, accountId, type, payload,
+      createdAt, expiresAt: createdAt + Math.max(15_000, ttlMs), dedupeKey
+    });
+  }
+
+
   async function state(userId) {
     const [profile, pod, positions, audit, pairing, hostedAccount] = await Promise.all([
       store.getProfile(userId),
@@ -176,22 +214,7 @@ function createAutoTradeService(options = {}) {
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
     const podConnection = connectionState(pod);
-    const hostedOnline = !!hostedAccount?.lastSeenAt && now() - hostedAccount.lastSeenAt <= 30_000;
-    const connection = hostedAccount ? (
-      hostedAccount.status === 'ERROR' ? {
-        state: 'HOSTED_ERROR', label: 'MT5 HOSTED PERLU PERHATIAN',
-        online: hostedOnline, connected: false, ready: false
-      } : hostedOnline && hostedAccount.status === 'CONNECTED_LOCKED' ? {
-        state: 'HOSTED_CONNECTED_LOCKED', label: 'CONNECTED • EXECUTION LOCKED',
-        online: true, connected: true, ready: false
-      } : {
-        state: hostedAccount.status === 'LEASED' ? 'HOSTED_CONNECTING' : 'HOSTED_PENDING',
-        label: hostedAccount.status === 'LEASED'
-          ? 'MT5 HOSTED SEDANG DISAHKAN'
-          : 'MT5 HOSTED MENUNGGU WORKER',
-        online: false, connected: false, ready: false
-      }
-    ) : podConnection;
+    const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
     const settings = profile ? {
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
@@ -246,7 +269,7 @@ function createAutoTradeService(options = {}) {
         available: hostedMt5Enabled,
         workerIdentityEnabled: hostedWorkerEnabled,
         provider: 'GOOGLE_CLOUD',
-        executionReady: false,
+        executionReady: !!(hostedAccount && connection.ready),
         status: hostedAccount?.status || 'NOT_CONNECTED',
         encryptionAlgorithm: credentialEncryption.algorithm,
         keyId: credentialEncryption.keyId || null,
@@ -421,7 +444,7 @@ function createAutoTradeService(options = {}) {
         credentialEnvelope: lease.credentialEnvelope,
         expiresAt: lease.leaseExpiresAt,
         demoOnly: true,
-        executionEnabled: false,
+        executionEnabled: allowDemoExecution,
         accountMask: lease.accountMask,
         serverMask: lease.serverMask,
         brokerMask: lease.brokerMask
@@ -457,8 +480,12 @@ function createAutoTradeService(options = {}) {
       throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Hosted worker heartbeat ditolak.', 400,
         heartbeatValidation.errors);
     }
-    if (heartbeatValidation.value.demoExecutionUnlocked) {
-      throw serviceError('HOSTED_EXECUTION_LOCKED', 'Hosted order execution masih dikunci.', 409);
+    if (heartbeatValidation.value.demoExecutionUnlocked !== allowDemoExecution) {
+      throw serviceError(
+        allowDemoExecution ? 'HOSTED_EXECUTION_GATE_REQUIRED' : 'HOSTED_EXECUTION_LOCKED',
+        allowDemoExecution ? 'Hosted worker belum membuka gate DEMO execution.' : 'Hosted order execution masih dikunci.',
+        409
+      );
     }
     const reportedStatus = String(input.connectionStatus || 'CONNECTED').toUpperCase();
     if (!['CONNECTED', 'CONNECTING', 'ERROR'].includes(reportedStatus)) {
@@ -631,11 +658,33 @@ function createAutoTradeService(options = {}) {
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
     if (hostedAccount) {
-      throw serviceError(
-        'HOSTED_WORKER_NOT_READY',
-        'Managed Windows worker belum mengesahkan akaun Demo. Sistem kekal STOPPED.',
-        409
-      );
+      const hostedConnection = hostedConnectionState(hostedAccount);
+      const settingsValidation = Core.validateSettings(profile || {});
+      if (!settingsValidation.ok || !profile?.riskAcknowledgedAt) {
+        throw serviceError('SETTINGS_REQUIRED', 'Simpan konfigurasi dan pengesahan risiko dahulu.', 409);
+      }
+      const unsupportedSymbols = settingsValidation.value.symbols
+        .filter(symbol => !allowedDemoSymbols.includes(symbol));
+      if (unsupportedSymbols.length) {
+        throw serviceError('DEMO_SYMBOL_NOT_VALIDATED',
+          `Fasa Demo execution ini hanya dibuka untuk ${allowedDemoSymbols.join(', ')}.`, 409);
+      }
+      if (!hostedConnection.ready) {
+        throw serviceError('HOSTED_WORKER_NOT_READY', hostedConnection.label, 409);
+      }
+      const issued = await issueHostedCommand({
+        userId, accountId: hostedAccount.id, type: 'SYSTEM_ON',
+        payload: {
+          mode: 'DEMO', strategy: 'NORMAL_3M_SOP_V32',
+          exitSchema: '32.3-EXIT-STEPLOCK', settings: settingsValidation.value
+        }
+      });
+      await store.setControl(userId, {
+        desiredState: 'ON', effectiveState: 'ARMING',
+        pendingCommandId: issued.command.id, lastError: null
+      });
+      await store.appendAudit(userId, 'HOSTED_SYSTEM_ON_REQUESTED', { commandId: issued.command.id });
+      return state(userId);
     }
     const settingsValidation = Core.validateSettings(profile || {});
     if (!settingsValidation.ok || !profile?.riskAcknowledgedAt) {
@@ -673,9 +722,27 @@ function createAutoTradeService(options = {}) {
   }
 
   async function stop(userId) {
-    const pod = await store.getPodForUser(userId);
+    const [pod, hostedAccount] = await Promise.all([
+      store.getPodForUser(userId),
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+    ]);
     if (typeof store.cancelPendingEntryCommands === 'function') {
       await store.cancelPendingEntryCommands(userId, 'SYSTEM_STOP_REQUESTED');
+    }
+    if (typeof store.cancelPendingHostedEntryCommands === 'function') {
+      await store.cancelPendingHostedEntryCommands(userId, 'SYSTEM_STOP_REQUESTED');
+    }
+    if (hostedAccount) {
+      const issued = await issueHostedCommand({
+        userId, accountId: hostedAccount.id, type: 'SYSTEM_STOP',
+        payload: { keepExitManagement: true, blockNewEntriesImmediately: true }
+      });
+      await store.setControl(userId, {
+        desiredState: 'STOPPED', effectiveState: 'STOPPING',
+        pendingCommandId: issued.command.id, lastError: null
+      });
+      await store.appendAudit(userId, 'HOSTED_SYSTEM_STOP_REQUESTED', { commandId: issued.command.id });
+      return state(userId);
     }
     if (!pod) {
       await store.setControl(userId, {
@@ -703,16 +770,25 @@ function createAutoTradeService(options = {}) {
     if (String(input.confirmation || '').trim().toUpperCase() !== 'TUTUP SEMUA') {
       throw serviceError('CONFIRMATION_REQUIRED', 'Taip TUTUP SEMUA untuk mengesahkan tindakan kecemasan.', 400);
     }
-    const pod = await store.getPodForUser(userId);
-    if (!pod) throw serviceError('POD_NOT_READY', 'Secure Pod belum disediakan.', 409);
+    const [pod, hostedAccount] = await Promise.all([
+      store.getPodForUser(userId),
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+    ]);
+    if (!pod && !hostedAccount) throw serviceError('POD_NOT_READY', 'Execution host belum disediakan.', 409);
     if (typeof store.cancelPendingEntryCommands === 'function') {
       await store.cancelPendingEntryCommands(userId, 'EMERGENCY_CLOSE_REQUESTED');
     }
-    const issued = await issueCommand({
-      userId, podId: pod.id, type: 'EMERGENCY_CLOSE_ALL',
-      payload: { scope: 'ALL_OPEN_POSITIONS', blockNewEntriesImmediately: true },
-      ttlMs: 10 * 60 * 1000
-    });
+    const issued = hostedAccount
+      ? await issueHostedCommand({
+          userId, accountId: hostedAccount.id, type: 'EMERGENCY_CLOSE_ALL',
+          payload: { scope: 'ALL_OPEN_POSITIONS', blockNewEntriesImmediately: true },
+          ttlMs: 10 * 60 * 1000
+        })
+      : await issueCommand({
+          userId, podId: pod.id, type: 'EMERGENCY_CLOSE_ALL',
+          payload: { scope: 'ALL_OPEN_POSITIONS', blockNewEntriesImmediately: true },
+          ttlMs: 10 * 60 * 1000
+        });
     await store.setControl(userId, {
       desiredState: 'STOPPED', effectiveState: 'EMERGENCY_CLOSING',
       pendingCommandId: issued.command.id, lastError: null
@@ -822,6 +898,74 @@ function createAutoTradeService(options = {}) {
     return { ok: true, commandId: command.id, status };
   }
 
+
+  async function nextHostedCommand(workerIdentity, input = {}) {
+    if (!allowDemoExecution) {
+      throw serviceError('EXECUTION_ROLLOUT_LOCKED', 'Execution DEMO masih dikunci.', 409);
+    }
+    const accountId = String(input.accountId || '');
+    const leaseId = String(input.leaseId || '');
+    if (accountId !== hostedWorkerAccountId ||
+        !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(leaseId)) {
+      throw serviceError('INVALID_HOSTED_COMMAND_REQUEST', 'Hosted account atau lease ID tidak sah.', 400);
+    }
+    const userId = await store.validateHostedLease(accountId, workerIdentity, leaseId, now());
+    if (!userId) throw serviceError('HOSTED_LEASE_NOT_FOUND', 'Hosted worker lease tidak dijumpai.', 404);
+    const command = await store.nextHostedCommand(accountId, now());
+    if (!command) return { ok: true, command: null, serverTime: now() };
+    return {
+      ok: true,
+      command: {
+        id: command.id, type: command.type, payload: command.payload,
+        createdAt: command.createdAt, expiresAt: command.expiresAt
+      },
+      serverTime: now()
+    };
+  }
+
+  async function acknowledgeHostedCommand(workerIdentity, commandId, input = {}) {
+    if (!allowDemoExecution) {
+      throw serviceError('EXECUTION_ROLLOUT_LOCKED', 'Execution DEMO masih dikunci.', 409);
+    }
+    if (Core.containsForbiddenCredentialKey(input)) {
+      throw serviceError('CREDENTIAL_REJECTED', 'Credential broker tidak dibenarkan dalam acknowledgement.', 400);
+    }
+    const accountId = String(input.accountId || '');
+    const leaseId = String(input.leaseId || '');
+    const userId = await store.validateHostedLease(accountId, workerIdentity, leaseId, now());
+    if (!userId) throw serviceError('HOSTED_LEASE_NOT_FOUND', 'Hosted worker lease tidak dijumpai.', 404);
+    const status = String(input.status || '').toUpperCase();
+    if (!['EXECUTED','FAILED','REJECTED'].includes(status)) {
+      throw serviceError('INVALID_ACK', 'Status acknowledgement tidak sah.', 400);
+    }
+    const result = {
+      code: String(input.code || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40),
+      message: String(input.message || '').slice(0, 180),
+      brokerOrderId: String(input.brokerOrderId || '').replace(/[^A-Za-z0-9._,-]/g, '').slice(0, 180)
+    };
+    const command = await store.ackHostedCommand(accountId, String(commandId || ''), status, result);
+    if (!command) throw serviceError('COMMAND_NOT_FOUND', 'Arahan tidak dijumpai atau sudah diproses.', 404);
+    if (command.type === 'SYSTEM_ON') {
+      await store.setControl(userId, status === 'EXECUTED' ? {
+        desiredState: 'ON', effectiveState: 'ON', pendingCommandId: null, lastError: null
+      } : {
+        desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
+        lastError: result.message || 'Hosted worker menolak arahan ON.'
+      });
+    } else if (command.type === 'SYSTEM_STOP' || command.type === 'EMERGENCY_CLOSE_ALL') {
+      await store.setControl(userId, status === 'EXECUTED' ? {
+        desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
+      } : {
+        desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
+        lastError: result.message || 'Hosted worker gagal melaksanakan arahan.'
+      });
+    }
+    await store.appendAudit(userId, 'HOSTED_COMMAND_ACKNOWLEDGED', {
+      commandId: command.id, commandType: command.type, status, code: result.code
+    });
+    return { ok: true, commandId: command.id, status };
+  }
+
   async function dispatchMarkets(markets = []) {
     const profiles = allowDemoExecution ? await store.listOnProfiles() : [];
     let queued = 0;
@@ -831,24 +975,31 @@ function createAutoTradeService(options = {}) {
         store.listPositions(profile.userId),
         typeof store.getHostedAccount === 'function' ? store.getHostedAccount(profile.userId) : null
       ]);
-      if (hostedAccount) continue;
-      if (!connectionState(pod).ready) continue;
+      const hostedConnection = hostedAccount ? hostedConnectionState(hostedAccount) : null;
+      if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
       const openSymbols = new Set(positions.map(position => Core.normaliseSymbol(position.symbol)));
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!allowedDemoSymbols.includes(symbol) || openSymbols.has(symbol)) continue;
-        if (typeof store.hasRecentEntryCommand === 'function' &&
+        if (hostedAccount) {
+          if (typeof store.hasRecentHostedEntryCommand === 'function' &&
+              await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
+        } else if (typeof store.hasRecentEntryCommand === 'function' &&
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
-        const setup = Core.buildSetupCommand(market, profile, pod.symbolSpecs?.[symbol]);
+        const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
+        const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol]);
         if (!setup) continue;
-        const issued = await issueCommand({
-          userId: profile.userId,
-          podId: pod.id,
-          type: 'PLACE_SETUP',
-          payload: setup.payload,
-          dedupeKey: `SETUP|${setup.signalKey}`,
-          ttlMs: 5 * 60 * 1000
-        });
+        const issued = hostedAccount
+          ? await issueHostedCommand({
+              userId: profile.userId, accountId: hostedAccount.id,
+              type: 'PLACE_SETUP', payload: setup.payload,
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 5 * 60 * 1000
+            })
+          : await issueCommand({
+              userId: profile.userId, podId: pod.id,
+              type: 'PLACE_SETUP', payload: setup.payload,
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 5 * 60 * 1000
+            });
         if (issued.created) {
           queued += 1;
           await store.appendAudit(profile.userId, 'SETUP_QUEUED', {
@@ -870,22 +1021,24 @@ function createAutoTradeService(options = {}) {
         store.listPositions(profile.userId),
         typeof store.getHostedAccount === 'function' ? store.getHostedAccount(profile.userId) : null
       ]);
-      if (hostedAccount) continue;
-      if (!pod) continue;
+      if (!hostedAccount && !pod) continue;
       const positionSymbols = new Set(positions.map(position => position.symbol));
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!positionSymbols.has(symbol)) continue;
         const management = Core.buildManagementCommand(market);
         if (!management) continue;
-        const issued = await issueCommand({
-          userId: profile.userId,
-          podId: pod.id,
-          type: 'MANAGE_POSITION',
-          payload: management.payload,
-          dedupeKey: `MANAGE|${management.managementKey}`,
-          ttlMs: 10 * 60 * 1000
-        });
+        const issued = hostedAccount
+          ? await issueHostedCommand({
+              userId: profile.userId, accountId: hostedAccount.id,
+              type: 'MANAGE_POSITION', payload: management.payload,
+              dedupeKey: `MANAGE|${management.managementKey}`, ttlMs: 10 * 60 * 1000
+            })
+          : await issueCommand({
+              userId: profile.userId, podId: pod.id,
+              type: 'MANAGE_POSITION', payload: management.payload,
+              dedupeKey: `MANAGE|${management.managementKey}`, ttlMs: 10 * 60 * 1000
+            });
         if (issued.created) {
           queued += 1;
           await store.appendAudit(profile.userId, 'POSITION_MANAGEMENT_QUEUED', {
@@ -905,6 +1058,8 @@ function createAutoTradeService(options = {}) {
     connectHostedAccount,
     leaseHostedAccount,
     hostedHeartbeat,
+    nextHostedCommand,
+    acknowledgeHostedCommand,
     saveSettings,
     turnOn,
     stop,
