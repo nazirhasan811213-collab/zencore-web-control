@@ -207,6 +207,42 @@ class GcpControlPlaneClient:
             raise ValueError("plaintext MT5 credentials are forbidden in heartbeat")
         return self._post("heartbeat", payload)
 
+    def next_command(self, account_id: str, lease_id: str) -> dict[str, Any] | None:
+        if not _UUID_RE.fullmatch(str(account_id)) or not _UUID_RE.fullmatch(str(lease_id)):
+            raise ValueError("hosted command accountId and leaseId must be UUIDv4")
+        result = self._post("commands/next", {"accountId": account_id, "leaseId": lease_id})
+        command = result.get("command")
+        if command is not None and not isinstance(command, dict):
+            raise ControlPlaneError("Hosted command response was invalid")
+        return command
+
+    def acknowledge(
+        self,
+        account_id: str,
+        lease_id: str,
+        command_id: str,
+        status: str,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        if (
+            not _UUID_RE.fullmatch(str(account_id))
+            or not _UUID_RE.fullmatch(str(lease_id))
+            or not _UUID_RE.fullmatch(str(command_id))
+        ):
+            raise ValueError("hosted command identifiers must be UUIDv4")
+        safe_status = str(status or "").upper()
+        if safe_status not in {"EXECUTED", "FAILED", "REJECTED"}:
+            raise ValueError("hosted command acknowledgement status is invalid")
+        body = {
+            "accountId": account_id,
+            "leaseId": lease_id,
+            "status": safe_status,
+            "code": str(result.get("code") or "")[:40],
+            "message": str(result.get("message") or "")[:180],
+            "brokerOrderId": str(result.get("brokerOrderId") or "")[:50],
+        }
+        return self._post(f"commands/{command_id}/ack", body)
+
 
 __all__ = [
     "ControlPlaneError",
