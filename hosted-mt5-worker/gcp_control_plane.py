@@ -146,7 +146,10 @@ class GcpControlPlaneClient:
         return token
 
     def _post(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if action not in {"lease", "heartbeat"}:
+        if not (
+            action in {"lease", "heartbeat", "commands/next"}
+            or re.fullmatch(r"commands/[0-9a-f-]{36}/ack", action, re.IGNORECASE)
+        ):
             raise ValueError("unsupported control-plane action")
         request_payload = dict(payload)
         request_payload["requestId"] = str(self._uuid_factory())
