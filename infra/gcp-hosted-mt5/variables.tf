@@ -184,7 +184,7 @@ variable "mt5_installer_sha256" {
 variable "mt5_terminal_path" {
   description = "Expected terminal64.exe path after the reviewed InterStellar installer is run."
   type        = string
-  default     = "C:\\Program Files\\InterStellar MT5\\terminal64.exe"
+  default     = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
 
   validation {
     condition     = can(regex("^[A-Za-z]:\\\\[^\\r\\n]{3,240}$", var.mt5_terminal_path))
