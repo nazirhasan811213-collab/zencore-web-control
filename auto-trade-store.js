@@ -489,6 +489,55 @@ class PostgresAutoTradeStore {
     };
   }
 
+  async provisionHostedCommandPod(userId, preferredId) {
+    const existing = this.podsByUser.get(userId);
+    if (existing) this.podsByToken.delete(existing.tokenHash);
+    const tokenHashValue = crypto.createHash('sha256')
+      .update(`hosted-command-target:${preferredId}:${crypto.randomUUID()}`)
+      .digest('hex');
+    const row = {
+      id: existing?.id || preferredId,
+      userId,
+      label: 'ZenCore GCP Hosted MT5',
+      ownershipMode: 'INTERNAL_DEMO',
+      tokenHash: tokenHashValue,
+      accountMask: null,
+      serverMask: null,
+      brokerMask: null,
+      tradeMode: null,
+      terminalTradeAllowed: false,
+      accountTradeAllowed: false,
+      expertTradeAllowed: false,
+      demoExecutionUnlocked: false,
+      symbolSpecs: {},
+      connectorVersion: null,
+      terminalBuild: null,
+      lastSeenAt: null,
+      createdAt: existing?.createdAt || Date.now(),
+      revokedAt: null
+    };
+    this.podsByUser.set(userId, row);
+    this.podsByToken.set(tokenHashValue, row);
+    return publicPod(row);
+  }
+
+  async getHostedLeaseContext(accountId, identity, leaseId, now) {
+    const row = [...this.hostedAccounts.values()].find(item =>
+      item.id === accountId &&
+      item.workerInstanceId === identity.instanceId &&
+      item.workerProjectId === identity.projectId &&
+      item.leaseId === leaseId &&
+      Number(item.leaseExpiresAt || 0) > now
+    );
+    if (!row) return null;
+    return {
+      ...publicHostedAccount(row),
+      userId: row.userId,
+      leaseId: row.leaseId,
+      leaseExpiresAt: row.leaseExpiresAt
+    };
+  }
+
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
     await this.pool.query(
       `DELETE FROM zencore_gcp_worker_requests WHERE received_at < $1`,
@@ -849,6 +898,7 @@ class MemoryAutoTradeStore {
       terminalTradeAllowed: false,
       accountTradeAllowed: false,
       expertTradeAllowed: false,
+      demoExecutionUnlocked: false,
       symbolSpecs: {},
       connectorVersion: null,
       terminalBuild: null,
@@ -867,7 +917,7 @@ class MemoryAutoTradeStore {
     if (!row || String(row.tradeMode).toUpperCase() !== 'DEMO' ||
         (row.workerInstanceId && row.workerInstanceId !== identity.instanceId)) return null;
     Object.assign(row, {
-      status: 'LEASED',
+      status: row.status === 'CONNECTED_LOCKED' ? row.status : 'LEASED',
       workerProvider: identity.provider,
       workerSubject: identity.subject,
       workerEmail: identity.email,
@@ -877,13 +927,6 @@ class MemoryAutoTradeStore {
       workerInstanceId: identity.instanceId,
       leaseId,
       leaseExpiresAt: expiresAt,
-      terminalTradeAllowed: false,
-      accountTradeAllowed: false,
-      expertTradeAllowed: false,
-      symbolSpecs: {},
-      connectorVersion: null,
-      terminalBuild: null,
-      lastSeenAt: null,
       lastError: null,
       updatedAt: now
     });
@@ -909,6 +952,7 @@ class MemoryAutoTradeStore {
       terminalTradeAllowed: heartbeat.terminalTradeAllowed,
       accountTradeAllowed: heartbeat.accountTradeAllowed,
       expertTradeAllowed: heartbeat.expertTradeAllowed,
+      demoExecutionUnlocked: heartbeat.demoExecutionUnlocked === true,
       symbolSpecs: JSON.parse(JSON.stringify(heartbeat.symbolSpecs || {})),
       connectorVersion: heartbeat.connectorVersion || null,
       terminalBuild: heartbeat.terminalBuild || null,
