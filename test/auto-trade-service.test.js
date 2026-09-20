@@ -753,7 +753,7 @@ test('GCP hosted v2.1 requires local intent plus rollout gate before signed DEMO
   assert.equal(state.control.canTurnOn, true);
 
   state = await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
-  assert.equal(state.control.effectiveState, 'STARTING');
+  assert.equal(state.control.effectiveState, 'ARMING');
   const next = await service.hostedNextCommand(identity, {
     accountId,
     leaseId: lease.lease.id
