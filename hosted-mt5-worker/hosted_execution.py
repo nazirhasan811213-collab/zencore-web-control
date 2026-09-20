@@ -99,6 +99,9 @@ class ExecutionLedger:
         self.db.execute("DELETE FROM position_plans WHERE symbol = ?", (symbol,))
         self.db.commit()
 
+    def close(self) -> None:
+        self.db.close()
+
 
 class HostedExecutionEngine:
     def __init__(self, mt5_module: Any, config: Any, ledger_path: Path):
