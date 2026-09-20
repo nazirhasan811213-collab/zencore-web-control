@@ -106,16 +106,19 @@ class HostedExecutionTests(unittest.TestCase):
             engine.validate_setup_payload(setup_payload())
             with self.assertRaisesRegex(RuntimeError, "XAUUSD"):
                 engine.validate_setup_payload(setup_payload("EURUSD"))
+            engine.ledger.close()
         with tempfile.TemporaryDirectory() as folder:
             real = self.engine(folder, trade_mode=1)
             with self.assertRaisesRegex(RuntimeError, "DEMO"):
                 real.assert_demo_terminal(require_execution=True)
+            real.ledger.close()
 
     def test_config_gate_blocks_execution_even_in_execution_capable_build(self):
         with tempfile.TemporaryDirectory() as folder:
             engine = self.engine(folder, enabled=False)
             with self.assertRaisesRegex(RuntimeError, "gate is locked"):
                 engine.assert_demo_terminal(require_execution=True)
+            engine.ledger.close()
 
     def test_signed_command_is_bound_to_hidden_command_target(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -150,6 +153,7 @@ class HostedExecutionTests(unittest.TestCase):
             tampered["signature"] = "0" * 64
             with self.assertRaisesRegex(RuntimeError, "signature"):
                 engine.verify_command(tampered)
+            engine.ledger.close()
 
     def test_replay_ledger_blocks_duplicate_command_processing(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -185,6 +189,7 @@ class HostedExecutionTests(unittest.TestCase):
             self.assertEqual(control.acks[0][3], "EXECUTED")
             self.assertEqual(control.acks[1][3], "EXECUTED")
             self.assertTrue(engine.ledger.armed())
+            engine.ledger.close()
 
 
 if __name__ == "__main__":
