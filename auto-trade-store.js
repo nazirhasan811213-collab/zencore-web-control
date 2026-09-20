@@ -424,12 +424,12 @@ class PostgresAutoTradeStore {
   async updateHostedHeartbeat(accountId, identity, leaseId, heartbeat, status, lastError, now) {
     const result = await this.pool.query(
       `UPDATE zencore_mt5_hosted_accounts SET
-         status = $4, account_mask = $5, server_mask = $6, broker_mask = $7,
+         status = $4::varchar(32), account_mask = $5, server_mask = $6, broker_mask = $7,
          terminal_trade_allowed = $8, account_trade_allowed = $9,
          expert_trade_allowed = $10, symbol_specs = $11::jsonb,
          connector_version = $12, terminal_build = $13,
          worker_last_seen_at = $14, last_error = $15,
-         verified_at = CASE WHEN $4 = 'CONNECTED_LOCKED' THEN COALESCE(verified_at, $14) ELSE verified_at END,
+         verified_at = CASE WHEN $4::varchar(32) = 'CONNECTED_LOCKED'::varchar(32) THEN COALESCE(verified_at, $14) ELSE verified_at END,
          updated_at = $14
        WHERE id = $1 AND worker_instance_id = $2 AND worker_project_id = $3
          AND lease_id = $16 AND lease_expires_at > $14
