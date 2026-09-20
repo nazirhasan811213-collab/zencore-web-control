@@ -52,7 +52,7 @@ test('one hosted account is pinned to one Google worker identity and exact audie
   assert.match(variables, /hosted_account_id must be blank or a UUIDv4/);
   assert.match(main, /hostedAccountId\s*=\s*var\.hosted_account_id/);
   assert.match(main, /controlPlaneAudience\s*=\s*"\$\{var\.control_plane_url\}\/api\/hosted-execution"/);
-  assert.match(main, /connectorVersion\s*=\s*"2\.0\.0-gcp-connect"/);
+  assert.match(main, /connectorVersion\s*=\s*"2\.1\.0-gcp-demo-execution"/);
   assert.match(main, /approvedDemoServer\s*=\s*"InterStellarFinancial-Demo"/);
   assert.match(main, /mt5TerminalPath\s*=\s*var\.mt5_terminal_path/);
   assert.match(outputs, /ZENCORE_GCP_WORKER_AUDIENCE/);
@@ -74,15 +74,20 @@ test('Default MT5 terminal path matches the deployed MetaTrader 5 terminal', () 
   assert.match(example, /C:\\\\Program Files\\\\MetaTrader 5\\\\terminal64\.exe/);
 });
 
-test('Terraform and Windows bootstrap hard-lock Demo order execution', () => {
+test('Terraform and Windows bootstrap require an explicit local DEMO execution gate', () => {
   const variables = read('variables.tf');
   const main = read('main.tf');
   const bootstrap = read('bootstrap/Install-ZenCoreGcpHostedWorker.ps1.tftpl');
+  const example = read('terraform.tfvars.example');
   assert.match(variables, /variable "execution_enabled"/);
-  assert.match(variables, /condition\s*=\s*var\.execution_enabled == false/);
-  assert.match(main, /execution\s*=\s*"locked"/);
-  assert.match(bootstrap, /executionEnabled -ne \$false/);
+  assert.match(variables, /default\s*=\s*false/);
+  assert.match(main, /execution\s*=\s*var\.execution_enabled \? "demo-enabled" : "locked"/);
+  assert.match(main, /executionEnabled\s*=\s*var\.execution_enabled/);
+  assert.match(example, /execution_enabled\s*=\s*false/);
+  assert.match(bootstrap, /DEMO_EXECUTION_ENABLED/);
   assert.match(bootstrap, /EXECUTION_LOCKED/);
+  assert.match(bootstrap, /Remove-Item -Force -ErrorAction SilentlyContinue \$lockPath/);
+  assert.match(bootstrap, /Remove-Item -Force -ErrorAction SilentlyContinue \$enablePath/);
   assert.match(bootstrap, /Get-FileHash -Algorithm SHA256/);
   assert.match(bootstrap, /Expand-Archive/);
   assert.match(bootstrap, /Install-ZenCoreHostedWorker\.ps1/);
@@ -97,19 +102,21 @@ test('Google Cloud documentation states the honest Windows threat boundary', () 
   assert.match(document, /ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false/);
 });
 
-test('Windows worker release is test-built, hash-pinned and scheduled as locked SYSTEM task', () => {
+test('Windows worker release is test-built, hash-pinned and requires explicit DEMO marker under SYSTEM', () => {
   const build = readWorker('Build-ZenCoreHostedWorker.ps1');
   const install = readWorker('Install-ZenCoreHostedWorker.ps1');
   assert.match(build, /version_info\.major/);
   assert.match(build, /Python 3\.12/);
   assert.match(build, /unittest discover/);
   assert.match(build, /PyInstaller/);
-  assert.match(build, /executionUnlocked = \$false/);
+  assert.match(build, /executionUnlocked = \$true/);
   assert.match(build, /Get-FileHash -Algorithm SHA256/);
   assert.match(install, /release-manifest\.json/);
   assert.match(install, /Get-FileHash -Algorithm SHA256/);
   assert.match(install, /NT AUTHORITY\\SYSTEM/);
-  assert.match(install, /executionEnabled -ne \$false/);
+  assert.match(install, /DEMO_EXECUTION_ENABLED/);
+  assert.match(install, /EXECUTION_LOCKED/);
+  assert.match(install, /executionEnabled -is \[bool\]/);
   assert.match(install, /Disable-ScheduledTask/);
   assert.doesNotMatch(install, /ConvertTo-SecureString|PSCredential|service_account_key/);
 });
