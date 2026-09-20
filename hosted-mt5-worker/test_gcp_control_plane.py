@@ -13,6 +13,7 @@ from gcp_control_plane import (
 ORIGIN = "https://zencore-precision-entry.onrender.com"
 ACCOUNT_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 LEASE_ID = "11111111-2222-4333-8444-555555555555"
+COMMAND_ID = "77777777-8888-4999-8aaa-bbbbbbbbbbbb"
 REQUEST_ID = uuid.UUID("99999999-8888-4777-8666-555555555555")
 TOKEN = ".".join(["a" * 40, "b" * 120, "c" * 342])
 
@@ -74,8 +75,59 @@ class GcpControlPlaneClientTests(unittest.TestCase):
         body = json.loads(post_request.data)
         self.assertEqual(body["accountId"], ACCOUNT_ID)
         self.assertEqual(body["cellId"], "zencore-mt5-demo-01")
+        self.assertEqual(body["executionRequested"], False)
         self.assertEqual(body["requestId"], str(REQUEST_ID))
         self.assertEqual(body["requestTimestamp"], 1_790_000_000_125)
+
+    def test_hosted_command_poll_and_ack_use_identity_authenticated_posts(self):
+        calls = []
+
+        def open_request(request, _timeout):
+            calls.append(request)
+            if len(calls) in (1, 3):
+                return FakeResponse(TOKEN, {"Metadata-Flavor": "Google"})
+            if len(calls) == 2:
+                return FakeResponse(
+                    json.dumps({"ok": True, "command": None}),
+                    {"Content-Type": "application/json"},
+                    request.full_url,
+                )
+            return FakeResponse(
+                json.dumps({"ok": True, "commandId": COMMAND_ID, "status": "EXECUTED"}),
+                {"Content-Type": "application/json"},
+                request.full_url,
+            )
+
+        client = GcpControlPlaneClient(
+            ORIGIN,
+            opener=open_request,
+            clock=lambda: 1_790_000_000.125,
+            uuid_factory=lambda: REQUEST_ID,
+        )
+        self.assertIsNone(client.next_command(ACCOUNT_ID, LEASE_ID))
+        ack = client.acknowledge(
+            ACCOUNT_ID,
+            LEASE_ID,
+            COMMAND_ID,
+            "EXECUTED",
+            {"code": "ARMED", "message": "DEMO armed"},
+        )
+        self.assertEqual(ack["status"], "EXECUTED")
+        poll = calls[1]
+        self.assertEqual(
+            poll.full_url, f"{ORIGIN}/api/hosted-execution/commands/next"
+        )
+        poll_body = json.loads(poll.data)
+        self.assertEqual(poll_body["accountId"], ACCOUNT_ID)
+        self.assertEqual(poll_body["leaseId"], LEASE_ID)
+        ack_request = calls[3]
+        self.assertEqual(
+            ack_request.full_url,
+            f"{ORIGIN}/api/hosted-execution/commands/{COMMAND_ID}/ack",
+        )
+        ack_body = json.loads(ack_request.data)
+        self.assertEqual(ack_body["status"], "EXECUTED")
+        self.assertEqual(ack_body["code"], "ARMED")
 
     def test_heartbeat_never_accepts_transport_redirects(self):
         count = 0

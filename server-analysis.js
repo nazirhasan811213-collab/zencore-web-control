@@ -30,6 +30,9 @@ const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
   process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '1.4.0-demo-execution'
 );
+const AUTOTRADE_HOSTED_CONNECTOR_VERSION = String(
+  process.env.ZENCORE_AUTOTRADE_HOSTED_CONNECTOR_VERSION || '2.1.0-gcp-demo-execution'
+);
 const HOSTED_MT5_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(
   String(process.env.ZENCORE_HOSTED_MT5_ENABLED || '')
 );
@@ -104,6 +107,7 @@ if (AUTH_ENABLED) {
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
         requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
+        requiredHostedConnectorVersion: AUTOTRADE_HOSTED_CONNECTOR_VERSION,
         hostedMt5Enabled: HOSTED_MT5_ENABLED,
         hostedWorkerEnabled: GCP_HOSTED_WORKER_ENABLED,
         hostedWorkerAccountId: process.env.ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID,
@@ -438,10 +442,15 @@ async function handleHostedExecutionApi(req, res, pathname) {
       error: 'Google hosted worker masih dikunci.'
     });
   }
-  if (req.method !== 'POST' || ![
+  const hostedAckMatch = pathname.match(
+    /^\/api\/hosted-execution\/commands\/([0-9a-f-]{36})\/ack$/i
+  );
+  const hostedPathAllowed = [
     '/api/hosted-execution/lease',
-    '/api/hosted-execution/heartbeat'
-  ].includes(pathname)) {
+    '/api/hosted-execution/heartbeat',
+    '/api/hosted-execution/commands/next'
+  ].includes(pathname) || !!hostedAckMatch;
+  if (req.method !== 'POST' || !hostedPathAllowed) {
     return sendJson(res, 404, { ok: false, error: 'Route hosted worker tidak dijumpai.' });
   }
   const token = bearerToken(req);
@@ -468,7 +477,17 @@ async function handleHostedExecutionApi(req, res, pathname) {
     if (pathname === '/api/hosted-execution/lease') {
       return sendJson(res, 200, await autoTradeState.service.leaseHostedAccount(identity, body));
     }
-    return sendJson(res, 200, await autoTradeState.service.hostedHeartbeat(identity, body));
+    if (pathname === '/api/hosted-execution/heartbeat') {
+      return sendJson(res, 200, await autoTradeState.service.hostedHeartbeat(identity, body));
+    }
+    if (pathname === '/api/hosted-execution/commands/next') {
+      return sendJson(res, 200, await autoTradeState.service.hostedNextCommand(identity, body));
+    }
+    return sendJson(
+      res,
+      200,
+      await autoTradeState.service.hostedAcknowledgeCommand(identity, hostedAckMatch[1], body)
+    );
   } catch (error) {
     return autoTradeError(res, error);
   }

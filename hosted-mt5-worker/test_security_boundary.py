@@ -125,9 +125,9 @@ class AnalysisParityTests(unittest.TestCase):
             "signalReceivedAt": 1790000010000,
         }
 
-    def test_all_11_markets_are_declared_but_build_execution_is_locked(self):
+    def test_all_11_markets_are_declared_and_demo_execution_build_is_enabled(self):
         self.assertEqual(len(boundary.SUPPORTED_MARKETS), 11)
-        self.assertFalse(boundary.HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED)
+        self.assertTrue(boundary.HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED)
         snapshot = boundary.validate_entry_command(self.payload())
         self.assertEqual(snapshot["decisionOwner"], "ZENCORE_ANALYSIS")
 

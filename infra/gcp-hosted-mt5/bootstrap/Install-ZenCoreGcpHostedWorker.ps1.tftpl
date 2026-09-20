@@ -6,6 +6,7 @@ $staging = Join-Path $root "staging"
 $configPath = Join-Path $root "worker-config.json"
 $logPath = Join-Path $root "bootstrap.log"
 $lockPath = Join-Path $root "EXECUTION_LOCKED"
+$enablePath = Join-Path $root "DEMO_EXECUTION_ENABLED"
 
 New-Item -ItemType Directory -Force -Path $root, $staging | Out-Null
 
@@ -50,14 +51,25 @@ try {
         [System.Convert]::FromBase64String("${worker_config_base64}")
     )
     $config = $configJson | ConvertFrom-Json
-    if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $false) {
-        throw "Staged worker configuration attempted to unlock execution."
+    if ($config.demoOnly -ne $true -or -not ($config.executionEnabled -is [bool])) {
+        throw "Worker DEMO execution flag is invalid."
     }
     if ($config.privateKeyAvailable -ne $false -or $config.credentialStorage -ne "MEMORY_ONLY") {
         throw "Credential boundary configuration is invalid."
     }
+    if ($config.connectorVersion -ne "2.1.0-gcp-demo-execution") {
+        throw "Unexpected hosted worker connector version."
+    }
     [System.IO.File]::WriteAllText($configPath, $configJson, (New-Object System.Text.UTF8Encoding($false)))
-    Set-Content -LiteralPath $lockPath -Value "Hosted Demo order execution is locked in this release." -Encoding ASCII
+    if ($config.executionEnabled -eq $true) {
+        Remove-Item -Force -ErrorAction SilentlyContinue $lockPath
+        Set-Content -LiteralPath $enablePath -Value "Hosted XAUUSD DEMO execution explicitly enabled by reviewed infrastructure rollout." -Encoding ASCII
+        Write-SafeLog "Local DEMO execution marker enabled."
+    } else {
+        Remove-Item -Force -ErrorAction SilentlyContinue $enablePath
+        Set-Content -LiteralPath $lockPath -Value "Hosted Demo order execution remains locked." -Encoding ASCII
+        Write-SafeLog "Local DEMO execution marker remains locked."
+    }
 
     $workerReady = Save-VerifiedArtifact `
         -Uri "${worker_release_url}" `
@@ -107,13 +119,15 @@ try {
         & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
             -File $installer `
             -ConfigPath $configPath `
-            -ExecutionLockPath $lockPath
+            -ExecutionLockPath $lockPath `
+            -ExecutionEnablePath $enablePath
         if ($LASTEXITCODE -ne 0) {
             throw "Verified ZenCore worker installation failed."
         }
     }
 
-    Write-SafeLog "Shielded Windows cell initialized. WorkerReady=$workerReady Mt5Ready=$mt5Ready Execution=LOCKED"
+    $executionState = if ($config.executionEnabled -eq $true) { "DEMO_ENABLED" } else { "LOCKED" }
+    Write-SafeLog "Shielded Windows cell initialized. WorkerReady=$workerReady Mt5Ready=$mt5Ready Execution=$executionState"
 } catch {
     Write-SafeLog "Bootstrap failed closed: $($_.Exception.Message)"
     throw

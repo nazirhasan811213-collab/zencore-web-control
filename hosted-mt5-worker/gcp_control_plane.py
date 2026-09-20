@@ -146,7 +146,10 @@ class GcpControlPlaneClient:
         return token
 
     def _post(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if action not in {"lease", "heartbeat"}:
+        if not (
+            action in {"lease", "heartbeat", "commands/next"}
+            or re.fullmatch(r"commands/[0-9a-f-]{36}/ack", action, re.IGNORECASE)
+        ):
             raise ValueError("unsupported control-plane action")
         request_payload = dict(payload)
         request_payload["requestId"] = str(self._uuid_factory())
@@ -189,12 +192,20 @@ class GcpControlPlaneClient:
             raise ControlPlaneError("Control plane rejected request")
         return result
 
-    def lease(self, account_id: str, cell_id: str) -> dict[str, Any]:
+    def lease(
+        self, account_id: str, cell_id: str, execution_requested: bool = False
+    ) -> dict[str, Any]:
         if not _UUID_RE.fullmatch(str(account_id)):
             raise ValueError("account_id must be a UUIDv4")
         if not _CELL_RE.fullmatch(str(cell_id)):
             raise ValueError("cell_id is invalid")
-        return self._post("lease", {"accountId": account_id, "cellId": cell_id})
+        if not isinstance(execution_requested, bool):
+            raise ValueError("execution_requested must be boolean")
+        return self._post("lease", {
+            "accountId": account_id,
+            "cellId": cell_id,
+            "executionRequested": execution_requested,
+        })
 
     def heartbeat(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(payload, dict):
@@ -206,6 +217,42 @@ class GcpControlPlaneClient:
         if _contains_plaintext_credential(payload):
             raise ValueError("plaintext MT5 credentials are forbidden in heartbeat")
         return self._post("heartbeat", payload)
+
+    def next_command(self, account_id: str, lease_id: str) -> dict[str, Any] | None:
+        if not _UUID_RE.fullmatch(str(account_id)) or not _UUID_RE.fullmatch(str(lease_id)):
+            raise ValueError("hosted command accountId and leaseId must be UUIDv4")
+        result = self._post("commands/next", {"accountId": account_id, "leaseId": lease_id})
+        command = result.get("command")
+        if command is not None and not isinstance(command, dict):
+            raise ControlPlaneError("Hosted command response was invalid")
+        return command
+
+    def acknowledge(
+        self,
+        account_id: str,
+        lease_id: str,
+        command_id: str,
+        status: str,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        if (
+            not _UUID_RE.fullmatch(str(account_id))
+            or not _UUID_RE.fullmatch(str(lease_id))
+            or not _UUID_RE.fullmatch(str(command_id))
+        ):
+            raise ValueError("hosted command identifiers must be UUIDv4")
+        safe_status = str(status or "").upper()
+        if safe_status not in {"EXECUTED", "FAILED", "REJECTED"}:
+            raise ValueError("hosted command acknowledgement status is invalid")
+        body = {
+            "accountId": account_id,
+            "leaseId": lease_id,
+            "status": safe_status,
+            "code": str(result.get("code") or "")[:40],
+            "message": str(result.get("message") or "")[:180],
+            "brokerOrderId": str(result.get("brokerOrderId") or "")[:50],
+        }
+        return self._post(f"commands/{command_id}/ack", body)
 
 
 __all__ = [

@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $version = (Get-Content -Raw -LiteralPath (Join-Path $source "VERSION")).Trim()
-if ($version -ne "2.0.0-gcp-connect") {
+if ($version -ne "2.1.0-gcp-demo-execution") {
     throw "Unexpected hosted worker version."
 }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
@@ -75,7 +75,7 @@ try {
     $manifest = [ordered]@{
         schemaVersion = 1
         connectorVersion = $version
-        executionUnlocked = $false
+        executionUnlocked = $true
         createdAt = (Get-Date).ToUniversalTime().ToString("o")
         files = @($files)
     }
