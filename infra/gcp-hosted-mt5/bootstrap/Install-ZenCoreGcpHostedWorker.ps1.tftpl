@@ -6,6 +6,7 @@ $staging = Join-Path $root "staging"
 $configPath = Join-Path $root "worker-config.json"
 $logPath = Join-Path $root "bootstrap.log"
 $lockPath = Join-Path $root "EXECUTION_LOCKED"
+$executionGatePath = Join-Path $root "DEMO_EXECUTION_ENABLED"
 
 New-Item -ItemType Directory -Force -Path $root, $staging | Out-Null
 
@@ -50,14 +51,29 @@ try {
         [System.Convert]::FromBase64String("${worker_config_base64}")
     )
     $config = $configJson | ConvertFrom-Json
-    if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $false) {
-        throw "Staged worker configuration attempted to unlock execution."
+    if ($config.demoOnly -ne $true) {
+        throw "Hosted worker must remain DEMO only."
+    }
+    if ($config.executionEnabled -eq $true) {
+        if ($config.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
+            @($config.allowedDemoSymbols).Count -ne 1 -or
+            [string]$config.allowedDemoSymbols[0] -ne "XAUUSD") {
+            throw "DEMO execution assignment is not certified for this release."
+        }
+    } elseif ($config.connectorVersion -ne "2.0.0-gcp-connect") {
+        throw "Connection-only connector version is invalid."
     }
     if ($config.privateKeyAvailable -ne $false -or $config.credentialStorage -ne "MEMORY_ONLY") {
         throw "Credential boundary configuration is invalid."
     }
     [System.IO.File]::WriteAllText($configPath, $configJson, (New-Object System.Text.UTF8Encoding($false)))
-    Set-Content -LiteralPath $lockPath -Value "Hosted Demo order execution is locked in this release." -Encoding ASCII
+    if ($config.executionEnabled -eq $true) {
+        Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $lockPath
+        Set-Content -LiteralPath $executionGatePath -Value "ZenCore XAUUSD DEMO execution gate enabled." -Encoding ASCII
+    } else {
+        Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $executionGatePath
+        Set-Content -LiteralPath $lockPath -Value "Hosted Demo order execution is locked in this release." -Encoding ASCII
+    }
 
     $workerReady = Save-VerifiedArtifact `
         -Uri "${worker_release_url}" `
@@ -104,10 +120,17 @@ try {
         if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
             throw "Verified ZenCore worker release has no installer."
         }
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
-            -File $installer `
-            -ConfigPath $configPath `
-            -ExecutionLockPath $lockPath
+        if ($config.executionEnabled -eq $true) {
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+                -File $installer `
+                -ConfigPath $configPath `
+                -ExecutionGatePath $executionGatePath
+        } else {
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+                -File $installer `
+                -ConfigPath $configPath `
+                -ExecutionLockPath $lockPath
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "Verified ZenCore worker installation failed."
         }
