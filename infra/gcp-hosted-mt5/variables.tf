@@ -207,12 +207,16 @@ variable "allowed_demo_symbols" {
 }
 
 variable "execution_enabled" {
-  description = "Hard rollout gate. This staged infrastructure release cannot unlock order execution."
+  description = "Explicit DEMO-only rollout gate. REAL-account execution remains blocked by the worker."
   type        = bool
   default     = false
 
   validation {
-    condition     = var.execution_enabled == false
-    error_message = "Order execution must remain false until Demo certification is merged separately."
+    condition = var.execution_enabled == false || (
+      var.allowed_demo_symbols == toset(["XAUUSD"]) &&
+      var.worker_release_url != "" &&
+      can(regex("^[A-Fa-f0-9]{64}$", var.worker_release_sha256))
+    )
+    error_message = "DEMO execution requires exactly XAUUSD plus a pinned HTTPS worker release and SHA-256."
   }
 }

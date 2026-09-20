@@ -438,10 +438,14 @@ async function handleHostedExecutionApi(req, res, pathname) {
       error: 'Google hosted worker masih dikunci.'
     });
   }
-  if (req.method !== 'POST' || ![
-    '/api/hosted-execution/lease',
-    '/api/hosted-execution/heartbeat'
-  ].includes(pathname)) {
+  const hostedAckMatch = pathname.match(/^\/api\/hosted-execution\/commands\/([0-9a-f-]{36})\/ack$/i);
+  const hostedRouteAllowed = req.method === 'POST' && (
+    pathname === '/api/hosted-execution/lease' ||
+    pathname === '/api/hosted-execution/heartbeat' ||
+    pathname === '/api/hosted-execution/commands/next' ||
+    !!hostedAckMatch
+  );
+  if (!hostedRouteAllowed) {
     return sendJson(res, 404, { ok: false, error: 'Route hosted worker tidak dijumpai.' });
   }
   const token = bearerToken(req);
@@ -468,7 +472,15 @@ async function handleHostedExecutionApi(req, res, pathname) {
     if (pathname === '/api/hosted-execution/lease') {
       return sendJson(res, 200, await autoTradeState.service.leaseHostedAccount(identity, body));
     }
-    return sendJson(res, 200, await autoTradeState.service.hostedHeartbeat(identity, body));
+    if (pathname === '/api/hosted-execution/heartbeat') {
+      return sendJson(res, 200, await autoTradeState.service.hostedHeartbeat(identity, body));
+    }
+    if (pathname === '/api/hosted-execution/commands/next') {
+      return sendJson(res, 200, await autoTradeState.service.nextHostedCommand(identity, body));
+    }
+    return sendJson(res, 200, await autoTradeState.service.acknowledgeHostedCommand(
+      identity, hostedAckMatch[1], body
+    ));
   } catch (error) {
     return autoTradeError(res, error);
   }

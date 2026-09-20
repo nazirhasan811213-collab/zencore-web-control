@@ -1,8 +1,8 @@
-"""ZenCore Google Cloud hosted MT5 worker (DEMO connection-only release).
+"""ZenCore Google Cloud hosted MT5 worker (DEMO execution release).
 
 This build can authenticate the assigned Google VM, lease an encrypted broker
 credential, unwrap it through Cloud HSM, initialize one MT5 Demo terminal and
-report sanitized telemetry.  It deliberately has no order execution method.
+report sanitized telemetry and execute only validated XAUUSD DEMO commands behind explicit gates.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from gcp_kms_unwrapper import (
     KEY_ALIAS_PATTERN,
     KEY_VERSION_PATTERN,
 )
+from demo_executor import DemoExecutionError, DemoExecutor
 from security_boundary import (
     HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED,
     Mt5Credential,
@@ -34,7 +35,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.0.0-gcp-connect"
+CONNECTOR_VERSION = "2.1.0-gcp-demo-execution"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
@@ -101,6 +102,7 @@ class WorkerConfig:
     approved_demo_server: str
     heartbeat_seconds: float
     connector_version: str
+    execution_enabled: bool
 
     @staticmethod
     def load(path: Path) -> "WorkerConfig":
@@ -124,10 +126,10 @@ class WorkerConfig:
             raw.get("schemaVersion") != 1
             or raw.get("provider") != "GOOGLE_CLOUD"
             or raw.get("demoOnly") is not True
-            or raw.get("executionEnabled") is not False
+            or raw.get("executionEnabled") is not True
             or raw.get("credentialStorage") != "MEMORY_ONLY"
             or raw.get("privateKeyAvailable") is not False
-            or HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED
+            or not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED
         ):
             raise WorkerFailure("CONFIG_SECURITY_BOUNDARY_INVALID")
         cell_id = str(raw.get("cellId") or "")
@@ -174,6 +176,7 @@ class WorkerConfig:
             approved_demo_server=approved_server,
             heartbeat_seconds=heartbeat,
             connector_version=connector_version,
+            execution_enabled=True,
         )
 
 
@@ -185,6 +188,7 @@ class MetaTraderConnection:
         self._identity_digest = ""
         self._allowed_symbols: tuple[str, ...] = ()
         self._connector_version = CONNECTOR_VERSION
+        self._execution_enabled = False
 
     def connect(self, config: WorkerConfig, credential: Mt5Credential) -> None:
         login, password, server = credential.text()
@@ -213,6 +217,7 @@ class MetaTraderConnection:
         login = server = ""
         self._allowed_symbols = config.allowed_demo_symbols
         self._connector_version = config.connector_version
+        self._execution_enabled = config.execution_enabled
         self.snapshot()
 
     def _account_terminal(self) -> tuple[Any, Any]:
@@ -265,16 +270,43 @@ class MetaTraderConnection:
             specs.append(values)
         return specs
 
-    def snapshot(self) -> dict[str, Any]:
-        account, terminal = self._account_terminal()
+    def _positions(self) -> list[dict[str, Any]]:
         try:
-            positions = self._mt5.positions_get()
+            rows = self._mt5.positions_get()
         except Exception as exc:
             raise WorkerFailure("MT5_POSITION_READ_FAILED") from exc
-        if positions is None:
+        if rows is None:
             raise WorkerFailure("MT5_POSITION_READ_FAILED")
-        if any(int(getattr(position, "magic", 0) or 0) == MAGIC for position in positions):
-            raise WorkerFailure("UNEXPECTED_ZENCORE_POSITION")
+        result: list[dict[str, Any]] = []
+        buy_type = int(getattr(self._mt5, "POSITION_TYPE_BUY", 0))
+        for position in rows:
+            if int(getattr(position, "magic", 0) or 0) != MAGIC:
+                continue
+            symbol = str(getattr(position, "symbol", "")).upper()
+            if symbol not in self._allowed_symbols:
+                raise WorkerFailure("UNEXPECTED_ZENCORE_POSITION")
+            result.append({
+                "ticket": str(getattr(position, "ticket", "") or ""),
+                "symbol": symbol,
+                "side": "BUY" if int(getattr(position, "type", -1)) == buy_type else "SELL",
+                "volume": float(getattr(position, "volume", 0) or 0),
+                "layers": 1,
+                "entry": float(getattr(position, "price_open", 0) or 0),
+                "currentPrice": float(getattr(position, "price_current", 0) or 0),
+                "initialSl": float(getattr(position, "sl", 0) or 0) or None,
+                "activeSl": float(getattr(position, "sl", 0) or 0) or None,
+                "tp1": float(getattr(position, "tp", 0) or 0) or None,
+                "tp2": None,
+                "tp3": None,
+                "profitUsd": float(getattr(position, "profit", 0) or 0),
+                "openedAt": int(getattr(position, "time_msc", 0) or int(getattr(position, "time", 0) or 0) * 1000),
+                "exitStage": "HOLD",
+                "slLock": "ACTIVE" if float(getattr(position, "sl", 0) or 0) else "INITIAL",
+            })
+        return result
+
+    def snapshot(self) -> dict[str, Any]:
+        account, terminal = self._account_terminal()
         try:
             version = self._mt5.version() or ()
         except Exception as exc:
@@ -289,11 +321,11 @@ class MetaTraderConnection:
             "terminalTradeAllowed": bool(getattr(terminal, "trade_allowed", False)),
             "accountTradeAllowed": bool(getattr(account, "trade_allowed", False)),
             "expertTradeAllowed": bool(getattr(account, "trade_expert", False)),
-            "demoExecutionUnlocked": False,
+            "demoExecutionUnlocked": self._execution_enabled,
             "connectorVersion": self._connector_version,
             "terminalBuild": re.sub(r"[^A-Za-z0-9._-]", "", build)[:24] or "UNKNOWN",
             "symbolSpecs": self._symbol_specs(),
-            "positions": [],
+            "positions": self._positions(),
         }
 
     def shutdown(self) -> None:
@@ -319,7 +351,7 @@ def _validate_lease(result: Any, config: WorkerConfig) -> dict[str, Any]:
         or lease.get("accountId") != config.hosted_account_id
         or lease.get("keyId") != config.key_alias
         or lease.get("demoOnly") is not True
-        or lease.get("executionEnabled") is not False
+        or lease.get("executionEnabled") is not True
         or not isinstance(server_time, int)
         or not isinstance(lease.get("expiresAt"), int)
         or not server_time < lease["expiresAt"] <= server_time + 5 * 60 * 1000
@@ -338,8 +370,9 @@ class HostedConnectionWorker:
         control_plane: GcpControlPlaneClient,
         unwrapper: GcpKmsUnwrapper,
         terminal: MetaTraderConnection,
+        executor: DemoExecutor,
         *,
-        execution_lock_path: Path,
+        execution_gate_path: Path,
         sleeper: Callable[[float], None] = time.sleep,
         clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
     ) -> None:
@@ -347,17 +380,21 @@ class HostedConnectionWorker:
         self.control_plane = control_plane
         self.unwrapper = unwrapper
         self.terminal = terminal
-        self.execution_lock_path = execution_lock_path
+        self.executor = executor
+        self.execution_gate_path = execution_gate_path
         self.sleeper = sleeper
         self.clock_ms = clock_ms
         self.lease: dict[str, Any] | None = None
+        self.entries_enabled = False
 
-    def _assert_locked(self) -> None:
-        if not self.execution_lock_path.is_file() or HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
-            raise WorkerFailure("EXECUTION_LOCK_MISSING")
+    def _assert_execution_gate(self) -> None:
+        if not self.config.execution_enabled or not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
+            raise WorkerFailure("DEMO_EXECUTION_BUILD_LOCKED")
+        if not self.execution_gate_path.is_file():
+            raise WorkerFailure("DEMO_EXECUTION_GATE_MISSING")
 
     def connect_once(self) -> dict[str, Any]:
-        self._assert_locked()
+        self._assert_execution_gate()
         assert_clean_worker_environment()
         try:
             result = self.control_plane.lease(
@@ -409,7 +446,7 @@ class HostedConnectionWorker:
             pass
 
     def heartbeat_once(self) -> dict[str, Any]:
-        self._assert_locked()
+        self._assert_execution_gate()
         if not self.lease:
             raise WorkerFailure("LEASE_NOT_READY")
         if self.clock_ms() >= int(self.lease["expiresAt"]):
@@ -426,6 +463,81 @@ class HostedConnectionWorker:
         except ControlPlaneError as exc:
             raise WorkerFailure("CONTROL_PLANE_HEARTBEAT_FAILED") from exc
 
+    def _ack_command(self, command: dict[str, Any], status: str, code: str, message: str = "", broker_ids: tuple[str, ...] = ()) -> None:
+        if not self.lease:
+            raise WorkerFailure("LEASE_NOT_READY")
+        try:
+            self.control_plane.acknowledge_command(
+                self.config.hosted_account_id,
+                self.lease["id"],
+                str(command.get("id") or ""),
+                status=status,
+                code=code,
+                message=message,
+                broker_order_id=",".join(broker_ids),
+            )
+        except ControlPlaneError as exc:
+            raise WorkerFailure("CONTROL_PLANE_ACK_FAILED") from exc
+
+    def command_once(self) -> None:
+        self._assert_execution_gate()
+        if not self.lease:
+            raise WorkerFailure("LEASE_NOT_READY")
+        try:
+            result = self.control_plane.next_command(
+                self.config.hosted_account_id, self.lease["id"]
+            )
+        except ControlPlaneError as exc:
+            raise WorkerFailure("CONTROL_PLANE_COMMAND_FAILED") from exc
+        command = result.get("command") if isinstance(result, dict) else None
+        if command is None:
+            return
+        if not isinstance(command, dict):
+            raise WorkerFailure("COMMAND_RESPONSE_INVALID")
+        command_id = str(command.get("id") or "")
+        command_type = str(command.get("type") or "").upper()
+        payload = command.get("payload")
+        expires_at = int(command.get("expiresAt") or 0)
+        if not _UUID_RE.fullmatch(command_id) or not isinstance(payload, dict) or expires_at <= self.clock_ms():
+            raise WorkerFailure("COMMAND_RESPONSE_INVALID")
+        try:
+            if command_type == "SYSTEM_ON":
+                self.entries_enabled = True
+                self._ack_command(command, "EXECUTED", "HOSTED_DEMO_ARMED")
+                return
+            if command_type == "SYSTEM_STOP":
+                self.entries_enabled = False
+                self._ack_command(command, "EXECUTED", "HOSTED_DEMO_STOPPED")
+                return
+            if command_type == "PLACE_SETUP":
+                if not self.entries_enabled:
+                    self._ack_command(command, "REJECTED", "SYSTEM_STOPPED", "New entries are disabled.")
+                    return
+                executed = self.executor.execute_place_setup(payload)
+                self._ack_command(
+                    command, "EXECUTED", executed.code,
+                    broker_ids=executed.broker_order_ids,
+                )
+                return
+            if command_type == "MANAGE_POSITION":
+                managed = self.executor.execute_management(payload)
+                self._ack_command(
+                    command, "EXECUTED", managed.code,
+                    broker_ids=managed.broker_order_ids,
+                )
+                return
+            if command_type == "EMERGENCY_CLOSE_ALL":
+                self.entries_enabled = False
+                closed = self.executor.emergency_close_all()
+                self._ack_command(
+                    command, "EXECUTED", closed.code,
+                    broker_ids=closed.broker_order_ids,
+                )
+                return
+            self._ack_command(command, "REJECTED", "COMMAND_TYPE_INVALID")
+        except DemoExecutionError as exc:
+            self._ack_command(command, "REJECTED", str(exc)[:40], "DEMO execution guard rejected command.")
+
     def run_forever(self) -> None:
         while True:
             failure = "WORKER_RECONNECT"
@@ -434,6 +546,7 @@ class HostedConnectionWorker:
                 while True:
                     self.sleeper(self.config.heartbeat_seconds)
                     self.heartbeat_once()
+                    self.command_once()
             except WorkerFailure as exc:
                 failure = exc.code
                 self._error_heartbeat(exc.code)
@@ -454,25 +567,32 @@ def main(argv: list[str] | None = None) -> int:
         default=r"C:\ProgramData\ZenCore\HostedWorker\worker-config.json",
     )
     parser.add_argument(
-        "--execution-lock",
-        default=r"C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED",
+        "--execution-gate",
+        default=r"C:\ProgramData\ZenCore\HostedWorker\DEMO_EXECUTION_ENABLED",
     )
     args = parser.parse_args(argv)
     try:
         config = WorkerConfig.load(Path(args.config))
         assert_clean_worker_environment()
-        if not Path(args.execution_lock).is_file():
-            raise WorkerFailure("EXECUTION_LOCK_MISSING")
+        if not Path(args.execution_gate).is_file():
+            raise WorkerFailure("DEMO_EXECUTION_GATE_MISSING")
         try:
             import MetaTrader5 as mt5  # type: ignore
         except ImportError as exc:
             raise WorkerFailure("MT5_PYTHON_MODULE_MISSING") from exc
+        terminal = MetaTraderConnection(mt5)
         worker = HostedConnectionWorker(
             config,
             GcpControlPlaneClient(config.control_plane_url),
             GcpKmsUnwrapper(config.key_alias, config.key_version_resource),
-            MetaTraderConnection(mt5),
-            execution_lock_path=Path(args.execution_lock),
+            terminal,
+            DemoExecutor(
+                mt5,
+                approved_server=config.approved_demo_server,
+                allowed_symbols=config.allowed_demo_symbols,
+                execution_enabled=config.execution_enabled,
+            ),
+            execution_gate_path=Path(args.execution_gate),
         )
         worker.run_forever()
     except KeyboardInterrupt:

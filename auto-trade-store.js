@@ -113,6 +113,24 @@ function publicCommand(row) {
   };
 }
 
+function publicHostedCommand(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id || row.userId,
+    accountId: row.account_id || row.accountId,
+    type: row.command_type || row.type,
+    payload: row.payload || {},
+    dedupeKey: row.dedupe_key ?? row.dedupeKey ?? null,
+    status: row.status,
+    createdAt: timestamp(row.created_at ?? row.createdAt),
+    expiresAt: timestamp(row.expires_at ?? row.expiresAt),
+    deliveredAt: timestamp(row.delivered_at ?? row.deliveredAt),
+    acknowledgedAt: timestamp(row.acknowledged_at ?? row.acknowledgedAt),
+    result: row.result || null
+  };
+}
+
 class PostgresAutoTradeStore {
   constructor(databaseUrl) {
     const local = /(?:localhost|127\.0\.0\.1)/i.test(databaseUrl);
@@ -277,6 +295,26 @@ class PostgresAutoTradeStore {
 
       ALTER TABLE zencore_autotrade_commands
         ADD COLUMN IF NOT EXISTS signed_envelope TEXT;
+
+      CREATE TABLE IF NOT EXISTS zencore_hosted_autotrade_commands (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES zencore_users(id) ON DELETE CASCADE,
+        account_id UUID NOT NULL REFERENCES zencore_mt5_hosted_accounts(id) ON DELETE CASCADE,
+        command_type VARCHAR(40) NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        dedupe_key VARCHAR(220),
+        status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL,
+        delivered_at TIMESTAMPTZ,
+        acknowledged_at TIMESTAMPTZ,
+        result JSONB
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS zencore_hosted_command_dedupe_idx
+        ON zencore_hosted_autotrade_commands(user_id, dedupe_key)
+        WHERE dedupe_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS zencore_hosted_command_queue_idx
+        ON zencore_hosted_autotrade_commands(account_id, status, created_at);
 
       CREATE TABLE IF NOT EXISTS zencore_autotrade_audit (
         id BIGSERIAL PRIMARY KEY,
@@ -723,6 +761,120 @@ class PostgresAutoTradeStore {
     return publicCommand(query.rows[0]);
   }
 
+
+  async validateHostedLease(accountId, identity, leaseId, now) {
+    const result = await this.pool.query(
+      `SELECT user_id FROM zencore_mt5_hosted_accounts
+       WHERE id = $1 AND worker_instance_id = $2 AND worker_project_id = $3
+         AND lease_id = $4 AND lease_expires_at > $5
+       LIMIT 1`,
+      [accountId, identity.instanceId, identity.projectId, leaseId, new Date(now)]
+    );
+    return result.rows[0]?.user_id || null;
+  }
+
+  async createHostedCommand(command) {
+    try {
+      const result = await this.pool.query(
+        `INSERT INTO zencore_hosted_autotrade_commands
+          (id, user_id, account_id, command_type, payload, dedupe_key, expires_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+         RETURNING *`,
+        [command.id, command.userId, command.accountId, command.type,
+          JSON.stringify(command.payload || {}), command.dedupeKey || null,
+          new Date(command.expiresAt)]
+      );
+      return { created: true, command: publicHostedCommand(result.rows[0]) };
+    } catch (error) {
+      if (error?.code !== '23505' || !command.dedupeKey) throw error;
+      const result = await this.pool.query(
+        `SELECT * FROM zencore_hosted_autotrade_commands
+         WHERE user_id = $1 AND dedupe_key = $2 LIMIT 1`,
+        [command.userId, command.dedupeKey]
+      );
+      return { created: false, command: publicHostedCommand(result.rows[0]) };
+    }
+  }
+
+  async hasRecentHostedEntryCommand(userId, symbol, since) {
+    const result = await this.pool.query(
+      `SELECT 1 FROM zencore_hosted_autotrade_commands
+       WHERE user_id = $1 AND command_type = 'PLACE_SETUP'
+         AND payload->>'symbol' = $2 AND created_at >= $3
+         AND status NOT IN ('FAILED','REJECTED','EXPIRED','CANCELLED')
+       LIMIT 1`,
+      [userId, symbol, new Date(since)]
+    );
+    return result.rowCount > 0;
+  }
+
+  async cancelPendingHostedEntryCommands(userId, reason) {
+    const safeReason = String(reason || 'CANCELLED').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40);
+    const result = await this.pool.query(
+      `UPDATE zencore_hosted_autotrade_commands SET
+         status = 'CANCELLED', acknowledged_at = NOW(),
+         result = jsonb_build_object('code', $2::text, 'message', 'Cancelled before broker execution')
+       WHERE user_id = $1 AND command_type IN ('PLACE_SETUP','SYSTEM_ON')
+         AND status = 'PENDING'
+       RETURNING id`,
+      [userId, safeReason]
+    );
+    return result.rowCount;
+  }
+
+  async nextHostedCommand(accountId, now) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE zencore_hosted_autotrade_commands SET status = 'EXPIRED'
+         WHERE account_id = $1 AND status IN ('PENDING','DELIVERED') AND expires_at <= $2`,
+        [accountId, new Date(now)]
+      );
+      const result = await client.query(
+        `SELECT * FROM zencore_hosted_autotrade_commands
+         WHERE account_id = $1 AND status IN ('PENDING','DELIVERED') AND expires_at > $2
+         ORDER BY CASE command_type
+           WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
+           WHEN 'SYSTEM_STOP' THEN 1
+           WHEN 'MANAGE_POSITION' THEN 2
+           WHEN 'SYSTEM_ON' THEN 3
+           WHEN 'PLACE_SETUP' THEN 4
+           ELSE 5 END,
+           created_at ASC
+         LIMIT 1 FOR UPDATE SKIP LOCKED`,
+        [accountId, new Date(now)]
+      );
+      if (!result.rows[0]) {
+        await client.query('COMMIT');
+        return null;
+      }
+      const updated = await client.query(
+        `UPDATE zencore_hosted_autotrade_commands SET status = 'DELIVERED', delivered_at = NOW()
+         WHERE id = $1 RETURNING *`,
+        [result.rows[0].id]
+      );
+      await client.query('COMMIT');
+      return publicHostedCommand(updated.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async ackHostedCommand(accountId, commandId, status, result) {
+    const query = await this.pool.query(
+      `UPDATE zencore_hosted_autotrade_commands SET
+         status = $3, acknowledged_at = NOW(), result = $4::jsonb
+       WHERE id = $1 AND account_id = $2 AND status IN ('PENDING','DELIVERED')
+       RETURNING *`,
+      [commandId, accountId, status, JSON.stringify(result || {})]
+    );
+    return publicHostedCommand(query.rows[0]);
+  }
+
   async appendAudit(userId, eventType, detail = {}) {
     await this.pool.query(
       `INSERT INTO zencore_autotrade_audit (user_id, event_type, detail)
@@ -756,6 +908,7 @@ class MemoryAutoTradeStore {
     this.hostedWorkerRequests = new Map();
     this.positions = new Map();
     this.commands = new Map();
+    this.hostedCommands = new Map();
     this.audit = new Map();
   }
 
@@ -1052,6 +1205,82 @@ class MemoryAutoTradeStore {
     return publicCommand(row);
   }
 
+
+  async validateHostedLease(accountId, identity, leaseId, now) {
+    const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+    if (!row || row.workerInstanceId !== identity.instanceId ||
+        row.workerProjectId !== identity.projectId || row.leaseId !== leaseId ||
+        Number(row.leaseExpiresAt || 0) <= now) return null;
+    return row.userId;
+  }
+
+  async createHostedCommand(command) {
+    const rows = this.hostedCommands.get(command.accountId) || [];
+    if (command.dedupeKey) {
+      const duplicate = [...this.hostedCommands.values()].flat()
+        .find(item => item.userId === command.userId && item.dedupeKey === command.dedupeKey);
+      if (duplicate) return { created: false, command: publicHostedCommand(duplicate) };
+    }
+    const row = {
+      ...command, status: 'PENDING', createdAt: Date.now(),
+      deliveredAt: null, acknowledgedAt: null, result: null
+    };
+    rows.push(row);
+    this.hostedCommands.set(command.accountId, rows);
+    return { created: true, command: publicHostedCommand(row) };
+  }
+
+  async hasRecentHostedEntryCommand(userId, symbol, since) {
+    return [...this.hostedCommands.values()].flat().some(item =>
+      item.userId === userId && item.type === 'PLACE_SETUP' &&
+      item.payload?.symbol === symbol && item.createdAt >= since &&
+      !['FAILED','REJECTED','EXPIRED','CANCELLED'].includes(item.status)
+    );
+  }
+
+  async cancelPendingHostedEntryCommands(userId, reason) {
+    let cancelled = 0;
+    for (const rows of this.hostedCommands.values()) {
+      for (const item of rows) {
+        if (item.userId !== userId || !['PLACE_SETUP','SYSTEM_ON'].includes(item.type) ||
+            item.status !== 'PENDING') continue;
+        item.status = 'CANCELLED';
+        item.acknowledgedAt = Date.now();
+        item.result = {
+          code: String(reason || 'CANCELLED').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40),
+          message: 'Cancelled before broker execution'
+        };
+        cancelled += 1;
+      }
+    }
+    return cancelled;
+  }
+
+  async nextHostedCommand(accountId, now) {
+    const rows = this.hostedCommands.get(accountId) || [];
+    for (const row of rows) {
+      if (['PENDING','DELIVERED'].includes(row.status) && row.expiresAt <= now) row.status = 'EXPIRED';
+    }
+    const priority = { EMERGENCY_CLOSE_ALL: 0, SYSTEM_STOP: 1, MANAGE_POSITION: 2, SYSTEM_ON: 3, PLACE_SETUP: 4 };
+    const row = rows
+      .filter(item => ['PENDING','DELIVERED'].includes(item.status) && item.expiresAt > now)
+      .sort((a,b) => (priority[a.type] ?? 5) - (priority[b.type] ?? 5) || a.createdAt - b.createdAt)[0];
+    if (!row) return null;
+    row.status = 'DELIVERED';
+    row.deliveredAt = now;
+    return publicHostedCommand(row);
+  }
+
+  async ackHostedCommand(accountId, commandId, status, result) {
+    const row = (this.hostedCommands.get(accountId) || [])
+      .find(item => item.id === commandId && ['PENDING','DELIVERED'].includes(item.status));
+    if (!row) return null;
+    row.status = status;
+    row.result = result || {};
+    row.acknowledgedAt = Date.now();
+    return publicHostedCommand(row);
+  }
+
   async appendAudit(userId, eventType, detail = {}) {
     const rows = this.audit.get(userId) || [];
     rows.unshift({ id: crypto.randomUUID(), type: eventType, detail, createdAt: Date.now() });
@@ -1079,5 +1308,6 @@ module.exports = {
   publicPod,
   publicPairing,
   publicHostedAccount,
-  publicCommand
+  publicCommand,
+  publicHostedCommand
 };

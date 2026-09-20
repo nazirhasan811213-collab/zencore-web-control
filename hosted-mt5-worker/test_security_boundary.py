@@ -122,12 +122,15 @@ class AnalysisParityTests(unittest.TestCase):
             "tp1": 199.0,
             "tp2": 198.0,
             "tp3": 197.0,
+            "lotPerLayer": 0.01,
+            "layers": 3,
+            "totalLot": 0.03,
             "signalReceivedAt": 1790000010000,
         }
 
-    def test_all_11_markets_are_declared_but_build_execution_is_locked(self):
+    def test_all_11_markets_are_declared_and_demo_execution_build_is_explicitly_unlocked(self):
         self.assertEqual(len(boundary.SUPPORTED_MARKETS), 11)
-        self.assertFalse(boundary.HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED)
+        self.assertTrue(boundary.HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED)
         snapshot = boundary.validate_entry_command(self.payload())
         self.assertEqual(snapshot["decisionOwner"], "ZENCORE_ANALYSIS")
 
