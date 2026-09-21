@@ -4,120 +4,253 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>Admin Dashboard — ZenCore</title>
+  <title>ZenCore Admin Control Center</title>
   <link rel="stylesheet" href="/auth.css?v=1.1">
-  <link rel="stylesheet" href="/management.css?v=1.2">
+  <link rel="stylesheet" href="/management.css?v=2.0">
 </head>
-<body data-management-role="admin">
-  <div class="mg-shell">
-    <aside class="mg-sidebar">
-      <a class="mg-logo" href="/admin">
-        <span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span>
-        <span><b>ZenCore</b><small>ADMIN CONTROL</small></span>
+<body data-management-role="admin" class="admin-v4">
+  <div class="mg-shell zc-shell">
+    <aside class="mg-sidebar zc-sidebar">
+      <a class="zc-brand" href="/admin" aria-label="ZenCore Admin">
+        <span class="zc-brand-orb" aria-hidden="true">
+          <i class="zc-brand-ring one"></i>
+          <i class="zc-brand-ring two"></i>
+          <b>Z</b>
+        </span>
+        <span class="zc-brand-copy">
+          <strong>ZenCore</strong>
+          <small>TOTAL TRADE SYSTEM</small>
+          <em>TRADE SMARTER TOGETHER</em>
+        </span>
       </a>
-      <nav class="mg-nav">
+
+      <nav class="mg-nav zc-nav" aria-label="Admin navigation">
         <a class="active" href="/admin"><span>⌂</span>Dashboard</a>
         <a href="#ibs"><span>◈</span>IB Management</a>
         <a href="#clients"><span>◎</span>All Clients</a>
         <a href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
-        <a href="/admin/activity"><span>▤</span>Activity</a>
-        <a href="/admin/system"><span>⚙</span>System Settings</a>
         <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
         <a href="/auto-trade"><span>↯</span>Auto Trade</a>
         <a href="/results"><span>▤</span>Reports</a>
+        <a href="/admin/system"><span>⚙</span>Settings</a>
       </nav>
-      <div class="mg-side-note">
-        <span>ROLE</span>
-        <b>SUPER ADMIN</b>
-        <small>Full ZenCore access</small>
+
+      <div class="zc-admin-badge">
+        <span>ADMIN ACCESS</span>
+        <b>♛ SUPER ADMIN</b>
+        <small>Full system control</small>
+      </div>
+
+      <div class="zc-sidebar-quote">
+        <p>“Technology creates opportunity.<br>Discipline creates consistency.”</p>
+        <span>— ZENCORE</span>
       </div>
     </aside>
 
-    <main class="mg-main">
-      <header class="mg-topbar">
-        <div>
-          <span class="mg-kicker">ZENCORE TOTAL TRADE SYSTEM</span>
-          <h1>Admin Dashboard</h1>
+    <main class="mg-main zc-main">
+      <header class="zc-topbar">
+        <div class="zc-global-search">
+          <span>⌕</span>
+          <input id="globalSearch" type="search" placeholder="Search IB, client, registration code, or anything..." autocomplete="off">
+          <kbd>Ctrl K</kbd>
         </div>
-        <div class="mg-user">
-          <div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div>
-          <span class="mg-role admin">ADMIN</span>
+
+        <div class="zc-profile">
+          <button class="zc-icon-button" type="button" aria-label="Notifications">◔<i></i></button>
+          <div class="zc-avatar">N</div>
+          <div class="zc-profile-copy">
+            <b id="accountName">Nazir</b>
+            <small id="accountEmail">Admin</small>
+          </div>
+          <span class="zc-super-badge">♛ SUPER ADMIN <i>● Online</i></span>
           <button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button>
         </div>
       </header>
 
-      <section class="mg-hero">
-        <div>
-          <span class="mg-kicker">GLOBAL CONTROL CENTER</span>
-          <h2>Semua IB dan client, satu pusat kawalan.</h2>
-          <p>Admin boleh create IB, pantau semua client, kawal status akaun dan melihat keseluruhan hierarchy ZenCore.</p>
+      <section class="zc-hero">
+        <div class="zc-hero-copy">
+          <span class="mg-kicker">ZENCORE TOTAL TRADE SYSTEM</span>
+          <h1>Semua IB dan Client,<br><strong>Satu Pusat Kawalan.</strong></h1>
+          <p>Admin mengawal keseluruhan sistem, IB mengurus client di bawah rangkaian sendiri, dan setiap client mempunyai akaun sendiri dalam ekosistem ZenCore yang kemas dan terkawal.</p>
+
+          <div class="zc-pillars">
+            <div><span>◇</span><b>SECURE</b><small>Role-based access</small></div>
+            <div><span>♙</span><b>SCALABLE</b><small>Built for growth</small></div>
+            <div><span>⌁</span><b>INTELLIGENT</b><small>Live system insight</small></div>
+          </div>
         </div>
-        <div class="mg-system">
+
+        <div class="zc-orbit-stage" aria-hidden="true">
+          <div class="zc-nebula"></div>
+          <div class="zc-orb">
+            <span class="zc-orb-core">Z</span>
+            <i class="zc-ring ring-a"></i>
+            <i class="zc-ring ring-b"></i>
+            <i class="zc-ring ring-c"></i>
+            <i class="zc-satellite sat-a"></i>
+            <i class="zc-satellite sat-b"></i>
+          </div>
+          <div class="zc-orbit-words">
+            <span>PEOPLE</span><span>TECHNOLOGY</span><span>DISCIPLINE</span><span>GROWTH</span>
+          </div>
+        </div>
+
+        <div class="zc-access-card">
           <span>SYSTEM ACCESS</span>
           <b>FULL CONTROL</b>
-          <small>Admin → IB → Client</small>
+          <strong>Admin → IB → Client</strong>
+          <hr>
+          <small>Role-based ownership untuk sistem yang lebih tersusun dan selamat.</small>
         </div>
       </section>
 
-      <section class="mg-stats" aria-label="Ringkasan sistem">
-        <article><span>TOTAL IB</span><b id="statIb">—</b><small id="statIbActive">— active</small></article>
-        <article><span>TOTAL CLIENT</span><b id="statClients">—</b><small>Registered</small></article>
-        <article><span>ACTIVE CLIENT</span><b id="statActive">—</b><small>Can login</small></article>
-        <article><span>NEW TODAY</span><b id="statToday">—</b><small>Registrations</small></article>
+      <section class="zc-kpis" aria-label="System summary">
+        <article>
+          <div class="zc-kpi-icon blue">♙</div>
+          <div><span>TOTAL IB</span><b id="statIb">—</b><small id="statIbActive">— active</small></div>
+          <i class="zc-mini-bars blue"><u></u><u></u><u></u><u></u></i>
+        </article>
+        <article>
+          <div class="zc-kpi-icon indigo">♟</div>
+          <div><span>TOTAL CLIENT</span><b id="statClients">—</b><small>Registered accounts</small></div>
+          <i class="zc-mini-bars indigo"><u></u><u></u><u></u><u></u></i>
+        </article>
+        <article>
+          <div class="zc-kpi-icon green">●</div>
+          <div><span>ACTIVE CLIENT</span><b id="statActive">—</b><small id="activeRate">Can login</small></div>
+          <i class="zc-progress-ring" id="activeRing"></i>
+        </article>
+        <article>
+          <div class="zc-kpi-icon cyan">＋</div>
+          <div><span>NEW TODAY</span><b id="statToday">—</b><small>New registrations</small></div>
+          <i class="zc-mini-bars cyan"><u></u><u></u><u></u><u></u></i>
+        </article>
+        <article>
+          <div class="zc-kpi-icon gold">⌛</div>
+          <div><span>PENDING MT5</span><b id="statPendingMt5">—</b><small>Needs verification</small></div>
+          <i class="zc-mini-bars gold"><u></u><u></u><u></u><u></u></i>
+        </article>
       </section>
 
-      <section id="ibs" class="mg-panel">
-        <div class="mg-panel-head">
-          <div><span class="mg-kicker">PARTNER NETWORK</span><h2>IB Management</h2></div>
-          <button id="toggleCreateIb" class="mg-primary" type="button">+ CREATE IB</button>
+      <section class="zc-dashboard-grid">
+        <div class="zc-main-column">
+          <section id="ibs" class="mg-panel zc-panel">
+            <div class="mg-panel-head zc-panel-head">
+              <div>
+                <span class="mg-kicker">PARTNER NETWORK</span>
+                <h2>IB Management</h2>
+                <p>Urus, pantau dan kawal semua Introducing Broker dalam rangkaian ZenCore.</p>
+              </div>
+              <button id="toggleCreateIb" class="mg-primary zc-primary" type="button">＋ TAMBAH IB BARU</button>
+            </div>
+
+            <form id="createIbForm" class="mg-create hidden" novalidate>
+              <div class="mg-create-head"><b>Create IB Account</b><span>IB akan menerima dashboard dan referral link sendiri.</span></div>
+              <label>Nama IB<input name="displayName" maxlength="80" placeholder="Contoh: Azman IB" required></label>
+              <label>Kod IB<input name="code" maxlength="48" placeholder="Contoh: azman" required></label>
+              <label>E-mel<input name="email" type="email" maxlength="254" placeholder="azman@email.com" required></label>
+              <label>No. telefon<input name="phone" type="tel" maxlength="24" placeholder="0123456789"></label>
+              <label>Password sementara<input name="password" type="password" minlength="10" maxlength="128" placeholder="Minimum 10 aksara" required></label>
+              <div class="mg-create-actions">
+                <span id="createIbStatus" class="mg-form-status"></span>
+                <button type="submit" class="mg-primary">CREATE & GENERATE LINK</button>
+              </div>
+            </form>
+
+            <div class="mg-table-wrap zc-table-wrap">
+              <table class="mg-table zc-table">
+                <thead><tr><th>IB NAME</th><th>CODE / REGISTRATION LINK</th><th>TOTAL CLIENTS</th><th>STATUS</th><th>ACTION</th></tr></thead>
+                <tbody id="ibTable"><tr><td colspan="5" class="mg-loading">Loading IB...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="clients" class="mg-panel zc-panel">
+            <div class="mg-panel-head zc-panel-head">
+              <div>
+                <span class="mg-kicker">CLIENT DATABASE</span>
+                <h2>All Clients</h2>
+                <p>Senarai semua client dan status semasa mereka.</p>
+              </div>
+              <div class="mg-filter mg-filter-advanced zc-client-filter">
+                <input id="clientSearch" type="search" placeholder="Nama, email, phone, IB...">
+                <select id="clientIbFilter"><option value="">All IB</option></select>
+                <select id="clientStatusFilter">
+                  <option value="">All status</option>
+                  <option value="active">Active</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mg-table-wrap zc-table-wrap">
+              <table class="mg-table clients zc-table">
+                <thead><tr><th>CLIENT NAME</th><th>CONTACT</th><th>IB</th><th>REGISTERED</th><th>STATUS</th><th>ACTION</th></tr></thead>
+                <tbody id="clientTable"><tr><td colspan="6" class="mg-loading">Loading clients...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
         </div>
 
-        <form id="createIbForm" class="mg-create hidden" novalidate>
-          <div class="mg-create-head"><b>Create IB Account</b><span>IB akan mendapat dashboard dan referral link sendiri.</span></div>
-          <label>Nama IB<input name="displayName" maxlength="80" placeholder="Contoh: Azman IB" required></label>
-          <label>Kod IB<input name="code" maxlength="48" placeholder="Contoh: azman" required></label>
-          <label>E-mel<input name="email" type="email" maxlength="254" placeholder="azman@email.com" required></label>
-          <label>No. telefon<input name="phone" type="tel" maxlength="24" placeholder="0123456789"></label>
-          <label>Password sementara<input name="password" type="password" minlength="10" maxlength="128" placeholder="Minimum 10 aksara" required></label>
-          <div class="mg-create-actions">
-            <span id="createIbStatus" class="mg-form-status"></span>
-            <button type="submit" class="mg-primary">CREATE & GENERATE LINK</button>
-          </div>
-        </form>
+        <aside class="zc-insight-column">
+          <section class="zc-insight-card">
+            <div class="zc-insight-head">
+              <div><span class="zc-panel-icon">◉</span><h3>System Intelligence</h3></div>
+              <span class="zc-live-dot">● Live</span>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">▥</span>
+              <div><b>Platform Status</b><small id="systemPlatformText">Checking...</small></div>
+              <strong id="systemPlatformState">—</strong>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">◎</span>
+              <div><b>MT5 Coverage</b><small id="systemMt5Text">Checking...</small></div>
+              <strong id="systemMt5State">—</strong>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">◇</span>
+              <div><b>Execution Safety</b><small id="systemExecutionText">Controlled rollout</small></div>
+              <strong id="systemExecutionState">—</strong>
+            </div>
+          </section>
 
-        <div class="mg-table-wrap">
-          <table class="mg-table">
-            <thead><tr><th>IB</th><th>Code / Registration Link</th><th>Clients</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="ibTable"><tr><td colspan="5" class="mg-loading">Loading IB...</td></tr></tbody>
-          </table>
-        </div>
+          <section class="zc-insight-card">
+            <div class="zc-insight-head">
+              <div><span class="zc-panel-icon">↯</span><h3>Auto Trade Status</h3></div>
+              <span class="zc-live-dot">● System</span>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">▤</span>
+              <div><b>Connected MT5</b><small>Client terminals</small></div>
+              <strong id="autoConnectedMt5">—</strong>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">⚙</span>
+              <div><b>Auto Trade Engine</b><small>Control plane</small></div>
+              <strong id="autoTradeEngine">—</strong>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">⌁</span>
+              <div><b>System ON</b><small>Client desired/effective</small></div>
+              <strong id="autoTradeOn">—</strong>
+            </div>
+            <div class="zc-insight-row">
+              <span class="zc-row-icon">◇</span>
+              <div><b>Registration</b><small>New client onboarding</small></div>
+              <strong id="registrationState">—</strong>
+            </div>
+          </section>
+        </aside>
       </section>
 
-      <section id="clients" class="mg-panel">
-        <div class="mg-panel-head">
-          <div><span class="mg-kicker">CLIENT DATABASE</span><h2>All Clients</h2></div>
-          <div class="mg-filter mg-filter-advanced">
-            <label for="clientSearch">FILTER</label>
-            <input id="clientSearch" type="search" placeholder="Nama, email, phone, IB">
-            <select id="clientIbFilter"><option value="">All IB</option></select>
-            <select id="clientStatusFilter">
-              <option value="">All status</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-            </select>
-          </div>
-        </div>
-        <div class="mg-table-wrap">
-          <table class="mg-table clients">
-            <thead><tr><th>Client</th><th>Contact</th><th>IC</th><th>IB</th><th>Registered</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="clientTable"><tr><td colspan="7" class="mg-loading">Loading clients...</td></tr></tbody>
-          </table>
-        </div>
-      </section>
-
-      <footer class="mg-foot">ZenCore Admin Control • Role-based access • IB ownership locked at database level</footer>
+      <footer class="zc-footer">
+        <div><b>ZenCore</b><span>Build A Smarter Trading Tomorrow.</span></div>
+        <div><span>Secure</span><i>•</i><span>Role-Based</span><i>•</i><span>Professional</span><i>•</i><span>Scalable</span></div>
+      </footer>
     </main>
   </div>
-  <script src="/management.js?v=1.2" defer></script>
+
+  <script src="/management.js?v=2.0" defer></script>
 </body>
 </html>

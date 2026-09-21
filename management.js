@@ -83,13 +83,12 @@
     const tbody = byId('clientTable');
     if (!tbody) return;
     if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="mg-loading">Belum ada client.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="mg-loading">Belum ada client. Client akan dipaparkan selepas pendaftaran.</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(client => `<tr>
       <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
-      <td><strong>${esc(client.phone || '—')}</strong><small>${esc(fmtLastLogin(client.lastLoginAt))}</small></td>
-      <td><span class="link-code">${esc(client.icMasked || '—')}</span></td>
+      <td><strong>${esc(client.phone || '—')}</strong><small>IC ${esc(client.icMasked || '—')}</small></td>
       <td><strong>${esc(client.ibName || 'Nazir (Admin)')}</strong><small>${esc((client.ibCode || 'nazir').toUpperCase())}</small></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
       <td>${statusPill(client.status)}</td>
@@ -122,7 +121,7 @@
       const link = `${window.location.origin}/u/${encodeURIComponent(item.code)}`;
       return `<tr>
         <td><a class="table-link" href="/admin/ib/${encodeURIComponent(item.code)}"><strong>${esc(item.displayName)}</strong><small>${isAdmin ? 'Default owner' : 'IB Partner'}</small></a></td>
-        <td><span class="link-code">${esc(item.code.toUpperCase())}</span><small>${esc(link)}</small></td>
+        <td><span class="link-code">${esc(item.code.toUpperCase())}</span><small>${esc(link)} <button class="copy-inline" type="button" data-copy-link="${esc(link)}" title="Copy registration link">⧉</button></small></td>
         <td><strong>${esc(item.clientCount)}</strong><small>clients</small></td>
         <td>${statusPill(item.active ? 'active' : 'disabled')}</td>
         <td>${isAdmin ? '<span class="status-pill active">SYSTEM</span>' : `<button class="table-action ${item.active ? 'danger' : 'good'}" type="button" data-ib-status="${esc(item.id)}" data-active="${item.active ? 'false' : 'true'}">${item.active ? 'DISABLE' : 'ACTIVATE'}</button>`}</td>
@@ -131,14 +130,64 @@
   }
 
   async function loadAdmin() {
-    const body = await api('/api/admin/overview');
+    const [body, systemBody, mt5Body] = await Promise.all([
+      api('/api/admin/overview'),
+      api('/api/admin/system').catch(() => ({ settings: {} })),
+      api('/api/admin/mt5').catch(() => ({ ready: false, accounts: [] }))
+    ]);
     overview = body;
     clients = body.latestClients || [];
+    const totalClients = Number(body.stats?.total_clients || 0);
+    const activeClients = Number(body.stats?.active_clients || 0);
+    const activePct = totalClients > 0 ? Math.round((activeClients / totalClients) * 100) : 0;
+
     byId('statIb').textContent = body.stats?.total_ibs ?? 0;
-    byId('statIbActive').textContent = `${body.stats?.active_ibs ?? 0} active`;
-    byId('statClients').textContent = body.stats?.total_clients ?? 0;
-    byId('statActive').textContent = body.stats?.active_clients ?? 0;
+    byId('statIbActive').textContent = `${body.stats?.active_ibs ?? 0} active IB`;
+    byId('statClients').textContent = totalClients;
+    byId('statActive').textContent = activeClients;
     byId('statToday').textContent = body.stats?.today_clients ?? 0;
+    if (byId('activeRate')) byId('activeRate').textContent = totalClients ? `${activePct}% of total` : 'Can login';
+    if (byId('activeRing')) byId('activeRing').style.setProperty('--ring', `${activePct}%`);
+
+    const accounts = Array.isArray(mt5Body.accounts) ? mt5Body.accounts : [];
+    const pendingMt5 = accounts.filter(row => {
+      const status = String(row.hosted?.status || '').toUpperCase();
+      return status.includes('PENDING') || status.includes('VERIFY');
+    }).length;
+    if (byId('statPendingMt5')) byId('statPendingMt5').textContent = pendingMt5;
+
+    const now = Date.now();
+    const connectedMt5 = accounts.filter(row => {
+      const lastSeen = Number(row.hosted?.lastSeenAt || row.pod?.lastSeenAt || 0);
+      return lastSeen > 0 && (now - lastSeen) <= 45000;
+    }).length;
+    const systemsOn = accounts.filter(row =>
+      row.control?.desiredState === 'ON' || row.control?.effectiveState === 'ON'
+    ).length;
+    const sys = systemBody.settings || {};
+    const registrationOpen = sys.registration?.effective === true;
+
+    if (byId('systemPlatformState')) {
+      byId('systemPlatformState').textContent = 'OPERATIONAL';
+      byId('systemPlatformText').textContent = 'Admin, IB and client services online';
+    }
+    if (byId('systemMt5State')) {
+      byId('systemMt5State').textContent = connectedMt5 ? `${connectedMt5} LIVE` : 'IDLE';
+      byId('systemMt5Text').textContent = `${connectedMt5} of ${totalClients} client terminal(s) connected`;
+    }
+    if (byId('systemExecutionState')) {
+      byId('systemExecutionState').textContent = sys.executionUnlocked ? 'UNLOCKED' : 'LOCKED';
+      byId('systemExecutionState').className = sys.executionUnlocked ? 'warn' : '';
+      byId('systemExecutionText').textContent = sys.executionUnlocked ? 'Execution rollout enabled' : 'Protected by controlled rollout';
+    }
+    if (byId('autoConnectedMt5')) byId('autoConnectedMt5').textContent = String(connectedMt5);
+    if (byId('autoTradeEngine')) byId('autoTradeEngine').textContent = sys.autoTrade ? 'READY' : 'OFF';
+    if (byId('autoTradeOn')) byId('autoTradeOn').textContent = String(systemsOn);
+    if (byId('registrationState')) {
+      byId('registrationState').textContent = registrationOpen ? 'OPEN' : 'CLOSED';
+      byId('registrationState').className = registrationOpen ? '' : 'warn';
+    }
+
     renderIbTable(body.ibs || []);
     const ibFilter = byId('clientIbFilter');
     if (ibFilter) {
@@ -182,6 +231,36 @@
     else renderIbClients(list);
   }
 
+
+  function runGlobalSearch() {
+    const global = byId('globalSearch');
+    const local = byId('clientSearch');
+    if (!global || !local) return;
+    local.value = global.value;
+    filterClients();
+    const target = document.getElementById('clients');
+    if (global.value.trim() && target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  byId('globalSearch')?.addEventListener('change', runGlobalSearch);
+  byId('globalSearch')?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runGlobalSearch();
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'k') {
+      const input = byId('globalSearch');
+      if (input) {
+        event.preventDefault();
+        input.focus();
+        input.select();
+      }
+    }
+  });
+
   byId('clientSearch')?.addEventListener('input', filterClients);
   byId('clientIbFilter')?.addEventListener('change', filterClients);
   byId('clientStatusFilter')?.addEventListener('change', filterClients);
@@ -217,6 +296,22 @@
   });
 
   document.addEventListener('click', async event => {
+    const copyButton = event.target.closest('[data-copy-link]');
+    if (copyButton) {
+      const value = copyButton.dataset.copyLink || '';
+      if (value) {
+        try {
+          await navigator.clipboard.writeText(value);
+          const original = copyButton.textContent;
+          copyButton.textContent = '✓';
+          window.setTimeout(() => { copyButton.textContent = original; }, 1000);
+        } catch (_) {
+          window.prompt('Copy registration link:', value);
+        }
+      }
+      return;
+    }
+
     const ibButton = event.target.closest('[data-ib-status]');
     if (ibButton && role === 'admin') {
       ibButton.disabled = true;
