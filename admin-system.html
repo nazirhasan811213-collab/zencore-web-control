@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+  <title>System Settings — ZenCore Admin</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1"><link rel="stylesheet" href="/management.css?v=1.2">
+</head>
+<body data-admin-ops-page="system">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a class="mg-logo" href="/admin"><span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span><span><b>ZenCore</b><small>ADMIN CONTROL</small></span></a>
+      <nav class="mg-nav">
+        <a href="/admin"><span>⌂</span>Dashboard</a>
+        <a href="/admin#ibs"><span>◈</span>IB Management</a>
+        <a href="/admin#clients"><span>◎</span>Clients</a>
+        <a href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
+        <a href="/admin/activity"><span>▤</span>Activity</a>
+        <a class="active" href="/admin/system"><span>⚙</span>System Settings</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+      </nav>
+      <div class="mg-side-note"><span>CONTROL</span><b>ADMIN SETTINGS</b><small>Critical execution gate protected</small></div>
+    </aside>
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div><span class="mg-kicker">PLATFORM CONTROL</span><h1>System Settings</h1></div>
+        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button></div>
+      </header>
+
+      <section class="mg-hero ops-hero">
+        <div><span class="mg-kicker">ZENCORE PLATFORM</span><h2>Control operasi tanpa membuka execution secara tidak sengaja.</h2><p>Admin boleh buka/tutup pendaftaran client. Gate MT5 execution kekal read-only di sini dan hanya berubah melalui controlled rollout.</p></div>
+        <div class="mg-system"><span>SAFETY MODE</span><b id="systemSafety">CHECKING...</b><small>Execution is independently gated</small></div>
+      </section>
+
+      <section class="system-grid">
+        <article class="mg-panel system-card">
+          <div class="system-card-head"><div><span class="mg-kicker">CLIENT ONBOARDING</span><h2>Client Registration</h2></div><span id="registrationBadge" class="status-pill">—</span></div>
+          <p>Apabila ditutup, client baharu tidak boleh register melalui mana-mana link IB. Akaun sedia ada tidak terjejas.</p>
+          <label class="switch-row"><span><b>Allow new client registration</b><small id="registrationNote">Loading...</small></span><input id="registrationToggle" type="checkbox"><i></i></label>
+          <div id="systemMessage" class="mg-form-status"></div>
+        </article>
+
+        <article class="mg-panel system-card">
+          <div class="system-card-head"><div><span class="mg-kicker">ACCESS</span><h2>Authentication</h2></div><span id="authBadge" class="status-pill">—</span></div>
+          <dl class="detail-list"><div><dt>Default IB</dt><dd id="defaultIb">—</dd></div><div><dt>Admin Role</dt><dd>Enabled</dd></div><div><dt>IB Isolation</dt><dd>Server enforced</dd></div></dl>
+        </article>
+
+        <article class="mg-panel system-card">
+          <div class="system-card-head"><div><span class="mg-kicker">AUTO TRADE</span><h2>Control Plane</h2></div><span id="autoTradeBadge" class="status-pill">—</span></div>
+          <dl class="detail-list"><div><dt>Hosted MT5</dt><dd id="hostedMt5">—</dd></div><div><dt>GCP Worker Identity</dt><dd id="gcpWorker">—</dd></div><div><dt>Symbols</dt><dd id="demoSymbols">—</dd></div></dl>
+        </article>
+
+        <article class="mg-panel system-card critical-card">
+          <div class="system-card-head"><div><span class="mg-kicker">CRITICAL GATE</span><h2>Execution Rollout</h2></div><span id="executionBadge" class="status-pill">—</span></div>
+          <p>Setting ini sengaja tidak mempunyai toggle di Admin GUI. Ia kekal di bawah controlled infrastructure rollout untuk elak order dibuka secara tidak sengaja.</p>
+          <dl class="detail-list"><div><dt>Required Connector</dt><dd id="connectorVersion">—</dd></div><div><dt>GUI Control</dt><dd>READ ONLY</dd></div></dl>
+        </article>
+      </section>
+      <footer class="mg-foot">ZenCore Admin • Business controls are separated from critical trade execution gates</footer>
+    </main>
+  </div>
+  <script src="/admin-ops.js?v=1.0" defer></script>
+</body>
+</html>
