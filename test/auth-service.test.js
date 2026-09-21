@@ -22,6 +22,7 @@ test('register creates a user and authenticated session without storing raw pass
 
   assert.equal(created.user.displayName, 'Test Trader');
   assert.equal(created.user.email, 'trader@example.com');
+  assert.equal(created.user.role, 'client');
   assert.equal(created.user.ibCode, 'nazir');
   assert.equal(created.user.ibName, 'Nazir (Admin)');
   assert.ok(created.token);
@@ -134,4 +135,111 @@ test('missing or invalid IB link defaults to Nazir admin and duplicate IC is blo
     assert.ok(error.fields.icNumber);
     return true;
   });
+});
+
+
+test('Admin controls all IBs while each IB only controls its own clients', async () => {
+  const store = new MemoryAuthStore();
+  const auth = createAuthService({ store, secureCookies: false });
+
+  const adminCreated = await auth.register({
+    displayName: 'Nazir Admin',
+    email: 'admin@example.com',
+    icNumber: '900101011241',
+    phone: '0123456781',
+    password: 'ZenCore2026!'
+  });
+  await store.setUserRole(adminCreated.user.id, 'admin');
+  const adminLogin = await auth.login({ email: 'admin@example.com', password: 'ZenCore2026!' });
+  assert.equal(adminLogin.user.role, 'admin');
+
+  const ibOne = await auth.createIb(adminLogin.user, {
+    displayName: 'Azman IB',
+    code: 'azman',
+    email: 'azman@example.com',
+    phone: '0123000001',
+    password: 'ZenCore2026!'
+  });
+  const ibTwo = await auth.createIb(adminLogin.user, {
+    displayName: 'Siti IB',
+    code: 'siti',
+    email: 'siti@example.com',
+    phone: '0123000002',
+    password: 'ZenCore2026!'
+  });
+  assert.equal(ibOne.user.role, 'ib');
+  assert.equal(ibTwo.user.role, 'ib');
+
+  await auth.register({
+    displayName: 'Client Azman',
+    email: 'client-azman@example.com',
+    icNumber: '900101011242',
+    phone: '0123000011',
+    ibCode: 'azman',
+    password: 'ZenCore2026!'
+  });
+  await auth.register({
+    displayName: 'Client Siti',
+    email: 'client-siti@example.com',
+    icNumber: '900101011243',
+    phone: '0123000012',
+    ibCode: 'siti',
+    password: 'ZenCore2026!'
+  });
+
+  const azmanLogin = await auth.login({ email: 'azman@example.com', password: 'ZenCore2026!' });
+  const sitiLogin = await auth.login({ email: 'siti@example.com', password: 'ZenCore2026!' });
+
+  const azmanOverview = await auth.ibOverview(azmanLogin.user);
+  const sitiOverview = await auth.ibOverview(sitiLogin.user);
+  assert.equal(azmanOverview.clients.length, 1);
+  assert.equal(azmanOverview.clients[0].email, 'client-azman@example.com');
+  assert.equal(sitiOverview.clients.length, 1);
+  assert.equal(sitiOverview.clients[0].email, 'client-siti@example.com');
+
+  const adminOverview = await auth.adminOverview(adminLogin.user);
+  assert.equal(adminOverview.stats.total_ibs, 2);
+  assert.equal(adminOverview.stats.total_clients, 3);
+  assert.ok(adminOverview.ibs.some(item => item.code === 'azman'));
+  assert.ok(adminOverview.ibs.some(item => item.code === 'siti'));
+
+  await assert.rejects(() => auth.adminOverview(azmanLogin.user), error => {
+    assert.equal(error.code, 'FORBIDDEN');
+    return true;
+  });
+
+  const sitiClientId = sitiOverview.clients[0].id;
+  await assert.rejects(() => auth.setIbClientActive(azmanLogin.user, sitiClientId, false), error => {
+    assert.equal(error.code, 'CLIENT_NOT_FOUND');
+    return true;
+  });
+
+  const ownClientId = azmanOverview.clients[0].id;
+  const disabled = await auth.setIbClientActive(azmanLogin.user, ownClientId, false);
+  assert.equal(disabled.status, 'disabled');
+
+  const reenabled = await auth.setAdminClientActive(adminLogin.user, ownClientId, true);
+  assert.equal(reenabled.status, 'active');
+});
+
+test('configured admin promotion changes only matching existing accounts', async () => {
+  const store = new MemoryAuthStore();
+  const auth = createAuthService({ store, secureCookies: false });
+  const a = await auth.register({
+    displayName: 'First',
+    email: 'first@example.com',
+    icNumber: '900101011244',
+    phone: '0123000021',
+    password: 'ZenCore2026!'
+  });
+  const b = await auth.register({
+    displayName: 'Second',
+    email: 'second@example.com',
+    icNumber: '900101011245',
+    phone: '0123000022',
+    password: 'ZenCore2026!'
+  });
+  assert.equal(await store.promoteAdminsByEmail(['first@example.com']), 1);
+  assert.equal((await store.findUserByIdForLogin(a.user.id)).role, 'admin');
+  assert.equal((await store.findUserByIdForLogin(b.user.id)).role, 'client');
 });
