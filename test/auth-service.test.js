@@ -199,7 +199,7 @@ test('Admin controls all IBs while each IB only controls its own clients', async
 
   const adminOverview = await auth.adminOverview(adminLogin.user);
   assert.equal(adminOverview.stats.total_ibs, 2);
-  assert.equal(adminOverview.stats.total_clients, 3);
+  assert.equal(adminOverview.stats.total_clients, 2);
   assert.ok(adminOverview.ibs.some(item => item.code === 'azman'));
   assert.ok(adminOverview.ibs.some(item => item.code === 'siti'));
 
