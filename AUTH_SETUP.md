@@ -106,3 +106,58 @@ Additional IB codes can be seeded at startup with `ZENCORE_IB_REGISTRY_JSON`:
 ```
 
 Keep codes lowercase and use only letters, numbers, `_` or `-`.
+
+
+## Role hierarchy
+
+ZenCore now uses three account roles:
+
+- `admin`: global control across all IBs and all clients.
+- `ib`: access only to clients permanently assigned to that IB.
+- `client`: personal ZenCore account; trading/analysis APIs continue to use the signed-in user's own user ID.
+
+Configured admins are promoted from existing user accounts at startup using:
+
+```text
+ZENCORE_ADMIN_EMAILS=admin@example.com
+```
+
+Multiple admin e-mails can be comma-separated. Public client registration never creates an admin or IB role.
+
+Role landing pages:
+
+```text
+/admin   -> Admin control center
+/ib      -> IB partner dashboard
+/app     -> Client Market Radar
+```
+
+Short registration links are supported:
+
+```text
+/u/azman
+/u/siti
+/u/nazir
+```
+
+Each short link redirects to the locked client registration flow for that IB.
+
+### Admin controls
+
+Admin can:
+
+- view every IB and client
+- create an IB login + referral code
+- activate/disable IB access
+- activate/disable any client account
+- filter all clients by IB through the API
+
+### IB controls
+
+IB can:
+
+- see only its own assigned clients
+- copy its own unique registration link
+- activate/disable only clients under that IB
+
+Server-side ownership checks prevent an IB from reading or changing another IB's client.
