@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin Dashboard — ZenCore</title>
   <link rel="stylesheet" href="/auth.css?v=1.1">
-  <link rel="stylesheet" href="/management.css?v=1.0">
+  <link rel="stylesheet" href="/management.css?v=1.2">
 </head>
 <body data-management-role="admin">
   <div class="mg-shell">
@@ -19,6 +19,9 @@
         <a class="active" href="/admin"><span>⌂</span>Dashboard</a>
         <a href="#ibs"><span>◈</span>IB Management</a>
         <a href="#clients"><span>◎</span>All Clients</a>
+        <a href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
+        <a href="/admin/activity"><span>▤</span>Activity</a>
+        <a href="/admin/system"><span>⚙</span>System Settings</a>
         <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
         <a href="/auto-trade"><span>↯</span>Auto Trade</a>
         <a href="/results"><span>▤</span>Reports</a>
@@ -93,9 +96,15 @@
       <section id="clients" class="mg-panel">
         <div class="mg-panel-head">
           <div><span class="mg-kicker">CLIENT DATABASE</span><h2>All Clients</h2></div>
-          <div class="mg-filter">
-            <label for="clientSearch">SEARCH</label>
+          <div class="mg-filter mg-filter-advanced">
+            <label for="clientSearch">FILTER</label>
             <input id="clientSearch" type="search" placeholder="Nama, email, phone, IB">
+            <select id="clientIbFilter"><option value="">All IB</option></select>
+            <select id="clientStatusFilter">
+              <option value="">All status</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
           </div>
         </div>
         <div class="mg-table-wrap">
@@ -109,6 +118,6 @@
       <footer class="mg-foot">ZenCore Admin Control • Role-based access • IB ownership locked at database level</footer>
     </main>
   </div>
-  <script src="/management.js?v=1.0" defer></script>
+  <script src="/management.js?v=1.2" defer></script>
 </body>
 </html>
