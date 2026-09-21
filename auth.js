@@ -25,6 +25,12 @@
     if (target) target.textContent = message || '';
   }
 
+  function landingForRole(role) {
+    if (role === 'admin') return '/admin';
+    if (role === 'ib') return '/ib';
+    return '/app';
+  }
+
   function status(message, type = 'error') {
     formStatus.textContent = message;
     formStatus.className = `form-status show ${type}`;
@@ -203,7 +209,7 @@
         return;
       }
       status(page === 'register' ? 'Pendaftaran client berjaya. Membuka ZenCore...' : 'Login berjaya.', 'success');
-      window.setTimeout(() => { window.location.replace('/app'); }, 350);
+      window.setTimeout(() => { window.location.replace(landingForRole(body.user?.role)); }, 350);
     } catch (_) {
       status('Tidak dapat menghubungi ZenCore. Semak internet dan cuba semula.');
     } finally {
@@ -215,6 +221,6 @@
 
   fetch('/auth/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then(response => response.ok ? response.json() : null)
-    .then(body => { if (body?.authenticated) window.location.replace('/app'); })
+    .then(body => { if (body?.authenticated) window.location.replace(landingForRole(body.user?.role)); })
     .catch(() => {});
 })();
