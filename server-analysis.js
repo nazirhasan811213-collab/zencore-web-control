@@ -373,6 +373,18 @@ async function handleManagementApi(req, res, pathname, session) {
         });
         return sendJson(res, 200, { ok: true, clients });
       }
+      const adminClientStatusMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/status$/i);
+      if (req.method === 'PATCH' && adminClientStatusMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const client = await authState.service.setAdminClientActive(
+          session.user, adminClientStatusMatch[1], body.active === true
+        );
+        return sendJson(res, 200, { ok: true, client });
+      }
       if (req.method === 'POST' && pathname === '/api/admin/ibs') {
         if (!requestOriginAllowed(req)) {
           return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
@@ -404,6 +416,18 @@ async function handleManagementApi(req, res, pathname, session) {
       }
       if (req.method === 'GET' && pathname === '/api/ib/clients') {
         return sendJson(res, 200, { ok: true, clients: await authState.service.ibClients(session.user) });
+      }
+      const ibClientStatusMatch = pathname.match(/^\/api\/ib\/clients\/([0-9a-f-]{36})\/status$/i);
+      if (req.method === 'PATCH' && ibClientStatusMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const client = await authState.service.setIbClientActive(
+          session.user, ibClientStatusMatch[1], body.active === true
+        );
+        return sendJson(res, 200, { ok: true, client });
       }
       return sendJson(res, 404, { ok: false, error: 'IB route tidak dijumpai.' });
     }
@@ -876,7 +900,7 @@ const server = http.createServer(async (req, res) => {
     if (authState.ready && authState.service) {
       try {
         const session = await authState.service.sessionFromRequest(req);
-        if (session) return redirect(res, '/app');
+        if (session) return redirect(res, landingForRole(session.user.role));
       } catch (_) {}
     }
     return sendAuthAsset(res, pathname === '/login' ? 'login.html' : 'register.html', 'text/html; charset=utf-8');
