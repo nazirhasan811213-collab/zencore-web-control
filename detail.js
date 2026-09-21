@@ -90,10 +90,19 @@
     byId('ibReferralLink').textContent = link;
     byId('ibAccessText').textContent = ref.active ? 'IB Login Active' : 'IB Login Disabled';
     const button = byId('toggleIbStatus');
-    button.textContent = ref.active ? 'DISABLE IB' : 'ACTIVATE IB';
-    button.className = `table-action ${ref.active ? 'danger' : 'good'}`;
-    button.dataset.referrerId = ref.id || '';
-    button.dataset.active = ref.active ? 'false' : 'true';
+    if (ref.code === 'nazir') {
+      button.textContent = 'SYSTEM OWNER';
+      button.className = 'table-action good';
+      button.disabled = true;
+      button.dataset.referrerId = '';
+      button.dataset.active = 'true';
+    } else {
+      button.textContent = ref.active ? 'DISABLE IB' : 'ACTIVATE IB';
+      button.className = `table-action ${ref.active ? 'danger' : 'good'}`;
+      button.disabled = false;
+      button.dataset.referrerId = ref.id || '';
+      button.dataset.active = ref.active ? 'false' : 'true';
+    }
     renderIbClients(allClients);
   }
 
