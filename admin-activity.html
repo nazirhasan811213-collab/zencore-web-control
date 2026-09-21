@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+  <title>Activity — ZenCore Admin</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1"><link rel="stylesheet" href="/management.css?v=1.2">
+</head>
+<body data-admin-ops-page="activity">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a class="mg-logo" href="/admin"><span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span><span><b>ZenCore</b><small>ADMIN CONTROL</small></span></a>
+      <nav class="mg-nav">
+        <a href="/admin"><span>⌂</span>Dashboard</a>
+        <a href="/admin#ibs"><span>◈</span>IB Management</a>
+        <a href="/admin#clients"><span>◎</span>Clients</a>
+        <a href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
+        <a class="active" href="/admin/activity"><span>▤</span>Activity</a>
+        <a href="/admin/system"><span>⚙</span>System Settings</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+      </nav>
+      <div class="mg-side-note"><span>AUDIT</span><b>SAFE VIEW</b><small>Sensitive fields redacted</small></div>
+    </aside>
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div><span class="mg-kicker">SYSTEM AUDIT</span><h1>Activity Monitor</h1></div>
+        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button></div>
+      </header>
+      <section class="mg-hero ops-hero">
+        <div><span class="mg-kicker">AUDIT TRAIL</span><h2>Jejak aktiviti Auto Trade dan MT5.</h2><p>Event dipaparkan dengan client dan IB owner. Field sensitif seperti token, credential, password dan envelope dibuang sebelum sampai ke browser.</p></div>
+        <div class="mg-system"><span>DATA POLICY</span><b>REDACTED</b><small>No broker credentials</small></div>
+      </section>
+      <section class="mg-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">LATEST EVENTS</span><h2>System Activity</h2></div>
+          <div class="ops-filters"><input id="activitySearch" type="search" placeholder="Client, IB, event"><select id="activityType"><option value="">All events</option></select></div>
+        </div>
+        <div id="activityList" class="activity-list"><div class="mg-loading">Loading activity...</div></div>
+      </section>
+      <footer class="mg-foot">ZenCore Admin • Audit detail is sanitized server-side</footer>
+    </main>
+  </div>
+  <script src="/admin-ops.js?v=1.0" defer></script>
+</body>
+</html>
