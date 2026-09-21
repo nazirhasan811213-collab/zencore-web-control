@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>IB Dashboard — ZenCore</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=1.0">
+</head>
+<body data-management-role="ib">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a class="mg-logo" href="/ib">
+        <span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span>
+        <span><b>ZenCore</b><small>IB PARTNER</small></span>
+      </a>
+      <nav class="mg-nav">
+        <a class="active" href="/ib"><span>⌂</span>Dashboard</a>
+        <a href="#clients"><span>◎</span>My Clients</a>
+        <a href="#registration"><span>↗</span>Registration Link</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+        <a href="/results"><span>▤</span>Reports</a>
+      </nav>
+      <div class="mg-side-note">
+        <span>ACCESS SCOPE</span>
+        <b>OWN CLIENTS ONLY</b>
+        <small>Other IB data is blocked</small>
+      </div>
+    </aside>
+
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div>
+          <span class="mg-kicker">ZENCORE PARTNER PORTAL</span>
+          <h1>IB Dashboard</h1>
+        </div>
+        <div class="mg-user">
+          <div><b id="accountName">IB</b><small id="accountEmail">Loading...</small></div>
+          <span class="mg-role ib">IB</span>
+          <button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button>
+        </div>
+      </header>
+
+      <section class="mg-hero ib-hero">
+        <div>
+          <span class="mg-kicker">PARTNER WORKSPACE</span>
+          <h2>Urus client bawah anda.</h2>
+          <p>Dashboard ini hanya memaparkan client yang mendaftar melalui referral link IB anda. Client IB lain tidak boleh dilihat atau dikawal.</p>
+        </div>
+        <div class="mg-system">
+          <span>ACCESS SCOPE</span>
+          <b>MY CLIENTS</b>
+          <small id="ibCodeHero">Loading...</small>
+        </div>
+      </section>
+
+      <section class="mg-stats ib-stats" aria-label="Ringkasan IB">
+        <article><span>TOTAL CLIENT</span><b id="statClients">—</b><small>Under your IB</small></article>
+        <article><span>ACTIVE CLIENT</span><b id="statActive">—</b><small>Can login</small></article>
+        <article><span>NEW TODAY</span><b id="statToday">—</b><small>Registrations</small></article>
+      </section>
+
+      <section id="registration" class="mg-panel referral-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">YOUR UNIQUE LINK</span><h2>Client Registration Link</h2></div>
+          <span class="mg-role ib">LOCKED TO YOUR IB</span>
+        </div>
+        <div class="referral-box">
+          <div><span>SHARE THIS LINK</span><b id="referralLink">Loading...</b><small>Client yang daftar melalui link ini akan kekal di bawah IB anda.</small></div>
+          <button id="copyReferral" class="mg-primary" type="button">COPY LINK</button>
+        </div>
+      </section>
+
+      <section id="clients" class="mg-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">MY CLIENT DATABASE</span><h2>My Clients</h2></div>
+          <div class="mg-filter">
+            <label for="clientSearch">SEARCH</label>
+            <input id="clientSearch" type="search" placeholder="Nama, email, phone">
+          </div>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table clients">
+            <thead><tr><th>Client</th><th>Contact</th><th>IC</th><th>Registered</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="clientTable"><tr><td colspan="6" class="mg-loading">Loading clients...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="mg-foot">ZenCore IB Portal • Data isolation enforced by server-side ownership checks</footer>
+    </main>
+  </div>
+  <script src="/management.js?v=1.0" defer></script>
+</body>
+</html>
