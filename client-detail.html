@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Client Detail — ZenCore</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=1.1">
+</head>
+<body data-detail-page="client">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a id="sideHome" class="mg-logo" href="/admin">
+        <span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span>
+        <span><b>ZenCore</b><small id="sideRole">MANAGEMENT</small></span>
+      </a>
+      <nav class="mg-nav">
+        <a id="navDashboard" href="/admin"><span>⌂</span>Dashboard</a>
+        <a class="active" id="navClients" href="/admin#clients"><span>◎</span>Clients</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+        <a href="/results"><span>▤</span>Reports</a>
+      </nav>
+      <div class="mg-side-note"><span>VIEW SCOPE</span><b id="scopeLabel">CLIENT DETAIL</b><small>Server-side role check</small></div>
+    </aside>
+
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div><span class="mg-kicker">CLIENT PROFILE</span><h1 id="detailTitle">Client Detail</h1></div>
+        <div class="mg-user">
+          <a id="backButton" class="mg-ghost mg-link-btn" href="/admin">← BACK</a>
+          <button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button>
+        </div>
+      </header>
+
+      <section class="mg-hero detail-hero client-hero">
+        <div>
+          <span class="mg-kicker">ZENCORE CLIENT</span>
+          <h2 id="clientName">Loading client...</h2>
+          <p id="clientEmail">—</p>
+          <div class="detail-tags">
+            <span id="clientStatusTag" class="detail-chip">STATUS —</span>
+            <span id="clientIbTag" class="detail-chip">IB —</span>
+          </div>
+        </div>
+        <div class="mg-system">
+          <span>AUTO TRADE</span>
+          <b id="tradeState">—</b>
+          <small id="tradeConnection">Loading...</small>
+        </div>
+      </section>
+
+      <section class="detail-grid three">
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">ACCOUNT PROFILE</span><h3>Client Information</h3>
+          <dl class="detail-list">
+            <div><dt>Phone</dt><dd id="clientPhone">—</dd></div>
+            <div><dt>IC</dt><dd id="clientIc">—</dd></div>
+            <div><dt>Registered</dt><dd id="clientCreated">—</dd></div>
+            <div><dt>Last Login</dt><dd id="clientLastLogin">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">IB OWNERSHIP</span><h3>Assigned Partner</h3>
+          <div class="detail-value" id="clientIbName">—</div>
+          <p id="clientIbCode">IB assignment is locked after registration.</p>
+          <span class="status-pill active">LOCKED</span>
+        </article>
+
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">ACCOUNT ACCESS</span><h3>Login Control</h3>
+          <div class="detail-value" id="clientAccessText">—</div>
+          <p>Disable akan tamatkan akses login baru untuk akaun client ini.</p>
+          <button id="toggleClientStatus" class="table-action" type="button">LOADING...</button>
+        </article>
+      </section>
+
+      <section class="detail-grid three">
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">MT5 CONNECTION</span><h3 id="mt5Status">—</h3>
+          <dl class="detail-list compact">
+            <div><dt>Account</dt><dd id="mt5Account">—</dd></div>
+            <div><dt>Server</dt><dd id="mt5Server">—</dd></div>
+            <div><dt>Connection</dt><dd id="mt5Connection">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">TRADE SETTINGS</span><h3 id="tradeSettingsState">Not configured</h3>
+          <dl class="detail-list compact">
+            <div><dt>Capital</dt><dd id="tradeCapital">—</dd></div>
+            <div><dt>Lot / Layer</dt><dd id="tradeLot">—</dd></div>
+            <div><dt>Layers</dt><dd id="tradeLayers">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">LIVE POSITION SUMMARY</span><h3 id="openPositions">0 Open</h3>
+          <dl class="detail-list compact">
+            <div><dt>Total Volume</dt><dd id="totalVolume">0</dd></div>
+            <div><dt>Floating P/L</dt><dd id="floatingProfit">$0.00</dd></div>
+            <div><dt>Mode</dt><dd id="tradeMode">DEMO</dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <footer class="mg-foot">ZenCore Client Detail • Only masked broker/account data is shown in management views</footer>
+    </main>
+  </div>
+  <script src="/detail.js?v=1.0" defer></script>
+</body>
+</html>
