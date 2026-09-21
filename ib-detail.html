@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>IB Detail — ZenCore</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=1.1">
+</head>
+<body data-detail-page="ib">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a class="mg-logo" href="/admin">
+        <span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span>
+        <span><b>ZenCore</b><small>ADMIN CONTROL</small></span>
+      </a>
+      <nav class="mg-nav">
+        <a href="/admin"><span>⌂</span>Dashboard</a>
+        <a class="active" href="/admin#ibs"><span>◈</span>IB Management</a>
+        <a href="/admin#clients"><span>◎</span>All Clients</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+        <a href="/auto-trade"><span>↯</span>Auto Trade</a>
+      </nav>
+      <div class="mg-side-note"><span>ACCESS</span><b>SUPER ADMIN</b><small>Global control</small></div>
+    </aside>
+
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div><span class="mg-kicker">IB MANAGEMENT</span><h1 id="detailTitle">IB Detail</h1></div>
+        <div class="mg-user">
+          <a class="mg-ghost mg-link-btn" href="/admin">← BACK TO ADMIN</a>
+          <button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button>
+        </div>
+      </header>
+
+      <section class="mg-hero detail-hero">
+        <div>
+          <span class="mg-kicker">PARTNER PROFILE</span>
+          <h2 id="ibName">Loading IB...</h2>
+          <p id="ibDescription">Memuatkan maklumat IB dan client di bawah partner ini.</p>
+          <div class="detail-tags">
+            <span id="ibCodeTag" class="detail-chip">CODE —</span>
+            <span id="ibStatusTag" class="detail-chip">STATUS —</span>
+          </div>
+        </div>
+        <div class="mg-system">
+          <span>CLIENT OWNERSHIP</span>
+          <b id="ibClientCount">— CLIENT</b>
+          <small>Assignment client → IB dikunci di database</small>
+        </div>
+      </section>
+
+      <section class="detail-grid">
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">REGISTRATION LINK</span>
+          <h3>Unique IB Link</h3>
+          <div class="detail-value mono" id="ibReferralLink">—</div>
+          <p>Semua client yang daftar melalui link ini akan kekal di bawah IB ini.</p>
+          <button id="copyIbLink" class="mg-primary" type="button">COPY LINK</button>
+        </article>
+
+        <article class="mg-panel detail-card">
+          <span class="mg-kicker">IB ACCESS</span>
+          <h3>Account Control</h3>
+          <div class="detail-value" id="ibAccessText">—</div>
+          <p>Disable akan menghalang login IB tetapi client di bawahnya kekal dalam database.</p>
+          <button id="toggleIbStatus" class="table-action" type="button">LOADING...</button>
+        </article>
+      </section>
+
+      <section class="mg-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">OWNED CLIENTS</span><h2>Clients Under This IB</h2></div>
+          <div class="mg-filter">
+            <label for="detailSearch">SEARCH</label>
+            <input id="detailSearch" type="search" placeholder="Nama, email, phone">
+          </div>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table clients">
+            <thead><tr><th>Client</th><th>Contact</th><th>IC</th><th>Registered</th><th>Status</th><th>Open</th></tr></thead>
+            <tbody id="detailClientTable"><tr><td colspan="6" class="mg-loading">Loading clients...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="mg-foot">ZenCore Admin • IB detail • Client ownership is immutable after registration</footer>
+    </main>
+  </div>
+  <script src="/detail.js?v=1.0" defer></script>
+</body>
+</html>
