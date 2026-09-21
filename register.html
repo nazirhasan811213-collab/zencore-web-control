@@ -4,46 +4,76 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>Daftar Akaun — ZenCore Precision Entry</title>
-  <link rel="stylesheet" href="/auth.css?v=1.0">
+  <title>Daftar Client — ZenCore Precision Entry</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1">
 </head>
 <body data-auth-page="register">
   <main class="auth-shell">
     <section class="auth-story" aria-label="Pengenalan ZenCore">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-        <div><b>ZenCore Precision Entry</b><span>Professional Trading Analysis Workspace</span></div>
+        <div><b>ZenCore Precision Entry</b><span>Total Trade System</span></div>
       </div>
 
       <div class="story-copy">
-        <div class="eyebrow">Bina disiplin. Ikut proses.</div>
-        <h1>Mulakan dengan analysis yang sama untuk setiap keputusan.</h1>
-        <p>Akaun ZenCore menyimpan akses pengguna secara berasingan sebelum modul Page Utama dan Result Page disambungkan.</p>
-        <div class="feature-row" aria-label="Ciri utama">
-          <span>SECURE ACCOUNT</span><span>11 MARKET</span><span>SOP CHECKLIST</span><span>RESULT TRACKING</span>
+        <div class="eyebrow">Pendaftaran client ZenCore</div>
+        <h1>Satu akaun. Satu IB. Rekod kekal.</h1>
+        <p>Setiap client didaftarkan di bawah IB berdasarkan link pendaftaran yang digunakan. Selepas pendaftaran berjaya, assignment IB dikunci dan tidak boleh ditukar oleh client.</p>
+        <div class="feature-row" aria-label="Ciri pendaftaran">
+          <span>CLIENT PROFILE</span><span>IB LOCK</span><span>SECURE LOGIN</span><span>ZENCORE ACCESS</span>
         </div>
       </div>
 
-      <p class="risk-note">Daftar akaun ZenCore tidak membuka akaun broker dan tidak mengaktifkan Auto Trade. Pairing boleh diuji secara berasingan, tetapi execution order MT5 kekal dikunci dalam fasa ini.</p>
+      <p class="risk-note">Jika client membuka halaman pendaftaran tanpa link IB yang sah, sistem akan mendaftarkan client secara automatik di bawah Nazir (Admin).</p>
     </section>
 
     <section class="auth-panel">
-      <div class="auth-card">
+      <div class="auth-card register-card">
         <div class="brand mobile-brand">
           <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-          <div><b>ZenCore Precision Entry</b><span>Trading Analysis Workspace</span></div>
+          <div><b>ZenCore Precision Entry</b><span>Client Registration</span></div>
         </div>
-        <div class="eyebrow">Akaun baharu</div>
-        <h2>Daftar ZenCore</h2>
-        <p class="auth-lead">Sediakan akaun untuk masuk ke pusat kawalan ZenCore.</p>
 
-        <form id="authForm" class="form-grid" novalidate>
+        <div class="eyebrow">Client baharu</div>
+        <h2>Daftar ZenCore</h2>
+        <p class="auth-lead">Lengkapkan maklumat client. Maklumat IB ditentukan oleh link pendaftaran dan akan dikunci selepas akaun diwujudkan.</p>
+
+        <div id="ibAssignment" class="ib-assignment loading" aria-live="polite">
+          <div class="ib-lock" aria-hidden="true">◆</div>
+          <div class="ib-copy">
+            <span>DAFTAR DI BAWAH IB</span>
+            <strong id="ibName">Mengesahkan link IB...</strong>
+            <small id="ibNotice">Sila tunggu sebentar.</small>
+          </div>
+          <div class="ib-badge">LOCKED</div>
+        </div>
+
+        <form id="authForm" class="form-grid register-grid" novalidate>
+          <input id="ibCode" name="ibCode" type="hidden" value="nazir">
+
           <div class="field">
-            <label for="displayName">Nama</label>
+            <label for="displayName">Nama penuh</label>
             <div class="input-wrap">
-              <input id="displayName" name="displayName" type="text" autocomplete="name" minlength="2" maxlength="60" placeholder="Nama anda" required>
+              <input id="displayName" name="displayName" type="text" autocomplete="name" minlength="2" maxlength="60" placeholder="Nama seperti dalam IC" required>
             </div>
             <span class="field-error" data-error-for="displayName"></span>
+          </div>
+
+          <div class="field">
+            <label for="icNumber">No. IC</label>
+            <div class="input-wrap">
+              <input id="icNumber" name="icNumber" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="Contoh: 900101-01-1234" required>
+            </div>
+            <span class="field-help">12 digit. Tanda “-” dibenarkan.</span>
+            <span class="field-error" data-error-for="icNumber"></span>
+          </div>
+
+          <div class="field">
+            <label for="phone">No. telefon</label>
+            <div class="input-wrap">
+              <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="24" placeholder="Contoh: 0123456789" required>
+            </div>
+            <span class="field-error" data-error-for="phone"></span>
           </div>
 
           <div class="field">
@@ -75,18 +105,18 @@
 
           <label class="ack">
             <input id="riskAck" name="riskAck" type="checkbox" required>
-            <span>Saya faham ZenCore ialah alat analisis dan bukan jaminan keuntungan.</span>
+            <span>Saya mengesahkan maklumat di atas adalah betul dan memahami ZenCore ialah alat analisis, bukan jaminan keuntungan.</span>
           </label>
           <span class="field-error" data-error-for="riskAck"></span>
 
           <div id="formStatus" class="form-status" role="alert" aria-live="polite"></div>
-          <button id="submitButton" class="primary-btn" type="submit">DAFTAR &amp; TERUSKAN</button>
+          <button id="submitButton" class="primary-btn" type="submit">DAFTAR CLIENT</button>
         </form>
 
         <p class="auth-switch">Sudah mempunyai akaun? <a href="/login">Log masuk</a></p>
       </div>
     </section>
   </main>
-  <script src="/auth.js?v=1.0" defer></script>
+  <script src="/auth.js?v=1.1" defer></script>
 </body>
 </html>
