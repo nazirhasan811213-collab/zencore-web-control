@@ -62,3 +62,47 @@ The memory store is blocked when `NODE_ENV=production` and must never be used fo
 - MT5 credentials and Auto Trade are not part of Phase 1.
 - The later Auto Trade control plane never stores broker credentials; see `AUTOTRADE_SECURITY.md`.
 - Result history is engine validation held in server memory; it is not user-specific broker P/L and may reset on service restart.
+
+
+## Client registration + IB referral
+
+New client registration now requires:
+
+- full name
+- Malaysian IC / NRIC (12 digits)
+- phone number
+- e-mail
+- ZenCore password
+- immutable IB assignment
+
+Registration link format:
+
+```text
+https://<your-zencore-host>/register?ib=<ib-code>
+```
+
+Examples:
+
+```text
+/register?ib=ib-azman
+/register?ib=team-a
+```
+
+If the link has no `ib` code, or the code is invalid/inactive, ZenCore falls back to:
+
+```text
+/register?ib=nazir
+```
+
+The default referrer is **Nazir (Admin)**. The selected IB is written to the client row during registration and the PostgreSQL trigger prevents that assignment from being changed afterward.
+
+Additional IB codes can be seeded at startup with `ZENCORE_IB_REGISTRY_JSON`:
+
+```json
+[
+  {"code":"ib-azman","displayName":"Azman IB"},
+  {"code":"ib-siti","displayName":"Siti IB"}
+]
+```
+
+Keep codes lowercase and use only letters, numbers, `_` or `-`.
