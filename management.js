@@ -140,6 +140,13 @@
     byId('statActive').textContent = body.stats?.active_clients ?? 0;
     byId('statToday').textContent = body.stats?.today_clients ?? 0;
     renderIbTable(body.ibs || []);
+    const ibFilter = byId('clientIbFilter');
+    if (ibFilter) {
+      const items = (body.ibs || []).map(item =>
+        `<option value="${esc(item.code)}">${esc(item.displayName)} (${esc(String(item.code).toUpperCase())})</option>`
+      ).join('');
+      ibFilter.innerHTML = '<option value="">All IB</option>' + items;
+    }
     const all = await api('/api/admin/clients?limit=500');
     clients = all.clients || [];
     renderAdminClients(clients);
@@ -161,14 +168,23 @@
 
   function filterClients() {
     const q = String(byId('clientSearch')?.value || '').trim().toLowerCase();
-    const list = !q ? clients : clients.filter(client => [
-      client.displayName, client.email, client.phone, client.ibName, client.ibCode, client.icMasked
-    ].some(value => String(value || '').toLowerCase().includes(q)));
+    const ib = String(byId('clientIbFilter')?.value || '').trim().toLowerCase();
+    const status = String(byId('clientStatusFilter')?.value || '').trim().toLowerCase();
+    const list = clients.filter(client => {
+      if (ib && String(client.ibCode || 'nazir').toLowerCase() !== ib) return false;
+      if (status && String(client.status || '').toLowerCase() !== status) return false;
+      if (!q) return true;
+      return [
+        client.displayName, client.email, client.phone, client.ibName, client.ibCode, client.icMasked
+      ].some(value => String(value || '').toLowerCase().includes(q));
+    });
     if (role === 'admin') renderAdminClients(list);
     else renderIbClients(list);
   }
 
   byId('clientSearch')?.addEventListener('input', filterClients);
+  byId('clientIbFilter')?.addEventListener('change', filterClients);
+  byId('clientStatusFilter')?.addEventListener('change', filterClients);
 
   byId('toggleCreateIb')?.addEventListener('click', () => {
     byId('createIbForm')?.classList.toggle('hidden');
