@@ -428,3 +428,8 @@ body.admin-v4 .mg-create input,body.admin-v4 .mg-filter input,body.admin-v4 .mg-
 @media(max-width:480px){
   .zc-kpis{grid-template-columns:1fr}.zc-hero-copy h1{font-size:32px}.zc-global-search kbd{display:none}
 }
+
+body.admin-v4 .copy-inline{
+  margin-left:5px;padding:0;border:0;background:transparent;color:#6f9baa;cursor:pointer;font-size:9px;vertical-align:middle
+}
+body.admin-v4 .copy-inline:hover{color:#54e2eb;text-shadow:0 0 8px rgba(84,226,235,.4)}
