@@ -433,3 +433,120 @@ body.admin-v4 .copy-inline{
   margin-left:5px;padding:0;border:0;background:transparent;color:#6f9baa;cursor:pointer;font-size:9px;vertical-align:middle
 }
 body.admin-v4 .copy-inline:hover{color:#54e2eb;text-shadow:0 0 8px rgba(84,226,235,.4)}
+
+
+/* =========================================================
+   ZenCore Admin V4.1 — readability + luxury spacing pass
+   Tuned for 1920px desktop so the interface stays premium,
+   legible and spacious instead of looking compressed.
+   ========================================================= */
+@media(min-width:1281px){
+  body.admin-v4 .zc-shell{grid-template-columns:238px minmax(0,1fr)}
+  body.admin-v4 .zc-sidebar{padding:22px 16px 20px}
+  body.admin-v4 .zc-main{padding:16px 20px 28px}
+
+  .zc-brand-orb{width:94px;height:76px}
+  .zc-brand-orb::before{width:60px;height:60px}
+  .zc-brand-orb b{font-size:32px}
+  .zc-brand-ring{width:88px;height:31px}
+  .zc-brand-ring.two{width:79px;height:39px}
+  .zc-brand-copy strong{font-size:26px}
+  .zc-brand-copy small{font-size:8px}
+  .zc-brand-copy em{font-size:7px}
+
+  body.admin-v4 .zc-nav{margin-top:22px;gap:6px}
+  body.admin-v4 .zc-nav a{min-height:45px;padding:0 14px;font-size:11px}
+  body.admin-v4 .zc-nav a span{font-size:17px}
+  .zc-admin-badge span,.zc-admin-badge small{font-size:7.5px}
+  .zc-admin-badge b{font-size:10.5px}
+  .zc-sidebar-quote p{font-size:8px}
+  .zc-sidebar-quote span{font-size:7px}
+
+  .zc-topbar{min-height:51px;margin-bottom:11px}
+  .zc-global-search{width:min(500px,42vw);height:38px;padding:0 11px}
+  .zc-global-search input{font-size:11px}
+  .zc-global-search kbd{font-size:8px}
+  .zc-profile-copy b{font-size:11px}
+  .zc-profile-copy small{font-size:8px}
+  .zc-super-badge{min-width:132px;padding:7px 12px;font-size:9px}
+  .zc-super-badge i{font-size:7px}
+  .mg-ghost{font-size:9px}
+
+  .zc-hero{
+    min-height:270px;
+    grid-template-columns:minmax(500px,1.18fr) minmax(310px,.78fr) 255px;
+    padding:26px 26px 21px;
+  }
+  .zc-hero-copy h1{font-size:clamp(43px,3vw,58px)}
+  .zc-hero-copy>p{max-width:760px;font-size:12.5px;line-height:1.65}
+  .mg-kicker{font-size:9px}
+  .zc-pillars{gap:30px;margin-top:22px}
+  .zc-pillars>div{grid-template-columns:34px auto;column-gap:9px}
+  .zc-pillars>div>span{width:33px;height:33px;font-size:16px}
+  .zc-pillars b{font-size:8.5px}
+  .zc-pillars small{font-size:8px}
+
+  .zc-orb{width:162px;height:162px}
+  .zc-orb-core{font-size:78px}
+  .zc-ring.ring-a{width:270px;height:72px}
+  .zc-ring.ring-b{width:250px;height:90px}
+  .zc-ring.ring-c{width:210px;height:143px}
+  .zc-nebula{width:370px;height:210px}
+  .zc-orbit-words{right:-7px;top:37px;font-size:7px;gap:8px}
+
+  .zc-access-card{min-height:192px;padding:22px 20px}
+  .zc-access-card>span{font-size:8px}
+  .zc-access-card>b{font-size:22px}
+  .zc-access-card>strong{font-size:10px}
+  .zc-access-card small{font-size:9.5px}
+
+  .zc-kpis{gap:11px;margin-top:11px}
+  .zc-kpis article{
+    min-height:112px;
+    grid-template-columns:58px minmax(0,1fr) 44px;
+    gap:10px;
+    padding:15px;
+  }
+  .zc-kpi-icon{width:52px;height:52px;font-size:23px}
+  .zc-kpis article span{font-size:8px}
+  .zc-kpis article b{font-size:28px}
+  .zc-kpis article small{font-size:8.5px}
+  .zc-progress-ring{width:41px;height:41px}
+
+  .zc-dashboard-grid{grid-template-columns:minmax(0,1fr) 330px;gap:12px;margin-top:12px}
+  body.admin-v4 .zc-panel{margin-bottom:12px;padding:18px}
+  .zc-panel-head{margin-bottom:15px}
+  .zc-panel-head h2{font-size:21px}
+  .zc-panel-head p{font-size:9.5px}
+  .zc-primary{min-height:39px;font-size:9px;padding:0 15px}
+
+  body.admin-v4 .zc-table th{padding:11px 13px;font-size:8px}
+  body.admin-v4 .zc-table td{padding:13px;font-size:10.5px}
+  body.admin-v4 .zc-table td strong{font-size:11.5px}
+  body.admin-v4 .zc-table td small{font-size:9px}
+  body.admin-v4 .status-pill{font-size:8px}
+  body.admin-v4 .table-action{height:31px;font-size:8px}
+  body.admin-v4 .mg-loading{font-size:10px!important;padding:31px!important}
+
+  .zc-client-filter{max-width:600px}
+  .zc-client-filter input{width:220px;font-size:10.5px}
+  .zc-client-filter select{max-width:125px;font-size:10px}
+
+  .zc-insight-card{padding:16px}
+  .zc-insight-head{margin-bottom:10px}
+  .zc-insight-head h3{font-size:16px}
+  .zc-panel-icon{width:31px;height:31px;font-size:15px}
+  .zc-live-dot{font-size:8px}
+  .zc-insight-row{
+    grid-template-columns:33px minmax(0,1fr) auto;
+    gap:10px;
+    padding:12px 2px;
+  }
+  .zc-row-icon{width:30px;height:30px;font-size:14px}
+  .zc-insight-row b{font-size:10px}
+  .zc-insight-row small{font-size:8.5px;line-height:1.35}
+  .zc-insight-row>strong{font-size:9.5px}
+
+  .zc-footer{padding-top:7px;font-size:8.5px}
+  .zc-footer b{font-size:11px}
+}
