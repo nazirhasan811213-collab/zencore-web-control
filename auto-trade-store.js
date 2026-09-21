@@ -368,6 +368,120 @@ class PostgresAutoTradeStore {
     return publicHostedAccount(result.rows[0]);
   }
 
+
+  async listAdminMt5Overview(limit = 500) {
+    const safeLimit = Math.min(1000, Math.max(1, Number(limit) || 500));
+    const result = await this.pool.query(
+      `SELECT
+         u.id AS user_id, u.display_name, u.email, u.status AS user_status,
+         ref.code AS ib_code, ref.display_name AS ib_name,
+         h.id AS hosted_id, h.status AS hosted_status, h.account_mask AS hosted_account_mask,
+         h.server_mask AS hosted_server_mask, h.broker_mask AS hosted_broker_mask,
+         h.trade_mode AS hosted_trade_mode, h.worker_provider, h.worker_instance_name,
+         h.terminal_trade_allowed, h.account_trade_allowed, h.expert_trade_allowed,
+         h.connector_version AS hosted_connector_version, h.terminal_build AS hosted_terminal_build,
+         h.worker_last_seen_at AS hosted_last_seen_at, h.last_error AS hosted_last_error,
+         p.id AS pod_id, p.account_mask AS pod_account_mask, p.server_mask AS pod_server_mask,
+         p.broker_mask AS pod_broker_mask, p.trade_mode AS pod_trade_mode,
+         p.connector_version AS pod_connector_version, p.terminal_build AS pod_terminal_build,
+         p.last_seen_at AS pod_last_seen_at, p.revoked_at AS pod_revoked_at,
+         a.capital_usd, a.lot_per_layer, a.layers, a.symbols,
+         a.desired_state, a.effective_state, a.last_error AS control_last_error,
+         COALESCE(pos.open_positions, 0)::int AS open_positions
+       FROM zencore_users u
+       LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       LEFT JOIN zencore_mt5_hosted_accounts h ON h.user_id = u.id
+       LEFT JOIN zencore_mt5_secure_pods p ON p.user_id = u.id AND p.revoked_at IS NULL
+       LEFT JOIN zencore_autotrade_profiles a ON a.user_id = u.id
+       LEFT JOIN (
+         SELECT user_id, COUNT(*)::int AS open_positions
+         FROM zencore_mt5_positions
+         GROUP BY user_id
+       ) pos ON pos.user_id = u.id
+       WHERE u.role = 'client'
+       ORDER BY
+         CASE WHEN h.worker_last_seen_at IS NOT NULL OR p.last_seen_at IS NOT NULL THEN 0 ELSE 1 END,
+         GREATEST(COALESCE(h.updated_at, 'epoch'::timestamptz), COALESCE(a.updated_at, 'epoch'::timestamptz), u.created_at) DESC
+       LIMIT $1`,
+      [safeLimit]
+    );
+    return result.rows.map(row => ({
+      userId: row.user_id,
+      client: {
+        displayName: row.display_name,
+        email: row.email,
+        status: row.user_status,
+        ibCode: row.ib_code || null,
+        ibName: row.ib_name || null
+      },
+      hosted: row.hosted_id ? {
+        id: row.hosted_id,
+        status: row.hosted_status,
+        accountMask: row.hosted_account_mask,
+        serverMask: row.hosted_server_mask,
+        brokerMask: row.hosted_broker_mask,
+        tradeMode: row.hosted_trade_mode,
+        workerProvider: row.worker_provider,
+        workerCell: row.worker_instance_name,
+        terminalTradeAllowed: row.terminal_trade_allowed === true,
+        accountTradeAllowed: row.account_trade_allowed === true,
+        expertTradeAllowed: row.expert_trade_allowed === true,
+        connectorVersion: row.hosted_connector_version,
+        terminalBuild: row.hosted_terminal_build,
+        lastSeenAt: timestamp(row.hosted_last_seen_at),
+        lastError: row.hosted_last_error || null
+      } : null,
+      pod: row.pod_id ? {
+        id: row.pod_id,
+        accountMask: row.pod_account_mask,
+        serverMask: row.pod_server_mask,
+        brokerMask: row.pod_broker_mask,
+        tradeMode: row.pod_trade_mode,
+        connectorVersion: row.pod_connector_version,
+        terminalBuild: row.pod_terminal_build,
+        lastSeenAt: timestamp(row.pod_last_seen_at)
+      } : null,
+      settings: row.capital_usd == null ? null : {
+        capitalUsd: Number(row.capital_usd),
+        lotPerLayer: row.lot_per_layer == null ? null : Number(row.lot_per_layer),
+        layers: row.layers == null ? null : Number(row.layers),
+        symbols: Array.isArray(row.symbols) ? row.symbols : []
+      },
+      control: {
+        desiredState: row.desired_state || 'STOPPED',
+        effectiveState: row.effective_state || 'STOPPED',
+        lastError: row.control_last_error || null
+      },
+      openPositions: Number(row.open_positions || 0)
+    }));
+  }
+
+  async listAdminAudit(limit = 100) {
+    const safeLimit = Math.min(300, Math.max(1, Number(limit) || 100));
+    const result = await this.pool.query(
+      `SELECT a.id, a.user_id, a.event_type, a.detail, a.created_at,
+              u.display_name, u.email,
+              ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_autotrade_audit a
+       JOIN zencore_users u ON u.id = a.user_id
+       LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       ORDER BY a.created_at DESC
+       LIMIT $1`,
+      [safeLimit]
+    );
+    return result.rows.map(row => ({
+      id: String(row.id),
+      userId: row.user_id,
+      clientName: row.display_name,
+      clientEmail: row.email,
+      ibCode: row.ib_code || null,
+      ibName: row.ib_name || null,
+      type: row.event_type,
+      detail: row.detail || {},
+      createdAt: timestamp(row.created_at)
+    }));
+  }
+
   async saveHostedAccountEnvelope(input) {
     const result = await this.pool.query(
       `INSERT INTO zencore_mt5_hosted_accounts
@@ -931,6 +1045,49 @@ class MemoryAutoTradeStore {
 
   async getHostedAccount(userId) {
     return publicHostedAccount(this.hostedAccounts.get(userId));
+  }
+
+
+  async listAdminMt5Overview(limit = 500) {
+    const safeLimit = Math.min(1000, Math.max(1, Number(limit) || 500));
+    const userIds = new Set([
+      ...this.profiles.keys(),
+      ...this.podsByUser.keys(),
+      ...this.hostedAccounts.values().map(item => item.userId)
+    ]);
+    return [...userIds].slice(0, safeLimit).map(userId => {
+      const profile = this.profiles.get(userId) || null;
+      const pod = this.podsByUser.get(userId) || null;
+      const hosted = this.hostedAccounts.get(userId) || null;
+      return {
+        userId,
+        client: null,
+        hosted: publicHostedAccount(hosted),
+        pod: publicPod(pod),
+        settings: profile ? {
+          capitalUsd: profile.capitalUsd ?? null,
+          lotPerLayer: profile.lotPerLayer ?? null,
+          layers: profile.layers ?? null,
+          symbols: Array.isArray(profile.symbols) ? profile.symbols : []
+        } : null,
+        control: {
+          desiredState: profile?.desiredState || 'STOPPED',
+          effectiveState: profile?.effectiveState || 'STOPPED',
+          lastError: profile?.lastError || null
+        },
+        openPositions: (this.positions.get(userId) || []).length
+      };
+    });
+  }
+
+  async listAdminAudit(limit = 100) {
+    const rows = [];
+    for (const [userId, events] of this.audit.entries()) {
+      for (const event of events) rows.push({ ...event, userId });
+    }
+    return rows
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+      .slice(0, Math.min(300, Math.max(1, Number(limit) || 100)));
   }
 
   async saveHostedAccountEnvelope(input) {

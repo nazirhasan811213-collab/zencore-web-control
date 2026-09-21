@@ -402,6 +402,37 @@ async function clientTradingSummary(userId) {
   }
 }
 
+
+function sanitizeAdminAuditDetail(value, depth = 0) {
+  if (depth > 5) return '[TRUNCATED]';
+  if (Array.isArray(value)) return value.slice(0, 30).map(item => sanitizeAdminAuditDetail(item, depth + 1));
+  if (!value || typeof value !== 'object') {
+    if (typeof value === 'string') return value.slice(0, 240);
+    return value;
+  }
+  const blocked = /(password|credential|token|secret|private|cipher|wrapped|envelope|authorization|cookie)/i;
+  const output = {};
+  for (const [key, item] of Object.entries(value).slice(0, 40)) {
+    output[key] = blocked.test(key) ? '[REDACTED]' : sanitizeAdminAuditDetail(item, depth + 1);
+  }
+  return output;
+}
+
+async function effectiveRegistrationSetting() {
+  let databaseEnabled = true;
+  if (authState.store && typeof authState.store.getSystemSettings === 'function') {
+    try {
+      const settings = await authState.store.getSystemSettings();
+      databaseEnabled = settings?.registrationEnabled !== false;
+    } catch (_) {}
+  }
+  return {
+    envEnabled: REGISTRATION_ENABLED,
+    databaseEnabled,
+    effective: REGISTRATION_ENABLED && databaseEnabled
+  };
+}
+
 async function handleManagementApi(req, res, pathname, session) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
   try {
@@ -411,6 +442,76 @@ async function handleManagementApi(req, res, pathname, session) {
       }
       if (req.method === 'GET' && pathname === '/api/admin/overview') {
         return sendJson(res, 200, { ok: true, ...(await authState.service.adminOverview(session.user)) });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/mt5') {
+        if (!autoTradeState.ready || !autoTradeState.store ||
+            typeof autoTradeState.store.listAdminMt5Overview !== 'function') {
+          return sendJson(res, 200, { ok: true, ready: false, accounts: [] });
+        }
+        const accounts = await autoTradeState.store.listAdminMt5Overview(1000);
+        return sendJson(res, 200, {
+          ok: true,
+          ready: true,
+          executionUnlocked: AUTOTRADE_EXECUTION_ENABLED,
+          requiredConnectorVersion: AUTOTRADE_EXECUTION_ENABLED ? AUTOTRADE_DEMO_CONNECTOR_VERSION : null,
+          accounts
+        });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/activity') {
+        if (!autoTradeState.ready || !autoTradeState.store ||
+            typeof autoTradeState.store.listAdminAudit !== 'function') {
+          return sendJson(res, 200, { ok: true, ready: false, events: [] });
+        }
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const events = await autoTradeState.store.listAdminAudit(Number(url.searchParams.get('limit') || 150));
+        return sendJson(res, 200, {
+          ok: true,
+          ready: true,
+          events: events.map(event => ({
+            ...event,
+            detail: sanitizeAdminAuditDetail(event.detail || {})
+          }))
+        });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/system') {
+        const registration = await effectiveRegistrationSetting();
+        return sendJson(res, 200, {
+          ok: true,
+          settings: {
+            authentication: AUTH_ENABLED,
+            registration,
+            autoTrade: AUTOTRADE_ENABLED,
+            executionUnlocked: AUTOTRADE_EXECUTION_ENABLED,
+            hostedMt5: HOSTED_MT5_ENABLED,
+            gcpWorkerIdentity: GCP_HOSTED_WORKER_ENABLED,
+            defaultIbCode: DEFAULT_IB_CODE,
+            demoSymbols: AUTOTRADE_DEMO_SYMBOLS,
+            requiredConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION
+          }
+        });
+      }
+      if (req.method === 'PATCH' && pathname === '/api/admin/system/registration') {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        if (!authState.store || typeof authState.store.setRegistrationEnabled !== 'function') {
+          return sendJson(res, 503, { ok: false, error: 'System settings store belum tersedia.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const requested = body.enabled === true;
+        if (requested && !REGISTRATION_ENABLED) {
+          return sendJson(res, 409, {
+            ok: false,
+            code: 'REGISTRATION_ENV_LOCKED',
+            error: 'Registration dikunci oleh environment production dan tidak boleh dibuka dari dashboard.'
+          });
+        }
+        await authState.store.setRegistrationEnabled(requested);
+        return sendJson(res, 200, {
+          ok: true,
+          registration: await effectiveRegistrationSetting()
+        });
       }
       if (req.method === 'GET' && pathname === '/api/admin/clients') {
         const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -602,8 +703,11 @@ async function handleAuthApi(req, res, pathname) {
     }, { 'Retry-After': String(limit.retryAfter) });
   }
 
-  if (pathname === '/auth/register' && !REGISTRATION_ENABLED) {
-    return sendJson(res, 403, { ok: false, error: 'Pendaftaran baharu sedang ditutup.' });
+  if (pathname === '/auth/register') {
+    const registration = await effectiveRegistrationSetting();
+    if (!registration.effective) {
+      return sendJson(res, 403, { ok: false, error: 'Pendaftaran baharu sedang ditutup oleh Admin.' });
+    }
   }
   if (pathname === '/auth/register' && body.riskAccepted !== true) {
     return sendJson(res, 400, {
@@ -976,6 +1080,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/management.js') return sendAuthAsset(res, 'management.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/detail.js') return sendAuthAsset(res, 'detail.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/admin-ops.js') return sendAuthAsset(res, 'admin-ops.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/market-radar-core.js') return sendAuthAsset(res, 'market-radar-core.js', 'application/javascript; charset=utf-8');
@@ -1048,6 +1153,24 @@ const server = http.createServer(async (req, res) => {
     const session = await requireRole(req, res, 'admin', '/login');
     if (!session) return;
     return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/mt5') {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'admin-mt5.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/activity') {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'admin-activity.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/system') {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'admin-system.html', 'text/html; charset=utf-8');
   }
 
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/ib') {

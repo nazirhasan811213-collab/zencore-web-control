@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>MT5 Accounts — ZenCore Admin</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=1.2">
+</head>
+<body data-admin-ops-page="mt5">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a class="mg-logo" href="/admin"><span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span><span><b>ZenCore</b><small>ADMIN CONTROL</small></span></a>
+      <nav class="mg-nav">
+        <a href="/admin"><span>⌂</span>Dashboard</a>
+        <a href="/admin#ibs"><span>◈</span>IB Management</a>
+        <a href="/admin#clients"><span>◎</span>Clients</a>
+        <a class="active" href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
+        <a href="/admin/activity"><span>▤</span>Activity</a>
+        <a href="/admin/system"><span>⚙</span>System Settings</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+      </nav>
+      <div class="mg-side-note"><span>ROLE</span><b>SUPER ADMIN</b><small>Global MT5 visibility</small></div>
+    </aside>
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div><span class="mg-kicker">BROKER CONNECTION CONTROL</span><h1>MT5 Accounts</h1></div>
+        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button></div>
+      </header>
+
+      <section class="mg-hero ops-hero">
+        <div><span class="mg-kicker">ALL CLIENT TERMINALS</span><h2>Semua sambungan MT5 dalam satu view.</h2><p>Admin boleh melihat status sambungan client, account mask, server, control state dan open positions tanpa mendedahkan credential broker.</p></div>
+        <div class="mg-system"><span>EXECUTION GATE</span><b id="executionGate">CHECKING...</b><small id="requiredConnector">Protected by server gate</small></div>
+      </section>
+
+      <section class="mg-stats">
+        <article><span>TOTAL CLIENT</span><b id="mt5Total">—</b><small>Tracked</small></article>
+        <article><span>CONNECTED</span><b id="mt5Connected">—</b><small>Recent heartbeat</small></article>
+        <article><span>SYSTEM ON</span><b id="mt5On">—</b><small>Desired / effective</small></article>
+        <article><span>NEEDS ATTENTION</span><b id="mt5Attention">—</b><small>Error / stale</small></article>
+      </section>
+
+      <section class="mg-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">ACCOUNT DIRECTORY</span><h2>Client MT5 Status</h2></div>
+          <div class="ops-filters">
+            <input id="mt5Search" type="search" placeholder="Nama, email, IB, account, server">
+            <select id="mt5Filter">
+              <option value="all">All status</option>
+              <option value="connected">Connected</option>
+              <option value="not-connected">Not connected</option>
+              <option value="on">System ON</option>
+              <option value="attention">Needs attention</option>
+            </select>
+          </div>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table ops-table">
+            <thead><tr><th>Client</th><th>IB</th><th>MT5 Account / Server</th><th>Connection</th><th>Auto Trade</th><th>Positions</th><th>Last Seen</th><th>Open</th></tr></thead>
+            <tbody id="mt5Table"><tr><td colspan="8" class="mg-loading">Loading MT5 accounts...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+      <footer class="mg-foot">ZenCore Admin • Credentials are never displayed in this view</footer>
+    </main>
+  </div>
+  <script src="/admin-ops.js?v=1.0" defer></script>
+</body>
+</html>
