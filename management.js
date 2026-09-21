@@ -87,7 +87,7 @@
       return;
     }
     tbody.innerHTML = list.map(client => `<tr>
-      <td><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></td>
+      <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
       <td><strong>${esc(client.phone || '—')}</strong><small>${esc(fmtLastLogin(client.lastLoginAt))}</small></td>
       <td><span class="link-code">${esc(client.icMasked || '—')}</span></td>
       <td><strong>${esc(client.ibName || 'Nazir (Admin)')}</strong><small>${esc((client.ibCode || 'nazir').toUpperCase())}</small></td>
@@ -105,7 +105,7 @@
       return;
     }
     tbody.innerHTML = list.map(client => `<tr>
-      <td><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></td>
+      <td><a class="table-link" href="/ib/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
       <td><strong>${esc(client.phone || '—')}</strong><small>${esc(fmtLastLogin(client.lastLoginAt))}</small></td>
       <td><span class="link-code">${esc(client.icMasked || '—')}</span></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
@@ -121,7 +121,7 @@
       const isAdmin = item.code === 'nazir';
       const link = `${window.location.origin}/u/${encodeURIComponent(item.code)}`;
       return `<tr>
-        <td><strong>${esc(item.displayName)}</strong><small>${isAdmin ? 'Default owner' : 'IB Partner'}</small></td>
+        <td><a class="table-link" href="/admin/ib/${encodeURIComponent(item.code)}"><strong>${esc(item.displayName)}</strong><small>${isAdmin ? 'Default owner' : 'IB Partner'}</small></a></td>
         <td><span class="link-code">${esc(item.code.toUpperCase())}</span><small>${esc(link)}</small></td>
         <td><strong>${esc(item.clientCount)}</strong><small>clients</small></td>
         <td>${statusPill(item.active ? 'active' : 'disabled')}</td>
