@@ -13,6 +13,9 @@ const {
 const DEFAULT_COOKIE_NAME = 'zencore_session';
 const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_IB_CODE = 'nazir';
+const ROLE_ADMIN = 'admin';
+const ROLE_IB = 'ib';
+const ROLE_CLIENT = 'client';
 
 function safeUser(user) {
   if (!user) return null;
@@ -20,6 +23,7 @@ function safeUser(user) {
     id: user.id,
     displayName: user.displayName || user.display_name,
     email: user.email,
+    role: user.role || ROLE_CLIENT,
     status: user.status,
     createdAt: user.createdAt || user.created_at,
     lastLoginAt: user.lastLoginAt || user.last_login_at || null,
@@ -77,7 +81,8 @@ function createAuthService(options = {}) {
         passwordHash,
         icNumber: validation.value.icNumber,
         phone: validation.value.phone,
-        ibReferrerId: referrer.id
+        ibReferrerId: referrer.id,
+        role: ROLE_CLIENT
       });
     } catch (error) {
       if (error?.code === 'EMAIL_EXISTS') {
@@ -101,6 +106,89 @@ function createAuthService(options = {}) {
     const referrer = await store.resolveReferrer(code, defaultIbCode);
     if (!referrer) throw authError('IB_UNAVAILABLE', 'Maklumat IB tidak dapat disahkan.', 503);
     return referrer;
+  }
+
+
+  function assertRole(user, role) {
+    if (!user || user.role !== role) {
+      throw authError('FORBIDDEN', 'Akses tidak dibenarkan untuk akaun ini.', 403);
+    }
+  }
+
+  function normalizeIbCreateInput(input = {}) {
+    const displayName = String(input.displayName || '').trim().replace(/\s+/g, ' ');
+    const code = String(input.code || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const email = normalizeEmail(input.email);
+    const password = String(input.password || '');
+    const phone = String(input.phone || '').trim().replace(/[\s()-]/g, '');
+    const errors = {};
+    if (displayName.length < 2 || displayName.length > 80) errors.displayName = 'Nama IB perlu antara 2 hingga 80 aksara.';
+    if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(code)) errors.code = 'Kod IB mesti 2-48 aksara: huruf kecil, nombor, - atau _.';
+    if (code === defaultIbCode) errors.code = 'Kod ini dikhaskan untuk Admin.';
+    if (!validateEmail(email)) errors.email = 'Masukkan e-mel IB yang sah.';
+    if (password.length < 10 || password.length > 128 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      errors.password = 'Password mesti minimum 10 aksara dengan sekurang-kurangnya satu huruf dan satu nombor.';
+    }
+    if (phone && !/^\+?\d{8,15}$/.test(phone)) errors.phone = 'Masukkan nombor telefon yang sah.';
+    return { ok: Object.keys(errors).length === 0, errors, value: { displayName, code, email, password, phone } };
+  }
+
+  async function adminOverview(user) {
+    assertRole(user, ROLE_ADMIN);
+    return store.adminOverview();
+  }
+
+  async function adminClients(user, options = {}) {
+    assertRole(user, ROLE_ADMIN);
+    return store.listClientsForAdmin(options);
+  }
+
+  async function createIb(user, input = {}) {
+    assertRole(user, ROLE_ADMIN);
+    const validation = normalizeIbCreateInput(input);
+    if (!validation.ok) {
+      throw authError('VALIDATION_ERROR', 'Semak semula maklumat IB.', 400, validation.errors);
+    }
+    const passwordHash = await hashPassword(validation.value.password);
+    try {
+      return await store.createIbAccount({
+        displayName: validation.value.displayName,
+        code: validation.value.code,
+        email: validation.value.email,
+        passwordHash,
+        phone: validation.value.phone || null
+      });
+    } catch (error) {
+      if (error?.code === 'EMAIL_EXISTS') {
+        throw authError('EMAIL_EXISTS', 'E-mel ini sudah digunakan.', 409, { email: 'Gunakan e-mel lain.' });
+      }
+      if (error?.code === 'IB_CODE_EXISTS') {
+        throw authError('IB_CODE_EXISTS', 'Kod IB ini sudah digunakan.', 409, { code: 'Gunakan kod IB lain.' });
+      }
+      throw error;
+    }
+  }
+
+  async function setIbActive(user, referrerId, active) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(referrerId || ''))) {
+      throw authError('INVALID_IB', 'IB tidak sah.', 400);
+    }
+    const updated = await store.setIbActive(String(referrerId), active === true);
+    if (!updated) throw authError('IB_NOT_FOUND', 'IB tidak dijumpai atau tidak boleh diubah.', 404);
+    return updated;
+  }
+
+  async function ibOverview(user) {
+    assertRole(user, ROLE_IB);
+    const overview = await store.ibOverview(user.id);
+    if (!overview) throw authError('IB_PROFILE_NOT_FOUND', 'Profil IB belum disambungkan.', 404);
+    return overview;
+  }
+
+  async function ibClients(user) {
+    assertRole(user, ROLE_IB);
+    return store.listClientsForIb(user.id);
   }
 
   async function login(input = {}) {
@@ -157,6 +245,12 @@ function createAuthService(options = {}) {
   return {
     register,
     resolveReferrer,
+    adminOverview,
+    adminClients,
+    createIb,
+    setIbActive,
+    ibOverview,
+    ibClients,
     login,
     sessionFromRequest,
     reauthenticate,
@@ -172,6 +266,9 @@ module.exports = {
   DEFAULT_COOKIE_NAME,
   DEFAULT_SESSION_TTL_MS,
   DEFAULT_IB_CODE,
+  ROLE_ADMIN,
+  ROLE_IB,
+  ROLE_CLIENT,
   createAuthService,
   authError,
   safeUser
