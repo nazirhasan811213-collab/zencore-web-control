@@ -22,6 +22,8 @@ const ALLOW_ORIGINLESS_AUTH = /^(?:1|true|yes|on)$/i.test(String(process.env.ZEN
 const REGISTRATION_ENABLED = !/^(?:0|false|no|off)$/i.test(String(process.env.ZENCORE_REGISTRATION_ENABLED || 'true'));
 const DEFAULT_IB_CODE = String(process.env.ZENCORE_DEFAULT_IB_CODE || 'nazir').trim().toLowerCase();
 const IB_REGISTRY_JSON = String(process.env.ZENCORE_IB_REGISTRY_JSON || '').trim();
+const ADMIN_EMAILS = String(process.env.ZENCORE_ADMIN_EMAILS || '')
+  .split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
 const AUTOTRADE_ENABLED = AUTH_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_ENABLED || ''));
 const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_EXECUTION_ENABLED || ''));
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
@@ -71,6 +73,10 @@ if (AUTH_ENABLED) {
       allowMemory: AUTH_MEMORY && process.env.NODE_ENV !== 'production'
     });
     await store.init();
+    if (ADMIN_EMAILS.length && typeof store.promoteAdminsByEmail === 'function') {
+      const promoted = await store.promoteAdminsByEmail(ADMIN_EMAILS);
+      if (promoted) console.log(`ZenCore RBAC promoted ${promoted} configured admin account(s).`);
+    }
     if (IB_REGISTRY_JSON && typeof store.createIbReferrer === 'function') {
       let ibRegistry;
       try {
@@ -325,6 +331,92 @@ async function requireSession(req, res, redirectTo = null) {
     if (redirectTo) redirect(res, redirectTo);
     else authUnavailable(res);
     return null;
+  }
+}
+
+
+function landingForRole(role) {
+  if (role === 'admin') return '/admin';
+  if (role === 'ib') return '/ib';
+  return '/app';
+}
+
+async function requireRole(req, res, role, redirectTo = null) {
+  const session = await requireSession(req, res, redirectTo);
+  if (!session) return null;
+  if (session.user.role !== role) {
+    if (redirectTo) {
+      redirect(res, landingForRole(session.user.role));
+    } else {
+      sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Akses tidak dibenarkan untuk akaun ini.' });
+    }
+    return null;
+  }
+  return session;
+}
+
+async function handleManagementApi(req, res, pathname, session) {
+  if (!authState.ready || !authState.service) return authUnavailable(res);
+  try {
+    if (pathname.startsWith('/api/admin/')) {
+      if (session.user.role !== 'admin') {
+        return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/overview') {
+        return sendJson(res, 200, { ok: true, ...(await authState.service.adminOverview(session.user)) });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/clients') {
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const clients = await authState.service.adminClients(session.user, {
+          ibCode: String(url.searchParams.get('ib') || '').trim().toLowerCase(),
+          limit: Number(url.searchParams.get('limit') || 200)
+        });
+        return sendJson(res, 200, { ok: true, clients });
+      }
+      if (req.method === 'POST' && pathname === '/api/admin/ibs') {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const created = await authState.service.createIb(session.user, body);
+        return sendJson(res, 201, { ok: true, ...created });
+      }
+      const ibStatusMatch = pathname.match(/^\/api\/admin\/ibs\/([0-9a-f-]{36})\/status$/i);
+      if (req.method === 'PATCH' && ibStatusMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const referrer = await authState.service.setIbActive(session.user, ibStatusMatch[1], body.active === true);
+        return sendJson(res, 200, { ok: true, referrer });
+      }
+      return sendJson(res, 404, { ok: false, error: 'Admin route tidak dijumpai.' });
+    }
+
+    if (pathname.startsWith('/api/ib/')) {
+      if (session.user.role !== 'ib') {
+        return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'IB access required.' });
+      }
+      if (req.method === 'GET' && pathname === '/api/ib/overview') {
+        return sendJson(res, 200, { ok: true, ...(await authState.service.ibOverview(session.user)) });
+      }
+      if (req.method === 'GET' && pathname === '/api/ib/clients') {
+        return sendJson(res, 200, { ok: true, clients: await authState.service.ibClients(session.user) });
+      }
+      return sendJson(res, 404, { ok: false, error: 'IB route tidak dijumpai.' });
+    }
+
+    return sendJson(res, 404, { ok: false, error: 'Management route tidak dijumpai.' });
+  } catch (error) {
+    if (error?.status) {
+      return sendJson(res, error.status, {
+        ok: false, code: error.code, error: error.message, fields: error.fields || undefined
+      });
+    }
+    console.error('ZenCore management request failed:', error?.message || 'Unknown error');
+    return sendJson(res, 500, { ok: false, error: 'Permintaan management tidak dapat diselesaikan.' });
   }
 }
 
@@ -750,6 +842,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/auth.css') return sendAuthAsset(res, 'auth.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/management.css') return sendAuthAsset(res, 'management.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/management.js') return sendAuthAsset(res, 'management.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/market-radar-core.js') return sendAuthAsset(res, 'market-radar-core.js', 'application/javascript; charset=utf-8');
@@ -788,6 +882,17 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, pathname === '/login' ? 'login.html' : 'register.html', 'text/html; charset=utf-8');
   }
 
+  const shortReferralMatch = pathname.match(/^\/u\/([a-z0-9_-]{1,48})$/i);
+  if (AUTH_ENABLED && req.method === 'GET' && shortReferralMatch) {
+    if (authState.ready && authState.service) {
+      try {
+        const session = await authState.service.sessionFromRequest(req);
+        if (session) return redirect(res, landingForRole(session.user.role));
+      } catch (_) {}
+    }
+    return redirect(res, `/register?ib=${encodeURIComponent(shortReferralMatch[1].toLowerCase())}`);
+  }
+
   if (req.method === 'GET' && pathname === '/precision-entry.css') return sendAsset(res, 'precision-entry.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/precision-entry.js') return sendAsset(res, 'precision-entry.js', 'application/javascript; charset=utf-8');
 
@@ -797,7 +902,7 @@ const server = http.createServer(async (req, res) => {
     if (!authState.ready || !authState.service) return redirect(res, '/login');
     try {
       const session = await authState.service.sessionFromRequest(req);
-      return redirect(res, session ? '/app' : '/login');
+      return redirect(res, session ? landingForRole(session.user.role) : '/login');
     } catch (_) {
       return redirect(res, '/login');
     }
@@ -807,9 +912,29 @@ const server = http.createServer(async (req, res) => {
     return sendAsset(res, 'retired.html', 'text/html; charset=utf-8');
   }
 
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin') {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/ib') {
+    const session = await requireRole(req, res, 'ib', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'ib.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/ib/'))) {
+    const session = await requireSession(req, res);
+    if (!session) return;
+    return handleManagementApi(req, res, pathname, session);
+  }
+
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/app') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
+    if (session.user.role === 'admin') return redirect(res, '/admin');
+    if (session.user.role === 'ib') return redirect(res, '/ib');
     return sendAuthAsset(res, 'home.html', 'text/html; charset=utf-8');
   }
 
