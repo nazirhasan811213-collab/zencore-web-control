@@ -102,6 +102,37 @@ button,input{font:inherit}
 .auth-lead{margin:0 0 28px;color:var(--muted);font-size:12px;line-height:1.6}
 .mobile-brand{display:none;margin-bottom:24px}
 
+
+.register-card{width:min(100%,560px)}
+.ib-assignment{
+  display:grid;
+  grid-template-columns:42px 1fr auto;
+  align-items:center;
+  gap:12px;
+  margin:0 0 22px;
+  padding:14px;
+  border:1px solid rgba(67,229,173,.28);
+  border-radius:14px;
+  background:linear-gradient(120deg,rgba(67,229,173,.08),rgba(67,220,255,.05));
+}
+.ib-assignment.loading{opacity:.72}
+.ib-assignment.fallback{border-color:rgba(255,199,103,.34);background:rgba(255,199,103,.06)}
+.ib-assignment.error{border-color:rgba(255,111,127,.34);background:rgba(255,111,127,.06)}
+.ib-lock{
+  width:42px;height:42px;display:grid;place-items:center;border-radius:12px;
+  border:1px solid rgba(67,229,173,.34);background:#071b20;color:var(--green);
+  font-size:13px;box-shadow:inset 0 0 16px rgba(67,229,173,.08)
+}
+.ib-copy{min-width:0}
+.ib-copy span{display:block;color:#71a1b2;font-size:8px;font-weight:950;letter-spacing:.14em}
+.ib-copy strong{display:block;margin-top:4px;color:#e9fbff;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib-copy small{display:block;margin-top:4px;color:#7f9ba9;font-size:9px;line-height:1.45}
+.ib-badge{
+  padding:6px 8px;border:1px solid rgba(67,229,173,.34);border-radius:999px;
+  color:#75eac2;background:rgba(67,229,173,.06);font-size:7px;font-weight:950;letter-spacing:.12em
+}
+.field-help{margin-top:-3px;color:#607b89;font-size:9px}
+
 .form-grid{display:grid;gap:17px}
 .field{display:grid;gap:7px}
 .field label{font-size:10px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#aac0cc}
@@ -175,6 +206,7 @@ button,input{font:inherit}
 }
 @media(max-width:620px){
   .auth-card{padding:25px 20px;border-radius:18px}.auth-card h2{font-size:27px}
+  .ib-assignment{grid-template-columns:38px 1fr}.ib-badge{display:none}.ib-lock{width:38px;height:38px}
   .portal-shell{padding:9px}.portal-top{padding:12px}.portal-top .brand span{display:none}.user-pill{display:none}
   .modules{grid-template-columns:1fr}.hero-card{padding:22px}.status-card{min-height:170px}.module-card{min-height:180px}
 }
