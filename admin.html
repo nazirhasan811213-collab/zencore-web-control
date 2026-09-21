@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin Dashboard — ZenCore</title>
+  <link rel="stylesheet" href="/auth.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=1.0">
+</head>
+<body data-management-role="admin">
+  <div class="mg-shell">
+    <aside class="mg-sidebar">
+      <a class="mg-logo" href="/admin">
+        <span class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></span>
+        <span><b>ZenCore</b><small>ADMIN CONTROL</small></span>
+      </a>
+      <nav class="mg-nav">
+        <a class="active" href="/admin"><span>⌂</span>Dashboard</a>
+        <a href="#ibs"><span>◈</span>IB Management</a>
+        <a href="#clients"><span>◎</span>All Clients</a>
+        <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
+        <a href="/auto-trade"><span>↯</span>Auto Trade</a>
+        <a href="/results"><span>▤</span>Reports</a>
+      </nav>
+      <div class="mg-side-note">
+        <span>ROLE</span>
+        <b>SUPER ADMIN</b>
+        <small>Full ZenCore access</small>
+      </div>
+    </aside>
+
+    <main class="mg-main">
+      <header class="mg-topbar">
+        <div>
+          <span class="mg-kicker">ZENCORE TOTAL TRADE SYSTEM</span>
+          <h1>Admin Dashboard</h1>
+        </div>
+        <div class="mg-user">
+          <div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div>
+          <span class="mg-role admin">ADMIN</span>
+          <button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button>
+        </div>
+      </header>
+
+      <section class="mg-hero">
+        <div>
+          <span class="mg-kicker">GLOBAL CONTROL CENTER</span>
+          <h2>Semua IB dan client, satu pusat kawalan.</h2>
+          <p>Admin boleh create IB, pantau semua client, kawal status akaun dan melihat keseluruhan hierarchy ZenCore.</p>
+        </div>
+        <div class="mg-system">
+          <span>SYSTEM ACCESS</span>
+          <b>FULL CONTROL</b>
+          <small>Admin → IB → Client</small>
+        </div>
+      </section>
+
+      <section class="mg-stats" aria-label="Ringkasan sistem">
+        <article><span>TOTAL IB</span><b id="statIb">—</b><small id="statIbActive">— active</small></article>
+        <article><span>TOTAL CLIENT</span><b id="statClients">—</b><small>Registered</small></article>
+        <article><span>ACTIVE CLIENT</span><b id="statActive">—</b><small>Can login</small></article>
+        <article><span>NEW TODAY</span><b id="statToday">—</b><small>Registrations</small></article>
+      </section>
+
+      <section id="ibs" class="mg-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">PARTNER NETWORK</span><h2>IB Management</h2></div>
+          <button id="toggleCreateIb" class="mg-primary" type="button">+ CREATE IB</button>
+        </div>
+
+        <form id="createIbForm" class="mg-create hidden" novalidate>
+          <div class="mg-create-head"><b>Create IB Account</b><span>IB akan mendapat dashboard dan referral link sendiri.</span></div>
+          <label>Nama IB<input name="displayName" maxlength="80" placeholder="Contoh: Azman IB" required></label>
+          <label>Kod IB<input name="code" maxlength="48" placeholder="Contoh: azman" required></label>
+          <label>E-mel<input name="email" type="email" maxlength="254" placeholder="azman@email.com" required></label>
+          <label>No. telefon<input name="phone" type="tel" maxlength="24" placeholder="0123456789"></label>
+          <label>Password sementara<input name="password" type="password" minlength="10" maxlength="128" placeholder="Minimum 10 aksara" required></label>
+          <div class="mg-create-actions">
+            <span id="createIbStatus" class="mg-form-status"></span>
+            <button type="submit" class="mg-primary">CREATE & GENERATE LINK</button>
+          </div>
+        </form>
+
+        <div class="mg-table-wrap">
+          <table class="mg-table">
+            <thead><tr><th>IB</th><th>Code / Registration Link</th><th>Clients</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="ibTable"><tr><td colspan="5" class="mg-loading">Loading IB...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="clients" class="mg-panel">
+        <div class="mg-panel-head">
+          <div><span class="mg-kicker">CLIENT DATABASE</span><h2>All Clients</h2></div>
+          <div class="mg-filter">
+            <label for="clientSearch">SEARCH</label>
+            <input id="clientSearch" type="search" placeholder="Nama, email, phone, IB">
+          </div>
+        </div>
+        <div class="mg-table-wrap">
+          <table class="mg-table clients">
+            <thead><tr><th>Client</th><th>Contact</th><th>IC</th><th>IB</th><th>Registered</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="clientTable"><tr><td colspan="7" class="mg-loading">Loading clients...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="mg-foot">ZenCore Admin Control • Role-based access • IB ownership locked at database level</footer>
+    </main>
+  </div>
+  <script src="/management.js?v=1.0" defer></script>
+</body>
+</html>
