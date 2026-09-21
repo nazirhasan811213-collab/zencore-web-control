@@ -355,6 +355,53 @@ async function requireRole(req, res, role, redirectTo = null) {
   return session;
 }
 
+
+async function clientTradingSummary(userId) {
+  if (!autoTradeState.ready || !autoTradeState.service) {
+    return { available: false, status: 'STARTING' };
+  }
+  try {
+    const state = await autoTradeState.service.state(userId);
+    return {
+      available: true,
+      mode: state.mode || 'DEMO',
+      connection: state.connection ? {
+        state: state.connection.state || null,
+        label: state.connection.label || null,
+        online: state.connection.online === true,
+        connected: state.connection.connected === true,
+        ready: state.connection.ready === true
+      } : null,
+      control: {
+        desiredState: state.control?.desiredState || 'STOPPED',
+        effectiveState: state.control?.effectiveState || 'STOPPED',
+        executionRolloutUnlocked: state.control?.executionRolloutUnlocked === true
+      },
+      mt5: {
+        status: state.hostedMt5?.status || state.hostedAccount?.status || 'NOT_CONNECTED',
+        executionReady: state.hostedMt5?.executionReady === true,
+        accountMask: state.hostedAccount?.accountMask || state.pod?.accountMask || null,
+        serverMask: state.hostedAccount?.serverMask || state.pod?.serverMask || null,
+        brokerMask: state.hostedAccount?.brokerMask || state.pod?.brokerMask || null
+      },
+      settings: state.settings ? {
+        capitalUsd: state.settings.capitalUsd ?? null,
+        lotPerLayer: state.settings.lotPerLayer ?? null,
+        layers: state.settings.layers ?? null,
+        totalLot: state.settings.totalLot ?? null,
+        symbols: Array.isArray(state.settings.symbols) ? state.settings.symbols : []
+      } : null,
+      summary: {
+        openPositions: Number(state.summary?.openPositions || 0),
+        floatingProfitUsd: Number(state.summary?.floatingProfitUsd || 0),
+        totalVolume: Number(state.summary?.totalVolume || 0)
+      }
+    };
+  } catch (error) {
+    return { available: false, status: 'UNAVAILABLE' };
+  }
+}
+
 async function handleManagementApi(req, res, pathname, session) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
   try {
@@ -372,6 +419,20 @@ async function handleManagementApi(req, res, pathname, session) {
           limit: Number(url.searchParams.get('limit') || 200)
         });
         return sendJson(res, 200, { ok: true, clients });
+      }
+      const adminClientDetailMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})$/i);
+      if (req.method === 'GET' && adminClientDetailMatch) {
+        const client = await authState.service.adminClientDetail(session.user, adminClientDetailMatch[1]);
+        return sendJson(res, 200, {
+          ok: true,
+          client,
+          trading: await clientTradingSummary(client.id)
+        });
+      }
+      const adminIbDetailMatch = pathname.match(/^\/api\/admin\/ibs\/([a-z0-9_-]{2,48})$/i);
+      if (req.method === 'GET' && adminIbDetailMatch) {
+        const detail = await authState.service.adminIbDetail(session.user, adminIbDetailMatch[1]);
+        return sendJson(res, 200, { ok: true, ...detail });
       }
       const adminClientStatusMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/status$/i);
       if (req.method === 'PATCH' && adminClientStatusMatch) {
@@ -417,6 +478,15 @@ async function handleManagementApi(req, res, pathname, session) {
       if (req.method === 'GET' && pathname === '/api/ib/clients') {
         return sendJson(res, 200, { ok: true, clients: await authState.service.ibClients(session.user) });
       }
+      const ibClientDetailMatch = pathname.match(/^\/api\/ib\/clients\/([0-9a-f-]{36})$/i);
+      if (req.method === 'GET' && ibClientDetailMatch) {
+        const client = await authState.service.ibClientDetail(session.user, ibClientDetailMatch[1]);
+        return sendJson(res, 200, {
+          ok: true,
+          client,
+          trading: await clientTradingSummary(client.id)
+        });
+      }
       const ibClientStatusMatch = pathname.match(/^\/api\/ib\/clients\/([0-9a-f-]{36})\/status$/i);
       if (req.method === 'PATCH' && ibClientStatusMatch) {
         if (!requestOriginAllowed(req)) {
@@ -441,6 +511,42 @@ async function handleManagementApi(req, res, pathname, session) {
     }
     console.error('ZenCore management request failed:', error?.message || 'Unknown error');
     return sendJson(res, 500, { ok: false, error: 'Permintaan management tidak dapat diselesaikan.' });
+  }
+}
+
+
+async function handleAccountApi(req, res, pathname, session) {
+  if (!authState.ready || !authState.service) return authUnavailable(res);
+  if (session.user.role !== 'client') {
+    return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Client access required.' });
+  }
+  try {
+    if (req.method === 'GET' && pathname === '/api/account/profile') {
+      const profile = await authState.service.ownClientProfile(session.user);
+      return sendJson(res, 200, {
+        ok: true,
+        profile,
+        trading: await clientTradingSummary(profile.id)
+      });
+    }
+    if (req.method === 'PATCH' && pathname === '/api/account/profile') {
+      if (!requestOriginAllowed(req)) {
+        return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+      }
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      const profile = await authState.service.updateOwnClientProfile(session.user, body);
+      return sendJson(res, 200, { ok: true, profile });
+    }
+    return sendJson(res, 404, { ok: false, error: 'Account route tidak dijumpai.' });
+  } catch (error) {
+    if (error?.status) {
+      return sendJson(res, error.status, {
+        ok: false, code: error.code, error: error.message, fields: error.fields || undefined
+      });
+    }
+    console.error('ZenCore account request failed:', error?.message || 'Unknown error');
+    return sendJson(res, 500, { ok: false, error: 'Permintaan akaun tidak dapat diselesaikan.' });
   }
 }
 
@@ -868,6 +974,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/auth.css') return sendAuthAsset(res, 'auth.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/management.css') return sendAuthAsset(res, 'management.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/management.js') return sendAuthAsset(res, 'management.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/detail.js') return sendAuthAsset(res, 'detail.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/market-radar-core.js') return sendAuthAsset(res, 'market-radar-core.js', 'application/javascript; charset=utf-8');
@@ -946,6 +1054,39 @@ const server = http.createServer(async (req, res) => {
     const session = await requireRole(req, res, 'ib', '/login');
     if (!session) return;
     return sendAuthAsset(res, 'ib.html', 'text/html; charset=utf-8');
+  }
+
+  const adminIbPageMatch = pathname.match(/^\/admin\/ib\/([a-z0-9_-]{2,48})$/i);
+  if (AUTH_ENABLED && req.method === 'GET' && adminIbPageMatch) {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'ib-detail.html', 'text/html; charset=utf-8');
+  }
+
+  const adminClientPageMatch = pathname.match(/^\/admin\/client\/([0-9a-f-]{36})$/i);
+  if (AUTH_ENABLED && req.method === 'GET' && adminClientPageMatch) {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'client-detail.html', 'text/html; charset=utf-8');
+  }
+
+  const ibClientPageMatch = pathname.match(/^\/ib\/client\/([0-9a-f-]{36})$/i);
+  if (AUTH_ENABLED && req.method === 'GET' && ibClientPageMatch) {
+    const session = await requireRole(req, res, 'ib', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'client-detail.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/account') {
+    const session = await requireRole(req, res, 'client', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'account.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && pathname.startsWith('/api/account/')) {
+    const session = await requireSession(req, res);
+    if (!session) return;
+    return handleAccountApi(req, res, pathname, session);
   }
 
   if (AUTH_ENABLED && (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/ib/'))) {
