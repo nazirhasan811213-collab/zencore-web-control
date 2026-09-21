@@ -22,7 +22,9 @@ function safeUser(user) {
     email: user.email,
     status: user.status,
     createdAt: user.createdAt || user.created_at,
-    lastLoginAt: user.lastLoginAt || user.last_login_at || null
+    lastLoginAt: user.lastLoginAt || user.last_login_at || null,
+    ibCode: user.ibCode || user.ib_code || null,
+    ibName: user.ibName || user.ib_name || null
   };
 }
 
