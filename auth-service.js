@@ -179,6 +179,27 @@ function createAuthService(options = {}) {
     return updated;
   }
 
+
+  async function setAdminClientActive(user, clientId, active) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const client = await store.setClientActiveForAdmin(String(clientId), active === true);
+    if (!client) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+    return client;
+  }
+
+  async function setIbClientActive(user, clientId, active) {
+    assertRole(user, ROLE_IB);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const client = await store.setClientActiveForIb(user.id, String(clientId), active === true);
+    if (!client) throw authError('CLIENT_NOT_FOUND', 'Client bukan di bawah IB ini atau tidak dijumpai.', 404);
+    return client;
+  }
+
   async function ibOverview(user) {
     assertRole(user, ROLE_IB);
     const overview = await store.ibOverview(user.id);
@@ -249,6 +270,8 @@ function createAuthService(options = {}) {
     adminClients,
     createIb,
     setIbActive,
+    setAdminClientActive,
+    setIbClientActive,
     ibOverview,
     ibClients,
     login,
