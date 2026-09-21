@@ -176,8 +176,49 @@ class PostgresAuthStore {
         ON zencore_sessions(user_id);
       CREATE INDEX IF NOT EXISTS zencore_sessions_expires_at_idx
         ON zencore_sessions(expires_at);
+
+      CREATE TABLE IF NOT EXISTS zencore_system_settings (
+        setting_key VARCHAR(64) PRIMARY KEY,
+        setting_value JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      INSERT INTO zencore_system_settings (setting_key, setting_value)
+      VALUES ('registration_enabled', 'true'::jsonb)
+      ON CONFLICT (setting_key) DO NOTHING;
     `);
     await this.deleteExpiredSessions();
+  }
+
+
+  async getSystemSettings() {
+    const result = await this.pool.query(
+      `SELECT setting_key, setting_value, updated_at
+       FROM zencore_system_settings
+       WHERE setting_key = 'registration_enabled'
+       LIMIT 1`
+    );
+    const row = result.rows[0];
+    return {
+      registrationEnabled: row ? row.setting_value === true : true,
+      updatedAt: row?.updated_at || null
+    };
+  }
+
+  async setRegistrationEnabled(enabled) {
+    const result = await this.pool.query(
+      `INSERT INTO zencore_system_settings (setting_key, setting_value, updated_at)
+       VALUES ('registration_enabled', $1::jsonb, NOW())
+       ON CONFLICT (setting_key) DO UPDATE SET
+         setting_value = EXCLUDED.setting_value,
+         updated_at = NOW()
+       RETURNING setting_value, updated_at`,
+      [JSON.stringify(enabled === true)]
+    );
+    return {
+      registrationEnabled: result.rows[0]?.setting_value === true,
+      updatedAt: result.rows[0]?.updated_at || null
+    };
   }
 
   async promoteAdminsByEmail(emails = []) {
@@ -649,6 +690,23 @@ class MemoryAuthStore {
   }
 
   async init() {}
+
+
+  async getSystemSettings() {
+    return {
+      registrationEnabled: this.registrationEnabled !== false,
+      updatedAt: this.registrationUpdatedAt || null
+    };
+  }
+
+  async setRegistrationEnabled(enabled) {
+    this.registrationEnabled = enabled === true;
+    this.registrationUpdatedAt = new Date();
+    return {
+      registrationEnabled: this.registrationEnabled,
+      updatedAt: this.registrationUpdatedAt
+    };
+  }
 
   async promoteAdminsByEmail(emails = []) {
     const normalized = new Set(emails.map(value => String(value || '').trim().toLowerCase()).filter(Boolean));
