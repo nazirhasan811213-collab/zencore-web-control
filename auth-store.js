@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const DEFAULT_IB_CODE = 'nazir';
 const DEFAULT_IB_NAME = 'Nazir (Admin)';
 const DEFAULT_IB_ID = '00000000-0000-4000-8000-000000000001';
+const USER_ROLES = Object.freeze(['admin', 'ib', 'client']);
 
 function publicUser(row) {
   if (!row) return null;
@@ -11,6 +12,7 @@ function publicUser(row) {
     id: row.id,
     displayName: row.display_name,
     email: row.email,
+    role: row.role || 'client',
     status: row.status,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
@@ -25,8 +27,32 @@ function publicReferrer(row, requestedCode = '') {
     id: row.id,
     code: row.code,
     displayName: row.display_name,
+    userId: row.user_id || null,
     active: row.active === true,
+    clientCount: Number(row.client_count || 0),
     fallback: !!requestedCode && requestedCode !== row.code
+  };
+}
+
+function maskedIc(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length !== 12) return '';
+  return `${digits.slice(0, 6)}-**-${digits.slice(-4)}`;
+}
+
+function publicClient(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    email: row.email,
+    phone: row.phone || '',
+    icMasked: maskedIc(row.ic_number),
+    status: row.status,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at,
+    ibCode: row.ib_code || null,
+    ibName: row.ib_name || null
   };
 }
 
@@ -67,6 +93,7 @@ class PostgresAuthStore {
         password_hash TEXT NOT NULL,
         ic_number VARCHAR(12),
         phone VARCHAR(24),
+        role VARCHAR(16) NOT NULL DEFAULT 'client',
         ib_referrer_id UUID REFERENCES zencore_ib_referrers(id),
         status VARCHAR(20) NOT NULL DEFAULT 'active',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -76,10 +103,20 @@ class PostgresAuthStore {
       ALTER TABLE zencore_users
         ADD COLUMN IF NOT EXISTS ic_number VARCHAR(12),
         ADD COLUMN IF NOT EXISTS phone VARCHAR(24),
+        ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'client',
         ADD COLUMN IF NOT EXISTS ib_referrer_id UUID;
 
       DO $$
       BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'zencore_users_role_check'
+        ) THEN
+          ALTER TABLE zencore_users
+            ADD CONSTRAINT zencore_users_role_check
+            CHECK (role IN ('admin','ib','client'));
+        END IF;
+
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint
           WHERE conname = 'zencore_users_ib_referrer_fk'
@@ -89,11 +126,26 @@ class PostgresAuthStore {
             FOREIGN KEY (ib_referrer_id)
             REFERENCES zencore_ib_referrers(id);
         END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'zencore_ib_referrers_user_fk'
+        ) THEN
+          ALTER TABLE zencore_ib_referrers
+            ADD CONSTRAINT zencore_ib_referrers_user_fk
+            FOREIGN KEY (user_id)
+            REFERENCES zencore_users(id)
+            ON DELETE SET NULL;
+        END IF;
       END $$;
 
       CREATE UNIQUE INDEX IF NOT EXISTS zencore_users_ic_number_idx
         ON zencore_users(ic_number)
         WHERE ic_number IS NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS zencore_ib_referrers_user_idx
+        ON zencore_ib_referrers(user_id)
+        WHERE user_id IS NOT NULL;
 
       CREATE OR REPLACE FUNCTION zencore_lock_ib_assignment()
       RETURNS trigger AS $$
@@ -128,11 +180,34 @@ class PostgresAuthStore {
     await this.deleteExpiredSessions();
   }
 
+  async promoteAdminsByEmail(emails = []) {
+    const normalized = [...new Set(emails.map(value => String(value || '').trim().toLowerCase()).filter(Boolean))];
+    if (!normalized.length) return 0;
+    const result = await this.pool.query(
+      `UPDATE zencore_users
+       SET role = 'admin'
+       WHERE LOWER(email) = ANY($1::text[])
+         AND role <> 'admin'
+       RETURNING id`,
+      [normalized]
+    );
+    return result.rowCount;
+  }
+
+  async setUserRole(userId, role) {
+    if (!USER_ROLES.includes(role)) throw new Error('Invalid user role');
+    const result = await this.pool.query(
+      `UPDATE zencore_users SET role = $2 WHERE id = $1 RETURNING id, role`,
+      [userId, role]
+    );
+    return result.rows[0] || null;
+  }
+
   async resolveReferrer(code, defaultCode = DEFAULT_IB_CODE) {
     const requestedCode = String(code || '').trim().toLowerCase();
     const desiredCode = requestedCode || defaultCode;
     let result = await this.pool.query(
-      `SELECT id, code, display_name, active
+      `SELECT id, code, display_name, user_id, active
        FROM zencore_ib_referrers
        WHERE code = $1 AND active = TRUE
        LIMIT 1`,
@@ -140,7 +215,7 @@ class PostgresAuthStore {
     );
     if (!result.rows[0] && desiredCode !== defaultCode) {
       result = await this.pool.query(
-        `SELECT id, code, display_name, active
+        `SELECT id, code, display_name, user_id, active
          FROM zencore_ib_referrers
          WHERE code = $1 AND active = TRUE
          LIMIT 1`,
@@ -158,19 +233,23 @@ class PostgresAuthStore {
          display_name = EXCLUDED.display_name,
          user_id = COALESCE(EXCLUDED.user_id, zencore_ib_referrers.user_id),
          active = TRUE
-       RETURNING id, code, display_name, active`,
+       RETURNING id, code, display_name, user_id, active`,
       [crypto.randomUUID(), code, displayName, userId]
     );
     return publicReferrer(result.rows[0]);
   }
 
-  async createUser({ displayName, email, passwordHash, icNumber, phone, ibReferrerId }) {
+  async createUser({
+    displayName, email, passwordHash, icNumber = null, phone = null,
+    ibReferrerId = null, role = 'client'
+  }) {
+    if (!USER_ROLES.includes(role)) throw new Error('Invalid user role');
     try {
       const result = await this.pool.query(
         `WITH inserted AS (
            INSERT INTO zencore_users
-             (id, display_name, email, password_hash, ic_number, phone, ib_referrer_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (id, display_name, email, password_hash, ic_number, phone, ib_referrer_id, role)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING *
          )
          SELECT inserted.*,
@@ -178,7 +257,10 @@ class PostgresAuthStore {
                 ref.display_name AS ib_name
          FROM inserted
          LEFT JOIN zencore_ib_referrers ref ON ref.id = inserted.ib_referrer_id`,
-        [crypto.randomUUID(), displayName, email, passwordHash, icNumber, phone, ibReferrerId]
+        [
+          crypto.randomUUID(), displayName, email, passwordHash,
+          icNumber || null, phone || null, ibReferrerId || null, role
+        ]
       );
       return publicUser(result.rows[0]);
     } catch (error) {
@@ -192,9 +274,225 @@ class PostgresAuthStore {
     }
   }
 
+  async createIbAccount({ displayName, code, email, passwordHash, phone = null }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const userId = crypto.randomUUID();
+      const userResult = await client.query(
+        `INSERT INTO zencore_users
+          (id, display_name, email, password_hash, phone, role, status)
+         VALUES ($1, $2, $3, $4, $5, 'ib', 'active')
+         RETURNING id, display_name, email, role, status, created_at, last_login_at`,
+        [userId, displayName, email, passwordHash, phone || null]
+      );
+      const referrerResult = await client.query(
+        `INSERT INTO zencore_ib_referrers
+          (id, code, display_name, user_id, active)
+         VALUES ($1, $2, $3, $4, TRUE)
+         RETURNING id, code, display_name, user_id, active, created_at`,
+        [crypto.randomUUID(), code, displayName, userId]
+      );
+      await client.query('COMMIT');
+      return {
+        user: publicUser(userResult.rows[0]),
+        referrer: publicReferrer(referrerResult.rows[0])
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (error?.code === '23505') {
+        const duplicate = new Error('IB account already exists');
+        duplicate.code = String(error.constraint || '').includes('zencore_ib_referrers')
+          ? 'IB_CODE_EXISTS'
+          : 'EMAIL_EXISTS';
+        throw duplicate;
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async setIbActive(referrerId, active) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `UPDATE zencore_ib_referrers
+         SET active = $2
+         WHERE id = $1 AND code <> $3
+         RETURNING id, code, display_name, user_id, active`,
+        [referrerId, active === true, DEFAULT_IB_CODE]
+      );
+      const referrer = result.rows[0];
+      if (!referrer) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      if (referrer.user_id) {
+        await client.query(
+          `UPDATE zencore_users SET status = $2 WHERE id = $1 AND role = 'ib'`,
+          [referrer.user_id, active === true ? 'active' : 'disabled']
+        );
+      }
+      await client.query('COMMIT');
+      return publicReferrer(referrer);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async adminOverview() {
+    const [stats, ibs, clients] = await Promise.all([
+      this.pool.query(
+        `SELECT
+          (SELECT COUNT(*)::int FROM zencore_ib_referrers WHERE code <> $1) AS total_ibs,
+          (SELECT COUNT(*)::int FROM zencore_ib_referrers WHERE code <> $1 AND active = TRUE) AS active_ibs,
+          (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client') AS total_clients,
+          (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client' AND status = 'active') AS active_clients,
+          (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client' AND created_at >= CURRENT_DATE) AS today_clients`,
+        [DEFAULT_IB_CODE]
+      ),
+      this.listIbReferrersWithCounts(),
+      this.listClientsForAdmin({ limit: 12 })
+    ]);
+    return {
+      stats: stats.rows[0] || {
+        total_ibs: 0, active_ibs: 0, total_clients: 0, active_clients: 0, today_clients: 0
+      },
+      ibs,
+      latestClients: clients
+    };
+  }
+
+  async listIbReferrersWithCounts() {
+    const result = await this.pool.query(
+      `SELECT ref.id, ref.code, ref.display_name, ref.user_id, ref.active, ref.created_at,
+              COUNT(u.id)::int AS client_count
+       FROM zencore_ib_referrers ref
+       LEFT JOIN zencore_users u
+         ON u.ib_referrer_id = ref.id AND u.role = 'client'
+       GROUP BY ref.id
+       ORDER BY CASE WHEN ref.code = $1 THEN 0 ELSE 1 END, ref.created_at ASC`,
+      [DEFAULT_IB_CODE]
+    );
+    return result.rows.map(row => publicReferrer(row));
+  }
+
+  async listClientsForAdmin({ ibCode = '', limit = 200 } = {}) {
+    const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
+    const values = [];
+    let filter = '';
+    if (ibCode) {
+      values.push(String(ibCode).toLowerCase());
+      filter = `AND ref.code = $1`;
+    }
+    values.push(safeLimit);
+    const limitIndex = values.length;
+    const result = await this.pool.query(
+      `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
+              u.created_at, u.last_login_at,
+              ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_users u
+       LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       WHERE u.role = 'client' ${filter}
+       ORDER BY u.created_at DESC
+       LIMIT $${limitIndex}`,
+      values
+    );
+    return result.rows.map(publicClient);
+  }
+
+  async ibOverview(userId) {
+    const refResult = await this.pool.query(
+      `SELECT id, code, display_name, user_id, active
+       FROM zencore_ib_referrers
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const referrer = refResult.rows[0];
+    if (!referrer) return null;
+    const [stats, clients] = await Promise.all([
+      this.pool.query(
+        `SELECT
+          COUNT(*)::int AS total_clients,
+          COUNT(*) FILTER (WHERE status = 'active')::int AS active_clients,
+          COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today_clients
+         FROM zencore_users
+         WHERE role = 'client' AND ib_referrer_id = $1`,
+        [referrer.id]
+      ),
+      this.listClientsForIb(userId, { limit: 200 })
+    ]);
+    return {
+      referrer: publicReferrer(referrer),
+      stats: stats.rows[0] || { total_clients: 0, active_clients: 0, today_clients: 0 },
+      clients
+    };
+  }
+
+  async listClientsForIb(userId, { limit = 200 } = {}) {
+    const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
+    const result = await this.pool.query(
+      `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
+              u.created_at, u.last_login_at,
+              ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_ib_referrers ref
+       JOIN zencore_users u
+         ON u.ib_referrer_id = ref.id AND u.role = 'client'
+       WHERE ref.user_id = $1
+       ORDER BY u.created_at DESC
+       LIMIT $2`,
+      [userId, safeLimit]
+    );
+    return result.rows.map(publicClient);
+  }
+
+
+  async setClientActiveForAdmin(clientId, active) {
+    const result = await this.pool.query(
+      `UPDATE zencore_users
+       SET status = $2
+       WHERE id = $1 AND role = 'client'
+       RETURNING id, display_name, email, phone, ic_number, status, created_at, last_login_at, ib_referrer_id`,
+      [clientId, active === true ? 'active' : 'disabled']
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    const enriched = await this.pool.query(
+      `SELECT u.*, ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_users u
+       LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       WHERE u.id = $1`,
+      [clientId]
+    );
+    return publicClient(enriched.rows[0]);
+  }
+
+  async setClientActiveForIb(ibUserId, clientId, active) {
+    const result = await this.pool.query(
+      `UPDATE zencore_users u
+       SET status = $3
+       FROM zencore_ib_referrers ref
+       WHERE u.id = $2
+         AND u.role = 'client'
+         AND u.ib_referrer_id = ref.id
+         AND ref.user_id = $1
+       RETURNING u.id`,
+      [ibUserId, clientId, active === true ? 'active' : 'disabled']
+    );
+    if (!result.rows[0]) return null;
+    const rows = await this.listClientsForIb(ibUserId, { limit: 500 });
+    return rows.find(item => item.id === clientId) || null;
+  }
+
   async findUserForLogin(email) {
     const result = await this.pool.query(
-      `SELECT u.id, u.display_name, u.email, u.password_hash, u.status,
+      `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
               u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -207,7 +505,7 @@ class PostgresAuthStore {
 
   async findUserByIdForLogin(userId) {
     const result = await this.pool.query(
-      `SELECT u.id, u.display_name, u.email, u.password_hash, u.status,
+      `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
               u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -236,7 +534,7 @@ class PostgresAuthStore {
   async findSession(tokenHash) {
     const result = await this.pool.query(
       `SELECT s.id AS session_id, s.expires_at,
-              u.id, u.display_name, u.email, u.status, u.created_at, u.last_login_at,
+              u.id, u.display_name, u.email, u.role, u.status, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_sessions s
        JOIN zencore_users u ON u.id = s.user_id
@@ -280,11 +578,33 @@ class MemoryAuthStore {
       id: DEFAULT_IB_ID,
       code: DEFAULT_IB_CODE,
       display_name: DEFAULT_IB_NAME,
-      active: true
+      user_id: null,
+      active: true,
+      created_at: new Date()
     });
   }
 
   async init() {}
+
+  async promoteAdminsByEmail(emails = []) {
+    const normalized = new Set(emails.map(value => String(value || '').trim().toLowerCase()).filter(Boolean));
+    let changed = 0;
+    for (const row of this.usersById.values()) {
+      if (normalized.has(String(row.email || '').toLowerCase()) && row.role !== 'admin') {
+        row.role = 'admin';
+        changed += 1;
+      }
+    }
+    return changed;
+  }
+
+  async setUserRole(userId, role) {
+    if (!USER_ROLES.includes(role)) throw new Error('Invalid user role');
+    const row = this.usersById.get(userId);
+    if (!row) return null;
+    row.role = role;
+    return { id: row.id, role };
+  }
 
   async resolveReferrer(code, defaultCode = DEFAULT_IB_CODE) {
     const requestedCode = String(code || '').trim().toLowerCase();
@@ -300,28 +620,34 @@ class MemoryAuthStore {
   }
 
   async createIbReferrer({ code, displayName, userId = null }) {
-    const row = {
+    const existing = this.referrersByCode.get(code);
+    const row = existing || {
       id: crypto.randomUUID(),
       code,
-      display_name: displayName,
-      user_id: userId,
-      active: true
+      created_at: new Date()
     };
+    row.display_name = displayName;
+    row.user_id = userId || row.user_id || null;
+    row.active = true;
     this.referrersByCode.set(code, row);
     return publicReferrer(row);
   }
 
-  async createUser({ displayName, email, passwordHash, icNumber, phone, ibReferrerId }) {
+  async createUser({
+    displayName, email, passwordHash, icNumber = null, phone = null,
+    ibReferrerId = null, role = 'client'
+  }) {
     if (this.usersByEmail.has(email)) {
       const error = new Error('Email already registered');
       error.code = 'EMAIL_EXISTS';
       throw error;
     }
-    if (this.usersByIc.has(icNumber)) {
+    if (icNumber && this.usersByIc.has(icNumber)) {
       const error = new Error('IC already registered');
       error.code = 'IC_EXISTS';
       throw error;
     }
+    if (!USER_ROLES.includes(role)) throw new Error('Invalid user role');
     const now = new Date();
     const referrer = [...this.referrersByCode.values()].find(item => item.id === ibReferrerId) || null;
     const row = {
@@ -329,9 +655,10 @@ class MemoryAuthStore {
       display_name: displayName,
       email,
       password_hash: passwordHash,
-      ic_number: icNumber,
-      phone,
-      ib_referrer_id: ibReferrerId,
+      ic_number: icNumber || null,
+      phone: phone || null,
+      role,
+      ib_referrer_id: ibReferrerId || null,
       ib_code: referrer?.code || null,
       ib_name: referrer?.display_name || null,
       status: 'active',
@@ -340,8 +667,125 @@ class MemoryAuthStore {
     };
     this.usersByEmail.set(email, row);
     this.usersById.set(row.id, row);
-    this.usersByIc.set(icNumber, row);
+    if (icNumber) this.usersByIc.set(icNumber, row);
     return publicUser(row);
+  }
+
+  async createIbAccount({ displayName, code, email, passwordHash, phone = null }) {
+    if (this.usersByEmail.has(email)) {
+      const error = new Error('Email already registered');
+      error.code = 'EMAIL_EXISTS';
+      throw error;
+    }
+    if (this.referrersByCode.has(code)) {
+      const error = new Error('IB code already registered');
+      error.code = 'IB_CODE_EXISTS';
+      throw error;
+    }
+    const user = await this.createUser({
+      displayName, email, passwordHash, phone, role: 'ib'
+    });
+    const referrer = await this.createIbReferrer({
+      code, displayName, userId: user.id
+    });
+    return { user, referrer };
+  }
+
+  async setIbActive(referrerId, active) {
+    const referrer = [...this.referrersByCode.values()].find(item => item.id === referrerId);
+    if (!referrer || referrer.code === DEFAULT_IB_CODE) return null;
+    referrer.active = active === true;
+    if (referrer.user_id) {
+      const user = this.usersById.get(referrer.user_id);
+      if (user && user.role === 'ib') user.status = referrer.active ? 'active' : 'disabled';
+    }
+    return publicReferrer(referrer);
+  }
+
+  async adminOverview() {
+    const ibs = await this.listIbReferrersWithCounts();
+    const clients = await this.listClientsForAdmin({ limit: 12 });
+    const allClients = [...this.usersById.values()].filter(row => row.role === 'client');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return {
+      stats: {
+        total_ibs: ibs.filter(item => item.code !== DEFAULT_IB_CODE).length,
+        active_ibs: ibs.filter(item => item.code !== DEFAULT_IB_CODE && item.active).length,
+        total_clients: allClients.length,
+        active_clients: allClients.filter(item => item.status === 'active').length,
+        today_clients: allClients.filter(item => new Date(item.created_at).getTime() >= today.getTime()).length
+      },
+      ibs,
+      latestClients: clients
+    };
+  }
+
+  async listIbReferrersWithCounts() {
+    return [...this.referrersByCode.values()]
+      .map(referrer => {
+        const clientCount = [...this.usersById.values()]
+          .filter(user => user.role === 'client' && user.ib_referrer_id === referrer.id).length;
+        return publicReferrer({ ...referrer, client_count: clientCount });
+      })
+      .sort((a, b) => {
+        if (a.code === DEFAULT_IB_CODE) return -1;
+        if (b.code === DEFAULT_IB_CODE) return 1;
+        return a.displayName.localeCompare(b.displayName);
+      });
+  }
+
+  async listClientsForAdmin({ ibCode = '', limit = 200 } = {}) {
+    const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
+    return [...this.usersById.values()]
+      .filter(row => row.role === 'client' && (!ibCode || row.ib_code === ibCode))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, safeLimit)
+      .map(publicClient);
+  }
+
+  async ibOverview(userId) {
+    const referrer = [...this.referrersByCode.values()].find(item => item.user_id === userId);
+    if (!referrer) return null;
+    const clients = await this.listClientsForIb(userId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return {
+      referrer: publicReferrer(referrer),
+      stats: {
+        total_clients: clients.length,
+        active_clients: clients.filter(item => item.status === 'active').length,
+        today_clients: clients.filter(item => new Date(item.createdAt).getTime() >= today.getTime()).length
+      },
+      clients
+    };
+  }
+
+  async listClientsForIb(userId, { limit = 200 } = {}) {
+    const referrer = [...this.referrersByCode.values()].find(item => item.user_id === userId);
+    if (!referrer) return [];
+    const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
+    return [...this.usersById.values()]
+      .filter(row => row.role === 'client' && row.ib_referrer_id === referrer.id)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, safeLimit)
+      .map(publicClient);
+  }
+
+
+  async setClientActiveForAdmin(clientId, active) {
+    const row = this.usersById.get(clientId);
+    if (!row || row.role !== 'client') return null;
+    row.status = active === true ? 'active' : 'disabled';
+    return publicClient(row);
+  }
+
+  async setClientActiveForIb(ibUserId, clientId, active) {
+    const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
+    const row = this.usersById.get(clientId);
+    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
+    row.status = active === true ? 'active' : 'disabled';
+    return publicClient(row);
   }
 
   async findUserForLogin(email) {
@@ -402,9 +846,11 @@ function createAuthStore(options = {}) {
 module.exports = {
   DEFAULT_IB_CODE,
   DEFAULT_IB_NAME,
+  USER_ROLES,
   PostgresAuthStore,
   MemoryAuthStore,
   createAuthStore,
   publicUser,
-  publicReferrer
+  publicReferrer,
+  publicClient
 };

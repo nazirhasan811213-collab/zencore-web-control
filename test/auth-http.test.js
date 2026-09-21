@@ -84,6 +84,10 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Log masuk/);
 
+    response = await fetch(`${BASE}/u/nazir`, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/register?ib=nazir');
+
     response = await fetch(`${BASE}/api/markets`);
     assert.equal(response.status, 401);
 
@@ -138,12 +142,27 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     });
     assert.equal(response.status, 201, output());
     const registered = await response.json();
+    assert.equal(registered.user.role, 'client');
     const userId = registered.user.id;
     const setCookie = response.headers.get('set-cookie');
     assert.ok(setCookie);
     assert.match(setCookie, /HttpOnly/);
     assert.match(setCookie, /SameSite=Strict/);
     const cookie = setCookie.split(';')[0];
+
+    response = await fetch(`${BASE}/admin`, { headers: { Cookie: cookie }, redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/app');
+
+    response = await fetch(`${BASE}/ib`, { headers: { Cookie: cookie }, redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/app');
+
+    response = await fetch(`${BASE}/api/admin/overview`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 403);
+
+    response = await fetch(`${BASE}/api/ib/overview`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 403);
 
     response = await fetch(`${BASE}/app`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
