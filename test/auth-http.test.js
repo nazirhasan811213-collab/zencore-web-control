@@ -95,9 +95,18 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
 
+    response = await fetch(`${BASE}/auth/referrer/nazir`);
+    assert.equal(response.status, 200);
+    const defaultIb = await response.json();
+    assert.equal(defaultIb.referrer.code, 'nazir');
+    assert.equal(defaultIb.referrer.displayName, 'Nazir (Admin)');
+
     const registration = {
       displayName: 'HTTP Test Trader',
       email: 'http-test@example.com',
+      icNumber: '900101011240',
+      phone: '0123456782',
+      ibCode: 'nazir',
       password: 'ZenCore2026!'
     };
 
