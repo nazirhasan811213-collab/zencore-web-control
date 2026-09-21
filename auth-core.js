@@ -16,6 +16,18 @@ function normalizeDisplayName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
+function normalizeIcNumber(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function normalizePhone(value) {
+  return String(value || '').trim().replace(/[\s()-]/g, '');
+}
+
+function normalizeIbCode(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 48);
+}
+
 function validateEmail(email) {
   if (!email || email.length > 254) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(email);
@@ -25,6 +37,9 @@ function validateRegistration(input = {}) {
   const displayName = normalizeDisplayName(input.displayName);
   const email = normalizeEmail(input.email);
   const password = String(input.password || '');
+  const icNumber = normalizeIcNumber(input.icNumber);
+  const phone = normalizePhone(input.phone);
+  const ibCode = normalizeIbCode(input.ibCode);
   const errors = {};
 
   if (displayName.length < 2 || displayName.length > 60) {
@@ -32,6 +47,12 @@ function validateRegistration(input = {}) {
   }
   if (!validateEmail(email)) {
     errors.email = 'Masukkan alamat e-mel yang sah.';
+  }
+  if (!/^\d{12}$/.test(icNumber)) {
+    errors.icNumber = 'No. IC mesti mengandungi 12 digit.';
+  }
+  if (!/^\+?\d{8,15}$/.test(phone)) {
+    errors.phone = 'Masukkan nombor telefon yang sah.';
   }
   if (password.length < 10 || password.length > 128) {
     errors.password = 'Password perlu antara 10 hingga 128 aksara.';
@@ -42,7 +63,7 @@ function validateRegistration(input = {}) {
   return {
     ok: Object.keys(errors).length === 0,
     errors,
-    value: { displayName, email, password }
+    value: { displayName, email, password, icNumber, phone, ibCode }
   };
 }
 
@@ -128,6 +149,9 @@ function sessionCookie(name, token, options = {}) {
 module.exports = {
   normalizeEmail,
   normalizeDisplayName,
+  normalizeIcNumber,
+  normalizePhone,
+  normalizeIbCode,
   validateEmail,
   validateRegistration,
   hashPassword,

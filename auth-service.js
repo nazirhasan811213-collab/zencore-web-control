@@ -12,6 +12,7 @@ const {
 
 const DEFAULT_COOKIE_NAME = 'zencore_session';
 const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_IB_CODE = 'nazir';
 
 function safeUser(user) {
   if (!user) return null;
@@ -21,7 +22,9 @@ function safeUser(user) {
     email: user.email,
     status: user.status,
     createdAt: user.createdAt || user.created_at,
-    lastLoginAt: user.lastLoginAt || user.last_login_at || null
+    lastLoginAt: user.lastLoginAt || user.last_login_at || null,
+    ibCode: user.ibCode || user.ib_code || null,
+    ibName: user.ibName || user.ib_name || null
   };
 }
 
@@ -41,6 +44,7 @@ function createAuthService(options = {}) {
   const secureCookies = options.secureCookies !== false;
   const sessionTtlMs = Math.max(60 * 60 * 1000, Number(options.sessionTtlMs) || DEFAULT_SESSION_TTL_MS);
   const maxAgeSeconds = Math.floor(sessionTtlMs / 1000);
+  const defaultIbCode = String(options.defaultIbCode || DEFAULT_IB_CODE).trim().toLowerCase();
 
   async function issueSession(userId) {
     const token = generateSessionToken();
@@ -59,13 +63,21 @@ function createAuthService(options = {}) {
       throw authError('VALIDATION_ERROR', 'Semak semula maklumat pendaftaran.', 400, validation.errors);
     }
 
+    const referrer = await store.resolveReferrer(validation.value.ibCode, defaultIbCode);
+    if (!referrer) {
+      throw authError('IB_UNAVAILABLE', 'Maklumat IB tidak dapat disahkan. Cuba semula.', 503);
+    }
+
     const passwordHash = await hashPassword(validation.value.password);
     let user;
     try {
       user = await store.createUser({
         displayName: validation.value.displayName,
         email: validation.value.email,
-        passwordHash
+        passwordHash,
+        icNumber: validation.value.icNumber,
+        phone: validation.value.phone,
+        ibReferrerId: referrer.id
       });
     } catch (error) {
       if (error?.code === 'EMAIL_EXISTS') {
@@ -73,11 +85,22 @@ function createAuthService(options = {}) {
           email: 'Gunakan e-mel lain atau log masuk.'
         });
       }
+      if (error?.code === 'IC_EXISTS') {
+        throw authError('IC_EXISTS', 'No. IC ini sudah mempunyai akaun ZenCore.', 409, {
+          icNumber: 'No. IC ini sudah didaftarkan.'
+        });
+      }
       throw error;
     }
 
     const session = await issueSession(user.id);
-    return { user: safeUser(user), ...session };
+    return { user: safeUser(user), referrer, ...session };
+  }
+
+  async function resolveReferrer(code) {
+    const referrer = await store.resolveReferrer(code, defaultIbCode);
+    if (!referrer) throw authError('IB_UNAVAILABLE', 'Maklumat IB tidak dapat disahkan.', 503);
+    return referrer;
   }
 
   async function login(input = {}) {
@@ -133,6 +156,7 @@ function createAuthService(options = {}) {
 
   return {
     register,
+    resolveReferrer,
     login,
     sessionFromRequest,
     reauthenticate,
@@ -147,6 +171,7 @@ function createAuthService(options = {}) {
 module.exports = {
   DEFAULT_COOKIE_NAME,
   DEFAULT_SESSION_TTL_MS,
+  DEFAULT_IB_CODE,
   createAuthService,
   authError,
   safeUser

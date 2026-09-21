@@ -20,6 +20,8 @@ const AUTH_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTH_
 const INSECURE_COOKIE = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_INSECURE_COOKIE || ''));
 const ALLOW_ORIGINLESS_AUTH = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_ALLOW_ORIGINLESS_AUTH || ''));
 const REGISTRATION_ENABLED = !/^(?:0|false|no|off)$/i.test(String(process.env.ZENCORE_REGISTRATION_ENABLED || 'true'));
+const DEFAULT_IB_CODE = String(process.env.ZENCORE_DEFAULT_IB_CODE || 'nazir').trim().toLowerCase();
+const IB_REGISTRY_JSON = String(process.env.ZENCORE_IB_REGISTRY_JSON || '').trim();
 const AUTOTRADE_ENABLED = AUTH_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_ENABLED || ''));
 const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_EXECUTION_ENABLED || ''));
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
@@ -69,11 +71,31 @@ if (AUTH_ENABLED) {
       allowMemory: AUTH_MEMORY && process.env.NODE_ENV !== 'production'
     });
     await store.init();
+    if (IB_REGISTRY_JSON && typeof store.createIbReferrer === 'function') {
+      let ibRegistry;
+      try {
+        ibRegistry = JSON.parse(IB_REGISTRY_JSON);
+      } catch (_) {
+        throw new Error('ZENCORE_IB_REGISTRY_JSON must be valid JSON.');
+      }
+      if (!Array.isArray(ibRegistry)) {
+        throw new Error('ZENCORE_IB_REGISTRY_JSON must be a JSON array.');
+      }
+      for (const item of ibRegistry) {
+        const code = String(item?.code || '').trim().toLowerCase();
+        const displayName = String(item?.displayName || '').trim();
+        if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(code) || displayName.length < 2 || displayName.length > 80) {
+          throw new Error('ZENCORE_IB_REGISTRY_JSON contains an invalid IB entry.');
+        }
+        await store.createIbReferrer({ code, displayName });
+      }
+    }
     authState.store = store;
     authState.service = createAuthService({
       store,
       secureCookies: !INSECURE_COOKIE,
-      sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined
+      sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
+      defaultIbCode: DEFAULT_IB_CODE
     });
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
@@ -308,6 +330,17 @@ async function requireSession(req, res, redirectTo = null) {
 
 async function handleAuthApi(req, res, pathname) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
+
+  const referrerMatch = pathname.match(/^\/auth\/referrer\/([a-z0-9_-]{1,48})$/i);
+  if (req.method === 'GET' && referrerMatch) {
+    try {
+      const referrer = await authState.service.resolveReferrer(decodeURIComponent(referrerMatch[1]));
+      return sendJson(res, 200, { ok: true, referrer });
+    } catch (error) {
+      if (error?.status) return sendJson(res, error.status, { ok: false, code: error.code, error: error.message });
+      return authUnavailable(res);
+    }
+  }
 
   if (req.method === 'GET' && pathname === '/auth/me') {
     const session = await authState.service.sessionFromRequest(req);

@@ -15,11 +15,15 @@ test('registration validation normalizes safe account input', () => {
   const result = validateRegistration({
     displayName: '  Nazir   Hasan ',
     email: '  NAZIR@EXAMPLE.COM ',
+    icNumber: '900101-01-1234',
+    phone: '012-345 6789',
     password: 'ZenCore2026!'
   });
   assert.equal(result.ok, true);
   assert.equal(result.value.displayName, 'Nazir Hasan');
   assert.equal(result.value.email, 'nazir@example.com');
+  assert.equal(result.value.icNumber, '900101011234');
+  assert.equal(result.value.phone, '0123456789');
   assert.equal(normalizeEmail(' A@B.COM '), 'a@b.com');
 });
 
@@ -27,11 +31,15 @@ test('registration validation rejects weak or malformed fields', () => {
   const result = validateRegistration({
     displayName: 'N',
     email: 'not-an-email',
+    icNumber: '123',
+    phone: 'abc',
     password: 'password'
   });
   assert.equal(result.ok, false);
   assert.ok(result.errors.displayName);
   assert.ok(result.errors.email);
+  assert.ok(result.errors.icNumber);
+  assert.ok(result.errors.phone);
   assert.ok(result.errors.password);
 });
 
