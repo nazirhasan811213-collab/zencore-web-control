@@ -1,5 +1,7 @@
 const {
   normalizeEmail,
+  normalizeDisplayName,
+  normalizePhone,
   validateEmail,
   validateRegistration,
   hashPassword,
@@ -200,6 +202,64 @@ function createAuthService(options = {}) {
     return client;
   }
 
+
+  async function adminIbDetail(user, code) {
+    assertRole(user, ROLE_ADMIN);
+    const safeCode = String(code || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(safeCode)) {
+      throw authError('INVALID_IB', 'Kod IB tidak sah.', 400);
+    }
+    const detail = await store.getIbDetailForAdmin(safeCode);
+    if (!detail) throw authError('IB_NOT_FOUND', 'IB tidak dijumpai.', 404);
+    return detail;
+  }
+
+  async function adminClientDetail(user, clientId) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const client = await store.getClientForAdmin(String(clientId));
+    if (!client) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+    return client;
+  }
+
+  async function ibClientDetail(user, clientId) {
+    assertRole(user, ROLE_IB);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const client = await store.getClientForIb(user.id, String(clientId));
+    if (!client) throw authError('CLIENT_NOT_FOUND', 'Client bukan di bawah IB ini atau tidak dijumpai.', 404);
+    return client;
+  }
+
+  async function ownClientProfile(user) {
+    assertRole(user, ROLE_CLIENT);
+    const profile = await store.getOwnClientProfile(user.id);
+    if (!profile) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
+    return profile;
+  }
+
+  async function updateOwnClientProfile(user, input = {}) {
+    assertRole(user, ROLE_CLIENT);
+    const displayName = normalizeDisplayName(input.displayName);
+    const phone = normalizePhone(input.phone);
+    const errors = {};
+    if (displayName.length < 2 || displayName.length > 60) {
+      errors.displayName = 'Nama perlu antara 2 hingga 60 aksara.';
+    }
+    if (!/^\+?\d{8,15}$/.test(phone)) {
+      errors.phone = 'Masukkan nombor telefon yang sah.';
+    }
+    if (Object.keys(errors).length) {
+      throw authError('VALIDATION_ERROR', 'Semak semula maklumat akaun.', 400, errors);
+    }
+    const profile = await store.updateOwnClientProfile(user.id, { displayName, phone });
+    if (!profile) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
+    return profile;
+  }
+
   async function ibOverview(user) {
     assertRole(user, ROLE_IB);
     const overview = await store.ibOverview(user.id);
@@ -268,11 +328,16 @@ function createAuthService(options = {}) {
     resolveReferrer,
     adminOverview,
     adminClients,
+    adminIbDetail,
+    adminClientDetail,
     createIb,
     setIbActive,
     setAdminClientActive,
     setIbClientActive,
     ibOverview,
+    ibClientDetail,
+    ownClientProfile,
+    updateOwnClientProfile,
     ibClients,
     login,
     sessionFromRequest,
