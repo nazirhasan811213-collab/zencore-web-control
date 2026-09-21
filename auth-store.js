@@ -452,6 +452,44 @@ class PostgresAuthStore {
     return result.rows.map(publicClient);
   }
 
+
+  async setClientActiveForAdmin(clientId, active) {
+    const result = await this.pool.query(
+      `UPDATE zencore_users
+       SET status = $2
+       WHERE id = $1 AND role = 'client'
+       RETURNING id, display_name, email, phone, ic_number, status, created_at, last_login_at, ib_referrer_id`,
+      [clientId, active === true ? 'active' : 'disabled']
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    const enriched = await this.pool.query(
+      `SELECT u.*, ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_users u
+       LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       WHERE u.id = $1`,
+      [clientId]
+    );
+    return publicClient(enriched.rows[0]);
+  }
+
+  async setClientActiveForIb(ibUserId, clientId, active) {
+    const result = await this.pool.query(
+      `UPDATE zencore_users u
+       SET status = $3
+       FROM zencore_ib_referrers ref
+       WHERE u.id = $2
+         AND u.role = 'client'
+         AND u.ib_referrer_id = ref.id
+         AND ref.user_id = $1
+       RETURNING u.id`,
+      [ibUserId, clientId, active === true ? 'active' : 'disabled']
+    );
+    if (!result.rows[0]) return null;
+    const rows = await this.listClientsForIb(ibUserId, { limit: 500 });
+    return rows.find(item => item.id === clientId) || null;
+  }
+
   async findUserForLogin(email) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
@@ -732,6 +770,22 @@ class MemoryAuthStore {
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, safeLimit)
       .map(publicClient);
+  }
+
+
+  async setClientActiveForAdmin(clientId, active) {
+    const row = this.usersById.get(clientId);
+    if (!row || row.role !== 'client') return null;
+    row.status = active === true ? 'active' : 'disabled';
+    return publicClient(row);
+  }
+
+  async setClientActiveForIb(ibUserId, clientId, active) {
+    const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
+    const row = this.usersById.get(clientId);
+    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
+    row.status = active === true ? 'active' : 'disabled';
+    return publicClient(row);
   }
 
   async findUserForLogin(email) {
