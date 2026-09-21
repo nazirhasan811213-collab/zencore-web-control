@@ -490,6 +490,70 @@ class PostgresAuthStore {
     return rows.find(item => item.id === clientId) || null;
   }
 
+
+  async getIbDetailForAdmin(code) {
+    const result = await this.pool.query(
+      `SELECT ref.id, ref.code, ref.display_name, ref.user_id, ref.active, ref.created_at,
+              COUNT(u.id)::int AS client_count
+       FROM zencore_ib_referrers ref
+       LEFT JOIN zencore_users u
+         ON u.ib_referrer_id = ref.id AND u.role = 'client'
+       WHERE ref.code = $1
+       GROUP BY ref.id
+       LIMIT 1`,
+      [String(code || '').trim().toLowerCase()]
+    );
+    const referrer = result.rows[0];
+    if (!referrer) return null;
+    const clients = await this.listClientsForAdmin({ ibCode: referrer.code, limit: 500 });
+    return { referrer: publicReferrer(referrer), clients };
+  }
+
+  async getClientForAdmin(clientId) {
+    const result = await this.pool.query(
+      `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
+              u.created_at, u.last_login_at,
+              ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_users u
+       LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       WHERE u.id = $1 AND u.role = 'client'
+       LIMIT 1`,
+      [clientId]
+    );
+    return publicClient(result.rows[0]);
+  }
+
+  async getClientForIb(ibUserId, clientId) {
+    const result = await this.pool.query(
+      `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
+              u.created_at, u.last_login_at,
+              ref.code AS ib_code, ref.display_name AS ib_name
+       FROM zencore_ib_referrers ref
+       JOIN zencore_users u
+         ON u.ib_referrer_id = ref.id AND u.role = 'client'
+       WHERE ref.user_id = $1 AND u.id = $2
+       LIMIT 1`,
+      [ibUserId, clientId]
+    );
+    return publicClient(result.rows[0]);
+  }
+
+  async getOwnClientProfile(userId) {
+    return this.getClientForAdmin(userId);
+  }
+
+  async updateOwnClientProfile(userId, { displayName, phone }) {
+    const result = await this.pool.query(
+      `UPDATE zencore_users
+       SET display_name = $2, phone = $3
+       WHERE id = $1 AND role = 'client' AND status = 'active'
+       RETURNING id`,
+      [userId, displayName, phone]
+    );
+    if (!result.rows[0]) return null;
+    return this.getClientForAdmin(userId);
+  }
+
   async findUserForLogin(email) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
@@ -785,6 +849,45 @@ class MemoryAuthStore {
     const row = this.usersById.get(clientId);
     if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
     row.status = active === true ? 'active' : 'disabled';
+    return publicClient(row);
+  }
+
+
+  async getIbDetailForAdmin(code) {
+    const referrer = this.referrersByCode.get(String(code || '').trim().toLowerCase());
+    if (!referrer) return null;
+    const clients = await this.listClientsForAdmin({ ibCode: referrer.code, limit: 500 });
+    return {
+      referrer: publicReferrer({
+        ...referrer,
+        client_count: clients.length
+      }),
+      clients
+    };
+  }
+
+  async getClientForAdmin(clientId) {
+    const row = this.usersById.get(clientId);
+    if (!row || row.role !== 'client') return null;
+    return publicClient(row);
+  }
+
+  async getClientForIb(ibUserId, clientId) {
+    const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
+    const row = this.usersById.get(clientId);
+    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
+    return publicClient(row);
+  }
+
+  async getOwnClientProfile(userId) {
+    return this.getClientForAdmin(userId);
+  }
+
+  async updateOwnClientProfile(userId, { displayName, phone }) {
+    const row = this.usersById.get(userId);
+    if (!row || row.role !== 'client' || row.status !== 'active') return null;
+    row.display_name = displayName;
+    row.phone = phone;
     return publicClient(row);
   }
 
