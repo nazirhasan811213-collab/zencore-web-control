@@ -19,7 +19,7 @@ function normalizeDisplayName(value) {
 function normalizeIcNumber(value) {
   return String(value || '')
     .trim()
-    .replace(/\s+/g, ' ')
+    .replace(/[\s-]+/g, '')
     .toUpperCase();
 }
 
