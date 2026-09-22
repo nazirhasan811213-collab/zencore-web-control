@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the complete connection-only hosted worker and Windows release pipeline. It does **not** place orders in this release. `HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED` is hard-coded to `False`, and `MetaTraderConnection` exposes connection/telemetry methods only—there is no `order_send` path.
+This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the staged multi-client Worker Manager. The child worker is execution-capable only for the guarded XAUUSD DEMO rollout; broker execution still requires the server rollout gate, the local DEMO gate, an approved connector version, an assigned worker slot, and all runtime safety checks.
 
 ## Implemented now
 
@@ -71,4 +71,29 @@ Production slot capacity is seeded by:
 ZENCORE_GCP_WORKER_SLOT_CAPACITY=10
 ```
 
-Phase 1 covers the central allocation and lease boundary. The Windows Worker Manager still needs to materialize one isolated MT5 terminal/profile and one worker process per assigned slot before multi-client execution is enabled.
+Phase 1 covers the central allocation and lease boundary.
+
+## Phase 2 — Windows Worker Manager
+
+`worker_manager.py` is the host-level supervisor for multi-client operation. It uses the Google-attested `/api/hosted-execution/assignments` route to discover **masked, non-secret** assignments for the current VM only. For each assigned slot it:
+
+1. creates a dedicated slot directory under `C:\ProgramData\ZenCore\HostedWorker\slots\<slot-code>`,
+2. materializes a clean MT5 terminal copy from an approved local template,
+3. writes a non-secret child `worker-config.json` containing only slot/account IDs, filesystem paths and reviewed control-plane settings,
+4. starts exactly one `ZenCoreHostedWorker.exe` child for that slot,
+5. restarts a failed child without moving it to another account,
+6. stops and removes the isolated slot directory when the assignment is removed or replaced.
+
+The manager never receives the encrypted credential envelope and never receives MT5 login/password/server plaintext. Each child worker leases its own envelope directly from ZenCore and decrypts it through Cloud KMS/HSM.
+
+The release now also includes `ZenCoreHostedWorkerManager.exe` and `Install-ZenCoreWorkerManager.ps1`. The manager installer is intentionally staged: the legacy one-to-one scheduled task remains untouched unless `-MigrateLegacyWorker` is explicitly supplied.
+
+A local terminal template can be prepared from the reviewed legacy MT5 installation with:
+
+```powershell
+.\Install-ZenCoreWorkerManager.ps1 -PrepareTerminalTemplate
+```
+
+This does **not** unlock the Render execution gate. If the local `DEMO_EXECUTION_ENABLED` gate is absent, the manager stays fail-closed and does not launch slot workers.
+
+Before enabling multi-client DEMO execution, verify on the Windows VM that each copied terminal keeps independent account/profile state and that no broker credential persists outside its assigned slot boundary.
