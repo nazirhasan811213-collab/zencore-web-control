@@ -28,7 +28,11 @@ function startServer() {
         ZENCORE_HOSTED_MT5_ENABLED: 'false',
         ZENCORE_GCP_HOSTED_WORKER_ENABLED: 'false',
         ZENCORE_POD_PROVISIONING_SECRET: POD_PROVISIONING_SECRET,
-        ZENCORE_COMMAND_SIGNING_KEY: COMMAND_SIGNING_KEY
+        ZENCORE_COMMAND_SIGNING_KEY: COMMAND_SIGNING_KEY,
+        ZENCORE_PUBLIC_VIEWER_ENABLED: 'true',
+        ZENCORE_PUBLIC_VIEWER_EMAIL: 'public@zencore.my',
+        ZENCORE_PUBLIC_VIEWER_PASSWORD: 'ZenCoreView2026!',
+        ZENCORE_PUBLIC_VIEWER_NAME: 'ZenCore Public Viewer'
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -114,6 +118,55 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const defaultIb = await response.json();
     assert.equal(defaultIb.referrer.code, 'nazir');
     assert.equal(defaultIb.referrer.displayName, 'Nazir (Admin)');
+
+    response = await fetch(`${BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: BASE, Accept: 'application/json' },
+      body: JSON.stringify({
+        email: 'public@zencore.my',
+        password: 'ZenCoreView2026!'
+      })
+    });
+    assert.equal(response.status, 200, output());
+    const viewerLogin = await response.json();
+    assert.equal(viewerLogin.user.role, 'viewer');
+    const viewerCookie = response.headers.get('set-cookie').split(';')[0];
+
+    response = await fetch(`${BASE}/app`, { headers: { Cookie: viewerCookie } });
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /Market Radar/);
+
+    response = await fetch(`${BASE}/analysis?pair=XAUUSD`, { headers: { Cookie: viewerCookie } });
+    assert.equal(response.status, 200);
+
+    response = await fetch(`${BASE}/results`, { headers: { Cookie: viewerCookie } });
+    assert.equal(response.status, 200);
+
+    response = await fetch(`${BASE}/auto-trade`, {
+      headers: { Cookie: viewerCookie },
+      redirect: 'manual'
+    });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/app');
+
+    response = await fetch(`${BASE}/account`, {
+      headers: { Cookie: viewerCookie },
+      redirect: 'manual'
+    });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/app');
+
+    response = await fetch(`${BASE}/api/auto-trade/state`, {
+      headers: { Cookie: viewerCookie }
+    });
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).code, 'VIEW_ONLY');
+
+    response = await fetch(`${BASE}/auth/logout`, {
+      method: 'POST',
+      headers: { Cookie: viewerCookie, Origin: BASE, Accept: 'application/json' }
+    });
+    assert.equal(response.status, 200);
 
     response = await fetch(`${BASE}/register?ib=nazir`);
     assert.equal(response.status, 200);
