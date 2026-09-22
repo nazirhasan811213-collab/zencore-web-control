@@ -195,6 +195,22 @@
     }
 
     renderIbTable(body.ibs || []);
+    const ibLinkSelect = byId('ibLinkSelect');
+    if (ibLinkSelect) {
+      const linkItems = (body.ibs || []).map(item =>
+        `<option value="${esc(item.code)}">${esc(item.displayName)} (${esc(String(item.code).toUpperCase())})${item.active ? '' : ' • DISABLED'}</option>`
+      ).join('');
+      ibLinkSelect.innerHTML = '<option value="">Pilih IB link...</option>' + linkItems;
+      const syncIbLink = () => {
+        const code = String(ibLinkSelect.value || '').trim();
+        const button = byId('copySelectedIbLink');
+        if (!button) return;
+        button.dataset.copyLink = code ? `${window.location.origin}/u/${encodeURIComponent(code)}` : '';
+        button.title = code ? `Copy: ${button.dataset.copyLink}` : 'Pilih IB dahulu';
+      };
+      ibLinkSelect.onchange = syncIbLink;
+      syncIbLink();
+    }
     const ibFilter = byId('clientIbFilter');
     if (ibFilter) {
       const items = (body.ibs || []).map(item =>
