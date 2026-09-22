@@ -24,7 +24,7 @@
         </div>
       </div>
 
-      <p class="risk-note">Jika client membuka halaman pendaftaran tanpa link IB yang sah, sistem akan mendaftarkan client secara automatik di bawah Nazir (Admin).</p>
+      <p class="risk-note">Pendaftaran hanya dibenarkan melalui link rasmi Admin atau IB yang masih aktif. Link tanpa kod IB yang sah tidak boleh digunakan.</p>
     </section>
 
     <section class="auth-panel">
@@ -49,7 +49,7 @@
         </div>
 
         <form id="authForm" class="form-grid register-grid" novalidate>
-          <input id="ibCode" name="ibCode" type="hidden" value="nazir">
+          <input id="ibCode" name="ibCode" type="hidden" value="">
 
           <div class="field">
             <label for="displayName">Nama penuh</label>
@@ -117,6 +117,6 @@
       </div>
     </section>
   </main>
-  <script src="/auth.js?v=1.1" defer></script>
+  <script src="/auth.js?v=1.2" defer></script>
 </body>
 </html>
