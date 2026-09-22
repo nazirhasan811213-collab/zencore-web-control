@@ -398,7 +398,10 @@ async function clientTradingSummary(userId) {
         executionReady: state.hostedMt5?.executionReady === true,
         accountMask: state.hostedAccount?.accountMask || state.pod?.accountMask || null,
         serverMask: state.hostedAccount?.serverMask || state.pod?.serverMask || null,
-        brokerMask: state.hostedAccount?.brokerMask || state.pod?.brokerMask || null
+        brokerMask: state.hostedAccount?.brokerMask || state.pod?.brokerMask || null,
+        workerSlotCode: state.hostedAccount?.workerSlotCode || null,
+        workerSlotNumber: state.hostedAccount?.workerSlotNumber || null,
+        workerHostName: state.hostedAccount?.workerHostName || state.hostedAccount?.workerCell || null
       },
       settings: state.settings ? {
         capitalUsd: state.settings.capitalUsd ?? null,
