@@ -30,7 +30,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
+    $manifest.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
     $manifest.workerManagerIncluded -ne $true) {
     throw "Release manifest does not contain the approved multi-client manager boundary."
@@ -56,12 +56,15 @@ if (-not (Test-Path -LiteralPath $LegacyConfigPath -PathType Leaf)) {
     throw "Existing hosted worker config is required to seed non-secret manager settings."
 }
 $legacy = Get-Content -Raw -LiteralPath $LegacyConfigPath | ConvertFrom-Json
+$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
+$configuredSymbols = @($legacy.allowedDemoSymbols | ForEach-Object { [string]$_ })
+$invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
 if ($legacy.demoOnly -ne $true -or
     $legacy.privateKeyAvailable -ne $false -or
     $legacy.credentialStorage -ne "MEMORY_ONLY" -or
-    [string]$legacy.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
-    @($legacy.allowedDemoSymbols).Count -ne 1 -or
-    [string]$legacy.allowedDemoSymbols[0] -ne "XAUUSD" -or
+    [string]$legacy.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
+    $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
+    @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count -or
     [string]$legacy.approvedDemoServer -ne "InterStellarFinancial-Demo") {
     throw "Existing worker config does not match the reviewed DEMO boundary."
 }
@@ -116,7 +119,7 @@ $managerConfig = [ordered]@{
     slotsRoot = $SlotsRoot
     executionGatePath = $ExecutionGatePath
     approvedDemoServer = [string]$legacy.approvedDemoServer
-    allowedDemoSymbols = @([string]$legacy.allowedDemoSymbols[0])
+    allowedDemoSymbols = @($configuredSymbols)
     heartbeatIntervalSeconds = [double]$legacy.heartbeatIntervalSeconds
     pollIntervalSeconds = 10
     connectorVersion = [string]$legacy.connectorVersion

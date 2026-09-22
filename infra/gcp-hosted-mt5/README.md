@@ -1,6 +1,6 @@
 # ZenCore hosted MT5 — Google Cloud staged Demo cell
 
-This module prepares one isolated Windows Server 2022 cell for one MT5 Demo account. It does not enable broker order execution and it does not claim compatibility with every broker server.
+This module prepares one private Windows Server 2022 worker host. The Worker Manager can create multiple isolated MT5 account slots on that host. It does not enable broker order execution by default and it does not claim compatibility with every broker server.
 
 ## Security boundary
 
@@ -9,9 +9,9 @@ This module prepares one isolated Windows Server 2022 cell for one MT5 Demo acco
 - The browser encrypts login, password and server with AES-256-GCM and wraps the AES key with the Cloud KMS public RSA key.
 - Cloud HSM owns the RSA-OAEP 3072 SHA-256 private key. The key cannot be exported. Only the worker service account has `asymmetricDecrypt` permission on this one key.
 - The VM uses its attached service account through the metadata server. No service-account JSON key is created or copied to disk.
-- Render accepts the worker only when Google's signed full instance identity exactly matches the configured project, zone, instance name, service account and HTTPS audience. Fresh request IDs are single-use, time-limited and recorded in a short PostgreSQL replay ledger across web-service restarts.
+- Render accepts a worker only when Google's signed full instance identity exactly matches a host in the configured fleet registry: project, zone, instance name, service account and HTTPS audience. Fresh request IDs are single-use, time-limited and recorded in a short PostgreSQL replay ledger across web-service restarts.
 - Decrypted MT5 values are permitted only in short-lived process memory. They are forbidden in environment variables, Terraform state, Render variables, logs and VM metadata.
-- The first rollout is limited to `InterStellarFinancial-Demo` and `XAUUSD`. Broker endpoint discovery and symbol suffix mapping must pass before expanding the matrix.
+- The default locked configuration starts with `InterStellarFinancial-Demo` and `XAUUSD`. Connector `2.2.0-gcp-multiuser-multipair` can accept additional canonical pairs only after broker endpoint, exact symbol, volume and tick-value validation.
 
 Google Cloud IAM separation of duties is required: the person who administers the KMS policy should not also control frontend releases, the Render database and the worker image. Absolute “admin-proof” auto-login is not possible when one person can replace every layer of the system.
 
@@ -83,7 +83,7 @@ The feature remains locked until all of these pass:
 1. No public IP, Secure Boot and TPM preflight.
 2. KMS decrypt succeeds only from the worker service account and fails for Render/admin application identities.
 3. InterStellar Demo login succeeds without writing plaintext credentials to disk or logs.
-4. Exact broker symbol mapping and volume/tick specifications for XAUUSD are captured.
+4. Exact broker symbol mapping and volume/tick specifications are captured for every configured pair.
 5. Analysis snapshot parity, command replay protection and STOP semantics pass.
 6. Entry, TP1, TP2, TP3, SL, Close Separuh and opposite confirmed yellow reversal pass on Demo.
 7. Recovery, restart, stale-command and duplicate-order tests pass.

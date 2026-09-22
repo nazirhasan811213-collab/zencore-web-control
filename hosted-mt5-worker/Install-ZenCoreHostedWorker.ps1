@@ -21,7 +21,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
+    $manifest.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true) {
     throw "Release manifest security boundary is invalid."
 }
@@ -52,11 +52,14 @@ if (Test-Path -LiteralPath "C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED
     throw "Legacy execution lock is still present. DEMO execution release will not install."
 }
 $config = Get-Content -Raw -LiteralPath $ConfigPath | ConvertFrom-Json
+$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
+$configuredSymbols = @($config.allowedDemoSymbols | ForEach-Object { [string]$_ })
+$invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
 if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $true -or
     $config.privateKeyAvailable -ne $false -or $config.credentialStorage -ne "MEMORY_ONLY" -or
-    $config.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
-    @($config.allowedDemoSymbols).Count -ne 1 -or
-    [string]$config.allowedDemoSymbols[0] -ne "XAUUSD" -or
+    $config.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
+    $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
+    @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count -or
     [string]$config.approvedDemoServer -ne "InterStellarFinancial-Demo") {
     throw "Worker configuration failed the DEMO execution boundary."
 }
