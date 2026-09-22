@@ -143,11 +143,12 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
 
     response = await fetch(`${BASE}/auto-trade`, {
-      headers: { Cookie: viewerCookie },
-      redirect: 'manual'
+      headers: { Cookie: viewerCookie }
     });
-    assert.equal(response.status, 302);
-    assert.equal(response.headers.get('location'), '/app');
+    assert.equal(response.status, 200);
+    const viewerAutoTradePage = await response.text();
+    assert.match(viewerAutoTradePage, /ZenCore Total Trade System/);
+    assert.match(viewerAutoTradePage, /viewer-mode\.js/);
 
     response = await fetch(`${BASE}/account`, {
       headers: { Cookie: viewerCookie },
@@ -158,6 +159,26 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
 
     response = await fetch(`${BASE}/api/auto-trade/state`, {
       headers: { Cookie: viewerCookie }
+    });
+    assert.equal(response.status, 200);
+    const viewerAutoState = await response.json();
+    assert.equal(viewerAutoState.viewerMode, true);
+    assert.equal(viewerAutoState.connection.state, 'VIEW_ONLY');
+    assert.equal(viewerAutoState.connection.ready, false);
+    assert.equal(viewerAutoState.hostedAccount, null);
+    assert.equal(viewerAutoState.pod, null);
+    assert.equal(viewerAutoState.control.canTurnOn, false);
+
+    response = await fetch(`${BASE}/api/auto-trade/credential-key`, {
+      headers: { Cookie: viewerCookie }
+    });
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).code, 'VIEW_ONLY');
+
+    response = await fetch(`${BASE}/api/auto-trade/on`, {
+      method: 'POST',
+      headers: { Cookie: viewerCookie, Origin: BASE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'AKTIFKAN DEMO' })
     });
     assert.equal(response.status, 403);
     assert.equal((await response.json()).code, 'VIEW_ONLY');
