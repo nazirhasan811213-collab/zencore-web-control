@@ -77,6 +77,51 @@ class GcpControlPlaneClientTests(unittest.TestCase):
         self.assertEqual(body["requestId"], str(REQUEST_ID))
         self.assertEqual(body["requestTimestamp"], 1_790_000_000_125)
 
+    def test_assignments_uses_attested_transport_without_credentials(self):
+        calls = []
+
+        def open_request(request, _timeout):
+            calls.append(request)
+            if len(calls) == 1:
+                return FakeResponse(TOKEN, {"Metadata-Flavor": "Google"})
+            return FakeResponse(
+                json.dumps({
+                    "ok": True,
+                    "assignments": [{
+                        "slotId": "aaaaaaaa-1111-4111-8111-111111111111",
+                        "slotCode": "zencore-mt5-demo-01-s01",
+                        "slotNumber": 1,
+                        "slotStatus": "RESERVED",
+                        "accountId": ACCOUNT_ID,
+                        "accountStatus": "QUEUED_FOR_WORKER",
+                        "tradeMode": "DEMO",
+                        "accountMask": "****123456",
+                        "serverMask": "****ncial-Demo",
+                        "brokerMask": "****ellarFinancial",
+                    }],
+                }),
+                {"Content-Type": "application/json"},
+                request.full_url,
+            )
+
+        client = GcpControlPlaneClient(
+            ORIGIN,
+            opener=open_request,
+            clock=lambda: 1_790_000_000.125,
+            uuid_factory=lambda: REQUEST_ID,
+        )
+        result = client.assignments()
+        self.assertEqual(result["assignments"][0]["accountId"], ACCOUNT_ID)
+        post_request = calls[1]
+        self.assertEqual(
+            post_request.full_url,
+            f"{ORIGIN}/api/hosted-execution/assignments",
+        )
+        body = json.loads(post_request.data)
+        self.assertEqual(set(body), {"requestId", "requestTimestamp"})
+        self.assertNotIn("password", json.dumps(body).lower())
+        self.assertNotIn("credential", json.dumps(body).lower())
+
     def test_heartbeat_never_accepts_transport_redirects(self):
         count = 0
 

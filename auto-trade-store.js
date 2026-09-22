@@ -444,10 +444,22 @@ class PostgresAutoTradeStore {
            VALUES ($1, $2, $3, $4, 'AVAILABLE')
            ON CONFLICT (host_id, slot_no) DO UPDATE SET
              slot_code = EXCLUDED.slot_code,
+             status = CASE
+               WHEN zencore_mt5_worker_slots.account_id IS NULL
+                    AND zencore_mt5_worker_slots.status = 'DISABLED'
+               THEN 'AVAILABLE'
+               ELSE zencore_mt5_worker_slots.status
+             END,
              updated_at = NOW()`,
           [crypto.randomUUID(), host.id, slotNo, slotCode]
         );
       }
+      await client.query(
+        `UPDATE zencore_mt5_worker_slots
+         SET status = 'DISABLED', updated_at = NOW()
+         WHERE host_id = $1 AND slot_no > $2 AND account_id IS NULL`,
+        [host.id, capacity]
+      );
       await client.query('COMMIT');
       return {
         id: host.id,
@@ -501,6 +513,7 @@ class PostgresAutoTradeStore {
          FROM zencore_mt5_worker_slots s
          JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
          WHERE h.enabled = TRUE
+           AND s.slot_no <= h.capacity
            AND s.account_id IS NULL
            AND s.status = 'AVAILABLE'
          ORDER BY h.created_at ASC, s.slot_no ASC
@@ -562,6 +575,87 @@ class PostgresAutoTradeStore {
       [accountId]
     );
     return result.rows[0] || null;
+  }
+
+
+  async listHostedAssignmentsForWorker(identity) {
+    const result = await this.pool.query(
+      `SELECT s.id AS slot_id, s.slot_code, s.slot_no, s.status AS slot_status,
+              a.id AS account_id, a.status AS account_status, a.trade_mode,
+              a.account_mask, a.server_mask, a.broker_mask
+       FROM zencore_mt5_worker_slots s
+       JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+       JOIN zencore_mt5_hosted_accounts a ON a.id = s.account_id
+       WHERE h.enabled = TRUE
+         AND h.provider = $1
+         AND h.project_id = $2
+         AND h.zone = $3
+         AND h.instance_name = $4
+         AND s.slot_no <= h.capacity
+       ORDER BY s.slot_no ASC`,
+      [identity.provider, identity.projectId, identity.zone, identity.instanceName]
+    );
+    await this.pool.query(
+      `UPDATE zencore_mt5_worker_hosts SET
+         instance_id = $5, last_seen_at = NOW(), updated_at = NOW()
+       WHERE provider = $1 AND project_id = $2 AND zone = $3 AND instance_name = $4`,
+      [identity.provider, identity.projectId, identity.zone, identity.instanceName,
+        identity.instanceId]
+    );
+    return result.rows.map(row => ({
+      slotId: row.slot_id,
+      slotCode: row.slot_code,
+      slotNumber: Number(row.slot_no),
+      slotStatus: row.slot_status,
+      accountId: row.account_id,
+      accountStatus: row.account_status,
+      tradeMode: row.trade_mode,
+      accountMask: row.account_mask,
+      serverMask: row.server_mask,
+      brokerMask: row.broker_mask
+    }));
+  }
+
+  async getHostedWorkerPoolOverview() {
+    const hostsResult = await this.pool.query(
+      `SELECT h.id, h.provider, h.project_id, h.zone, h.instance_name, h.instance_id,
+              h.capacity, h.enabled, h.last_seen_at,
+              COUNT(s.id) FILTER (WHERE s.slot_no <= h.capacity)::int AS slots_total,
+              COUNT(s.id) FILTER (WHERE s.slot_no <= h.capacity AND s.account_id IS NOT NULL)::int AS slots_assigned,
+              COUNT(s.id) FILTER (WHERE s.slot_no <= h.capacity AND s.status = 'ACTIVE')::int AS slots_active
+       FROM zencore_mt5_worker_hosts h
+       LEFT JOIN zencore_mt5_worker_slots s ON s.host_id = h.id
+       GROUP BY h.id
+       ORDER BY h.created_at ASC`
+    );
+    const waitingResult = await this.pool.query(
+      `SELECT COUNT(*)::int AS waiting
+       FROM zencore_mt5_hosted_accounts
+       WHERE status = 'WAITING_FOR_SLOT'`
+    );
+    const hosts = hostsResult.rows.map(row => ({
+      id: row.id,
+      provider: row.provider,
+      projectId: row.project_id,
+      zone: row.zone,
+      instanceName: row.instance_name,
+      instanceId: row.instance_id || null,
+      capacity: Number(row.capacity || 0),
+      enabled: row.enabled === true,
+      lastSeenAt: timestamp(row.last_seen_at),
+      slotsTotal: Number(row.slots_total || 0),
+      slotsAssigned: Number(row.slots_assigned || 0),
+      slotsActive: Number(row.slots_active || 0)
+    }));
+    return {
+      hosts,
+      totals: {
+        capacity: hosts.reduce((sum, host) => sum + (host.enabled ? host.capacity : 0), 0),
+        assigned: hosts.reduce((sum, host) => sum + host.slotsAssigned, 0),
+        active: hosts.reduce((sum, host) => sum + host.slotsActive, 0),
+        waiting: Number(waitingResult.rows[0]?.waiting || 0)
+      }
+    };
   }
 
 
@@ -1383,6 +1477,14 @@ class MemoryAutoTradeStore {
           lastSeenAt: null,
           lastError: null
         });
+      } else {
+        const slot = this.workerSlots.get(slotKey);
+        if (!slot.accountId && slot.status === 'DISABLED') slot.status = 'AVAILABLE';
+      }
+    }
+    for (const slot of this.workerSlots.values()) {
+      if (slot.hostId === host.id && slot.slotNo > capacity && !slot.accountId) {
+        slot.status = 'DISABLED';
       }
     }
     return { ...host };
@@ -1397,7 +1499,8 @@ class MemoryAutoTradeStore {
     }
     slot = [...this.workerSlots.values()].find(item => {
       const host = [...this.workerHosts.values()].find(value => value.id === item.hostId);
-      return host?.enabled === true && item.status === 'AVAILABLE' && !item.accountId;
+      return host?.enabled === true && item.slotNo <= host.capacity &&
+        item.status === 'AVAILABLE' && !item.accountId;
     }) || null;
     const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
     if (!slot) {
@@ -1428,6 +1531,70 @@ class MemoryAutoTradeStore {
       instance_name: host.instanceName,
       instance_id: host.instanceId,
       enabled: host.enabled
+    };
+  }
+
+
+  async listHostedAssignmentsForWorker(identity) {
+    const host = [...this.workerHosts.values()].find(item =>
+      item.enabled === true &&
+      item.provider === identity.provider &&
+      item.projectId === identity.projectId &&
+      item.zone === identity.zone &&
+      item.instanceName === identity.instanceName
+    ) || null;
+    if (!host) return [];
+    host.instanceId = identity.instanceId;
+    host.lastSeenAt = Date.now();
+    host.updatedAt = Date.now();
+    return [...this.workerSlots.values()]
+      .filter(slot => slot.hostId === host.id && slot.slotNo <= host.capacity && !!slot.accountId)
+      .sort((a, b) => a.slotNo - b.slotNo)
+      .map(slot => {
+        const account = [...this.hostedAccounts.values()].find(item => item.id === slot.accountId);
+        return {
+          slotId: slot.id,
+          slotCode: slot.slotCode,
+          slotNumber: slot.slotNo,
+          slotStatus: slot.status,
+          accountId: slot.accountId,
+          accountStatus: account?.status || null,
+          tradeMode: account?.tradeMode || null,
+          accountMask: account?.accountMask || null,
+          serverMask: account?.serverMask || null,
+          brokerMask: account?.brokerMask || null
+        };
+      });
+  }
+
+  async getHostedWorkerPoolOverview() {
+    const hosts = [...this.workerHosts.values()].map(host => {
+      const slots = [...this.workerSlots.values()]
+        .filter(slot => slot.hostId === host.id && slot.slotNo <= host.capacity);
+      return {
+        id: host.id,
+        provider: host.provider,
+        projectId: host.projectId,
+        zone: host.zone,
+        instanceName: host.instanceName,
+        instanceId: host.instanceId || null,
+        capacity: host.capacity,
+        enabled: host.enabled === true,
+        lastSeenAt: host.lastSeenAt || null,
+        slotsTotal: slots.length,
+        slotsAssigned: slots.filter(slot => !!slot.accountId).length,
+        slotsActive: slots.filter(slot => slot.status === 'ACTIVE').length
+      };
+    });
+    return {
+      hosts,
+      totals: {
+        capacity: hosts.reduce((sum, host) => sum + (host.enabled ? host.capacity : 0), 0),
+        assigned: hosts.reduce((sum, host) => sum + host.slotsAssigned, 0),
+        active: hosts.reduce((sum, host) => sum + host.slotsActive, 0),
+        waiting: [...this.hostedAccounts.values()]
+          .filter(item => item.status === 'WAITING_FOR_SLOT').length
+      }
     };
   }
 
