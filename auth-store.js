@@ -106,7 +106,7 @@ class PostgresAuthStore {
         ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'client',
         ADD COLUMN IF NOT EXISTS ib_referrer_id UUID;
 
-      DO $
+      DO $$
       BEGIN
         IF EXISTS (
           SELECT 1 FROM pg_constraint
