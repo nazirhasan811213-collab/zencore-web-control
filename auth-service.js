@@ -339,12 +339,16 @@ function createAuthService(options = {}) {
 
   async function updateOwnClientProfile(user, input = {}) {
     assertRole(user, ROLE_CLIENT);
-    const validation = normalizeClientProfileInput(input);
+    const current = await store.getOwnClientProfile(user.id);
+    if (!current) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
+    const validation = normalizeClientProfileInput({
+      ...input,
+      email: input.email == null ? current.email : input.email,
+      icNumber: input.icNumber == null ? current.identityNumber : input.icNumber
+    });
     if (!validation.ok) {
       throw authError('VALIDATION_ERROR', 'Semak semula maklumat akaun.', 400, validation.errors);
     }
-    const current = await store.getOwnClientProfile(user.id);
-    if (!current) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
     const sensitiveChanged =
       normalizeEmail(current.email) !== validation.value.email ||
       normalizeIcNumber(current.identityNumber) !== validation.value.icNumber;
