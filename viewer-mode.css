@@ -1,5 +1,4 @@
 body.viewer-mode .viewer-hidden,
-body.viewer-mode a[href^="/auto-trade"],
 body.viewer-mode a[href^="/account"],
 body.viewer-mode #mt5LiveMonitor,
 body.viewer-mode #exportButton{
@@ -22,3 +21,28 @@ body.viewer-mode #exportButton{
   font-size:8px;line-height:1.5;
 }
 @media(max-width:760px){.viewer-badge{font-size:7px;padding:0 8px}}
+
+body.viewer-mode.autotrade-viewer #autoTradeGate,
+body.viewer-mode.autotrade-viewer dialog,
+body.viewer-mode.autotrade-viewer .pairing-actions,
+body.viewer-mode.autotrade-viewer .master-actions,
+body.viewer-mode.autotrade-viewer .emergency-button,
+body.viewer-mode.autotrade-viewer .save-settings,
+body.viewer-mode.autotrade-viewer #applyRecommendationButton{
+  display:none!important;
+}
+body.viewer-mode.autotrade-viewer .auto-trade-workspace.hidden{display:block!important}
+body.viewer-mode.autotrade-viewer input,
+body.viewer-mode.autotrade-viewer select,
+body.viewer-mode.autotrade-viewer textarea,
+body.viewer-mode.autotrade-viewer button:not(#logoutButton){
+  pointer-events:none!important;
+}
+body.viewer-mode.autotrade-viewer input,
+body.viewer-mode.autotrade-viewer select,
+body.viewer-mode.autotrade-viewer textarea{
+  opacity:.72!important;
+}
+body.viewer-mode.autotrade-viewer .security-banner{
+  border-color:rgba(67,220,255,.22);
+}
