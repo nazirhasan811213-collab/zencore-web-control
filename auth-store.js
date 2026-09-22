@@ -1277,16 +1277,32 @@ class MemoryAuthStore {
     return detailedClient(row);
   }
 
-  async updateClientProfileForAdmin(clientId, input) {
+  async updateClientProfileForAdmin(clientId, { displayName, email, phone, icNumber }) {
     const row = this.usersById.get(clientId);
     if (!row || row.role !== 'client') return null;
-    const previousStatus = row.status;
-    row.status = 'active';
-    try {
-      return await this.updateOwnClientProfile(clientId, input);
-    } finally {
-      row.status = previousStatus;
+    const emailOwner = this.usersByEmail.get(email);
+    if (emailOwner && emailOwner.id !== clientId) {
+      const error = new Error('Email already registered');
+      error.code = 'EMAIL_EXISTS';
+      throw error;
     }
+    const icOwner = this.usersByIc.get(icNumber);
+    if (icOwner && icOwner.id !== clientId) {
+      const error = new Error('IC already registered');
+      error.code = 'IC_EXISTS';
+      throw error;
+    }
+    if (row.email !== email) {
+      this.usersByEmail.delete(row.email);
+      this.usersByEmail.set(email, row);
+    }
+    if (row.ic_number && row.ic_number !== icNumber) this.usersByIc.delete(row.ic_number);
+    row.display_name = displayName;
+    row.email = email;
+    row.phone = phone;
+    row.ic_number = icNumber;
+    this.usersByIc.set(icNumber, row);
+    return detailedClient(row);
   }
 
   async updatePasswordForUser(userId, passwordHash, requiredRole = null) {
