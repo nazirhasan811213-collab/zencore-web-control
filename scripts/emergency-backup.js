@@ -7,6 +7,18 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { encryptFile, sha256File } = require('./emergency-backup-lib');
 
+function pgEnv(databaseUrl) {
+  const parsed = new URL(databaseUrl);
+  return {
+    PGHOST: parsed.hostname,
+    PGPORT: parsed.port || '5432',
+    PGUSER: decodeURIComponent(parsed.username || ''),
+    PGPASSWORD: decodeURIComponent(parsed.password || ''),
+    PGDATABASE: decodeURIComponent(parsed.pathname.replace(/^\//, '')),
+    PGSSLMODE: 'require'
+  };
+}
+
 function requireEnv(name) {
   const value = String(process.env[name] || '');
   if (!value) throw new Error(`${name}_REQUIRED`);
@@ -52,7 +64,7 @@ async function main() {
 
   try {
     await fs.promises.mkdir(backupDir, { recursive: true, mode: 0o700 });
-    const env = { ...process.env, PGDATABASE: databaseUrl };
+    const env = { ...process.env, ...pgEnv(databaseUrl) };
     delete env.ZENCORE_BACKUP_PASSPHRASE;
     await run('pg_dump', [
       '--format=custom',
