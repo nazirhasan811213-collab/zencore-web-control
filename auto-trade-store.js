@@ -259,6 +259,40 @@ class PostgresAutoTradeStore {
         ADD COLUMN IF NOT EXISTS terminal_build VARCHAR(24),
         ADD COLUMN IF NOT EXISTS worker_last_seen_at TIMESTAMPTZ;
 
+      CREATE TABLE IF NOT EXISTS zencore_mt5_worker_hosts (
+        id UUID PRIMARY KEY,
+        provider VARCHAR(32) NOT NULL DEFAULT 'GOOGLE_CLOUD',
+        project_id VARCHAR(64) NOT NULL,
+        zone VARCHAR(64) NOT NULL,
+        instance_name VARCHAR(63) NOT NULL,
+        instance_id VARCHAR(32),
+        capacity INTEGER NOT NULL DEFAULT 10 CHECK (capacity BETWEEN 1 AND 50),
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        last_seen_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(provider, project_id, zone, instance_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS zencore_mt5_worker_slots (
+        id UUID PRIMARY KEY,
+        host_id UUID NOT NULL REFERENCES zencore_mt5_worker_hosts(id) ON DELETE CASCADE,
+        slot_no INTEGER NOT NULL CHECK (slot_no BETWEEN 1 AND 50),
+        slot_code VARCHAR(80) NOT NULL UNIQUE,
+        status VARCHAR(24) NOT NULL DEFAULT 'AVAILABLE',
+        account_id UUID UNIQUE REFERENCES zencore_mt5_hosted_accounts(id) ON DELETE SET NULL,
+        assigned_at TIMESTAMPTZ,
+        last_seen_at TIMESTAMPTZ,
+        last_error VARCHAR(240),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(host_id, slot_no)
+      );
+      CREATE INDEX IF NOT EXISTS zencore_mt5_worker_slots_available_idx
+        ON zencore_mt5_worker_slots(host_id, status, slot_no);
+      CREATE INDEX IF NOT EXISTS zencore_mt5_worker_slots_account_idx
+        ON zencore_mt5_worker_slots(account_id);
+
       CREATE TABLE IF NOT EXISTS zencore_gcp_worker_requests (
         request_id UUID PRIMARY KEY,
         worker_instance_id VARCHAR(32) NOT NULL,
