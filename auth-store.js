@@ -1249,12 +1249,54 @@ class MemoryAuthStore {
     return this.getClientForAdmin(userId);
   }
 
-  async updateOwnClientProfile(userId, { displayName, phone }) {
+  async updateOwnClientProfile(userId, { displayName, email, phone, icNumber }) {
     const row = this.usersById.get(userId);
     if (!row || row.role !== 'client' || row.status !== 'active') return null;
+    const emailOwner = this.usersByEmail.get(email);
+    if (emailOwner && emailOwner.id !== userId) {
+      const error = new Error('Email already registered');
+      error.code = 'EMAIL_EXISTS';
+      throw error;
+    }
+    const icOwner = this.usersByIc.get(icNumber);
+    if (icOwner && icOwner.id !== userId) {
+      const error = new Error('IC already registered');
+      error.code = 'IC_EXISTS';
+      throw error;
+    }
+    if (row.email !== email) {
+      this.usersByEmail.delete(row.email);
+      this.usersByEmail.set(email, row);
+    }
+    if (row.ic_number && row.ic_number !== icNumber) this.usersByIc.delete(row.ic_number);
     row.display_name = displayName;
+    row.email = email;
     row.phone = phone;
-    return publicClient(row);
+    row.ic_number = icNumber;
+    this.usersByIc.set(icNumber, row);
+    return detailedClient(row);
+  }
+
+  async updateClientProfileForAdmin(clientId, input) {
+    const row = this.usersById.get(clientId);
+    if (!row || row.role !== 'client') return null;
+    const previousStatus = row.status;
+    row.status = 'active';
+    try {
+      return await this.updateOwnClientProfile(clientId, input);
+    } finally {
+      row.status = previousStatus;
+    }
+  }
+
+  async updatePasswordForUser(userId, passwordHash, requiredRole = null) {
+    const row = this.usersById.get(userId);
+    if (!row || (requiredRole && row.role !== requiredRole)) return false;
+    row.password_hash = passwordHash;
+    for (const [tokenHash, session] of this.sessions) {
+      if (session.userId === userId) this.sessions.delete(tokenHash);
+    }
+    return true;
   }
 
   async findUserForLogin(email) {
