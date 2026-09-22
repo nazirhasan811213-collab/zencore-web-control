@@ -604,6 +604,36 @@ async function handleManagementApi(req, res, pathname, session) {
         );
         return sendJson(res, 200, { ok: true, client });
       }
+      const adminClientProfileMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/profile$/i);
+      if (req.method === 'PATCH' && adminClientProfileMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const client = await authState.service.updateAdminClientProfile(
+          session.user, adminClientProfileMatch[1], body
+        );
+        return sendJson(res, 200, { ok: true, client });
+      }
+
+      const adminClientPasswordMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/password$/i);
+      if (req.method === 'POST' && adminClientPasswordMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        await authState.service.resetAdminClientPassword(
+          session.user, adminClientPasswordMatch[1], body
+        );
+        return sendJson(res, 200, {
+          ok: true,
+          changed: true,
+          message: 'Password client berjaya direset. Semua sesi client telah ditamatkan.'
+        });
+      }
+
       const adminClientIbMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/ib$/i);
       if (req.method === 'PATCH' && adminClientIbMatch) {
         if (!requestOriginAllowed(req)) {
@@ -731,6 +761,19 @@ async function handleAccountApi(req, res, pathname, session) {
       if (body === null) return;
       const profile = await authState.service.updateOwnClientProfile(session.user, body);
       return sendJson(res, 200, { ok: true, profile });
+    }
+    if (req.method === 'POST' && pathname === '/api/account/password') {
+      if (!requestOriginAllowed(req)) {
+        return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+      }
+      const body = await parseApiJson(req, res);
+      if (body === null) return;
+      await authState.service.changeOwnClientPassword(session.user, body);
+      return sendJson(res, 200, {
+        ok: true,
+        changed: true,
+        message: 'Password berjaya ditukar. Sila log masuk semula.'
+      }, { 'Set-Cookie': authState.service.clearCookie() });
     }
     return sendJson(res, 404, { ok: false, error: 'Account route tidak dijumpai.' });
   } catch (error) {
