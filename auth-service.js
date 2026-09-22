@@ -93,8 +93,8 @@ function createAuthService(options = {}) {
         });
       }
       if (error?.code === 'IC_EXISTS') {
-        throw authError('IC_EXISTS', 'No. IC ini sudah mempunyai akaun ZenCore.', 409, {
-          icNumber: 'No. IC ini sudah didaftarkan.'
+        throw authError('IC_EXISTS', 'No. ID / Passport ini sudah mempunyai akaun ZenCore.', 409, {
+          icNumber: 'No. ID / Passport ini sudah didaftarkan.'
         });
       }
       throw error;
