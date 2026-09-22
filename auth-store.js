@@ -161,7 +161,7 @@ class PostgresAuthStore {
         WHERE user_id IS NOT NULL;
 
       CREATE OR REPLACE FUNCTION zencore_lock_ib_assignment()
-      RETURNS trigger AS $
+      RETURNS trigger AS $zencore$
       BEGIN
         IF OLD.ib_referrer_id IS NOT NULL
            AND NEW.ib_referrer_id IS DISTINCT FROM OLD.ib_referrer_id
@@ -170,7 +170,7 @@ class PostgresAuthStore {
         END IF;
         RETURN NEW;
       END;
-      $ LANGUAGE plpgsql;
+      $zencore$ LANGUAGE plpgsql;
 
       DROP TRIGGER IF EXISTS zencore_users_lock_ib_assignment ON zencore_users;
       CREATE TRIGGER zencore_users_lock_ib_assignment
