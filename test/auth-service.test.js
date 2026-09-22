@@ -388,7 +388,7 @@ test('client can edit personal details and change password with reauthentication
     currentPassword: 'ZenCore2026!'
   });
   assert.equal(updated.email, 'editable-new@example.com');
-  assert.equal(updated.identityNumber, 'PASS-EDIT-02');
+  assert.equal(updated.identityNumber, 'PASSEDIT02');
 
   const sessionBefore = await auth.login({
     email: 'editable-new@example.com',
@@ -470,7 +470,7 @@ test('Admin can edit client information and reset client password after step-up 
     adminPassword: 'AdminSecure2026!'
   });
   assert.equal(edited.email, 'managed-new@example.com');
-  assert.equal(edited.identityNumber, 'PASS-MANAGED-02');
+  assert.equal(edited.identityNumber, 'PASSMANAGED02');
 
   await auth.resetAdminClientPassword(adminLogin.user, client.user.id, {
     adminPassword: 'AdminSecure2026!',
