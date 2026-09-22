@@ -12,7 +12,10 @@
       if (body.user?.role !== 'viewer') return;
 
       document.body.classList.add('viewer-mode');
-      document.querySelectorAll('a[href^="/auto-trade"], a[href^="/account"]')
+      if (window.location.pathname === '/auto-trade') {
+        document.body.classList.add('autotrade-viewer');
+      }
+      document.querySelectorAll('a[href^="/account"]')
         .forEach(link => {
           link.setAttribute('aria-hidden', 'true');
           link.setAttribute('tabindex', '-1');
@@ -35,7 +38,9 @@
       if (hero && !hero.querySelector('.viewer-readonly-note')) {
         const note = document.createElement('div');
         note.className = 'viewer-readonly-note';
-        note.textContent = 'Akaun promosi ini adalah view-only. Tetapan akaun, MT5 dan Auto Trade tidak boleh diakses atau diubah.';
+        note.textContent = window.location.pathname === '/auto-trade'
+          ? 'Public Demo: paparan Auto Trade sahaja. Tiada sambungan MT5 dan semua kawalan execution dikunci.'
+          : 'Akaun promosi ini adalah view-only. Tetapan akaun dan execution tidak boleh diubah.';
         hero.appendChild(note);
       }
     } catch (_) {}
