@@ -243,3 +243,104 @@ test('configured admin promotion changes only matching existing accounts', async
   assert.equal((await store.findUserByIdForLogin(a.user.id)).role, 'admin');
   assert.equal((await store.findUserByIdForLogin(b.user.id)).role, 'client');
 });
+
+
+test('Admin can reassign clients between IBs and promote a client into a new IB', async () => {
+  const store = new MemoryAuthStore();
+  const auth = createAuthService({ store, secureCookies: false });
+
+  const adminCreated = await auth.register({
+    displayName: 'Admin Owner',
+    email: 'owner@example.com',
+    icNumber: 'ADMIN-9001',
+    phone: '0123000101',
+    password: 'ZenCore2026!'
+  });
+  await store.setUserRole(adminCreated.user.id, 'admin');
+  const adminLogin = await auth.login({
+    email: 'owner@example.com',
+    password: 'ZenCore2026!'
+  });
+
+  await auth.createIb(adminLogin.user, {
+    displayName: 'North IB',
+    code: 'north',
+    email: 'north@example.com',
+    phone: '0123000102',
+    password: 'ZenCore2026!'
+  });
+  await auth.createIb(adminLogin.user, {
+    displayName: 'South IB',
+    code: 'south',
+    email: 'south@example.com',
+    phone: '0123000103',
+    password: 'ZenCore2026!'
+  });
+
+  const movable = await auth.register({
+    displayName: 'Movable Client',
+    email: 'movable@example.com',
+    icNumber: 'PASS-A10001',
+    phone: '+60123000104',
+    ibCode: 'north',
+    password: 'ZenCore2026!'
+  });
+  const promotable = await auth.register({
+    displayName: 'Future Partner',
+    email: 'future@example.com',
+    icNumber: 'PASS-A10002',
+    phone: '+60123000105',
+    ibCode: 'north',
+    password: 'ZenCore2026!'
+  });
+
+  const moved = await auth.reassignAdminClientIb(adminLogin.user, movable.user.id, 'south');
+  assert.equal(moved.client.ibCode, 'south');
+  assert.equal(moved.referrer.code, 'south');
+
+  const northLogin = await auth.login({ email: 'north@example.com', password: 'ZenCore2026!' });
+  const southLogin = await auth.login({ email: 'south@example.com', password: 'ZenCore2026!' });
+  assert.equal((await auth.ibOverview(northLogin.user)).clients.length, 1);
+  assert.equal((await auth.ibOverview(southLogin.user)).clients.length, 1);
+  assert.equal((await auth.ibOverview(southLogin.user)).clients[0].email, 'movable@example.com');
+
+  await assert.rejects(
+    () => auth.reassignAdminClientIb(northLogin.user, movable.user.id, 'north'),
+    error => {
+      assert.equal(error.code, 'FORBIDDEN');
+      return true;
+    }
+  );
+
+  const promoted = await auth.promoteAdminClientToIb(adminLogin.user, promotable.user.id, {
+    code: 'future-partner',
+    displayName: 'Future Partner IB'
+  });
+  assert.equal(promoted.user.role, 'ib');
+  assert.equal(promoted.referrer.code, 'future-partner');
+
+  const promotedLogin = await auth.login({
+    email: 'future@example.com',
+    password: 'ZenCore2026!'
+  });
+  assert.equal(promotedLogin.user.role, 'ib');
+  const promotedOverview = await auth.ibOverview(promotedLogin.user);
+  assert.equal(promotedOverview.referrer.code, 'future-partner');
+  assert.equal(promotedOverview.clients.length, 0);
+
+  const adminOverview = await auth.adminOverview(adminLogin.user);
+  assert.equal(adminOverview.stats.total_ibs, 3);
+  assert.equal(adminOverview.stats.total_clients, 1);
+  assert.ok(adminOverview.ibs.some(item => item.code === 'future-partner'));
+
+  await assert.rejects(
+    () => auth.promoteAdminClientToIb(adminLogin.user, movable.user.id, {
+      code: 'south',
+      displayName: 'Duplicate Code'
+    }),
+    error => {
+      assert.equal(error.code, 'IB_CODE_EXISTS');
+      return true;
+    }
+  );
+});
