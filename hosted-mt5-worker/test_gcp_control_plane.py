@@ -77,6 +77,43 @@ class GcpControlPlaneClientTests(unittest.TestCase):
         self.assertEqual(body["requestId"], str(REQUEST_ID))
         self.assertEqual(body["requestTimestamp"], 1_790_000_000_125)
 
+    def test_assignments_uses_same_attested_transport_without_account_credentials(self):
+        calls = []
+
+        def open_request(request, _timeout):
+            calls.append(request)
+            if len(calls) == 1:
+                return FakeResponse(TOKEN, {"Metadata-Flavor": "Google"})
+            return FakeResponse(
+                json.dumps({
+                    "ok": True,
+                    "assignments": [{
+                        "slotCode": "zencore-mt5-demo-01-s01",
+                        "accountId": ACCOUNT_ID,
+                        "accountMask": "****123456",
+                    }],
+                }),
+                {"Content-Type": "application/json"},
+                request.full_url,
+            )
+
+        client = GcpControlPlaneClient(
+            ORIGIN,
+            opener=open_request,
+            clock=lambda: 1_790_000_000.125,
+            uuid_factory=lambda: REQUEST_ID,
+        )
+        result = client.assignments()
+        self.assertEqual(result["assignments"][0]["accountId"], ACCOUNT_ID)
+        post_request = calls[1]
+        self.assertEqual(
+            post_request.full_url,
+            f"{ORIGIN}/api/hosted-execution/assignments",
+        )
+        body = json.loads(post_request.data)
+        self.assertEqual(set(body), {"requestId", "requestTimestamp"})
+        self.assertNotIn("password", json.dumps(body).lower())
+
     def test_heartbeat_never_accepts_transport_redirects(self):
         count = 0
 
