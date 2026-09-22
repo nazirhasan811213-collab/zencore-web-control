@@ -396,15 +396,167 @@ class PostgresAutoTradeStore {
 
   async getHostedAccount(userId) {
     const result = await this.pool.query(
-      `SELECT id, user_id, status, account_mask, server_mask, broker_mask,
-              trade_mode, key_id, worker_provider, worker_instance_name,
-              terminal_trade_allowed, account_trade_allowed, expert_trade_allowed,
-              symbol_specs, connector_version, terminal_build, worker_last_seen_at,
-              last_error, verified_at, created_at, updated_at
-       FROM zencore_mt5_hosted_accounts WHERE user_id = $1`,
+      `SELECT a.id, a.user_id, a.status, a.account_mask, a.server_mask, a.broker_mask,
+              a.trade_mode, a.key_id, a.worker_provider, a.worker_instance_name,
+              a.terminal_trade_allowed, a.account_trade_allowed, a.expert_trade_allowed,
+              a.symbol_specs, a.connector_version, a.terminal_build, a.worker_last_seen_at,
+              a.last_error, a.verified_at, a.created_at, a.updated_at,
+              s.id AS worker_slot_id, s.slot_code AS worker_slot_code,
+              s.slot_no AS worker_slot_no, h.id AS worker_host_id,
+              h.instance_name AS worker_host_name
+       FROM zencore_mt5_hosted_accounts a
+       LEFT JOIN zencore_mt5_worker_slots s ON s.account_id = a.id
+       LEFT JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+       WHERE a.user_id = $1`,
       [userId]
     );
     return publicHostedAccount(result.rows[0]);
+  }
+
+  async ensureHostedWorkerHost(input) {
+    const provider = String(input.provider || 'GOOGLE_CLOUD');
+    const projectId = String(input.projectId || '');
+    const zone = String(input.zone || '');
+    const instanceName = String(input.instanceName || '');
+    const capacity = Math.min(50, Math.max(1, Number(input.capacity) || 10));
+    if (!projectId || !zone || !instanceName) return null;
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const hostResult = await client.query(
+        `INSERT INTO zencore_mt5_worker_hosts
+          (id, provider, project_id, zone, instance_name, capacity, enabled, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
+         ON CONFLICT (provider, project_id, zone, instance_name) DO UPDATE SET
+           capacity = EXCLUDED.capacity,
+           enabled = TRUE,
+           updated_at = NOW()
+         RETURNING *`,
+        [crypto.randomUUID(), provider, projectId, zone, instanceName, capacity]
+      );
+      const host = hostResult.rows[0];
+      for (let slotNo = 1; slotNo <= capacity; slotNo += 1) {
+        const slotCode = `${instanceName}-s${String(slotNo).padStart(2, '0')}`;
+        await client.query(
+          `INSERT INTO zencore_mt5_worker_slots
+            (id, host_id, slot_no, slot_code, status)
+           VALUES ($1, $2, $3, $4, 'AVAILABLE')
+           ON CONFLICT (host_id, slot_no) DO UPDATE SET
+             slot_code = EXCLUDED.slot_code,
+             updated_at = NOW()`,
+          [crypto.randomUUID(), host.id, slotNo, slotCode]
+        );
+      }
+      await client.query('COMMIT');
+      return {
+        id: host.id,
+        provider: host.provider,
+        projectId: host.project_id,
+        zone: host.zone,
+        instanceName: host.instance_name,
+        capacity: Number(host.capacity),
+        enabled: host.enabled === true
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async assignHostedAccountSlot(accountId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        `SELECT s.id, s.slot_code, s.slot_no, s.status,
+                h.id AS host_id, h.instance_name, h.project_id, h.zone
+         FROM zencore_mt5_worker_slots s
+         JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+         WHERE s.account_id = $1
+         LIMIT 1
+         FOR UPDATE OF s`,
+        [accountId]
+      );
+      if (existing.rows[0]) {
+        await client.query(
+          `UPDATE zencore_mt5_hosted_accounts
+           SET status = CASE
+             WHEN status IN ('CONNECTED_LOCKED','HOSTED_READY') THEN status
+             ELSE 'QUEUED_FOR_WORKER'
+           END,
+           updated_at = NOW()
+           WHERE id = $1`,
+          [accountId]
+        );
+        await client.query('COMMIT');
+        return existing.rows[0];
+      }
+
+      const available = await client.query(
+        `SELECT s.id, s.slot_code, s.slot_no, s.status,
+                h.id AS host_id, h.instance_name, h.project_id, h.zone
+         FROM zencore_mt5_worker_slots s
+         JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+         WHERE h.enabled = TRUE
+           AND s.account_id IS NULL
+           AND s.status = 'AVAILABLE'
+         ORDER BY h.created_at ASC, s.slot_no ASC
+         LIMIT 1
+         FOR UPDATE OF s SKIP LOCKED`
+      );
+      const slot = available.rows[0];
+      if (!slot) {
+        await client.query(
+          `UPDATE zencore_mt5_hosted_accounts
+           SET status = 'WAITING_FOR_SLOT', updated_at = NOW()
+           WHERE id = $1`,
+          [accountId]
+        );
+        await client.query('COMMIT');
+        return null;
+      }
+
+      await client.query(
+        `UPDATE zencore_mt5_worker_slots SET
+           account_id = $2,
+           status = 'RESERVED',
+           assigned_at = COALESCE(assigned_at, NOW()),
+           last_error = NULL,
+           updated_at = NOW()
+         WHERE id = $1`,
+        [slot.id, accountId]
+      );
+      await client.query(
+        `UPDATE zencore_mt5_hosted_accounts
+         SET status = 'QUEUED_FOR_WORKER', updated_at = NOW()
+         WHERE id = $1`,
+        [accountId]
+      );
+      await client.query('COMMIT');
+      return { ...slot, status: 'RESERVED' };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getHostedSlotForAccount(accountId) {
+    const result = await this.pool.query(
+      `SELECT s.id, s.slot_code, s.slot_no, s.status,
+              h.id AS host_id, h.provider, h.project_id, h.zone,
+              h.instance_name, h.instance_id, h.enabled
+       FROM zencore_mt5_worker_slots s
+       JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+       WHERE s.account_id = $1
+       LIMIT 1`,
+      [accountId]
+    );
+    return result.rows[0] || null;
   }
 
 
