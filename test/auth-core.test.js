@@ -53,7 +53,7 @@ test('registration validation rejects weak or malformed fields', () => {
   const result = validateRegistration({
     displayName: 'N',
     email: 'not-an-email',
-    icNumber: '123',
+    icNumber: '<>',
     phone: 'abc',
     password: 'password'
   });
