@@ -509,12 +509,17 @@ class PostgresAutoTradeStore {
       );
       const slot = available.rows[0];
       if (!slot) {
-        await client.query(
-          `UPDATE zencore_mt5_hosted_accounts
-           SET status = 'WAITING_FOR_SLOT', updated_at = NOW()
-           WHERE id = $1`,
-          [accountId]
+        const hostCheck = await client.query(
+          `SELECT 1 FROM zencore_mt5_worker_hosts WHERE enabled = TRUE LIMIT 1`
         );
+        if (hostCheck.rowCount > 0) {
+          await client.query(
+            `UPDATE zencore_mt5_hosted_accounts
+             SET status = 'WAITING_FOR_SLOT', updated_at = NOW()
+             WHERE id = $1`,
+            [accountId]
+          );
+        }
         await client.query('COMMIT');
         return null;
       }
@@ -1396,7 +1401,7 @@ class MemoryAutoTradeStore {
     }) || null;
     const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
     if (!slot) {
-      if (row) row.status = 'WAITING_FOR_SLOT';
+      if (row && this.workerHosts.size > 0) row.status = 'WAITING_FOR_SLOT';
       return null;
     }
     slot.accountId = accountId;
