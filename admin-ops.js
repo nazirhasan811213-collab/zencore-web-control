@@ -96,6 +96,7 @@
       const text = [
         row.client?.displayName, row.client?.email, row.client?.ibName, row.client?.ibCode,
         row.hosted?.accountMask, row.hosted?.serverMask, row.hosted?.brokerMask,
+        row.hosted?.workerSlot?.code, row.hosted?.workerSlot?.hostName,
         row.pod?.accountMask, row.pod?.serverMask, row.pod?.brokerMask
       ].join(' ').toLowerCase();
       if (q && !text.includes(q)) return false;
@@ -124,7 +125,7 @@
         <td><a class="table-link" href="/admin/client/${encodeURIComponent(row.userId)}"><strong>${esc(row.client?.displayName || 'Client')}</strong><small>${esc(row.client?.email || '')}</small></a></td>
         <td><strong>${esc(row.client?.ibName || 'Nazir (Admin)')}</strong><small>${esc(String(row.client?.ibCode || 'nazir').toUpperCase())}</small></td>
         <td><strong class="mono-inline">${esc(endpoint.accountMask || '—')}</strong><small>${esc(endpoint.serverMask || endpoint.brokerMask || 'No MT5 linked')}</small></td>
-        <td>${connection}<small>${esc(endpoint.status || endpoint.tradeMode || '')}</small></td>
+        <td>${connection}<small>${esc(endpoint.workerSlot?.code || endpoint.status || endpoint.tradeMode || '')}</small></td>
         <td>${control}<small>${esc(row.control?.lastError || '')}</small></td>
         <td><strong>${esc(row.openPositions || 0)}</strong><small>open</small></td>
         <td><strong>${esc(relativeSeen(d.lastSeenAt))}</strong><small>${esc(fmtDateTime(d.lastSeenAt))}</small></td>
