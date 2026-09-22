@@ -431,7 +431,7 @@ function createAutoTradeService(options = {}) {
         throw serviceError('INVALID_HOSTED_SLOT', 'Worker slot tidak sepadan dengan akaun ini.', 409);
       }
     } else if (!legacyLease) {
-      throw serviceError('HOSTED_SLOT_NOT_ASSIGNED', 'Akaun ini belum mempunyai worker slot.', 409);
+      throw serviceError('INVALID_HOSTED_LEASE', 'Hosted account atau worker slot tidak sah.', 400);
     }
 
     const issuedAt = now();
