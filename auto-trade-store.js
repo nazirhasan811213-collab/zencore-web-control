@@ -718,7 +718,7 @@ class PostgresAutoTradeStore {
     return publicHostedAccount(result.rows[0]);
   }
 
-  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt) {
+  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt, slotCode = null) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -727,11 +727,51 @@ class PostgresAutoTradeStore {
         [accountId]
       );
       const row = selected.rows[0];
-      if (!row || String(row.trade_mode).toUpperCase() !== 'DEMO' ||
-          (row.worker_instance_id && row.worker_instance_id !== identity.instanceId)) {
+      if (!row || String(row.trade_mode).toUpperCase() !== 'DEMO') {
         await client.query('ROLLBACK');
         return null;
       }
+
+      let slot = null;
+      if (slotCode) {
+        const slotResult = await client.query(
+          `SELECT s.id, s.slot_code, s.slot_no, s.status, s.host_id,
+                  h.provider, h.project_id, h.zone, h.instance_name,
+                  h.instance_id, h.enabled
+           FROM zencore_mt5_worker_slots s
+           JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+           WHERE s.account_id = $1 AND s.slot_code = $2
+           LIMIT 1
+           FOR UPDATE OF s`,
+          [accountId, slotCode]
+        );
+        slot = slotResult.rows[0] || null;
+        if (!slot || slot.enabled !== true ||
+            slot.provider !== identity.provider ||
+            slot.project_id !== identity.projectId ||
+            slot.zone !== identity.zone ||
+            slot.instance_name !== identity.instanceName ||
+            (slot.instance_id && slot.instance_id !== identity.instanceId)) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        await client.query(
+          `UPDATE zencore_mt5_worker_hosts SET
+             instance_id = $2, last_seen_at = $3, updated_at = $3
+           WHERE id = $1`,
+          [slot.host_id, identity.instanceId, new Date(now)]
+        );
+        await client.query(
+          `UPDATE zencore_mt5_worker_slots SET
+             status = 'LEASED', last_seen_at = $2, last_error = NULL, updated_at = $2
+           WHERE id = $1`,
+          [slot.id, new Date(now)]
+        );
+      } else if (row.worker_instance_id && row.worker_instance_id !== identity.instanceId) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
       const updated = await client.query(
         `UPDATE zencore_mt5_hosted_accounts SET
            status = 'LEASED', worker_provider = $2, worker_subject = $3,
@@ -750,7 +790,14 @@ class PostgresAutoTradeStore {
       await client.query('COMMIT');
       const leased = updated.rows[0];
       return {
-        ...publicHostedAccount(leased),
+        ...publicHostedAccount(slot ? {
+          ...leased,
+          worker_slot_id: slot.id,
+          worker_slot_code: slot.slot_code,
+          worker_slot_no: slot.slot_no,
+          worker_host_id: slot.host_id,
+          worker_host_name: slot.instance_name
+        } : leased),
         userId: leased.user_id,
         credentialEnvelope: leased.credential_envelope,
         leaseId: leased.lease_id,
@@ -772,7 +819,11 @@ class PostgresAutoTradeStore {
          expert_trade_allowed = $10, symbol_specs = $11::jsonb,
          connector_version = $12, terminal_build = $13,
          worker_last_seen_at = $14, last_error = $15,
-         verified_at = CASE WHEN $4::varchar(32) = 'CONNECTED_LOCKED'::varchar(32) THEN COALESCE(verified_at, $14) ELSE verified_at END,
+         verified_at = CASE
+           WHEN $4::varchar(32) IN ('CONNECTED_LOCKED'::varchar(32), 'HOSTED_READY'::varchar(32)
+           THEN COALESCE(verified_at, $14)
+           ELSE verified_at
+         END,
          updated_at = $14
        WHERE id = $1 AND worker_instance_id = $2 AND worker_project_id = $3
          AND lease_id = $16 AND lease_expires_at > $14
@@ -784,7 +835,29 @@ class PostgresAutoTradeStore {
         heartbeat.connectorVersion || null, heartbeat.terminalBuild || null,
         new Date(now), lastError || null, leaseId]
     );
-    return publicHostedAccount(result.rows[0]);
+    const row = result.rows[0];
+    if (!row) return null;
+
+    await this.pool.query(
+      `UPDATE zencore_mt5_worker_slots s SET
+         status = CASE WHEN $2::text IN ('CONNECTED_LOCKED','HOSTED_READY') THEN 'ACTIVE' ELSE 'LEASED' END,
+         last_seen_at = $3,
+         last_error = $4,
+         updated_at = $3
+       FROM zencore_mt5_worker_hosts h
+       WHERE s.host_id = h.id AND s.account_id = $1
+         AND h.project_id = $5 AND h.instance_id = $6`,
+      [accountId, status, new Date(now), lastError || null, identity.projectId, identity.instanceId]
+    );
+    await this.pool.query(
+      `UPDATE zencore_mt5_worker_hosts h SET
+         last_seen_at = $2, updated_at = $2
+       WHERE h.id IN (
+         SELECT s.host_id FROM zencore_mt5_worker_slots s WHERE s.account_id = $1
+       ) AND h.project_id = $3 AND h.instance_id = $4`,
+      [accountId, new Date(now), identity.projectId, identity.instanceId]
+    );
+    return this.getHostedAccount(row.user_id);
   }
 
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
