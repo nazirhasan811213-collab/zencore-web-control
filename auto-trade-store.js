@@ -1328,7 +1328,9 @@ class MemoryAutoTradeStore {
     const row = this.hostedAccounts.get(userId);
     if (!row) return null;
     const slot = [...this.workerSlots.values()].find(item => item.accountId === row.id) || null;
-    const host = slot ? this.workerHosts.get(slot.hostId) : null;
+    const host = slot
+      ? [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null
+      : null;
     return publicHostedAccount({
       ...row,
       workerSlotId: slot?.id || null,
@@ -1436,10 +1438,34 @@ class MemoryAutoTradeStore {
       const profile = this.profiles.get(userId) || null;
       const pod = this.podsByUser.get(userId) || null;
       const hosted = this.hostedAccounts.get(userId) || null;
+      const slot = hosted
+        ? [...this.workerSlots.values()].find(item => item.accountId === hosted.id) || null
+        : null;
+      const host = slot
+        ? [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null
+        : null;
       return {
         userId,
         client: null,
-        hosted: publicHostedAccount(hosted),
+        hosted: hosted ? {
+          ...publicHostedAccount({
+            ...hosted,
+            workerSlotId: slot?.id || null,
+            workerSlotCode: slot?.slotCode || null,
+            workerSlotNumber: slot?.slotNo || null,
+            workerHostId: host?.id || null,
+            workerHostName: host?.instanceName || null
+          }),
+          workerSlot: slot ? {
+            id: slot.id,
+            code: slot.slotCode,
+            number: slot.slotNo,
+            status: slot.status,
+            hostId: host?.id || null,
+            hostName: host?.instanceName || null,
+            hostCapacity: host?.capacity || 0
+          } : null
+        } : null,
         pod: publicPod(pod),
         settings: profile ? {
           capitalUsd: profile.capitalUsd ?? null,
