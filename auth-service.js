@@ -1,6 +1,7 @@
 const {
   normalizeEmail,
   normalizeDisplayName,
+  normalizeIcNumber,
   normalizePhone,
   validateEmail,
   validateRegistration,
@@ -298,23 +299,162 @@ function createAuthService(options = {}) {
     return profile;
   }
 
-  async function updateOwnClientProfile(user, input = {}) {
-    assertRole(user, ROLE_CLIENT);
+  function normalizeClientProfileInput(input = {}) {
     const displayName = normalizeDisplayName(input.displayName);
+    const email = normalizeEmail(input.email);
     const phone = normalizePhone(input.phone);
+    const icNumber = normalizeIcNumber(input.icNumber);
     const errors = {};
     if (displayName.length < 2 || displayName.length > 60) {
       errors.displayName = 'Nama perlu antara 2 hingga 60 aksara.';
     }
+    if (!validateEmail(email)) {
+      errors.email = 'Masukkan alamat e-mel yang sah.';
+    }
     if (!/^\+?\d{8,15}$/.test(phone)) {
       errors.phone = 'Masukkan nombor telefon yang sah.';
     }
-    if (Object.keys(errors).length) {
-      throw authError('VALIDATION_ERROR', 'Semak semula maklumat akaun.', 400, errors);
+    if (icNumber.length < 3 || icNumber.length > 64 ||
+        !/[\p{L}\p{N}]/u.test(icNumber) ||
+        !/^[\p{L}\p{N} ._\-/()]+$/u.test(icNumber)) {
+      errors.icNumber = 'Masukkan No. IC, Passport atau National ID yang sah (3–64 aksara).';
     }
-    const profile = await store.updateOwnClientProfile(user.id, { displayName, phone });
-    if (!profile) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
-    return profile;
+    return {
+      ok: Object.keys(errors).length === 0,
+      errors,
+      value: { displayName, email, phone, icNumber }
+    };
+  }
+
+  function validateNewPassword(value) {
+    const password = String(value || '');
+    if (password.length < 10 || password.length > 128) {
+      return 'Password perlu antara 10 hingga 128 aksara.';
+    }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      return 'Password mesti mempunyai sekurang-kurangnya satu huruf dan satu nombor.';
+    }
+    return '';
+  }
+
+  async function updateOwnClientProfile(user, input = {}) {
+    assertRole(user, ROLE_CLIENT);
+    const validation = normalizeClientProfileInput(input);
+    if (!validation.ok) {
+      throw authError('VALIDATION_ERROR', 'Semak semula maklumat akaun.', 400, validation.errors);
+    }
+    const current = await store.getOwnClientProfile(user.id);
+    if (!current) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
+    const sensitiveChanged =
+      normalizeEmail(current.email) !== validation.value.email ||
+      normalizeIcNumber(current.identityNumber) !== validation.value.icNumber;
+    if (sensitiveChanged) {
+      const confirmed = await reauthenticate(user.id, String(input.currentPassword || ''));
+      if (!confirmed) {
+        throw authError('REAUTH_REQUIRED', 'Password semasa diperlukan untuk menukar e-mel atau ID/Passport.', 401, {
+          currentPassword: 'Password semasa tidak betul.'
+        });
+      }
+    }
+    try {
+      const profile = await store.updateOwnClientProfile(user.id, validation.value);
+      if (!profile) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
+      return profile;
+    } catch (error) {
+      if (error?.code === 'EMAIL_EXISTS') {
+        throw authError('EMAIL_EXISTS', 'E-mel ini sudah digunakan.', 409, { email: 'Gunakan e-mel lain.' });
+      }
+      if (error?.code === 'IC_EXISTS') {
+        throw authError('IC_EXISTS', 'No. ID / Passport ini sudah digunakan.', 409, {
+          icNumber: 'Gunakan No. ID / Passport lain.'
+        });
+      }
+      throw error;
+    }
+  }
+
+  async function changeOwnClientPassword(user, input = {}) {
+    assertRole(user, ROLE_CLIENT);
+    const currentPassword = String(input.currentPassword || '');
+    const newPassword = String(input.newPassword || '');
+    const confirmPassword = String(input.confirmPassword || '');
+    const error = validateNewPassword(newPassword);
+    const fields = {};
+    if (error) fields.newPassword = error;
+    if (newPassword !== confirmPassword) fields.confirmPassword = 'Pengesahan password tidak sepadan.';
+    if (Object.keys(fields).length) {
+      throw authError('VALIDATION_ERROR', 'Semak semula password baharu.', 400, fields);
+    }
+    if (!(await reauthenticate(user.id, currentPassword))) {
+      throw authError('INVALID_CURRENT_PASSWORD', 'Password semasa tidak betul.', 401, {
+        currentPassword: 'Password semasa tidak betul.'
+      });
+    }
+    if (await verifyPassword(newPassword, (await store.findUserByIdForLogin(user.id))?.password_hash)) {
+      throw authError('PASSWORD_UNCHANGED', 'Password baharu mesti berbeza daripada password semasa.', 400, {
+        newPassword: 'Gunakan password yang berbeza.'
+      });
+    }
+    const changed = await store.updatePasswordForUser(user.id, await hashPassword(newPassword), ROLE_CLIENT);
+    if (!changed) throw authError('CLIENT_NOT_FOUND', 'Profil client tidak dijumpai.', 404);
+    return { changed: true };
+  }
+
+  async function updateAdminClientProfile(user, clientId, input = {}) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const validation = normalizeClientProfileInput(input);
+    if (!validation.ok) {
+      throw authError('VALIDATION_ERROR', 'Semak semula maklumat client.', 400, validation.errors);
+    }
+    if (!(await reauthenticate(user.id, String(input.adminPassword || '')))) {
+      throw authError('ADMIN_REAUTH_REQUIRED', 'Password Admin tidak betul.', 401, {
+        adminPassword: 'Password Admin diperlukan.'
+      });
+    }
+    try {
+      const profile = await store.updateClientProfileForAdmin(String(clientId), validation.value);
+      if (!profile) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+      return profile;
+    } catch (error) {
+      if (error?.code === 'EMAIL_EXISTS') {
+        throw authError('EMAIL_EXISTS', 'E-mel ini sudah digunakan.', 409, { email: 'Gunakan e-mel lain.' });
+      }
+      if (error?.code === 'IC_EXISTS') {
+        throw authError('IC_EXISTS', 'No. ID / Passport ini sudah digunakan.', 409, {
+          icNumber: 'Gunakan No. ID / Passport lain.'
+        });
+      }
+      throw error;
+    }
+  }
+
+  async function resetAdminClientPassword(user, clientId, input = {}) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    if (!(await reauthenticate(user.id, String(input.adminPassword || '')))) {
+      throw authError('ADMIN_REAUTH_REQUIRED', 'Password Admin tidak betul.', 401, {
+        adminPassword: 'Password Admin diperlukan.'
+      });
+    }
+    const newPassword = String(input.newPassword || '');
+    const confirmPassword = String(input.confirmPassword || '');
+    const passwordError = validateNewPassword(newPassword);
+    const fields = {};
+    if (passwordError) fields.newPassword = passwordError;
+    if (newPassword !== confirmPassword) fields.confirmPassword = 'Pengesahan password tidak sepadan.';
+    if (Object.keys(fields).length) {
+      throw authError('VALIDATION_ERROR', 'Semak semula password baharu.', 400, fields);
+    }
+    const changed = await store.updatePasswordForUser(
+      String(clientId), await hashPassword(newPassword), ROLE_CLIENT
+    );
+    if (!changed) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+    return { changed: true };
   }
 
   async function ibOverview(user) {
@@ -397,6 +537,9 @@ function createAuthService(options = {}) {
     ibClientDetail,
     ownClientProfile,
     updateOwnClientProfile,
+    changeOwnClientPassword,
+    updateAdminClientProfile,
+    resetAdminClientPassword,
     ibClients,
     login,
     sessionFromRequest,
