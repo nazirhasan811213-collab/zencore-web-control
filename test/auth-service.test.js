@@ -344,3 +344,151 @@ test('Admin can reassign clients between IBs and promote a client into a new IB'
     }
   );
 });
+
+
+test('client can edit personal details and change password with reauthentication', async () => {
+  const store = new MemoryAuthStore();
+  const auth = createAuthService({ store, secureCookies: false });
+  const created = await auth.register({
+    displayName: 'Editable Client',
+    email: 'editable@example.com',
+    icNumber: 'PASS-EDIT-01',
+    phone: '+60123000991',
+    password: 'ZenCore2026!'
+  });
+
+  let updated = await auth.updateOwnClientProfile(created.user, {
+    displayName: 'Editable Client Updated',
+    email: 'editable@example.com',
+    icNumber: 'PASS-EDIT-01',
+    phone: '+60123000992'
+  });
+  assert.equal(updated.displayName, 'Editable Client Updated');
+  assert.equal(updated.phone, '+60123000992');
+
+  await assert.rejects(
+    () => auth.updateOwnClientProfile(created.user, {
+      displayName: 'Editable Client Updated',
+      email: 'editable-new@example.com',
+      icNumber: 'PASS-EDIT-02',
+      phone: '+60123000992',
+      currentPassword: 'WrongPassword1'
+    }),
+    error => {
+      assert.equal(error.code, 'REAUTH_REQUIRED');
+      return true;
+    }
+  );
+
+  updated = await auth.updateOwnClientProfile(created.user, {
+    displayName: 'Editable Client Updated',
+    email: 'editable-new@example.com',
+    icNumber: 'PASS-EDIT-02',
+    phone: '+60123000992',
+    currentPassword: 'ZenCore2026!'
+  });
+  assert.equal(updated.email, 'editable-new@example.com');
+  assert.equal(updated.identityNumber, 'PASS-EDIT-02');
+
+  const sessionBefore = await auth.login({
+    email: 'editable-new@example.com',
+    password: 'ZenCore2026!'
+  });
+  const cookieBefore = auth.createCookie(sessionBefore.token).split(';')[0];
+  assert.ok(await auth.sessionFromRequest(requestWithCookie(cookieBefore)));
+
+  await auth.changeOwnClientPassword(created.user, {
+    currentPassword: 'ZenCore2026!',
+    newPassword: 'ZenCoreNew2027!',
+    confirmPassword: 'ZenCoreNew2027!'
+  });
+  assert.equal(await auth.sessionFromRequest(requestWithCookie(cookieBefore)), null);
+
+  await assert.rejects(
+    () => auth.login({ email: 'editable-new@example.com', password: 'ZenCore2026!' }),
+    error => {
+      assert.equal(error.code, 'INVALID_CREDENTIALS');
+      return true;
+    }
+  );
+  const relogin = await auth.login({
+    email: 'editable-new@example.com',
+    password: 'ZenCoreNew2027!'
+  });
+  assert.equal(relogin.user.id, created.user.id);
+});
+
+test('Admin can edit client information and reset client password after step-up authentication', async () => {
+  const store = new MemoryAuthStore();
+  const auth = createAuthService({ store, secureCookies: false });
+
+  const admin = await auth.register({
+    displayName: 'Admin Security',
+    email: 'admin-security@example.com',
+    icNumber: 'ADMIN-SEC-01',
+    phone: '+60123000993',
+    password: 'AdminSecure2026!'
+  });
+  await store.setUserRole(admin.user.id, 'admin');
+  const adminLogin = await auth.login({
+    email: 'admin-security@example.com',
+    password: 'AdminSecure2026!'
+  });
+
+  const client = await auth.register({
+    displayName: 'Managed Client',
+    email: 'managed@example.com',
+    icNumber: 'PASS-MANAGED-01',
+    phone: '+60123000994',
+    password: 'ClientSecure2026!'
+  });
+  const clientSession = await auth.login({
+    email: 'managed@example.com',
+    password: 'ClientSecure2026!'
+  });
+  const clientCookie = auth.createCookie(clientSession.token).split(';')[0];
+
+  await assert.rejects(
+    () => auth.updateAdminClientProfile(adminLogin.user, client.user.id, {
+      displayName: 'Managed Client Edited',
+      email: 'managed-new@example.com',
+      icNumber: 'PASS-MANAGED-02',
+      phone: '+60123000995',
+      adminPassword: 'WrongAdminPassword1'
+    }),
+    error => {
+      assert.equal(error.code, 'ADMIN_REAUTH_REQUIRED');
+      return true;
+    }
+  );
+
+  const edited = await auth.updateAdminClientProfile(adminLogin.user, client.user.id, {
+    displayName: 'Managed Client Edited',
+    email: 'managed-new@example.com',
+    icNumber: 'PASS-MANAGED-02',
+    phone: '+60123000995',
+    adminPassword: 'AdminSecure2026!'
+  });
+  assert.equal(edited.email, 'managed-new@example.com');
+  assert.equal(edited.identityNumber, 'PASS-MANAGED-02');
+
+  await auth.resetAdminClientPassword(adminLogin.user, client.user.id, {
+    adminPassword: 'AdminSecure2026!',
+    newPassword: 'TempClient2027!',
+    confirmPassword: 'TempClient2027!'
+  });
+  assert.equal(await auth.sessionFromRequest(requestWithCookie(clientCookie)), null);
+
+  await assert.rejects(
+    () => auth.login({ email: 'managed-new@example.com', password: 'ClientSecure2026!' }),
+    error => {
+      assert.equal(error.code, 'INVALID_CREDENTIALS');
+      return true;
+    }
+  );
+  const login = await auth.login({
+    email: 'managed-new@example.com',
+    password: 'TempClient2027!'
+  });
+  assert.equal(login.user.id, client.user.id);
+});
