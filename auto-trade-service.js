@@ -391,6 +391,29 @@ function createAutoTradeService(options = {}) {
     return state(userId);
   }
 
+  async function listHostedAssignments(workerIdentity) {
+    if (!hostedWorkerEnabled) {
+      throw serviceError('HOSTED_WORKER_LOCKED', 'Google hosted worker masih dikunci.', 409);
+    }
+    if (workerIdentity?.provider !== 'GOOGLE_CLOUD') {
+      throw serviceError('INVALID_WORKER_IDENTITY', 'Google worker identity diperlukan.', 403);
+    }
+    if (typeof store.listHostedAssignmentsForWorker !== 'function') {
+      throw serviceError('HOSTED_POOL_UNAVAILABLE', 'Worker pool belum tersedia.', 503);
+    }
+    const assignments = await store.listHostedAssignmentsForWorker(workerIdentity);
+    return {
+      ok: true,
+      host: {
+        provider: workerIdentity.provider,
+        projectId: workerIdentity.projectId,
+        zone: workerIdentity.zone,
+        instanceName: workerIdentity.instanceName
+      },
+      assignments
+    };
+  }
+
   async function leaseHostedAccount(workerIdentity, input = {}) {
     if (!hostedWorkerEnabled) {
       throw serviceError('HOSTED_WORKER_LOCKED', 'Google hosted worker masih dikunci.', 409);
@@ -1089,6 +1112,7 @@ function createAutoTradeService(options = {}) {
     state,
     credentialEncryptionConfig,
     connectHostedAccount,
+    listHostedAssignments,
     leaseHostedAccount,
     hostedHeartbeat,
     nextHostedCommand,
