@@ -50,3 +50,25 @@ On a clean Windows build host with Python 3.12:
 The output is `ZenCore_Hosted_Worker_GCP_v2.0.0-gcp-connect.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
+
+
+## Multi-client worker pool
+
+ZenCore now supports a control-plane worker pool while keeping execution isolation one-account-per-slot.
+
+- One Windows worker host can expose multiple logical execution slots.
+- Each hosted MT5 account is assigned exactly one slot before a lease can be issued.
+- Slot codes are deterministic per host, for example `zencore-mt5-demo-01-s01`.
+- A Google Cloud instance identity may lease only an account assigned to a slot on that same configured host.
+- One slot cannot be assigned to two hosted accounts.
+- If all configured slots are occupied, the account remains queued with `WAITING_FOR_SLOT`.
+- Legacy single-account pinning remains supported during migration.
+- The web tier still stores only the encrypted credential envelope; slot allocation does not expose MT5 plaintext credentials.
+
+Production slot capacity is seeded by:
+
+```text
+ZENCORE_GCP_WORKER_SLOT_CAPACITY=10
+```
+
+Phase 1 covers the central allocation and lease boundary. The Windows Worker Manager still needs to materialize one isolated MT5 terminal/profile and one worker process per assigned slot before multi-client execution is enabled.

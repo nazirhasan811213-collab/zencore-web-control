@@ -39,6 +39,15 @@
     byId('accountMt5Mask').textContent = mt5.accountMask || '—';
     byId('accountServerMask').textContent = mt5.serverMask || '—';
     byId('accountConnState').textContent = conn.connected ? 'CONNECTED' : (conn.state || 'NOT CONNECTED');
+    byId('accountWorkerSlot').textContent = mt5.workerSlotCode || 'WAITING FOR ASSIGNMENT';
+    byId('accountWorkerHost').textContent = mt5.workerHostName || '—';
+
+    const action = byId('accountMt5Action');
+    const hasHostedMt5 = !!(mt5.accountMask || mt5.workerSlotCode || (mt5.status && mt5.status !== 'NOT_CONNECTED'));
+    if (action) {
+      action.href = hasHostedMt5 ? '/auto-trade' : '/auto-trade?connect=1';
+      action.textContent = hasHostedMt5 ? 'OPEN AUTO TRADE' : 'CONNECT MT5';
+    }
   }
 
   function renderProfile(body) {

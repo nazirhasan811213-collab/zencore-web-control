@@ -79,6 +79,11 @@ function publicHostedAccount(row) {
     keyId: row.key_id ?? row.keyId ?? null,
     workerProvider: row.worker_provider ?? row.workerProvider ?? null,
     workerCell: row.worker_instance_name ?? row.workerCell ?? null,
+    workerSlotId: row.worker_slot_id ?? row.workerSlotId ?? null,
+    workerSlotCode: row.worker_slot_code ?? row.workerSlotCode ?? null,
+    workerSlotNumber: row.worker_slot_no ?? row.workerSlotNumber ?? null,
+    workerHostId: row.worker_host_id ?? row.workerHostId ?? null,
+    workerHostName: row.worker_host_name ?? row.workerHostName ?? null,
     terminalTradeAllowed: row.terminal_trade_allowed ?? row.terminalTradeAllowed ?? false,
     accountTradeAllowed: row.account_trade_allowed ?? row.accountTradeAllowed ?? false,
     expertTradeAllowed: row.expert_trade_allowed ?? row.expertTradeAllowed ?? false,
@@ -254,6 +259,40 @@ class PostgresAutoTradeStore {
         ADD COLUMN IF NOT EXISTS terminal_build VARCHAR(24),
         ADD COLUMN IF NOT EXISTS worker_last_seen_at TIMESTAMPTZ;
 
+      CREATE TABLE IF NOT EXISTS zencore_mt5_worker_hosts (
+        id UUID PRIMARY KEY,
+        provider VARCHAR(32) NOT NULL DEFAULT 'GOOGLE_CLOUD',
+        project_id VARCHAR(64) NOT NULL,
+        zone VARCHAR(64) NOT NULL,
+        instance_name VARCHAR(63) NOT NULL,
+        instance_id VARCHAR(32),
+        capacity INTEGER NOT NULL DEFAULT 10 CHECK (capacity BETWEEN 1 AND 50),
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        last_seen_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(provider, project_id, zone, instance_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS zencore_mt5_worker_slots (
+        id UUID PRIMARY KEY,
+        host_id UUID NOT NULL REFERENCES zencore_mt5_worker_hosts(id) ON DELETE CASCADE,
+        slot_no INTEGER NOT NULL CHECK (slot_no BETWEEN 1 AND 50),
+        slot_code VARCHAR(80) NOT NULL UNIQUE,
+        status VARCHAR(24) NOT NULL DEFAULT 'AVAILABLE',
+        account_id UUID UNIQUE REFERENCES zencore_mt5_hosted_accounts(id) ON DELETE SET NULL,
+        assigned_at TIMESTAMPTZ,
+        last_seen_at TIMESTAMPTZ,
+        last_error VARCHAR(240),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(host_id, slot_no)
+      );
+      CREATE INDEX IF NOT EXISTS zencore_mt5_worker_slots_available_idx
+        ON zencore_mt5_worker_slots(host_id, status, slot_no);
+      CREATE INDEX IF NOT EXISTS zencore_mt5_worker_slots_account_idx
+        ON zencore_mt5_worker_slots(account_id);
+
       CREATE TABLE IF NOT EXISTS zencore_gcp_worker_requests (
         request_id UUID PRIMARY KEY,
         worker_instance_id VARCHAR(32) NOT NULL,
@@ -357,15 +396,172 @@ class PostgresAutoTradeStore {
 
   async getHostedAccount(userId) {
     const result = await this.pool.query(
-      `SELECT id, user_id, status, account_mask, server_mask, broker_mask,
-              trade_mode, key_id, worker_provider, worker_instance_name,
-              terminal_trade_allowed, account_trade_allowed, expert_trade_allowed,
-              symbol_specs, connector_version, terminal_build, worker_last_seen_at,
-              last_error, verified_at, created_at, updated_at
-       FROM zencore_mt5_hosted_accounts WHERE user_id = $1`,
+      `SELECT a.id, a.user_id, a.status, a.account_mask, a.server_mask, a.broker_mask,
+              a.trade_mode, a.key_id, a.worker_provider, a.worker_instance_name,
+              a.terminal_trade_allowed, a.account_trade_allowed, a.expert_trade_allowed,
+              a.symbol_specs, a.connector_version, a.terminal_build, a.worker_last_seen_at,
+              a.last_error, a.verified_at, a.created_at, a.updated_at,
+              s.id AS worker_slot_id, s.slot_code AS worker_slot_code,
+              s.slot_no AS worker_slot_no, h.id AS worker_host_id,
+              h.instance_name AS worker_host_name
+       FROM zencore_mt5_hosted_accounts a
+       LEFT JOIN zencore_mt5_worker_slots s ON s.account_id = a.id
+       LEFT JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+       WHERE a.user_id = $1`,
       [userId]
     );
     return publicHostedAccount(result.rows[0]);
+  }
+
+  async ensureHostedWorkerHost(input) {
+    const provider = String(input.provider || 'GOOGLE_CLOUD');
+    const projectId = String(input.projectId || '');
+    const zone = String(input.zone || '');
+    const instanceName = String(input.instanceName || '');
+    const capacity = Math.min(50, Math.max(1, Number(input.capacity) || 10));
+    if (!projectId || !zone || !instanceName) return null;
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const hostResult = await client.query(
+        `INSERT INTO zencore_mt5_worker_hosts
+          (id, provider, project_id, zone, instance_name, capacity, enabled, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
+         ON CONFLICT (provider, project_id, zone, instance_name) DO UPDATE SET
+           capacity = EXCLUDED.capacity,
+           enabled = TRUE,
+           updated_at = NOW()
+         RETURNING *`,
+        [crypto.randomUUID(), provider, projectId, zone, instanceName, capacity]
+      );
+      const host = hostResult.rows[0];
+      for (let slotNo = 1; slotNo <= capacity; slotNo += 1) {
+        const slotCode = `${instanceName}-s${String(slotNo).padStart(2, '0')}`;
+        await client.query(
+          `INSERT INTO zencore_mt5_worker_slots
+            (id, host_id, slot_no, slot_code, status)
+           VALUES ($1, $2, $3, $4, 'AVAILABLE')
+           ON CONFLICT (host_id, slot_no) DO UPDATE SET
+             slot_code = EXCLUDED.slot_code,
+             updated_at = NOW()`,
+          [crypto.randomUUID(), host.id, slotNo, slotCode]
+        );
+      }
+      await client.query('COMMIT');
+      return {
+        id: host.id,
+        provider: host.provider,
+        projectId: host.project_id,
+        zone: host.zone,
+        instanceName: host.instance_name,
+        capacity: Number(host.capacity),
+        enabled: host.enabled === true
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async assignHostedAccountSlot(accountId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        `SELECT s.id, s.slot_code, s.slot_no, s.status,
+                h.id AS host_id, h.instance_name, h.project_id, h.zone
+         FROM zencore_mt5_worker_slots s
+         JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+         WHERE s.account_id = $1
+         LIMIT 1
+         FOR UPDATE OF s`,
+        [accountId]
+      );
+      if (existing.rows[0]) {
+        await client.query(
+          `UPDATE zencore_mt5_hosted_accounts
+           SET status = CASE
+             WHEN status IN ('CONNECTED_LOCKED','HOSTED_READY') THEN status
+             ELSE 'QUEUED_FOR_WORKER'
+           END,
+           updated_at = NOW()
+           WHERE id = $1`,
+          [accountId]
+        );
+        await client.query('COMMIT');
+        return existing.rows[0];
+      }
+
+      const available = await client.query(
+        `SELECT s.id, s.slot_code, s.slot_no, s.status,
+                h.id AS host_id, h.instance_name, h.project_id, h.zone
+         FROM zencore_mt5_worker_slots s
+         JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+         WHERE h.enabled = TRUE
+           AND s.account_id IS NULL
+           AND s.status = 'AVAILABLE'
+         ORDER BY h.created_at ASC, s.slot_no ASC
+         LIMIT 1
+         FOR UPDATE OF s SKIP LOCKED`
+      );
+      const slot = available.rows[0];
+      if (!slot) {
+        const hostCheck = await client.query(
+          `SELECT 1 FROM zencore_mt5_worker_hosts WHERE enabled = TRUE LIMIT 1`
+        );
+        if (hostCheck.rowCount > 0) {
+          await client.query(
+            `UPDATE zencore_mt5_hosted_accounts
+             SET status = 'WAITING_FOR_SLOT', updated_at = NOW()
+             WHERE id = $1`,
+            [accountId]
+          );
+        }
+        await client.query('COMMIT');
+        return null;
+      }
+
+      await client.query(
+        `UPDATE zencore_mt5_worker_slots SET
+           account_id = $2,
+           status = 'RESERVED',
+           assigned_at = COALESCE(assigned_at, NOW()),
+           last_error = NULL,
+           updated_at = NOW()
+         WHERE id = $1`,
+        [slot.id, accountId]
+      );
+      await client.query(
+        `UPDATE zencore_mt5_hosted_accounts
+         SET status = 'QUEUED_FOR_WORKER', updated_at = NOW()
+         WHERE id = $1`,
+        [accountId]
+      );
+      await client.query('COMMIT');
+      return { ...slot, status: 'RESERVED' };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getHostedSlotForAccount(accountId) {
+    const result = await this.pool.query(
+      `SELECT s.id, s.slot_code, s.slot_no, s.status,
+              h.id AS host_id, h.provider, h.project_id, h.zone,
+              h.instance_name, h.instance_id, h.enabled
+       FROM zencore_mt5_worker_slots s
+       JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+       WHERE s.account_id = $1
+       LIMIT 1`,
+      [accountId]
+    );
+    return result.rows[0] || null;
   }
 
 
@@ -381,6 +577,10 @@ class PostgresAutoTradeStore {
          h.terminal_trade_allowed, h.account_trade_allowed, h.expert_trade_allowed,
          h.connector_version AS hosted_connector_version, h.terminal_build AS hosted_terminal_build,
          h.worker_last_seen_at AS hosted_last_seen_at, h.last_error AS hosted_last_error,
+         ws.id AS worker_slot_id, ws.slot_code AS worker_slot_code,
+         ws.slot_no AS worker_slot_no, ws.status AS worker_slot_status,
+         wh.id AS worker_host_id, wh.instance_name AS worker_host_name,
+         wh.capacity AS worker_host_capacity,
          p.id AS pod_id, p.account_mask AS pod_account_mask, p.server_mask AS pod_server_mask,
          p.broker_mask AS pod_broker_mask, p.trade_mode AS pod_trade_mode,
          p.connector_version AS pod_connector_version, p.terminal_build AS pod_terminal_build,
@@ -391,6 +591,8 @@ class PostgresAutoTradeStore {
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        LEFT JOIN zencore_mt5_hosted_accounts h ON h.user_id = u.id
+       LEFT JOIN zencore_mt5_worker_slots ws ON ws.account_id = h.id
+       LEFT JOIN zencore_mt5_worker_hosts wh ON wh.id = ws.host_id
        LEFT JOIN zencore_mt5_secure_pods p ON p.user_id = u.id AND p.revoked_at IS NULL
        LEFT JOIN zencore_autotrade_profiles a ON a.user_id = u.id
        LEFT JOIN (
@@ -423,6 +625,15 @@ class PostgresAutoTradeStore {
         tradeMode: row.hosted_trade_mode,
         workerProvider: row.worker_provider,
         workerCell: row.worker_instance_name,
+        workerSlot: row.worker_slot_id ? {
+          id: row.worker_slot_id,
+          code: row.worker_slot_code,
+          number: Number(row.worker_slot_no),
+          status: row.worker_slot_status,
+          hostId: row.worker_host_id,
+          hostName: row.worker_host_name,
+          hostCapacity: Number(row.worker_host_capacity || 0)
+        } : null,
         terminalTradeAllowed: row.terminal_trade_allowed === true,
         accountTradeAllowed: row.account_trade_allowed === true,
         expertTradeAllowed: row.expert_trade_allowed === true,
@@ -527,7 +738,7 @@ class PostgresAutoTradeStore {
     return publicHostedAccount(result.rows[0]);
   }
 
-  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt) {
+  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt, slotCode = null) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -536,11 +747,51 @@ class PostgresAutoTradeStore {
         [accountId]
       );
       const row = selected.rows[0];
-      if (!row || String(row.trade_mode).toUpperCase() !== 'DEMO' ||
-          (row.worker_instance_id && row.worker_instance_id !== identity.instanceId)) {
+      if (!row || String(row.trade_mode).toUpperCase() !== 'DEMO') {
         await client.query('ROLLBACK');
         return null;
       }
+
+      let slot = null;
+      if (slotCode) {
+        const slotResult = await client.query(
+          `SELECT s.id, s.slot_code, s.slot_no, s.status, s.host_id,
+                  h.provider, h.project_id, h.zone, h.instance_name,
+                  h.instance_id, h.enabled
+           FROM zencore_mt5_worker_slots s
+           JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
+           WHERE s.account_id = $1 AND s.slot_code = $2
+           LIMIT 1
+           FOR UPDATE OF s`,
+          [accountId, slotCode]
+        );
+        slot = slotResult.rows[0] || null;
+        if (!slot || slot.enabled !== true ||
+            slot.provider !== identity.provider ||
+            slot.project_id !== identity.projectId ||
+            slot.zone !== identity.zone ||
+            slot.instance_name !== identity.instanceName ||
+            (slot.instance_id && slot.instance_id !== identity.instanceId)) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        await client.query(
+          `UPDATE zencore_mt5_worker_hosts SET
+             instance_id = $2, last_seen_at = $3, updated_at = $3
+           WHERE id = $1`,
+          [slot.host_id, identity.instanceId, new Date(now)]
+        );
+        await client.query(
+          `UPDATE zencore_mt5_worker_slots SET
+             status = 'LEASED', last_seen_at = $2, last_error = NULL, updated_at = $2
+           WHERE id = $1`,
+          [slot.id, new Date(now)]
+        );
+      } else if (row.worker_instance_id && row.worker_instance_id !== identity.instanceId) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
       const updated = await client.query(
         `UPDATE zencore_mt5_hosted_accounts SET
            status = 'LEASED', worker_provider = $2, worker_subject = $3,
@@ -559,7 +810,14 @@ class PostgresAutoTradeStore {
       await client.query('COMMIT');
       const leased = updated.rows[0];
       return {
-        ...publicHostedAccount(leased),
+        ...publicHostedAccount(slot ? {
+          ...leased,
+          worker_slot_id: slot.id,
+          worker_slot_code: slot.slot_code,
+          worker_slot_no: slot.slot_no,
+          worker_host_id: slot.host_id,
+          worker_host_name: slot.instance_name
+        } : leased),
         userId: leased.user_id,
         credentialEnvelope: leased.credential_envelope,
         leaseId: leased.lease_id,
@@ -581,7 +839,11 @@ class PostgresAutoTradeStore {
          expert_trade_allowed = $10, symbol_specs = $11::jsonb,
          connector_version = $12, terminal_build = $13,
          worker_last_seen_at = $14, last_error = $15,
-         verified_at = CASE WHEN $4::varchar(32) = 'CONNECTED_LOCKED'::varchar(32) THEN COALESCE(verified_at, $14) ELSE verified_at END,
+         verified_at = CASE
+           WHEN $4::varchar(32) IN ('CONNECTED_LOCKED'::varchar(32), 'HOSTED_READY'::varchar(32))
+           THEN COALESCE(verified_at, $14)
+           ELSE verified_at
+         END,
          updated_at = $14
        WHERE id = $1 AND worker_instance_id = $2 AND worker_project_id = $3
          AND lease_id = $16 AND lease_expires_at > $14
@@ -593,7 +855,29 @@ class PostgresAutoTradeStore {
         heartbeat.connectorVersion || null, heartbeat.terminalBuild || null,
         new Date(now), lastError || null, leaseId]
     );
-    return publicHostedAccount(result.rows[0]);
+    const row = result.rows[0];
+    if (!row) return null;
+
+    await this.pool.query(
+      `UPDATE zencore_mt5_worker_slots s SET
+         status = CASE WHEN $2::text IN ('CONNECTED_LOCKED','HOSTED_READY') THEN 'ACTIVE' ELSE 'LEASED' END,
+         last_seen_at = $3,
+         last_error = $4,
+         updated_at = $3
+       FROM zencore_mt5_worker_hosts h
+       WHERE s.host_id = h.id AND s.account_id = $1
+         AND h.project_id = $5 AND h.instance_id = $6`,
+      [accountId, status, new Date(now), lastError || null, identity.projectId, identity.instanceId]
+    );
+    await this.pool.query(
+      `UPDATE zencore_mt5_worker_hosts h SET
+         last_seen_at = $2, updated_at = $2
+       WHERE h.id IN (
+         SELECT s.host_id FROM zencore_mt5_worker_slots s WHERE s.account_id = $1
+       ) AND h.project_id = $3 AND h.instance_id = $4`,
+      [accountId, new Date(now), identity.projectId, identity.instanceId]
+    );
+    return this.getHostedAccount(row.user_id);
   }
 
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
@@ -1019,6 +1303,8 @@ class MemoryAutoTradeStore {
     this.pairingsByUser = new Map();
     this.pairingsByCode = new Map();
     this.hostedAccounts = new Map();
+    this.workerHosts = new Map();
+    this.workerSlots = new Map();
     this.hostedWorkerRequests = new Map();
     this.positions = new Map();
     this.commands = new Map();
@@ -1044,7 +1330,105 @@ class MemoryAutoTradeStore {
   }
 
   async getHostedAccount(userId) {
-    return publicHostedAccount(this.hostedAccounts.get(userId));
+    const row = this.hostedAccounts.get(userId);
+    if (!row) return null;
+    const slot = [...this.workerSlots.values()].find(item => item.accountId === row.id) || null;
+    const host = slot
+      ? [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null
+      : null;
+    return publicHostedAccount({
+      ...row,
+      workerSlotId: slot?.id || null,
+      workerSlotCode: slot?.slotCode || null,
+      workerSlotNumber: slot?.slotNo || null,
+      workerHostId: host?.id || null,
+      workerHostName: host?.instanceName || null
+    });
+  }
+
+  async ensureHostedWorkerHost(input) {
+    const provider = String(input.provider || 'GOOGLE_CLOUD');
+    const projectId = String(input.projectId || '');
+    const zone = String(input.zone || '');
+    const instanceName = String(input.instanceName || '');
+    const capacity = Math.min(50, Math.max(1, Number(input.capacity) || 10));
+    if (!projectId || !zone || !instanceName) return null;
+
+    const key = `${provider}|${projectId}|${zone}|${instanceName}`;
+    let host = this.workerHosts.get(key);
+    if (!host) {
+      host = {
+        id: crypto.randomUUID(), provider, projectId, zone, instanceName,
+        instanceId: null, capacity, enabled: true, lastSeenAt: null,
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      this.workerHosts.set(key, host);
+    } else {
+      host.capacity = capacity;
+      host.enabled = true;
+      host.updatedAt = Date.now();
+    }
+
+    for (let slotNo = 1; slotNo <= capacity; slotNo += 1) {
+      const slotKey = `${host.id}|${slotNo}`;
+      if (!this.workerSlots.has(slotKey)) {
+        this.workerSlots.set(slotKey, {
+          id: crypto.randomUUID(),
+          hostId: host.id,
+          slotNo,
+          slotCode: `${instanceName}-s${String(slotNo).padStart(2, '0')}`,
+          status: 'AVAILABLE',
+          accountId: null,
+          assignedAt: null,
+          lastSeenAt: null,
+          lastError: null
+        });
+      }
+    }
+    return { ...host };
+  }
+
+  async assignHostedAccountSlot(accountId) {
+    let slot = [...this.workerSlots.values()].find(item => item.accountId === accountId) || null;
+    if (slot) {
+      const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+      if (row && !['CONNECTED_LOCKED','HOSTED_READY'].includes(row.status)) row.status = 'QUEUED_FOR_WORKER';
+      return { ...slot };
+    }
+    slot = [...this.workerSlots.values()].find(item => {
+      const host = [...this.workerHosts.values()].find(value => value.id === item.hostId);
+      return host?.enabled === true && item.status === 'AVAILABLE' && !item.accountId;
+    }) || null;
+    const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+    if (!slot) {
+      if (row && this.workerHosts.size > 0) row.status = 'WAITING_FOR_SLOT';
+      return null;
+    }
+    slot.accountId = accountId;
+    slot.status = 'RESERVED';
+    slot.assignedAt = Date.now();
+    if (row) row.status = 'QUEUED_FOR_WORKER';
+    return { ...slot };
+  }
+
+  async getHostedSlotForAccount(accountId) {
+    const slot = [...this.workerSlots.values()].find(item => item.accountId === accountId) || null;
+    if (!slot) return null;
+    const host = [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null;
+    if (!host) return null;
+    return {
+      id: slot.id,
+      slot_code: slot.slotCode,
+      slot_no: slot.slotNo,
+      status: slot.status,
+      host_id: host.id,
+      provider: host.provider,
+      project_id: host.projectId,
+      zone: host.zone,
+      instance_name: host.instanceName,
+      instance_id: host.instanceId,
+      enabled: host.enabled
+    };
   }
 
 
@@ -1059,10 +1443,34 @@ class MemoryAutoTradeStore {
       const profile = this.profiles.get(userId) || null;
       const pod = this.podsByUser.get(userId) || null;
       const hosted = this.hostedAccounts.get(userId) || null;
+      const slot = hosted
+        ? [...this.workerSlots.values()].find(item => item.accountId === hosted.id) || null
+        : null;
+      const host = slot
+        ? [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null
+        : null;
       return {
         userId,
         client: null,
-        hosted: publicHostedAccount(hosted),
+        hosted: hosted ? {
+          ...publicHostedAccount({
+            ...hosted,
+            workerSlotId: slot?.id || null,
+            workerSlotCode: slot?.slotCode || null,
+            workerSlotNumber: slot?.slotNo || null,
+            workerHostId: host?.id || null,
+            workerHostName: host?.instanceName || null
+          }),
+          workerSlot: slot ? {
+            id: slot.id,
+            code: slot.slotCode,
+            number: slot.slotNo,
+            status: slot.status,
+            hostId: host?.id || null,
+            hostName: host?.instanceName || null,
+            hostCapacity: host?.capacity || 0
+          } : null
+        } : null,
         pod: publicPod(pod),
         settings: profile ? {
           capitalUsd: profile.capitalUsd ?? null,
@@ -1127,10 +1535,35 @@ class MemoryAutoTradeStore {
     return publicHostedAccount(row);
   }
 
-  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt) {
+  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt, slotCode = null) {
     const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
-    if (!row || String(row.tradeMode).toUpperCase() !== 'DEMO' ||
-        (row.workerInstanceId && row.workerInstanceId !== identity.instanceId)) return null;
+    if (!row || String(row.tradeMode).toUpperCase() !== 'DEMO') return null;
+
+    let slot = null;
+    let host = null;
+    if (slotCode) {
+      slot = [...this.workerSlots.values()].find(item =>
+        item.accountId === accountId && item.slotCode === slotCode
+      ) || null;
+      host = slot
+        ? [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null
+        : null;
+      if (!slot || !host || host.enabled !== true ||
+          host.provider !== identity.provider ||
+          host.projectId !== identity.projectId ||
+          host.zone !== identity.zone ||
+          host.instanceName !== identity.instanceName ||
+          (host.instanceId && host.instanceId !== identity.instanceId)) return null;
+      host.instanceId = identity.instanceId;
+      host.lastSeenAt = now;
+      host.updatedAt = now;
+      slot.status = 'LEASED';
+      slot.lastSeenAt = now;
+      slot.lastError = null;
+    } else if (row.workerInstanceId && row.workerInstanceId !== identity.instanceId) {
+      return null;
+    }
+
     Object.assign(row, {
       status: 'LEASED',
       workerProvider: identity.provider,
@@ -1153,7 +1586,14 @@ class MemoryAutoTradeStore {
       updatedAt: now
     });
     return {
-      ...publicHostedAccount(row),
+      ...publicHostedAccount({
+        ...row,
+        workerSlotId: slot?.id || null,
+        workerSlotCode: slot?.slotCode || null,
+        workerSlotNumber: slot?.slotNo || null,
+        workerHostId: host?.id || null,
+        workerHostName: host?.instanceName || null
+      }),
       userId: row.userId,
       credentialEnvelope: JSON.parse(JSON.stringify(row.credentialEnvelope)),
       leaseId: row.leaseId,
@@ -1179,10 +1619,22 @@ class MemoryAutoTradeStore {
       terminalBuild: heartbeat.terminalBuild || null,
       lastSeenAt: now,
       lastError: lastError || null,
-      verifiedAt: status === 'CONNECTED_LOCKED' ? (row.verifiedAt || now) : row.verifiedAt,
+      verifiedAt: ['CONNECTED_LOCKED','HOSTED_READY'].includes(status) ? (row.verifiedAt || now) : row.verifiedAt,
       updatedAt: now
     });
-    return publicHostedAccount(row);
+    const slot = [...this.workerSlots.values()].find(item => item.accountId === accountId) || null;
+    if (slot) {
+      slot.status = ['CONNECTED_LOCKED','HOSTED_READY'].includes(status) ? 'ACTIVE' : 'LEASED';
+      slot.lastSeenAt = now;
+      slot.lastError = lastError || null;
+      const host = [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null;
+      if (host) {
+        host.instanceId = identity.instanceId;
+        host.lastSeenAt = now;
+        host.updatedAt = now;
+      }
+    }
+    return this.getHostedAccount(row.userId);
   }
 
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {

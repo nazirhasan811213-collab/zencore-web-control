@@ -42,6 +42,10 @@ const GCP_HOSTED_WORKER_ENABLED = HOSTED_MT5_ENABLED && /^(?:1|true|yes|on)$/i.t
 );
 const MT5_CREDENTIAL_KEY_ID = String(process.env.ZENCORE_MT5_CREDENTIAL_KEY_ID || '');
 const MT5_CREDENTIAL_PUBLIC_KEY = String(process.env.ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY || '').replace(/\\n/g, '\n');
+const GCP_HOSTED_WORKER_SLOT_CAPACITY = Math.min(
+  50,
+  Math.max(1, Number(process.env.ZENCORE_GCP_WORKER_SLOT_CAPACITY || 10) || 10)
+);
 
 process.env.PORT = String(V17_PORT);
 require('./server-v17.js');
@@ -115,6 +119,18 @@ if (AUTH_ENABLED) {
         allowMemory: AUTOTRADE_MEMORY && process.env.NODE_ENV !== 'production'
       });
       await autoStore.init();
+      if (GCP_HOSTED_WORKER_ENABLED && typeof autoStore.ensureHostedWorkerHost === 'function') {
+        const workerHost = await autoStore.ensureHostedWorkerHost({
+          provider: 'GOOGLE_CLOUD',
+          projectId: String(process.env.ZENCORE_GCP_WORKER_PROJECT_ID || ''),
+          zone: String(process.env.ZENCORE_GCP_WORKER_ZONE || ''),
+          instanceName: String(process.env.ZENCORE_GCP_WORKER_INSTANCE || ''),
+          capacity: GCP_HOSTED_WORKER_SLOT_CAPACITY
+        });
+        if (workerHost) {
+          console.log(`ZenCore hosted worker pool ready: ${workerHost.instanceName} • ${workerHost.capacity} slots`);
+        }
+      }
       autoTradeState.store = autoStore;
       if (GCP_HOSTED_WORKER_ENABLED) {
         autoTradeState.workerIdentityVerifier = createGcpInstanceIdentityVerifier({
@@ -382,7 +398,10 @@ async function clientTradingSummary(userId) {
         executionReady: state.hostedMt5?.executionReady === true,
         accountMask: state.hostedAccount?.accountMask || state.pod?.accountMask || null,
         serverMask: state.hostedAccount?.serverMask || state.pod?.serverMask || null,
-        brokerMask: state.hostedAccount?.brokerMask || state.pod?.brokerMask || null
+        brokerMask: state.hostedAccount?.brokerMask || state.pod?.brokerMask || null,
+        workerSlotCode: state.hostedAccount?.workerSlotCode || null,
+        workerSlotNumber: state.hostedAccount?.workerSlotNumber || null,
+        workerHostName: state.hostedAccount?.workerHostName || state.hostedAccount?.workerCell || null
       },
       settings: state.settings ? {
         capitalUsd: state.settings.capitalUsd ?? null,

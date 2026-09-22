@@ -247,7 +247,9 @@ class HostedWorkerTests(unittest.TestCase):
             lock = Path(folder, "EXECUTION_LOCKED")
             lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, FakeExecutor(), execution_gate_path=lock
+                config, control, unwrapper, terminal, FakeExecutor(),
+                execution_gate_path=lock,
+                clock_ms=lambda: 1_790_000_001_000,
             )
             result = worker.connect_once()
         self.assertEqual(result["connectionState"], "CONNECTED_LOCKED")

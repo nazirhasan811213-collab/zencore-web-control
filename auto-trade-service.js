@@ -96,9 +96,9 @@ function createAutoTradeService(options = {}) {
   const hostedMt5Enabled = options.hostedMt5Enabled === true;
   const hostedWorkerEnabled = hostedMt5Enabled && options.hostedWorkerEnabled === true;
   const hostedWorkerAccountId = String(options.hostedWorkerAccountId || '');
-  if (hostedWorkerEnabled &&
+  if (hostedWorkerAccountId &&
       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(hostedWorkerAccountId)) {
-    throw new Error('ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID must be the assigned UUIDv4.');
+    throw new Error('ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID must be a UUIDv4 when configured.');
   }
   const credentialEncryption = buildCredentialEncryptionConfig(
     hostedMt5Enabled,
@@ -374,13 +374,19 @@ function createAutoTradeService(options = {}) {
       credentialEnvelope: input.credentialEnvelope,
       now: now()
     });
+    let assignedSlot = null;
+    if (typeof store.assignHostedAccountSlot === 'function') {
+      assignedSlot = await store.assignHostedAccountSlot(saved.id);
+    }
     await store.appendAudit(userId, 'HOSTED_MT5_ENVELOPE_SAVED', {
       accountMask: saved.accountMask,
       serverMask: saved.serverMask,
       tradeMode: saved.tradeMode,
       keyId: saved.keyId,
       plaintextStored: false,
-      status: saved.status
+      status: saved.status,
+      workerSlot: assignedSlot?.slot_code || assignedSlot?.slotCode || null,
+      waitingForCapacity: !assignedSlot
     });
     return state(userId);
   }
@@ -404,19 +410,38 @@ function createAutoTradeService(options = {}) {
     }
     const accountId = String(input.accountId || '');
     const cellId = String(input.cellId || '');
-    if (accountId !== hostedWorkerAccountId || cellId !== workerIdentity.instanceName) {
-      throw serviceError('INVALID_HOSTED_LEASE', 'Hosted account atau cell ID tidak sah.', 400);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(accountId) ||
+        !/^[A-Za-z0-9._-]{2,80}$/.test(cellId)) {
+      throw serviceError('INVALID_HOSTED_LEASE', 'Hosted account atau worker slot tidak sah.', 400);
     }
     if (typeof store.leaseHostedAccount !== 'function') {
       throw serviceError('HOSTED_MT5_STORE_UNAVAILABLE', 'Hosted account lease belum tersedia.', 503);
     }
+
+    const assignedSlot = typeof store.getHostedSlotForAccount === 'function'
+      ? await store.getHostedSlotForAccount(accountId)
+      : null;
+    const assignedSlotCode = assignedSlot?.slot_code || assignedSlot?.slotCode || '';
+    const legacyLease = hostedWorkerAccountId &&
+      accountId === hostedWorkerAccountId &&
+      cellId === workerIdentity.instanceName;
+
+    if (assignedSlotCode) {
+      if (cellId !== assignedSlotCode) {
+        throw serviceError('INVALID_HOSTED_SLOT', 'Worker slot tidak sepadan dengan akaun ini.', 409);
+      }
+    } else if (!legacyLease) {
+      throw serviceError('INVALID_HOSTED_LEASE', 'Hosted account atau worker slot tidak sah.', 400);
+    }
+
     const issuedAt = now();
     const lease = await store.leaseHostedAccount(
       accountId,
       workerIdentity,
       crypto.randomUUID(),
       issuedAt,
-      issuedAt + hostedLeaseTtlMs
+      issuedAt + hostedLeaseTtlMs,
+      assignedSlotCode || null
     );
     if (!lease) {
       throw serviceError('HOSTED_ACCOUNT_NOT_AVAILABLE', 'Hosted account tidak tersedia untuk worker ini.', 409);
@@ -430,7 +455,8 @@ function createAutoTradeService(options = {}) {
     }
     await store.appendAudit(lease.userId, 'HOSTED_ENVELOPE_LEASED', {
       provider: workerIdentity.provider,
-      workerCell: workerIdentity.instanceName,
+      workerCell: cellId,
+      workerHost: workerIdentity.instanceName,
       leaseId: lease.leaseId,
       expiresAt: lease.leaseExpiresAt,
       plaintextReleased: false
@@ -462,7 +488,7 @@ function createAutoTradeService(options = {}) {
     }
     const accountId = String(input.accountId || '');
     const leaseId = String(input.leaseId || '');
-    if (accountId !== hostedWorkerAccountId ||
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(accountId) ||
         !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(leaseId)) {
       throw serviceError('INVALID_HOSTED_HEARTBEAT', 'Hosted account atau lease ID tidak sah.', 400);
     }
@@ -905,7 +931,7 @@ function createAutoTradeService(options = {}) {
     }
     const accountId = String(input.accountId || '');
     const leaseId = String(input.leaseId || '');
-    if (accountId !== hostedWorkerAccountId ||
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(accountId) ||
         !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(leaseId)) {
       throw serviceError('INVALID_HOSTED_COMMAND_REQUEST', 'Hosted account atau lease ID tidak sah.', 400);
     }

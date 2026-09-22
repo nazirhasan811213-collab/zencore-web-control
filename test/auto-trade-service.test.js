@@ -732,3 +732,87 @@ test('hosted worker replay IDs survive outside the in-process verifier cache', a
   ), true);
   assert.equal(store.hostedWorkerRequests.has(requestId), false);
 });
+
+
+test('multi-client hosted pool assigns unique slots and binds leases to the assigned slot', async () => {
+  let currentTime = 1_790_100_000_000;
+  const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const store = new MemoryAutoTradeStore();
+  await store.ensureHostedWorkerHost({
+    provider: 'GOOGLE_CLOUD',
+    projectId: 'zencore-total-trade-system',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-01',
+    capacity: 2
+  });
+
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    hostedWorkerEnabled: true,
+    credentialKeyId: 'zencore-gcp-hsm-demo-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' }),
+    now: () => currentTime
+  });
+
+  const envelope = () => ({
+    version: 1,
+    algorithm: 'RSA-OAEP-256+A256GCM',
+    keyId: 'zencore-gcp-hsm-demo-v1',
+    wrappedKey: crypto.randomBytes(384).toString('base64url'),
+    iv: crypto.randomBytes(12).toString('base64url'),
+    ciphertext: crypto.randomBytes(96).toString('base64url')
+  });
+  const connect = (userId, tail) => service.connectHostedAccount(userId, {
+    credentialEnvelope: envelope(),
+    accountMask: `****${tail}`,
+    serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial',
+    tradeMode: 'DEMO',
+    confirmation: 'CONNECT MT5 DEMO'
+  }, true);
+
+  const user1 = '10101010-1010-4010-8010-101010101010';
+  const user2 = '20202020-2020-4020-8020-202020202020';
+  const user3 = '30303030-3030-4030-8030-303030303030';
+  const first = await connect(user1, '111111');
+  const second = await connect(user2, '222222');
+  const third = await connect(user3, '333333');
+
+  assert.equal(first.hostedAccount.workerSlotCode, 'zencore-mt5-demo-01-s01');
+  assert.equal(second.hostedAccount.workerSlotCode, 'zencore-mt5-demo-01-s02');
+  assert.notEqual(first.hostedAccount.workerSlotCode, second.hostedAccount.workerSlotCode);
+  assert.equal(third.hostedAccount.workerSlotCode, null);
+  assert.equal(third.hostedAccount.status, 'WAITING_FOR_SLOT');
+
+  const identity = {
+    provider: 'GOOGLE_CLOUD',
+    subject: '100000000000000000001',
+    email: 'zencore-mt5-demo-worker@zencore-total-trade-system.iam.gserviceaccount.com',
+    projectId: 'zencore-total-trade-system',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-01',
+    instanceId: '9876543210987654321'
+  };
+
+  const leased = await service.leaseHostedAccount(identity, {
+    accountId: first.hostedAccount.id,
+    cellId: first.hostedAccount.workerSlotCode
+  });
+  assert.equal(leased.lease.accountId, first.hostedAccount.id);
+  assert.equal(leased.lease.demoOnly, true);
+
+  await assert.rejects(
+    () => service.leaseHostedAccount(identity, {
+      accountId: second.hostedAccount.id,
+      cellId: first.hostedAccount.workerSlotCode
+    }),
+    error => error.code === 'INVALID_HOSTED_SLOT'
+  );
+
+  currentTime += 1000;
+  const state = await service.state(user1);
+  assert.equal(state.hostedAccount.workerHostName, 'zencore-mt5-demo-01');
+  assert.equal(state.hostedAccount.workerSlotNumber, 1);
+});
