@@ -1531,6 +1531,68 @@ class MemoryAutoTradeStore {
     };
   }
 
+  async listHostedAssignmentsForWorker(identity) {
+    const host = [...this.workerHosts.values()].find(item =>
+      item.enabled === true &&
+      item.provider === identity.provider &&
+      item.projectId === identity.projectId &&
+      item.zone === identity.zone &&
+      item.instanceName === identity.instanceName
+    ) || null;
+    if (!host) return [];
+    host.instanceId = identity.instanceId;
+    host.lastSeenAt = Date.now();
+    host.updatedAt = Date.now();
+    return [...this.workerSlots.values()]
+      .filter(slot => slot.hostId === host.id && slot.slotNo <= host.capacity && !!slot.accountId)
+      .sort((a, b) => a.slotNo - b.slotNo)
+      .map(slot => {
+        const account = [...this.hostedAccounts.values()].find(item => item.id === slot.accountId);
+        return {
+          slotId: slot.id,
+          slotCode: slot.slotCode,
+          slotNumber: slot.slotNo,
+          slotStatus: slot.status,
+          accountId: slot.accountId,
+          accountStatus: account?.status || null,
+          tradeMode: account?.tradeMode || null,
+          accountMask: account?.accountMask || null,
+          serverMask: account?.serverMask || null,
+          brokerMask: account?.brokerMask || null
+        };
+      });
+  }
+
+  async getHostedWorkerPoolOverview() {
+    const hosts = [...this.workerHosts.values()].map(host => {
+      const slots = [...this.workerSlots.values()]
+        .filter(slot => slot.hostId === host.id && slot.slotNo <= host.capacity);
+      return {
+        id: host.id,
+        provider: host.provider,
+        projectId: host.projectId,
+        zone: host.zone,
+        instanceName: host.instanceName,
+        instanceId: host.instanceId || null,
+        capacity: host.capacity,
+        enabled: host.enabled === true,
+        lastSeenAt: host.lastSeenAt || null,
+        slotsTotal: slots.length,
+        slotsAssigned: slots.filter(slot => !!slot.accountId).length,
+        slotsActive: slots.filter(slot => slot.status === 'ACTIVE').length
+      };
+    });
+    return {
+      hosts,
+      totals: {
+        capacity: hosts.reduce((sum, host) => sum + (host.enabled ? host.capacity : 0), 0),
+        assigned: hosts.reduce((sum, host) => sum + host.slotsAssigned, 0),
+        active: hosts.reduce((sum, host) => sum + host.slotsActive, 0),
+        waiting: [...this.hostedAccounts.values()].filter(item => item.status === 'WAITING_FOR_SLOT').length
+      }
+    };
+  }
+
 
   async listAdminMt5Overview(limit = 500) {
     const safeLimit = Math.min(1000, Math.max(1, Number(limit) || 500));
