@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the staged multi-client Worker Manager. The child worker is execution-capable only for the guarded XAUUSD DEMO rollout; broker execution still requires the server rollout gate, the local DEMO gate, an approved connector version, an assigned worker slot, and all runtime safety checks.
+This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.0-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Broker execution still requires the server rollout gate, the local DEMO gate, an approved connector version, an assigned worker slot and all runtime safety checks.
 
 ## Implemented now
 
@@ -20,7 +20,7 @@ This directory contains the reviewed hosted MT5 Demo worker, the Windows release
 
 ## Required production boundary
 
-One trader account must run in one isolated Windows execution cell. The selected Google Cloud cell requires:
+One trader account must run in one isolated MT5 execution slot. A managed Windows host may supervise multiple isolated slots. Each selected Google Cloud host requires:
 
 1. Windows Server Shielded VM with Secure Boot, vTPM, integrity monitoring and no public IP. Google Cloud Windows does not support Confidential VM, so this design cannot claim protection against a fully privileged project owner.
 2. Attached keyless service-account identity with decrypt permission scoped to one HSM-backed RSA key.
@@ -47,7 +47,7 @@ On a clean Windows build host with Python 3.12:
 .\Build-ZenCoreHostedWorker.ps1 -OutputDirectory .\dist
 ```
 
-The output is `ZenCore_Hosted_Worker_GCP_v2.0.0-gcp-connect.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
+The output is `ZenCore_Hosted_Worker_GCP_v2.2.0-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
 
@@ -70,6 +70,8 @@ Production slot capacity is seeded by:
 ```text
 ZENCORE_GCP_WORKER_SLOT_CAPACITY=10
 ```
+
+Additional hosts are registered centrally through `ZENCORE_GCP_WORKER_FLEET_JSON`. Every entry pins project, zone, instance name, service-account email and capacity. Unknown Google instance identities remain rejected.
 
 Phase 1 covers the central allocation and lease boundary.
 

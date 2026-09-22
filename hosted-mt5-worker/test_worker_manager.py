@@ -79,10 +79,10 @@ class WorkerManagerTests(unittest.TestCase):
             slots_root=str(slots),
             execution_gate_path=str(gate),
             approved_demo_server="InterStellarFinancial-Demo",
-            allowed_demo_symbols=("XAUUSD",),
+            allowed_demo_symbols=("XAUUSD", "EURUSD"),
             heartbeat_seconds=10,
             poll_seconds=10,
-            connector_version="2.1.0-gcp-demo-execution",
+            connector_version="2.2.0-gcp-multiuser-multipair",
             max_slots=10,
         )
 
@@ -133,6 +133,7 @@ class WorkerManagerTests(unittest.TestCase):
                 self.assertEqual(data["cellId"], item["slotCode"])
                 self.assertEqual(data["hostedAccountId"], item["accountId"])
                 self.assertEqual(data["mt5TerminalPath"], str(terminal))
+                self.assertEqual(data["allowedDemoSymbols"], ["XAUUSD", "EURUSD"])
                 serialized = json.dumps(data).lower()
                 self.assertNotIn("password", serialized)
                 self.assertNotIn("credentialenvelope", serialized)

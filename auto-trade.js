@@ -113,8 +113,8 @@
       badge.className = `mini-status ${connection.ready ? 'ready' : connection.state === 'CONNECTED_LOCKED' ? 'locked' : connection.state === 'BLOCKED_REAL' ? 'blocked' : 'offline'}`;
     }
     setText('summaryPod', connection.ready ? 'READY' : connection.label || 'BELUM CONNECT');
-    setText('summaryHeartbeat', pod?.lastSeenAt
-      ? `Heartbeat ${timeText(pod.lastSeenAt)}`
+    setText('summaryHeartbeat', identity?.lastSeenAt
+      ? `Heartbeat ${timeText(identity.lastSeenAt)}`
       : hosted ? String(hosted.status || 'PENDING').replaceAll('_', ' ') : 'Tiada heartbeat');
     setText('accountMask', identity?.accountMask || 'Belum dipautkan');
     setText('serverMask', identity?.serverMask || '—');
@@ -124,12 +124,12 @@
     const health = (id, enabled) => {
       const el = byId(id);
       if (!el) return;
-      el.textContent = pod ? (enabled ? 'READY' : 'OFF') : 'WAIT';
-      el.className = pod ? (enabled ? 'good' : 'bad') : '';
+      el.textContent = identity ? (enabled ? 'READY' : 'OFF') : 'WAIT';
+      el.className = identity ? (enabled ? 'good' : 'bad') : '';
     };
-    health('terminalState', !!pod?.terminalTradeAllowed);
-    health('accountTradeState', !!pod?.accountTradeAllowed);
-    health('expertTradeState', !!pod?.expertTradeAllowed);
+    health('terminalState', !!identity?.terminalTradeAllowed);
+    health('accountTradeState', !!identity?.accountTradeAllowed);
+    health('expertTradeState', !!identity?.expertTradeAllowed);
     const waitingPair = state.pairing?.status === 'WAITING_FOR_SECURE_POD';
     const pairedHost = ownershipDescription(pod?.ownershipMode);
     const waitingHost = ownershipDescription(state.pairing?.ownershipMode);
@@ -182,7 +182,8 @@
     const emergencyButton = byId('emergencyButton');
     if (onButton) onButton.disabled = !control.canTurnOn || ['ON', 'ARMING'].includes(effective);
     if (stopButton) stopButton.disabled = ['UNPROVISIONED', 'STOPPED', 'STOPPING'].includes(effective);
-    if (emergencyButton) emergencyButton.disabled = !state.pod || !(state.positions || []).length || effective === 'EMERGENCY_CLOSING';
+    if (emergencyButton) emergencyButton.disabled = !(state.pod || state.hostedAccount) ||
+      !(state.positions || []).length || effective === 'EMERGENCY_CLOSING';
   }
 
   function renderSettings(state) {
@@ -192,9 +193,6 @@
     byId('lotPerLayer').value = settings.lotPerLayer ?? 0.01;
     byId('layers').value = settings.layers ?? 3;
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
-    document.querySelectorAll('[name="symbols"]').forEach(input => {
-      input.checked = (settings.symbols || []).includes(input.value);
-    });
     settingsHydrated = true;
     updateRiskPreview();
   }
@@ -202,15 +200,15 @@
   function renderExecutionScope(state) {
     const allowed = Array.isArray(state.control?.executionSymbols)
       ? state.control.executionSymbols : Core.SUPPORTED_MARKETS;
-    document.querySelectorAll('[name="symbols"]').forEach(input => {
-      const enabled = allowed.includes(input.value);
-      input.disabled = !enabled;
-      if (!enabled) input.checked = false;
-      input.closest('.symbol-option')?.classList.toggle('disabled', !enabled);
-    });
+    const options = byId('symbolOptions');
+    if (options) {
+      options.innerHTML = allowed.length
+        ? allowed.map(symbol => `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
+        : '<span class="symbol-scope-empty">Menunggu pair yang disahkan.</span>';
+    }
     setText(
       'executionSymbolNotice',
-      `Fasa Demo execution semasa: ${allowed.join(', ') || 'tiada pair'}. Pair lain kekal untuk analysis.`
+      `Skop automatik control plane: ${allowed.join(', ') || 'belum tersedia'}. Semua user aktif menerima skop pair yang sama.`
     );
   }
 
@@ -324,11 +322,14 @@
   }
 
   function selectedSettings() {
+    const symbols = Array.isArray(currentState?.control?.executionSymbols) && currentState.control.executionSymbols.length
+      ? currentState.control.executionSymbols
+      : ['XAUUSD'];
     return {
       capitalUsd: byId('capitalUsd').value,
       lotPerLayer: byId('lotPerLayer').value,
       layers: byId('layers').value,
-      symbols: [...document.querySelectorAll('[name="symbols"]:checked')].map(input => input.value)
+      symbols
     };
   }
 
@@ -454,10 +455,8 @@
   }
 
   function initialiseSymbols() {
-    const options = byId('symbolOptions');
     const riskSelect = byId('riskSymbol');
-    if (!Core || !options || !riskSelect) return;
-    options.innerHTML = Core.SUPPORTED_MARKETS.map(symbol => `<label class="symbol-option"><input name="symbols" type="checkbox" value="${symbol}"${symbol === 'XAUUSD' ? ' checked' : ''}><span>${symbol}</span></label>`).join('');
+    if (!Core || !riskSelect) return;
     riskSelect.innerHTML = Core.SUPPORTED_MARKETS.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
     document.querySelectorAll('#settingsForm input').forEach(input => input.addEventListener('input', () => {
       settingsDirty = true;

@@ -24,8 +24,12 @@ from typing import Any, Callable
 from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
 
 
-CONNECTOR_VERSION = "2.1.0-gcp-demo-execution"
+CONNECTOR_VERSION = "2.2.0-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
+SUPPORTED_MARKETS = (
+    "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
+    "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
+)
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
@@ -151,7 +155,8 @@ class ManagerConfig:
             or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", terminal_name)
             or approved_server != INTERSTELLAR_DEMO_SERVER
             or connector_version != CONNECTOR_VERSION
-            or symbols != ("XAUUSD",)
+            or not symbols
+            or any(symbol not in SUPPORTED_MARKETS for symbol in symbols)
             or not 5 <= heartbeat <= 30
             or not 5 <= poll <= 60
             or not 1 <= max_slots <= 50

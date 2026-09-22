@@ -32,7 +32,7 @@ locals {
     mt5TerminalPath          = var.mt5_terminal_path
     approvedDemoServer       = "InterStellarFinancial-Demo"
     heartbeatIntervalSeconds = 10
-    connectorVersion         = var.execution_enabled ? "2.1.0-gcp-demo-execution" : "2.0.0-gcp-connect"
+    connectorVersion         = var.execution_enabled ? "2.2.0-gcp-multiuser-multipair" : "2.0.0-gcp-connect"
   }
 }
 
