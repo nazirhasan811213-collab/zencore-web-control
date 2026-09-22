@@ -250,6 +250,26 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.match(setCookie, /SameSite=Strict/);
     const cookie = setCookie.split(';')[0];
 
+    response = await fetch(`${BASE}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Origin': BASE
+      },
+      body: JSON.stringify({
+        displayName: 'Overseas Client',
+        email: 'overseas-client@example.com',
+        icNumber: 'A 1234-5678',
+        phone: '+66812345678',
+        ibCode: 'nazir',
+        password: 'ZenCore2026!',
+        riskAccepted: true
+      })
+    });
+    assert.equal(response.status, 201, output());
+    assert.equal((await response.json()).user.role, 'client');
+
     response = await fetch(`${BASE}/admin`, { headers: { Cookie: cookie }, redirect: 'manual' });
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/app');
