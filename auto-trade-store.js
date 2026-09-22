@@ -1504,10 +1504,35 @@ class MemoryAutoTradeStore {
     return publicHostedAccount(row);
   }
 
-  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt) {
+  async leaseHostedAccount(accountId, identity, leaseId, now, expiresAt, slotCode = null) {
     const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
-    if (!row || String(row.tradeMode).toUpperCase() !== 'DEMO' ||
-        (row.workerInstanceId && row.workerInstanceId !== identity.instanceId)) return null;
+    if (!row || String(row.tradeMode).toUpperCase() !== 'DEMO') return null;
+
+    let slot = null;
+    let host = null;
+    if (slotCode) {
+      slot = [...this.workerSlots.values()].find(item =>
+        item.accountId === accountId && item.slotCode === slotCode
+      ) || null;
+      host = slot
+        ? [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null
+        : null;
+      if (!slot || !host || host.enabled !== true ||
+          host.provider !== identity.provider ||
+          host.projectId !== identity.projectId ||
+          host.zone !== identity.zone ||
+          host.instanceName !== identity.instanceName ||
+          (host.instanceId && host.instanceId !== identity.instanceId)) return null;
+      host.instanceId = identity.instanceId;
+      host.lastSeenAt = now;
+      host.updatedAt = now;
+      slot.status = 'LEASED';
+      slot.lastSeenAt = now;
+      slot.lastError = null;
+    } else if (row.workerInstanceId && row.workerInstanceId !== identity.instanceId) {
+      return null;
+    }
+
     Object.assign(row, {
       status: 'LEASED',
       workerProvider: identity.provider,
@@ -1530,7 +1555,14 @@ class MemoryAutoTradeStore {
       updatedAt: now
     });
     return {
-      ...publicHostedAccount(row),
+      ...publicHostedAccount({
+        ...row,
+        workerSlotId: slot?.id || null,
+        workerSlotCode: slot?.slotCode || null,
+        workerSlotNumber: slot?.slotNo || null,
+        workerHostId: host?.id || null,
+        workerHostName: host?.instanceName || null
+      }),
       userId: row.userId,
       credentialEnvelope: JSON.parse(JSON.stringify(row.credentialEnvelope)),
       leaseId: row.leaseId,
@@ -1556,10 +1588,22 @@ class MemoryAutoTradeStore {
       terminalBuild: heartbeat.terminalBuild || null,
       lastSeenAt: now,
       lastError: lastError || null,
-      verifiedAt: status === 'CONNECTED_LOCKED' ? (row.verifiedAt || now) : row.verifiedAt,
+      verifiedAt: ['CONNECTED_LOCKED','HOSTED_READY'].includes(status) ? (row.verifiedAt || now) : row.verifiedAt,
       updatedAt: now
     });
-    return publicHostedAccount(row);
+    const slot = [...this.workerSlots.values()].find(item => item.accountId === accountId) || null;
+    if (slot) {
+      slot.status = ['CONNECTED_LOCKED','HOSTED_READY'].includes(status) ? 'ACTIVE' : 'LEASED';
+      slot.lastSeenAt = now;
+      slot.lastError = lastError || null;
+      const host = [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null;
+      if (host) {
+        host.instanceId = identity.instanceId;
+        host.lastSeenAt = now;
+        host.updatedAt = now;
+      }
+    }
+    return this.getHostedAccount(row.userId);
   }
 
   async consumeHostedWorkerRequest(identity, requestId, requestTimestamp, now) {
