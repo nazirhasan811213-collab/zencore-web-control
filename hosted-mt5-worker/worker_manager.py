@@ -37,7 +37,8 @@ _KEY_RESOURCE_RE = re.compile(
     r"keyRings/[A-Za-z0-9_-]+/cryptoKeys/[A-Za-z0-9_-]+/cryptoKeyVersions/[0-9]+$"
 )
 _FORBIDDEN_CONFIG_KEYS = re.compile(
-    r"(password|credentialEnvelope|wrappedKey|ciphertext|privateKey|brokerLogin)",
+    r"(password|credentialEnvelope|wrappedKey|ciphertext|privateKeyPem|"
+    r"privateKeyMaterial|brokerLogin)",
     re.IGNORECASE,
 )
 
