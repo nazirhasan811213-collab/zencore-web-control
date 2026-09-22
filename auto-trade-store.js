@@ -840,7 +840,7 @@ class PostgresAutoTradeStore {
          connector_version = $12, terminal_build = $13,
          worker_last_seen_at = $14, last_error = $15,
          verified_at = CASE
-           WHEN $4::varchar(32) IN ('CONNECTED_LOCKED'::varchar(32), 'HOSTED_READY'::varchar(32)
+           WHEN $4::varchar(32) IN ('CONNECTED_LOCKED'::varchar(32), 'HOSTED_READY'::varchar(32))
            THEN COALESCE(verified_at, $14)
            ELSE verified_at
          END,
