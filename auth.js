@@ -90,38 +90,41 @@
     setBusy(false);
 
     const params = new URLSearchParams(window.location.search);
-    const raw = String(params.get('ib') || 'nazir').trim().toLowerCase();
-    const requested = /^[a-z0-9][a-z0-9_-]{0,47}$/.test(raw) ? raw : 'nazir';
+    const raw = String(params.get('ib') || '').trim().toLowerCase();
+    const requested = /^[a-z0-9][a-z0-9_-]{0,47}$/.test(raw) ? raw : '';
     const container = document.getElementById('ibAssignment');
     const name = document.getElementById('ibName');
     const notice = document.getElementById('ibNotice');
 
     try {
+      if (!requested) {
+        throw new Error('Link pendaftaran rasmi diperlukan.');
+      }
       const response = await fetch(`/auth/referrer/${encodeURIComponent(requested)}`, {
         credentials: 'same-origin',
         headers: { Accept: 'application/json' }
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok || !body.referrer?.code) {
-        throw new Error(body.error || 'IB tidak dapat disahkan.');
+      if (!response.ok || !body.referrer?.code ||
+          body.referrer.fallback === true ||
+          String(body.referrer.code).toLowerCase() !== requested) {
+        throw new Error(body.error || 'Link pendaftaran tidak sah atau tidak aktif.');
       }
       field('ibCode').value = body.referrer.code;
       if (name) name.textContent = body.referrer.displayName;
       if (notice) {
-        notice.textContent = body.referrer.fallback
-          ? 'Link IB tidak sah atau tidak aktif. Sistem menggunakan Nazir (Admin).'
-          : `Kod IB: ${String(body.referrer.code).toUpperCase()} • Assignment ini tidak boleh diubah selepas daftar.`;
+        notice.textContent = `Kod IB: ${String(body.referrer.code).toUpperCase()} • Assignment ini tidak boleh diubah selepas daftar.`;
       }
       container?.classList.remove('loading');
-      container?.classList.toggle('fallback', body.referrer.fallback === true);
+      container?.classList.remove('fallback');
       referralReady = true;
       setBusy(false);
     } catch (_) {
-      if (name) name.textContent = 'Pengesahan IB gagal';
-      if (notice) notice.textContent = 'Cuba refresh halaman sebelum mendaftar.';
+      if (name) name.textContent = 'Link pendaftaran tidak sah';
+      if (notice) notice.textContent = 'Minta link pendaftaran baharu daripada Admin atau IB anda.';
       container?.classList.remove('loading');
       container?.classList.add('error');
-      status('Maklumat IB tidak dapat disahkan. Refresh halaman dan cuba semula.');
+      status('Pendaftaran hanya melalui link rasmi Admin atau IB yang aktif.');
       referralReady = false;
       setBusy(false);
     }

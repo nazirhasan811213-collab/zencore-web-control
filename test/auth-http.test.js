@@ -82,7 +82,17 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
 
     response = await fetch(`${BASE}/login`);
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /Log masuk/);
+    const loginPage = await response.text();
+    assert.match(loginPage, /Log masuk/);
+    assert.doesNotMatch(loginPage, /href="\/register"/);
+
+    response = await fetch(`${BASE}/register`, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/login');
+
+    response = await fetch(`${BASE}/u/does-not-exist`, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/login');
 
     response = await fetch(`${BASE}/u/nazir`, { redirect: 'manual' });
     assert.equal(response.status, 302);
@@ -105,6 +115,10 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(defaultIb.referrer.code, 'nazir');
     assert.equal(defaultIb.referrer.displayName, 'Nazir (Admin)');
 
+    response = await fetch(`${BASE}/register?ib=nazir`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /Daftar ZenCore/);
+
     const registration = {
       displayName: 'HTTP Test Trader',
       email: 'http-test@example.com',
@@ -120,6 +134,18 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
       body: JSON.stringify({ ...registration, riskAccepted: true })
     });
     assert.equal(response.status, 403);
+
+    response = await fetch(`${BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: BASE },
+      body: JSON.stringify({
+        ...registration,
+        ibCode: 'does-not-exist',
+        riskAccepted: true
+      })
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'INVALID_REGISTRATION_LINK');
 
     response = await fetch(`${BASE}/auth/register`, {
       method: 'POST',

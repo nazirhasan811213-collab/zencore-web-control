@@ -137,6 +137,12 @@
     ]);
     overview = body;
     clients = body.latestClients || [];
+    const newClientLink = `${window.location.origin}/u/nazir`;
+    const newClientLinkButton = byId('newClientLinkButton');
+    if (newClientLinkButton) {
+      newClientLinkButton.dataset.copyLink = newClientLink;
+      newClientLinkButton.title = `Copy: ${newClientLink}`;
+    }
     const totalClients = Number(body.stats?.total_clients || 0);
     const activeClients = Number(body.stats?.active_clients || 0);
     const activePct = totalClients > 0 ? Math.round((activeClients / totalClients) * 100) : 0;
