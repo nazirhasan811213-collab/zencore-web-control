@@ -81,18 +81,7 @@ async function decryptFile(inputPath, outputPath, passphrase) {
 
 async function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
-  await pipeline(
-    fs.createReadStream(filePath),
-    async function* (source) {
-      for await (const chunk of source) {
-        hash.update(chunk);
-        yield chunk;
-      }
-    },
-    async function* (source) {
-      for await (const _chunk of source) {}
-    }
-  );
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk);
   return hash.digest('hex');
 }
 
