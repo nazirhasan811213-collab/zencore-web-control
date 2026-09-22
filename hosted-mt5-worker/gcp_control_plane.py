@@ -147,7 +147,7 @@ class GcpControlPlaneClient:
 
     def _post(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         if (
-            action not in {"lease", "heartbeat", "commands/next"}
+            action not in {"assignments", "lease", "heartbeat", "commands/next"}
             and not re.fullmatch(r"commands/[0-9a-fA-F-]{36}/ack", action)
         ):
             raise ValueError("unsupported control-plane action")
@@ -191,6 +191,9 @@ class GcpControlPlaneClient:
         if not isinstance(result, dict) or result.get("ok") is not True:
             raise ControlPlaneError("Control plane rejected request")
         return result
+
+    def assignments(self) -> dict[str, Any]:
+        return self._post("assignments", {})
 
     def lease(self, account_id: str, cell_id: str) -> dict[str, Any]:
         if not _UUID_RE.fullmatch(str(account_id)):
