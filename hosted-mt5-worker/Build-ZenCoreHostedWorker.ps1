@@ -61,11 +61,23 @@ try {
         (Join-Path $source "hosted_worker.py")
     if ($LASTEXITCODE -ne 0) { throw "Hosted worker executable build failed." }
 
+    & $python -m PyInstaller `
+        --noconfirm `
+        --clean `
+        --onefile `
+        --name "ZenCoreHostedWorkerManager" `
+        --paths $source `
+        --distpath $release `
+        --workpath $pyinstallerWork `
+        --specpath $pyinstallerWork `
+        (Join-Path $source "worker_manager.py")
+    if ($LASTEXITCODE -ne 0) { throw "Hosted worker manager executable build failed." }
     Copy-Item -Force -LiteralPath (Join-Path $source "Install-ZenCoreHostedWorker.ps1") -Destination $release
+    Copy-Item -Force -LiteralPath (Join-Path $source "Install-ZenCoreWorkerManager.ps1") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "README.md") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "VERSION") -Destination $release
 
-    $files = @("ZenCoreHostedWorker.exe", "README.md", "VERSION") | ForEach-Object {
+    $files = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe", "README.md", "VERSION") | ForEach-Object {
         $itemPath = Join-Path $release $_
         [ordered]@{
             path = $_
@@ -76,6 +88,8 @@ try {
         schemaVersion = 1
         connectorVersion = $version
         executionUnlocked = $true
+        workerManagerIncluded = $true
+        workerManagerVersion = "1.0.0"
         createdAt = (Get-Date).ToUniversalTime().ToString("o")
         files = @($files)
     }
