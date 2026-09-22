@@ -935,10 +935,59 @@ async function handleHostedExecutionApi(req, res, pathname) {
 
 async function handleAutoTradeUserApi(req, res, pathname, session) {
   if (session.user.role === 'viewer') {
+    if (req.method === 'GET' && pathname === '/api/auto-trade/state') {
+      return sendJson(res, 200, {
+        ok: true,
+        mode: 'DEMO',
+        viewerMode: true,
+        control: {
+          desiredState: 'STOPPED',
+          effectiveState: 'STOPPED',
+          canEnter: false,
+          canTurnOn: false,
+          executionRolloutUnlocked: false,
+          executionSymbols: ['XAUUSD'],
+          lastError: null
+        },
+        connection: {
+          state: 'VIEW_ONLY',
+          label: 'PUBLIC DEMO • NO MT5 CONNECTION',
+          online: false,
+          connected: false,
+          ready: false
+        },
+        pod: null,
+        pairing: null,
+        hostedAccount: null,
+        hostedMt5: {
+          available: false,
+          executionReady: false,
+          status: 'VIEW_ONLY',
+          message: 'Public demo memaparkan Auto Trade tanpa sambungan MT5.'
+        },
+        settings: {
+          capitalUsd: 1000,
+          lotPerLayer: 0.01,
+          layers: 3,
+          totalLot: 0.03,
+          symbols: ['XAUUSD'],
+          riskAcknowledgedAt: null
+        },
+        positions: [],
+        audit: [],
+        summary: {
+          openPositions: 0,
+          floatingProfitUsd: 0,
+          totalVolume: 0
+        },
+        ui: { autoTradeConfigured: true },
+        generatedAt: Date.now()
+      });
+    }
     return sendJson(res, 403, {
       ok: false,
       code: 'VIEW_ONLY',
-      error: 'Public demo ialah paparan view-only. Auto Trade tidak tersedia.'
+      error: 'Public demo ialah paparan view-only. Tiada sambungan atau kawalan Auto Trade dibenarkan.'
     });
   }
   if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
@@ -1362,7 +1411,6 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
-    if (session.user.role === 'viewer') return redirect(res, '/app');
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 
