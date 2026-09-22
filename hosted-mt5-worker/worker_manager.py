@@ -24,7 +24,7 @@ from typing import Any, Callable
 from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
 
 
-CONNECTOR_VERSION = "2.2.0-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.1-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
@@ -99,6 +99,7 @@ class ManagerConfig:
     heartbeat_seconds: float
     poll_seconds: float
     connector_version: str
+    execution_enabled: bool
     max_slots: int
 
     @staticmethod
@@ -115,7 +116,8 @@ class ManagerConfig:
             "terminalExecutableName", "slotsRoot", "executionGatePath",
             "approvedDemoServer", "allowedDemoSymbols", "heartbeatIntervalSeconds",
             "pollIntervalSeconds", "connectorVersion", "demoOnly",
-            "credentialStorage", "privateKeyAvailable", "maxSlots",
+            "credentialStorage", "privateKeyAvailable", "executionEnabled",
+            "maxSlots",
         }
         if set(raw) != allowed:
             raise ManagerFailure("MANAGER_CONFIG_FIELDS_INVALID")
@@ -125,6 +127,7 @@ class ManagerConfig:
             or raw.get("demoOnly") is not True
             or raw.get("credentialStorage") != "CHILD_WORKER_MEMORY_ONLY"
             or raw.get("privateKeyAvailable") is not False
+            or not isinstance(raw.get("executionEnabled"), bool)
         ):
             raise ManagerFailure("MANAGER_SECURITY_BOUNDARY_INVALID")
 
@@ -176,6 +179,7 @@ class ManagerConfig:
             heartbeat_seconds=heartbeat,
             poll_seconds=poll,
             connector_version=connector_version,
+            execution_enabled=raw["executionEnabled"],
             max_slots=max_slots,
         )
 
@@ -315,7 +319,7 @@ class WorkerManager:
             "keyAlias": self.config.key_alias,
             "keyVersionResource": self.config.key_version_resource,
             "demoOnly": True,
-            "executionEnabled": True,
+            "executionEnabled": self.config.execution_enabled,
             "allowedDemoSymbols": list(self.config.allowed_demo_symbols),
             "credentialStorage": "MEMORY_ONLY",
             "privateKeyAvailable": False,
@@ -353,11 +357,20 @@ class WorkerManager:
             if clean and state.slot_root.exists():
                 shutil.rmtree(state.slot_root, ignore_errors=True)
 
+    def _assert_runtime_boundary(self) -> None:
+        gate = Path(self.config.execution_gate_path)
+        gate_exists = gate.is_file()
+        if self.config.execution_enabled and not gate_exists:
+            self.shutdown()
+            raise ManagerFailure("DEMO_EXECUTION_GATE_MISSING")
+        if not self.config.execution_enabled and gate_exists:
+            self.shutdown()
+            raise ManagerFailure("PREFLIGHT_EXECUTION_GATE_PRESENT")
+
     def _launch(self, assignment: Assignment) -> None:
         gate = Path(self.config.execution_gate_path)
         child = Path(self.config.child_worker_path)
-        if not gate.is_file():
-            raise ManagerFailure("DEMO_EXECUTION_GATE_MISSING")
+        self._assert_runtime_boundary()
         if not child.is_file():
             raise ManagerFailure("CHILD_WORKER_NOT_FOUND")
         slot_root, config_path = self._materialize_slot(assignment)
@@ -374,6 +387,7 @@ class WorkerManager:
         )
 
     def reconcile_once(self) -> dict[str, int]:
+        self._assert_runtime_boundary()
         try:
             response = self.control_plane.assignments()
         except ControlPlaneError as exc:

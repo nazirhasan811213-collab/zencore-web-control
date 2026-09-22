@@ -8,6 +8,8 @@ param(
     [string]$TerminalTemplateRoot = "C:\ProgramData\ZenCore\MT5Template",
     [int]$MaxSlots = 10,
     [switch]$PrepareTerminalTemplate,
+    [switch]$ReplaceTerminalTemplate,
+    [switch]$EnableDemoExecution,
     [switch]$MigrateLegacyWorker
 )
 
@@ -22,6 +24,9 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 if ($MaxSlots -lt 1 -or $MaxSlots -gt 50) {
     throw "MaxSlots must be between 1 and 50."
 }
+if ($ReplaceTerminalTemplate -and -not $PrepareTerminalTemplate) {
+    throw "ReplaceTerminalTemplate requires PrepareTerminalTemplate."
+}
 
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $manifestPath = Join-Path $source "release-manifest.json"
@@ -30,8 +35,9 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
+    $manifest.connectorVersion -ne "2.2.1-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
+    $manifest.connectionOnlyPreflight -ne $true -or
     $manifest.workerManagerIncluded -ne $true) {
     throw "Release manifest does not contain the approved multi-client manager boundary."
 }
@@ -62,11 +68,28 @@ $invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymb
 if ($legacy.demoOnly -ne $true -or
     $legacy.privateKeyAvailable -ne $false -or
     $legacy.credentialStorage -ne "MEMORY_ONLY" -or
-    [string]$legacy.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
     $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
     @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count -or
     [string]$legacy.approvedDemoServer -ne "InterStellarFinancial-Demo") {
     throw "Existing worker config does not match the reviewed DEMO boundary."
+}
+
+$lockPath = "C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED"
+$legacyConnector = [string]$legacy.connectorVersion
+if ($EnableDemoExecution) {
+    if ($legacy.executionEnabled -ne $true -or
+        $legacyConnector -ne [string]$manifest.connectorVersion -or
+        -not (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf) -or
+        (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "DEMO execution installation requires matching config and an explicit unlocked local gate."
+    }
+} else {
+    if ($legacy.executionEnabled -ne $false -or
+        $legacyConnector -ne "2.0.0-gcp-connect" -or
+        (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "Connection-only preflight requires the locked 2.0.0 legacy boundary."
+    }
 }
 
 $releasePath = Join-Path $ReleaseRoot $manifest.connectorVersion
@@ -94,6 +117,9 @@ $legacyTerminalRoot = Split-Path -Parent $legacyTerminalPath
 
 if ($PrepareTerminalTemplate) {
     if (Test-Path -LiteralPath $TerminalTemplateRoot) {
+        if (-not $ReplaceTerminalTemplate) {
+            throw "MT5 terminal template already exists. Use ReplaceTerminalTemplate only after reviewing the exact target."
+        }
         Remove-Item -Recurse -Force -LiteralPath $TerminalTemplateRoot
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $TerminalTemplateRoot) | Out-Null
@@ -122,10 +148,11 @@ $managerConfig = [ordered]@{
     allowedDemoSymbols = @($configuredSymbols)
     heartbeatIntervalSeconds = [double]$legacy.heartbeatIntervalSeconds
     pollIntervalSeconds = 10
-    connectorVersion = [string]$legacy.connectorVersion
+    connectorVersion = [string]$manifest.connectorVersion
     demoOnly = $true
     credentialStorage = "CHILD_WORKER_MEMORY_ONLY"
     privateKeyAvailable = $false
+    executionEnabled = $EnableDemoExecution.IsPresent
     maxSlots = $MaxSlots
 }
 $managerConfig | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ManagerConfigPath -Encoding UTF8
@@ -172,17 +199,23 @@ $taskParams = @{
 }
 Register-ScheduledTask @taskParams | Out-Null
 Enable-ScheduledTask -TaskName $taskName | Out-Null
-Start-ScheduledTask -TaskName $taskName
+if ($MigrateLegacyWorker) {
+    Start-ScheduledTask -TaskName $taskName
+} else {
+    Disable-ScheduledTask -TaskName $taskName | Out-Null
+}
 
-Write-Host "ZenCore multi-client worker manager installed and started."
+Write-Host "ZenCore multi-client worker manager installed."
 Write-Host "Manager config: $ManagerConfigPath"
 Write-Host "MT5 template: $TerminalTemplateRoot"
 Write-Host "Slot root: $SlotsRoot"
-if (-not (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf)) {
-    Write-Warning "DEMO execution gate is absent. The manager will stay fail-closed and will not start slot workers."
+if (-not $EnableDemoExecution) {
+    Write-Host "Manager mode: CONNECTION-ONLY PREFLIGHT. Order commands are unreachable."
 }
 if (-not $MigrateLegacyWorker) {
-    Write-Host "Legacy one-to-one worker was left unchanged for staged migration."
+    Write-Host "Manager task is staged but disabled. Legacy one-to-one worker was left unchanged."
+} else {
+    Write-Host "Legacy worker was disabled and the manager was started for controlled migration."
 }
 
 # Manager config contains only non-secret control-plane and filesystem assignment data.

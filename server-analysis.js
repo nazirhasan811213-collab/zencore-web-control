@@ -40,7 +40,7 @@ const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || ''
 const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS || 'XAUUSD')
   .split(',').map(value => value.trim()).filter(Boolean);
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
-  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '1.4.0-demo-execution'
+  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.1-gcp-multiuser-multipair'
 );
 const HOSTED_MT5_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(
   String(process.env.ZENCORE_HOSTED_MT5_ENABLED || '')

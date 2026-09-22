@@ -89,6 +89,14 @@ ZENCORE_GCP_WORKER_HOSTED_ACCOUNT_ID=<assigned hosted-account UUIDv4>
 
 Only after those values match the deployed VM may `ZENCORE_GCP_HOSTED_WORKER_ENABLED=true`. Google-signed instance identity enables envelope lease and heartbeat only; `ZENCORE_AUTOTRADE_EXECUTION_ENABLED` remains false and the hosted worker build itself remains order-locked.
 
+For the managed GCP multi-user/multi-pair worker rollout, set the reviewed connector pin to:
+
+```text
+ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION=2.2.1-gcp-multiuser-multipair
+```
+
+Version `2.2.1` supports a connection-only preflight. Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false`, keep the VM `DEMO_EXECUTION_ENABLED` gate absent, and configure the Manager with `executionEnabled=false`. In that state child slots may lease encrypted envelopes and report locked heartbeats, but they never poll execution commands. The earlier `1.4.0-demo-execution` pin above remains only for the legacy trader-owned Windows rollout.
+
 ### Code-only worker release
 
 The Windows connection worker can be built without a Google Cloud project or billing:
