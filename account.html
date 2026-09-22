@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>My Account — ZenCore</title>
   <link rel="stylesheet" href="/auth.css?v=1.1">
-  <link rel="stylesheet" href="/management.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=2.0">
 </head>
 <body data-account-page="client">
   <div class="mg-shell">
@@ -74,8 +74,10 @@
               <div><dt>Account</dt><dd id="accountMt5Mask">—</dd></div>
               <div><dt>Server</dt><dd id="accountServerMask">—</dd></div>
               <div><dt>Connection</dt><dd id="accountConnState">—</dd></div>
+              <div><dt>Worker Slot</dt><dd id="accountWorkerSlot">—</dd></div>
+              <div><dt>Worker Host</dt><dd id="accountWorkerHost">—</dd></div>
             </dl>
-            <a class="mg-primary mg-link-btn primary-link" href="/auto-trade">OPEN AUTO TRADE</a>
+            <a id="accountMt5Action" class="mg-primary mg-link-btn primary-link" href="/auto-trade?connect=1">CONNECT MT5</a>
           </article>
 
           <article class="mg-panel detail-card">
@@ -88,6 +90,6 @@
       <footer class="mg-foot">ZenCore Client Portal • Own account only</footer>
     </main>
   </div>
-  <script src="/account.js?v=1.0" defer></script>
+  <script src="/account.js?v=1.1" defer></script>
 </body>
 </html>
