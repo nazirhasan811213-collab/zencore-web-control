@@ -158,9 +158,29 @@
       byId('navClients').href = '/ib#clients';
       byId('backButton').href = '/ib';
       byId('scopeLabel').textContent = 'OWN CLIENT ONLY';
+      byId('adminIbControl')?.classList.add('hidden');
     } else {
       byId('backButton').href = '/admin#clients';
       byId('scopeLabel').textContent = 'GLOBAL ADMIN VIEW';
+      byId('adminIbControl')?.classList.remove('hidden');
+      try {
+        const adminOverview = await api('/api/admin/overview');
+        const ibs = Array.isArray(adminOverview.ibs) ? adminOverview.ibs : [];
+        const select = byId('adminIbSelect');
+        if (select) {
+          select.innerHTML = ibs.map(item =>
+            `<option value="${esc(item.code)}" ${String(item.code) === String(client.ibCode || 'nazir') ? 'selected' : ''}>${esc(item.displayName)} (${esc(String(item.code).toUpperCase())})${item.active ? '' : ' • DISABLED'}</option>`
+          ).join('');
+        }
+        const promoteName = byId('promoteIbName');
+        if (promoteName && !promoteName.value) promoteName.value = client.displayName || '';
+      } catch (error) {
+        const status = byId('adminIbStatus');
+        if (status) {
+          status.className = 'mg-form-status error';
+          status.textContent = error.message;
+        }
+      }
     }
 
     byId('detailTitle').textContent = `${client.displayName || 'Client'} — Detail`;
@@ -173,7 +193,9 @@
     byId('clientCreated').textContent = fmtDate(client.createdAt, true);
     byId('clientLastLogin').textContent = fmtDate(client.lastLoginAt, true);
     byId('clientIbName').textContent = client.ibName || 'Nazir (Admin)';
-    byId('clientIbCode').textContent = `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • assignment locked`;
+    byId('clientIbCode').textContent = adminView
+      ? `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • admin boleh pindahkan assignment`
+      : `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • assignment dikunci untuk client/IB`;
     byId('clientAccessText').textContent = client.status === 'active' ? 'Login Active' : 'Login Disabled';
 
     const button = byId('toggleClientStatus');
@@ -221,6 +243,83 @@
     } catch (error) {
       window.alert(error.message);
     } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId('moveClientIb')?.addEventListener('click', async () => {
+    if (currentUser?.role !== 'admin' || !detail?.client?.id) return;
+    const code = String(byId('adminIbSelect')?.value || '').trim().toLowerCase();
+    if (!code) return;
+    const current = String(detail.client.ibCode || 'nazir').toLowerCase();
+    const status = byId('adminIbStatus');
+    if (code === current) {
+      if (status) {
+        status.className = 'mg-form-status';
+        status.textContent = 'Client sudah berada di bawah IB ini.';
+      }
+      return;
+    }
+    if (!window.confirm(`Pindahkan ${detail.client.displayName} dari ${current.toUpperCase()} ke ${code.toUpperCase()}?`)) return;
+    const button = byId('moveClientIb');
+    button.disabled = true;
+    if (status) {
+      status.className = 'mg-form-status';
+      status.textContent = 'Memindahkan client...';
+    }
+    try {
+      const body = await api(`/api/admin/clients/${encodeURIComponent(detail.client.id)}/ib`, {
+        method:'PATCH',
+        body:JSON.stringify({ ibCode: code })
+      });
+      detail.client = body.client;
+      if (status) {
+        status.className = 'mg-form-status success';
+        status.textContent = `Client dipindahkan ke ${body.referrer.displayName} (${String(body.referrer.code).toUpperCase()}).`;
+      }
+      await loadClientDetail();
+    } catch (error) {
+      if (status) {
+        status.className = 'mg-form-status error';
+        status.textContent = error.message;
+      }
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId('promoteClientIb')?.addEventListener('click', async () => {
+    if (currentUser?.role !== 'admin' || !detail?.client?.id) return;
+    const code = String(byId('promoteIbCode')?.value || '').trim().toLowerCase();
+    const displayName = String(byId('promoteIbName')?.value || '').trim();
+    const status = byId('adminIbStatus');
+    if (!code) {
+      if (status) {
+        status.className = 'mg-form-status error';
+        status.textContent = 'Masukkan kod IB baru.';
+      }
+      return;
+    }
+    if (!window.confirm(`Tukar ${detail.client.displayName} daripada CLIENT kepada IB ${code.toUpperCase()}? Akaun ini tidak lagi berada dalam senarai client.`)) return;
+    const button = byId('promoteClientIb');
+    button.disabled = true;
+    if (status) {
+      status.className = 'mg-form-status';
+      status.textContent = 'Menukar client kepada IB...';
+    }
+    try {
+      const body = await api(`/api/admin/clients/${encodeURIComponent(detail.client.id)}/promote-ib`, {
+        method:'POST',
+        body:JSON.stringify({ code, displayName })
+      });
+      const link = `${window.location.origin}/u/${encodeURIComponent(body.referrer.code)}`;
+      try { await navigator.clipboard.writeText(link); } catch (_) {}
+      window.location.replace(`/admin/ib/${encodeURIComponent(body.referrer.code)}`);
+    } catch (error) {
+      if (status) {
+        status.className = 'mg-form-status error';
+        status.textContent = error.message;
+      }
       button.disabled = false;
     }
   });

@@ -550,3 +550,33 @@ body.admin-v4 .copy-inline:hover{color:#54e2eb;text-shadow:0 0 8px rgba(84,226,2
   .zc-footer{padding-top:7px;font-size:8.5px}
   .zc-footer b{font-size:11px}
 }
+
+
+/* Admin client ownership controls */
+.admin-client-ib-control.hidden{display:none}
+.admin-client-ib-control .mg-panel-head p{max-width:760px;margin:5px 0 0;color:#6f8997;font-size:9px;line-height:1.55}
+.admin-ib-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.admin-ib-action{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;
+  padding:14px;border:1px solid #1d4354;border-radius:12px;background:#061720
+}
+.admin-ib-action.promote{grid-template-columns:minmax(150px,.8fr) minmax(190px,1.2fr) auto}
+.admin-ib-action label{grid-column:1/-1;color:#7895a4;font-size:8px;font-weight:900;letter-spacing:.06em}
+.admin-ib-action input,.admin-ib-action select{
+  width:100%;height:39px;padding:0 10px;border:1px solid #254657;border-radius:9px;
+  outline:none;background:#04131c;color:#e8f7fc;font-size:9px
+}
+.admin-ib-action input:focus,.admin-ib-action select:focus{border-color:#3fa9ca}
+.admin-ib-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.admin-ib-foot small{color:#627f8e;font-size:8px;text-align:right}
+@media(max-width:900px){
+  .admin-ib-actions{grid-template-columns:1fr}
+  .admin-ib-action.promote{grid-template-columns:1fr 1fr}
+  .admin-ib-action.promote button{grid-column:1/-1}
+}
+@media(max-width:600px){
+  .admin-ib-action,.admin-ib-action.promote{grid-template-columns:1fr}
+  .admin-ib-action button,.admin-ib-action.promote button{grid-column:auto}
+  .admin-ib-foot{align-items:flex-start;flex-direction:column}
+  .admin-ib-foot small{text-align:left}
+}

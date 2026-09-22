@@ -604,6 +604,42 @@ async function handleManagementApi(req, res, pathname, session) {
         );
         return sendJson(res, 200, { ok: true, client });
       }
+      const adminClientIbMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/ib$/i);
+      if (req.method === 'PATCH' && adminClientIbMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const result = await authState.service.reassignAdminClientIb(
+          session.user, adminClientIbMatch[1], body.ibCode
+        );
+        return sendJson(res, 200, { ok: true, ...result });
+      }
+
+      const adminClientPromoteMatch = pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/promote-ib$/i);
+      if (req.method === 'POST' && adminClientPromoteMatch) {
+        if (!requestOriginAllowed(req)) {
+          return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
+        }
+        const trading = await clientTradingSummary(adminClientPromoteMatch[1]);
+        const effective = String(trading?.control?.effectiveState || 'STOPPED').toUpperCase();
+        const openPositions = Number(trading?.summary?.openPositions || 0);
+        if (trading?.available === true &&
+            (openPositions > 0 || !['STOPPED', 'UNPROVISIONED'].includes(effective))) {
+          return sendJson(res, 409, {
+            ok: false,
+            code: 'CLIENT_TRADING_ACTIVE',
+            error: 'Hentikan Auto Trade dan pastikan tiada posisi terbuka sebelum client ditukar kepada IB.'
+          });
+        }
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const promoted = await authState.service.promoteAdminClientToIb(
+          session.user, adminClientPromoteMatch[1], body
+        );
+        return sendJson(res, 200, { ok: true, ...promoted });
+      }
       if (req.method === 'POST' && pathname === '/api/admin/ibs') {
         if (!requestOriginAllowed(req)) {
           return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });

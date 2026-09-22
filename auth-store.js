@@ -161,15 +161,16 @@ class PostgresAuthStore {
         WHERE user_id IS NOT NULL;
 
       CREATE OR REPLACE FUNCTION zencore_lock_ib_assignment()
-      RETURNS trigger AS $$
+      RETURNS trigger AS $zencore$
       BEGIN
         IF OLD.ib_referrer_id IS NOT NULL
-           AND NEW.ib_referrer_id IS DISTINCT FROM OLD.ib_referrer_id THEN
+           AND NEW.ib_referrer_id IS DISTINCT FROM OLD.ib_referrer_id
+           AND COALESCE(current_setting('zencore.admin_ib_reassignment', TRUE), '') <> 'on' THEN
           RAISE EXCEPTION 'IB assignment is immutable';
         END IF;
         RETURN NEW;
       END;
-      $$ LANGUAGE plpgsql;
+      $zencore$ LANGUAGE plpgsql;
 
       DROP TRIGGER IF EXISTS zencore_users_lock_ib_assignment ON zencore_users;
       CREATE TRIGGER zencore_users_lock_ib_assignment
@@ -555,6 +556,124 @@ class PostgresAuthStore {
       [clientId]
     );
     return publicClient(enriched.rows[0]);
+  }
+
+
+  async reassignClientForAdmin(clientId, ibCode) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const referrerResult = await client.query(
+        `SELECT id, code, display_name, user_id, active
+         FROM zencore_ib_referrers
+         WHERE code = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [String(ibCode || '').trim().toLowerCase()]
+      );
+      const referrer = referrerResult.rows[0];
+      if (!referrer) {
+        await client.query('ROLLBACK');
+        return { client: null, referrer: null };
+      }
+      await client.query(
+        `SELECT set_config('zencore.admin_ib_reassignment', 'on', TRUE)`
+      );
+      const updated = await client.query(
+        `UPDATE zencore_users
+         SET ib_referrer_id = $2
+         WHERE id = $1 AND role = 'client'
+         RETURNING id`,
+        [clientId, referrer.id]
+      );
+      if (!updated.rows[0]) {
+        await client.query('ROLLBACK');
+        return { client: null, referrer: publicReferrer(referrer) };
+      }
+      const enriched = await client.query(
+        `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
+                u.created_at, u.last_login_at,
+                ref.code AS ib_code, ref.display_name AS ib_name
+         FROM zencore_users u
+         LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+         WHERE u.id = $1`,
+        [clientId]
+      );
+      await client.query('COMMIT');
+      return {
+        client: publicClient(enriched.rows[0]),
+        referrer: publicReferrer(referrer)
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async promoteClientToIbForAdmin(clientId, { code, displayName = '' }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const userResult = await client.query(
+        `SELECT id, display_name, email, role, status, created_at, last_login_at
+         FROM zencore_users
+         WHERE id = $1 AND role = 'client'
+         LIMIT 1
+         FOR UPDATE`,
+        [clientId]
+      );
+      const userRow = userResult.rows[0];
+      if (!userRow) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const existingCode = await client.query(
+        `SELECT id FROM zencore_ib_referrers WHERE code = $1 LIMIT 1`,
+        [code]
+      );
+      if (existingCode.rows[0]) {
+        const error = new Error('IB code already registered');
+        error.code = 'IB_CODE_EXISTS';
+        throw error;
+      }
+
+      await client.query(
+        `SELECT set_config('zencore.admin_ib_reassignment', 'on', TRUE)`
+      );
+      const promotedResult = await client.query(
+        `UPDATE zencore_users
+         SET role = 'ib', ib_referrer_id = NULL, status = 'active'
+         WHERE id = $1 AND role = 'client'
+         RETURNING id, display_name, email, role, status, created_at, last_login_at`,
+        [clientId]
+      );
+      const promoted = promotedResult.rows[0];
+      const referrerResult = await client.query(
+        `INSERT INTO zencore_ib_referrers
+          (id, code, display_name, user_id, active)
+         VALUES ($1, $2, $3, $4, TRUE)
+         RETURNING id, code, display_name, user_id, active, created_at`,
+        [crypto.randomUUID(), code, displayName || userRow.display_name, clientId]
+      );
+      await client.query('COMMIT');
+      return {
+        user: publicUser(promoted),
+        referrer: publicReferrer(referrerResult.rows[0])
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (error?.code === '23505') {
+        const duplicate = new Error('IB code already registered');
+        duplicate.code = 'IB_CODE_EXISTS';
+        throw duplicate;
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async setClientActiveForIb(ibUserId, clientId, active) {
@@ -972,6 +1091,50 @@ class MemoryAuthStore {
     if (!row || row.role !== 'client') return null;
     row.status = active === true ? 'active' : 'disabled';
     return publicClient(row);
+  }
+
+
+  async reassignClientForAdmin(clientId, ibCode) {
+    const row = this.usersById.get(clientId);
+    const referrer = this.referrersByCode.get(String(ibCode || '').trim().toLowerCase());
+    if (!row || row.role !== 'client' || !referrer) {
+      return { client: null, referrer: referrer ? publicReferrer(referrer) : null };
+    }
+    row.ib_referrer_id = referrer.id;
+    row.ib_code = referrer.code;
+    row.ib_name = referrer.display_name;
+    return {
+      client: publicClient(row),
+      referrer: publicReferrer(referrer)
+    };
+  }
+
+  async promoteClientToIbForAdmin(clientId, { code, displayName = '' }) {
+    const row = this.usersById.get(clientId);
+    if (!row || row.role !== 'client') return null;
+    if (this.referrersByCode.has(code)) {
+      const error = new Error('IB code already registered');
+      error.code = 'IB_CODE_EXISTS';
+      throw error;
+    }
+    row.role = 'ib';
+    row.status = 'active';
+    row.ib_referrer_id = null;
+    row.ib_code = null;
+    row.ib_name = null;
+    const referrer = {
+      id: crypto.randomUUID(),
+      code,
+      display_name: displayName || row.display_name,
+      user_id: row.id,
+      active: true,
+      created_at: new Date()
+    };
+    this.referrersByCode.set(code, referrer);
+    return {
+      user: publicUser(row),
+      referrer: publicReferrer(referrer)
+    };
   }
 
   async setClientActiveForIb(ibUserId, clientId, active) {

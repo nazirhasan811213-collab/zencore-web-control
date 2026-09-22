@@ -192,6 +192,63 @@ function createAuthService(options = {}) {
     return client;
   }
 
+
+  async function reassignAdminClientIb(user, clientId, ibCode) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const safeCode = String(ibCode || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(safeCode)) {
+      throw authError('INVALID_IB', 'Kod IB tidak sah.', 400, { ibCode: 'Pilih IB yang sah.' });
+    }
+    if (typeof store.reassignClientForAdmin !== 'function') {
+      throw authError('IB_REASSIGN_UNAVAILABLE', 'Fungsi pindah IB belum tersedia.', 503);
+    }
+    const result = await store.reassignClientForAdmin(String(clientId), safeCode);
+    if (!result?.referrer) throw authError('IB_NOT_FOUND', 'IB sasaran tidak dijumpai.', 404);
+    if (!result?.client) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+    return result;
+  }
+
+  async function promoteAdminClientToIb(user, clientId, input = {}) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
+      throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    }
+    const code = String(input.code || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const client = await store.getClientForAdmin(String(clientId));
+    if (!client) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+    const displayName = String(input.displayName || client.displayName || '').trim().replace(/\s+/g, ' ');
+    const fields = {};
+    if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(code)) {
+      fields.code = 'Kod IB mesti 2-48 aksara: huruf kecil, nombor, - atau _.';
+    } else if (code === defaultIbCode) {
+      fields.code = 'Kod ini dikhaskan untuk Admin.';
+    }
+    if (displayName.length < 2 || displayName.length > 80) {
+      fields.displayName = 'Nama IB perlu antara 2 hingga 80 aksara.';
+    }
+    if (Object.keys(fields).length) {
+      throw authError('VALIDATION_ERROR', 'Semak semula maklumat IB.', 400, fields);
+    }
+    if (typeof store.promoteClientToIbForAdmin !== 'function') {
+      throw authError('IB_PROMOTION_UNAVAILABLE', 'Fungsi tukar client kepada IB belum tersedia.', 503);
+    }
+    try {
+      const promoted = await store.promoteClientToIbForAdmin(String(clientId), { code, displayName });
+      if (!promoted) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+      return promoted;
+    } catch (error) {
+      if (error?.code === 'IB_CODE_EXISTS') {
+        throw authError('IB_CODE_EXISTS', 'Kod IB ini sudah digunakan.', 409, {
+          code: 'Gunakan kod IB lain.'
+        });
+      }
+      throw error;
+    }
+  }
+
   async function setIbClientActive(user, clientId, active) {
     assertRole(user, ROLE_IB);
     if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
@@ -333,6 +390,8 @@ function createAuthService(options = {}) {
     createIb,
     setIbActive,
     setAdminClientActive,
+    reassignAdminClientIb,
+    promoteAdminClientToIb,
     setIbClientActive,
     ibOverview,
     ibClientDetail,

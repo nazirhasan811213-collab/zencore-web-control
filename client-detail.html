@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Client Detail — ZenCore</title>
   <link rel="stylesheet" href="/auth.css?v=1.1">
-  <link rel="stylesheet" href="/management.css?v=1.1">
+  <link rel="stylesheet" href="/management.css?v=1.2">
 </head>
 <body data-detail-page="client">
   <div class="mg-shell">
@@ -64,8 +64,8 @@
         <article class="mg-panel detail-card">
           <span class="mg-kicker">IB OWNERSHIP</span><h3>Assigned Partner</h3>
           <div class="detail-value" id="clientIbName">—</div>
-          <p id="clientIbCode">IB assignment is locked after registration.</p>
-          <span class="status-pill active">LOCKED</span>
+          <p id="clientIbCode">Client tidak boleh menukar IB sendiri. Admin boleh pindahkan assignment.</p>
+          <span id="clientIbLockTag" class="status-pill active">ADMIN CONTROLLED</span>
         </article>
 
         <article class="mg-panel detail-card">
@@ -74,6 +74,33 @@
           <p>Disable akan tamatkan akses login baru untuk akaun client ini.</p>
           <button id="toggleClientStatus" class="table-action" type="button">LOADING...</button>
         </article>
+      </section>
+
+      <section id="adminIbControl" class="mg-panel admin-client-ib-control hidden">
+        <div class="mg-panel-head">
+          <div>
+            <span class="mg-kicker">ADMIN • IB CONTROL</span>
+            <h2>Urus Ownership & Role Client</h2>
+            <p>Admin boleh pindahkan client ke mana-mana IB atau tukar akaun client ini menjadi IB.</p>
+          </div>
+        </div>
+        <div class="admin-ib-actions">
+          <div class="admin-ib-action">
+            <label for="adminIbSelect">PINDAH CLIENT KE IB</label>
+            <select id="adminIbSelect"><option value="">Loading IB...</option></select>
+            <button id="moveClientIb" class="mg-primary" type="button">MOVE CLIENT</button>
+          </div>
+          <div class="admin-ib-action promote">
+            <label for="promoteIbCode">TUKAR CLIENT MENJADI IB</label>
+            <input id="promoteIbCode" maxlength="48" placeholder="Kod IB baru, contoh: johor-team">
+            <input id="promoteIbName" maxlength="80" placeholder="Nama IB (optional)">
+            <button id="promoteClientIb" class="table-action good" type="button">PROMOTE TO IB</button>
+          </div>
+        </div>
+        <div class="admin-ib-foot">
+          <span id="adminIbStatus" class="mg-form-status">Perubahan ini hanya boleh dibuat oleh Super Admin.</span>
+          <small>Promote ke IB dibenarkan hanya apabila Auto Trade berhenti dan tiada posisi terbuka.</small>
+        </div>
       </section>
 
       <section class="detail-grid three">
@@ -108,6 +135,6 @@
       <footer class="mg-foot">ZenCore Client Detail • Only masked broker/account data is shown in management views</footer>
     </main>
   </div>
-  <script src="/detail.js?v=1.0" defer></script>
+  <script src="/detail.js?v=1.1" defer></script>
 </body>
 </html>
