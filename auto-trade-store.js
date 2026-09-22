@@ -572,6 +572,10 @@ class PostgresAutoTradeStore {
          h.terminal_trade_allowed, h.account_trade_allowed, h.expert_trade_allowed,
          h.connector_version AS hosted_connector_version, h.terminal_build AS hosted_terminal_build,
          h.worker_last_seen_at AS hosted_last_seen_at, h.last_error AS hosted_last_error,
+         ws.id AS worker_slot_id, ws.slot_code AS worker_slot_code,
+         ws.slot_no AS worker_slot_no, ws.status AS worker_slot_status,
+         wh.id AS worker_host_id, wh.instance_name AS worker_host_name,
+         wh.capacity AS worker_host_capacity,
          p.id AS pod_id, p.account_mask AS pod_account_mask, p.server_mask AS pod_server_mask,
          p.broker_mask AS pod_broker_mask, p.trade_mode AS pod_trade_mode,
          p.connector_version AS pod_connector_version, p.terminal_build AS pod_terminal_build,
@@ -582,6 +586,8 @@ class PostgresAutoTradeStore {
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        LEFT JOIN zencore_mt5_hosted_accounts h ON h.user_id = u.id
+       LEFT JOIN zencore_mt5_worker_slots ws ON ws.account_id = h.id
+       LEFT JOIN zencore_mt5_worker_hosts wh ON wh.id = ws.host_id
        LEFT JOIN zencore_mt5_secure_pods p ON p.user_id = u.id AND p.revoked_at IS NULL
        LEFT JOIN zencore_autotrade_profiles a ON a.user_id = u.id
        LEFT JOIN (
@@ -614,6 +620,15 @@ class PostgresAutoTradeStore {
         tradeMode: row.hosted_trade_mode,
         workerProvider: row.worker_provider,
         workerCell: row.worker_instance_name,
+        workerSlot: row.worker_slot_id ? {
+          id: row.worker_slot_id,
+          code: row.worker_slot_code,
+          number: Number(row.worker_slot_no),
+          status: row.worker_slot_status,
+          hostId: row.worker_host_id,
+          hostName: row.worker_host_name,
+          hostCapacity: Number(row.worker_host_capacity || 0)
+        } : null,
         terminalTradeAllowed: row.terminal_trade_allowed === true,
         accountTradeAllowed: row.account_trade_allowed === true,
         expertTradeAllowed: row.expert_trade_allowed === true,
