@@ -17,7 +17,10 @@ function normalizeDisplayName(value) {
 }
 
 function normalizeIcNumber(value) {
-  return String(value || '').replace(/\D/g, '');
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
 }
 
 function normalizePhone(value) {
@@ -48,8 +51,10 @@ function validateRegistration(input = {}) {
   if (!validateEmail(email)) {
     errors.email = 'Masukkan alamat e-mel yang sah.';
   }
-  if (!/^\d{12}$/.test(icNumber)) {
-    errors.icNumber = 'No. IC mesti mengandungi 12 digit.';
+  if (icNumber.length < 3 || icNumber.length > 64 ||
+      !/[\p{L}\p{N}]/u.test(icNumber) ||
+      !/^[\p{L}\p{N} ._\-/()]+$/u.test(icNumber)) {
+    errors.icNumber = 'Masukkan No. IC, Passport atau National ID yang sah (3–64 aksara).';
   }
   if (!/^\+?\d{8,15}$/.test(phone)) {
     errors.phone = 'Masukkan nombor telefon yang sah.';
