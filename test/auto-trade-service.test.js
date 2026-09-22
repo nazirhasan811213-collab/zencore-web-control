@@ -816,3 +816,75 @@ test('multi-client hosted pool assigns unique slots and binds leases to the assi
   assert.equal(state.hostedAccount.workerHostName, 'zencore-mt5-demo-01');
   assert.equal(state.hostedAccount.workerSlotNumber, 1);
 });
+
+
+test('worker manager discovers only assignments for its own attested host', async () => {
+  const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const store = new MemoryAutoTradeStore();
+  await store.ensureHostedWorkerHost({
+    provider: 'GOOGLE_CLOUD',
+    projectId: 'zencore-total-trade-system',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-01',
+    capacity: 3
+  });
+  await store.ensureHostedWorkerHost({
+    provider: 'GOOGLE_CLOUD',
+    projectId: 'zencore-total-trade-system',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-02',
+    capacity: 2
+  });
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    hostedMt5Enabled: true,
+    hostedWorkerEnabled: true,
+    credentialKeyId: 'zencore-gcp-hsm-demo-v1',
+    credentialPublicKey: keyPair.publicKey.export({ type: 'spki', format: 'pem' })
+  });
+  const envelope = {
+    version: 1,
+    algorithm: 'RSA-OAEP-256+A256GCM',
+    keyId: 'zencore-gcp-hsm-demo-v1',
+    wrappedKey: crypto.randomBytes(384).toString('base64url'),
+    iv: crypto.randomBytes(12).toString('base64url'),
+    ciphertext: crypto.randomBytes(96).toString('base64url')
+  };
+  const state = await service.connectHostedAccount(
+    '40404040-4040-4040-8040-404040404040',
+    {
+      credentialEnvelope: envelope,
+      accountMask: '****444444',
+      serverMask: '****ncial-Demo',
+      brokerMask: '****ellarFinancial',
+      tradeMode: 'DEMO',
+      confirmation: 'CONNECT MT5 DEMO'
+    },
+    true
+  );
+  const identity = {
+    provider: 'GOOGLE_CLOUD',
+    projectId: 'zencore-total-trade-system',
+    zone: 'asia-southeast1-b',
+    instanceName: 'zencore-mt5-demo-01',
+    instanceId: '1111222233334444555'
+  };
+  const discovered = await service.listHostedAssignments(identity);
+  assert.equal(discovered.assignments.length, 1);
+  assert.equal(discovered.assignments[0].accountId, state.hostedAccount.id);
+  assert.equal(discovered.assignments[0].slotCode, 'zencore-mt5-demo-01-s01');
+  assert.equal(Object.prototype.hasOwnProperty.call(discovered.assignments[0], 'credentialEnvelope'), false);
+
+  const other = await service.listHostedAssignments({
+    ...identity,
+    instanceName: 'zencore-mt5-demo-02',
+    instanceId: '9999888877776666555'
+  });
+  assert.equal(other.assignments.length, 0);
+
+  const pool = await store.getHostedWorkerPoolOverview();
+  assert.equal(pool.totals.capacity, 5);
+  assert.equal(pool.totals.assigned, 1);
+  assert.equal(pool.totals.waiting, 0);
+});
