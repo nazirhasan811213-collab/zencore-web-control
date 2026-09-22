@@ -35,9 +35,11 @@ function publicReferrer(row, requestedCode = '') {
 }
 
 function maskedIc(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (digits.length !== 12) return '';
-  return `${digits.slice(0, 6)}-**-${digits.slice(-4)}`;
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.length <= 4) return '*'.repeat(text.length);
+  if (text.length <= 8) return `${text.slice(0, 1)}${'*'.repeat(Math.max(2, text.length - 2))}${text.slice(-1)}`;
+  return `${text.slice(0, 2)}${'*'.repeat(Math.min(8, Math.max(4, text.length - 6)))}${text.slice(-4)}`;
 }
 
 function publicClient(row) {
@@ -91,7 +93,7 @@ class PostgresAuthStore {
         display_name VARCHAR(60) NOT NULL,
         email VARCHAR(254) NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
-        ic_number VARCHAR(12),
+        ic_number VARCHAR(64),
         phone VARCHAR(24),
         role VARCHAR(16) NOT NULL DEFAULT 'client',
         ib_referrer_id UUID REFERENCES zencore_ib_referrers(id),
@@ -101,10 +103,13 @@ class PostgresAuthStore {
       );
 
       ALTER TABLE zencore_users
-        ADD COLUMN IF NOT EXISTS ic_number VARCHAR(12),
+        ADD COLUMN IF NOT EXISTS ic_number VARCHAR(64),
         ADD COLUMN IF NOT EXISTS phone VARCHAR(24),
         ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'client',
         ADD COLUMN IF NOT EXISTS ib_referrer_id UUID;
+
+      ALTER TABLE zencore_users
+        ALTER COLUMN ic_number TYPE VARCHAR(64);
 
       DO $$
       BEGIN

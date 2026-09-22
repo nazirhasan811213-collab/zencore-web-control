@@ -27,11 +27,33 @@ test('registration validation normalizes safe account input', () => {
   assert.equal(normalizeEmail(' A@B.COM '), 'a@b.com');
 });
 
+test('registration validation accepts international passport and national ID formats', () => {
+  const passport = validateRegistration({
+    displayName: 'Amina Yusuf',
+    email: 'amina@example.com',
+    icNumber: 'A 1234-5678',
+    phone: '+60123456789',
+    password: 'ZenCore2026!'
+  });
+  assert.equal(passport.ok, true);
+  assert.equal(passport.value.icNumber, 'A12345678');
+
+  const nationalId = validateRegistration({
+    displayName: 'Global Client',
+    email: 'global@example.com',
+    icNumber: 'ID/TH.7788_99',
+    phone: '+66812345678',
+    password: 'ZenCore2026!'
+  });
+  assert.equal(nationalId.ok, true);
+  assert.equal(nationalId.value.icNumber, 'ID/TH.7788_99');
+});
+
 test('registration validation rejects weak or malformed fields', () => {
   const result = validateRegistration({
     displayName: 'N',
     email: 'not-an-email',
-    icNumber: '123',
+    icNumber: '<>',
     phone: 'abc',
     password: 'password'
   });

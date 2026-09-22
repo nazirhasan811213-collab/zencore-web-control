@@ -88,7 +88,7 @@
     }
     tbody.innerHTML = list.map(client => `<tr>
       <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
-      <td><strong>${esc(client.phone || '—')}</strong><small>IC ${esc(client.icMasked || '—')}</small></td>
+      <td><strong>${esc(client.phone || '—')}</strong><small>ID ${esc(client.icMasked || '—')}</small></td>
       <td><strong>${esc(client.ibName || 'Nazir (Admin)')}</strong><small>${esc((client.ibCode || 'nazir').toUpperCase())}</small></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
       <td>${statusPill(client.status)}</td>
