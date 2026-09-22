@@ -712,7 +712,15 @@
   }
   initialiseSymbols();
   loadUser();
-  refreshState(false);
+  refreshState(false).then(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connect') === '1' && !currentState?.hostedAccount && !currentState?.pod) {
+      workspaceOptedIn = true;
+      try { sessionStorage.setItem('zencore_auto_trade_open', '1'); } catch (_) {}
+      renderVisibility(currentState || { ui: {} });
+      openMt5ConnectDialog();
+    }
+  });
   refreshMarkets();
   window.setInterval(() => refreshState(true), 3000);
   window.setInterval(refreshMarkets, 15000);
