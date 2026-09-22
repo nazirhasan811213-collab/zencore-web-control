@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { createAuthStore } = require('./auth-store');
 const { createAuthService } = require('./auth-service');
+const { hashPassword, validateEmail } = require('./auth-core');
 const { createAutoTradeStore } = require('./auto-trade-store');
 const { createAutoTradeService } = require('./auto-trade-service');
 const {
@@ -24,6 +25,12 @@ const DEFAULT_IB_CODE = String(process.env.ZENCORE_DEFAULT_IB_CODE || 'nazir').t
 const IB_REGISTRY_JSON = String(process.env.ZENCORE_IB_REGISTRY_JSON || '').trim();
 const ADMIN_EMAILS = String(process.env.ZENCORE_ADMIN_EMAILS || '')
   .split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
+const PUBLIC_VIEWER_ENABLED = /^(?:1|true|yes|on)$/i.test(
+  String(process.env.ZENCORE_PUBLIC_VIEWER_ENABLED || '')
+);
+const PUBLIC_VIEWER_EMAIL = String(process.env.ZENCORE_PUBLIC_VIEWER_EMAIL || '').trim().toLowerCase();
+const PUBLIC_VIEWER_PASSWORD = String(process.env.ZENCORE_PUBLIC_VIEWER_PASSWORD || '');
+const PUBLIC_VIEWER_NAME = String(process.env.ZENCORE_PUBLIC_VIEWER_NAME || 'ZenCore Public Viewer').trim();
 const AUTOTRADE_ENABLED = AUTH_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_ENABLED || ''));
 const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_EXECUTION_ENABLED || ''));
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
@@ -99,6 +106,28 @@ if (AUTH_ENABLED) {
         }
         await store.createIbReferrer({ code, displayName });
       }
+    }
+    if (PUBLIC_VIEWER_ENABLED) {
+      if (!validateEmail(PUBLIC_VIEWER_EMAIL)) {
+        throw new Error('ZENCORE_PUBLIC_VIEWER_EMAIL must be a valid email address.');
+      }
+      if (PUBLIC_VIEWER_PASSWORD.length < 10 ||
+          !/[A-Za-z]/.test(PUBLIC_VIEWER_PASSWORD) ||
+          !/\d/.test(PUBLIC_VIEWER_PASSWORD)) {
+        throw new Error('ZENCORE_PUBLIC_VIEWER_PASSWORD must be at least 10 characters with a letter and number.');
+      }
+      if (PUBLIC_VIEWER_NAME.length < 2 || PUBLIC_VIEWER_NAME.length > 60) {
+        throw new Error('ZENCORE_PUBLIC_VIEWER_NAME must be between 2 and 60 characters.');
+      }
+      if (typeof store.upsertPublicViewer !== 'function') {
+        throw new Error('Public viewer store support is unavailable.');
+      }
+      const viewer = await store.upsertPublicViewer({
+        displayName: PUBLIC_VIEWER_NAME,
+        email: PUBLIC_VIEWER_EMAIL,
+        passwordHash: await hashPassword(PUBLIC_VIEWER_PASSWORD)
+      });
+      console.log(`ZenCore public viewer ready (${viewer.email}) • VIEW ONLY`);
     }
     authState.store = store;
     authState.service = createAuthService({
@@ -905,6 +934,13 @@ async function handleHostedExecutionApi(req, res, pathname) {
 }
 
 async function handleAutoTradeUserApi(req, res, pathname, session) {
+  if (session.user.role === 'viewer') {
+    return sendJson(res, 403, {
+      ok: false,
+      code: 'VIEW_ONLY',
+      error: 'Public demo ialah paparan view-only. Auto Trade tidak tersedia.'
+    });
+  }
   if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
   const userId = session.user.id;
   try {
@@ -1153,6 +1189,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/auto-trade.js') return sendAuthAsset(res, 'auto-trade.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade-monitor.css') return sendAuthAsset(res, 'auto-trade-monitor.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade-monitor.js') return sendAuthAsset(res, 'auto-trade-monitor.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/viewer-mode.css') return sendAuthAsset(res, 'viewer-mode.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/viewer-mode.js') return sendAuthAsset(res, 'viewer-mode.js', 'application/javascript; charset=utf-8');
 
   if (pathname.startsWith('/api/execution/')) {
     return handleExecutionApi(req, res, pathname);
@@ -1324,6 +1362,7 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
+    if (session.user.role === 'viewer') return redirect(res, '/app');
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 
@@ -1338,6 +1377,13 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && !publicProxy) {
     const session = await requireSession(req, res);
     if (!session) return;
+    if (session.user.role === 'viewer' && !['GET', 'HEAD'].includes(req.method)) {
+      return sendJson(res, 403, {
+        ok: false,
+        code: 'VIEW_ONLY',
+        error: 'Public demo ialah paparan view-only.'
+      });
+    }
   }
 
   return proxy(req, res);
