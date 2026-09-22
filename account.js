@@ -60,7 +60,7 @@
     byId('profileDisplayName').value = profile.displayName || '';
     byId('profilePhone').value = profile.phone || '';
     byId('profileEmail').value = profile.email || '';
-    byId('profileIc').value = profile.icMasked || '';
+    byId('profileIc').value = profile.identityNumber || profile.icMasked || '';
     byId('profileIbName').value = profile.ibName || 'Nazir (Admin)';
     renderTrading(body.trading);
   }
@@ -86,18 +86,50 @@
         method:'PATCH',
         body:JSON.stringify({
           displayName: byId('profileDisplayName').value,
-          phone: byId('profilePhone').value
+          phone: byId('profilePhone').value,
+          email: byId('profileEmail').value,
+          icNumber: byId('profileIc').value,
+          currentPassword: byId('profileCurrentPassword').value
         })
       });
       profile = body.profile;
       byId('accountName').textContent = profile.displayName;
+      byId('accountEmail').textContent = profile.email || '';
       byId('profileName').textContent = profile.displayName;
+      byId('profileCurrentPassword').value = '';
       status.className = 'mg-form-status success';
-      status.textContent = 'Profile updated.';
+      status.textContent = 'Maklumat akaun berjaya dikemaskini.';
     } catch (error) {
       status.className = 'mg-form-status error';
       status.textContent = error.message;
     } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId('passwordForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = byId('changePassword');
+    const status = byId('passwordStatusMessage');
+    button.disabled = true;
+    status.className = 'mg-form-status';
+    status.textContent = 'Updating password...';
+    try {
+      const body = await api('/api/account/password', {
+        method:'POST',
+        body:JSON.stringify({
+          currentPassword: byId('currentPassword').value,
+          newPassword: byId('newPassword').value,
+          confirmPassword: byId('confirmPassword').value
+        })
+      });
+      status.className = 'mg-form-status success';
+      status.textContent = body.message || 'Password berjaya ditukar.';
+      event.currentTarget.reset();
+      window.setTimeout(() => window.location.replace('/login'), 900);
+    } catch (error) {
+      status.className = 'mg-form-status error';
+      status.textContent = error.message;
       button.disabled = false;
     }
   });

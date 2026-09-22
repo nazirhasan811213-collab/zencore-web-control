@@ -159,10 +159,12 @@
       byId('backButton').href = '/ib';
       byId('scopeLabel').textContent = 'OWN CLIENT ONLY';
       byId('adminIbControl')?.classList.add('hidden');
+      byId('adminClientSettings')?.classList.add('hidden');
     } else {
       byId('backButton').href = '/admin#clients';
       byId('scopeLabel').textContent = 'GLOBAL ADMIN VIEW';
       byId('adminIbControl')?.classList.remove('hidden');
+      byId('adminClientSettings')?.classList.remove('hidden');
       try {
         const adminOverview = await api('/api/admin/overview');
         const ibs = Array.isArray(adminOverview.ibs) ? adminOverview.ibs : [];
@@ -197,6 +199,15 @@
       ? `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • admin boleh pindahkan assignment`
       : `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • assignment dikunci untuk client/IB`;
     byId('clientAccessText').textContent = client.status === 'active' ? 'Login Active' : 'Login Disabled';
+
+    if (adminView) {
+      if (byId('adminClientName')) byId('adminClientName').value = client.displayName || '';
+      if (byId('adminClientEmail')) byId('adminClientEmail').value = client.email || '';
+      if (byId('adminClientPhone')) byId('adminClientPhone').value = client.phone || '';
+      if (byId('adminClientIdentity')) {
+        byId('adminClientIdentity').value = client.identityNumber || '';
+      }
+    }
 
     const button = byId('toggleClientStatus');
     button.textContent = client.status === 'active' ? 'DISABLE CLIENT' : 'ACTIVATE CLIENT';
@@ -242,6 +253,74 @@
       await loadIbDetail();
     } catch (error) {
       window.alert(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId('adminClientProfileForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (currentUser?.role !== 'admin' || !detail?.client?.id) return;
+    const button = byId('saveAdminClientProfile');
+    const status = byId('adminClientProfileStatus');
+    button.disabled = true;
+    status.className = 'mg-form-status';
+    status.textContent = 'Saving client info...';
+    try {
+      const body = await api(`/api/admin/clients/${encodeURIComponent(detail.client.id)}/profile`, {
+        method:'PATCH',
+        body:JSON.stringify({
+          displayName: byId('adminClientName').value,
+          email: byId('adminClientEmail').value,
+          phone: byId('adminClientPhone').value,
+          icNumber: byId('adminClientIdentity').value,
+          adminPassword: byId('adminProfilePassword').value
+        })
+      });
+      detail.client = body.client;
+      byId('adminProfilePassword').value = '';
+      status.className = 'mg-form-status success';
+      status.textContent = 'Maklumat client berjaya dikemaskini.';
+      await loadClientDetail();
+    } catch (error) {
+      status.className = 'mg-form-status error';
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  byId('adminClientPasswordForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (currentUser?.role !== 'admin' || !detail?.client?.id) return;
+    const button = byId('resetClientPassword');
+    const status = byId('adminClientPasswordStatus');
+    const newPassword = byId('adminNewClientPassword').value;
+    const confirmPassword = byId('adminConfirmClientPassword').value;
+    if (newPassword !== confirmPassword) {
+      status.className = 'mg-form-status error';
+      status.textContent = 'Pengesahan password tidak sepadan.';
+      return;
+    }
+    if (!window.confirm(`Reset password untuk ${detail.client.displayName}? Semua sesi login client akan ditamatkan.`)) return;
+    button.disabled = true;
+    status.className = 'mg-form-status';
+    status.textContent = 'Resetting password...';
+    try {
+      const body = await api(`/api/admin/clients/${encodeURIComponent(detail.client.id)}/password`, {
+        method:'POST',
+        body:JSON.stringify({
+          adminPassword: byId('adminResetPassword').value,
+          newPassword,
+          confirmPassword
+        })
+      });
+      event.currentTarget.reset();
+      status.className = 'mg-form-status success';
+      status.textContent = body.message || 'Password client berjaya direset.';
+    } catch (error) {
+      status.className = 'mg-form-status error';
+      status.textContent = error.message;
     } finally {
       button.disabled = false;
     }

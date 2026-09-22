@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Client Detail — ZenCore</title>
   <link rel="stylesheet" href="/auth.css?v=1.1">
-  <link rel="stylesheet" href="/management.css?v=1.2">
+  <link rel="stylesheet" href="/management.css?v=1.3">
 </head>
 <body data-detail-page="client">
   <div class="mg-shell">
@@ -76,6 +76,39 @@
         </article>
       </section>
 
+      <section id="adminClientSettings" class="mg-panel admin-client-settings hidden">
+        <div class="mg-panel-head">
+          <div>
+            <span class="mg-kicker">ADMIN • CLIENT SETTINGS</span>
+            <h2>Edit Maklumat & Reset Password</h2>
+            <p>Admin boleh kemaskini maklumat client dan reset password. Password Admin diperlukan untuk tindakan sensitif.</p>
+          </div>
+        </div>
+        <div class="admin-client-settings-grid">
+          <form id="adminClientProfileForm" class="admin-client-form" novalidate>
+            <label>Nama penuh<input id="adminClientName" maxlength="60" required></label>
+            <label>E-mel<input id="adminClientEmail" type="email" maxlength="254" required></label>
+            <label>No. telefon<input id="adminClientPhone" type="tel" maxlength="24" required></label>
+            <label>No. IC / Passport / National ID<input id="adminClientIdentity" maxlength="64" required></label>
+            <label class="wide">Password Admin<input id="adminProfilePassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+            <div class="admin-client-form-actions">
+              <span id="adminClientProfileStatus" class="mg-form-status"></span>
+              <button id="saveAdminClientProfile" class="mg-primary" type="submit">SAVE CLIENT INFO</button>
+            </div>
+          </form>
+          <form id="adminClientPasswordForm" class="admin-client-form password-reset" novalidate>
+            <label>Password baru<input id="adminNewClientPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+            <label>Ulang password baru<input id="adminConfirmClientPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+            <label class="wide">Password Admin<input id="adminResetPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+            <div class="admin-client-form-actions">
+              <span id="adminClientPasswordStatus" class="mg-form-status"></span>
+              <button id="resetClientPassword" class="table-action danger" type="submit">RESET CLIENT PASSWORD</button>
+            </div>
+            <p class="admin-client-reset-note">Reset password akan tamatkan semua sesi login client. Client perlu log masuk semula menggunakan password baru.</p>
+          </form>
+        </div>
+      </section>
+
       <section id="adminIbControl" class="mg-panel admin-client-ib-control hidden">
         <div class="mg-panel-head">
           <div>
@@ -135,6 +168,6 @@
       <footer class="mg-foot">ZenCore Client Detail • Only masked broker/account data is shown in management views</footer>
     </main>
   </div>
-  <script src="/detail.js?v=1.1" defer></script>
+  <script src="/detail.js?v=1.2" defer></script>
 </body>
 </html>

@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>My Account — ZenCore</title>
   <link rel="stylesheet" href="/auth.css?v=1.1">
-  <link rel="stylesheet" href="/management.css?v=2.0">
+  <link rel="stylesheet" href="/management.css?v=2.1">
 </head>
 <body data-account-page="client">
   <div class="mg-shell">
@@ -39,7 +39,7 @@
         <div>
           <span class="mg-kicker">ZENCORE PROFILE</span>
           <h2 id="profileName">Loading account...</h2>
-          <p>Urus maklumat hubungan anda. E-mel, ID/Passport dan assignment IB dikunci untuk melindungi rekod akaun.</p>
+          <p>Urus maklumat peribadi dan keselamatan akaun anda. Assignment IB kekal dikawal oleh Admin.</p>
           <div class="detail-tags">
             <span id="profileStatus" class="detail-chip">ACTIVE</span>
             <span id="profileIb" class="detail-chip">IB —</span>
@@ -57,10 +57,11 @@
           <div class="mg-panel-head"><div><span class="mg-kicker">PERSONAL DETAILS</span><h2>Profile</h2></div><span class="status-pill active">YOUR ACCOUNT</span></div>
           <label>Nama penuh<input id="profileDisplayName" name="displayName" maxlength="60" required></label>
           <label>No. telefon<input id="profilePhone" name="phone" type="tel" maxlength="24" required></label>
-          <label>E-mel<input id="profileEmail" type="email" disabled></label>
-          <label>No. IC / Passport / National ID<input id="profileIc" disabled></label>
+          <label>E-mel<input id="profileEmail" name="email" type="email" maxlength="254" required></label>
+          <label>No. IC / Passport / National ID<input id="profileIc" name="icNumber" maxlength="64" required></label>
           <label>Your IB<input id="profileIbName" disabled></label>
-          <p class="account-lock-note">🔒 E-mel, ID/Passport dan IB owner tidak boleh diubah dari Client Portal.</p>
+          <label>Password semasa <small>Wajib jika ubah e-mel atau ID</small><input id="profileCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
+          <p class="account-lock-note">🔒 IB owner tidak boleh diubah oleh client. Untuk tukar e-mel atau ID/Passport, sahkan dengan password semasa.</p>
           <div class="mg-create-actions">
             <span id="profileStatusMessage" class="mg-form-status"></span>
             <button id="saveProfile" class="mg-primary" type="submit">SAVE PROFILE</button>
@@ -80,16 +81,23 @@
             <a id="accountMt5Action" class="mg-primary mg-link-btn primary-link" href="/auto-trade?connect=1">CONNECT MT5</a>
           </article>
 
-          <article class="mg-panel detail-card">
-            <span class="mg-kicker">ACCOUNT SECURITY</span><h3>Ownership Locked</h3>
-            <p>Client account hanya boleh melihat data sendiri. IB hanya boleh melihat client di bawahnya, manakala Admin mempunyai global control.</p>
-          </article>
+          <form id="passwordForm" class="mg-panel account-password-card" novalidate>
+            <span class="mg-kicker">ACCOUNT SECURITY</span><h3>Tukar Password</h3>
+            <p>Password baharu minimum 10 aksara dan mesti mempunyai sekurang-kurangnya satu huruf dan satu nombor.</p>
+            <label>Password semasa<input id="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+            <label>Password baharu<input id="newPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+            <label>Ulang password baharu<input id="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+            <div class="mg-create-actions password-actions">
+              <span id="passwordStatusMessage" class="mg-form-status"></span>
+              <button id="changePassword" class="mg-primary" type="submit">CHANGE PASSWORD</button>
+            </div>
+          </form>
         </div>
       </section>
 
       <footer class="mg-foot">ZenCore Client Portal • Own account only</footer>
     </main>
   </div>
-  <script src="/account.js?v=1.1" defer></script>
+  <script src="/account.js?v=1.2" defer></script>
 </body>
 </html>
