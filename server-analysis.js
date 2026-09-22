@@ -467,12 +467,21 @@ async function handleManagementApi(req, res, pathname, session) {
             typeof autoTradeState.store.listAdminMt5Overview !== 'function') {
           return sendJson(res, 200, { ok: true, ready: false, accounts: [] });
         }
-        const accounts = await autoTradeState.store.listAdminMt5Overview(1000);
+        const [accounts, workerPool] = await Promise.all([
+          autoTradeState.store.listAdminMt5Overview(1000),
+          typeof autoTradeState.store.getHostedWorkerPoolOverview === 'function'
+            ? autoTradeState.store.getHostedWorkerPoolOverview()
+            : Promise.resolve({
+                hosts: [],
+                totals: { capacity: 0, assigned: 0, active: 0, waiting: 0 }
+              })
+        ]);
         return sendJson(res, 200, {
           ok: true,
           ready: true,
           executionUnlocked: AUTOTRADE_EXECUTION_ENABLED,
           requiredConnectorVersion: AUTOTRADE_EXECUTION_ENABLED ? AUTOTRADE_DEMO_CONNECTOR_VERSION : null,
+          workerPool,
           accounts
         });
       }
@@ -818,6 +827,7 @@ async function handleHostedExecutionApi(req, res, pathname) {
   }
   const hostedAckMatch = pathname.match(/^\/api\/hosted-execution\/commands\/([0-9a-f-]{36})\/ack$/i);
   const hostedRouteAllowed = req.method === 'POST' && (
+    pathname === '/api/hosted-execution/assignments' ||
     pathname === '/api/hosted-execution/lease' ||
     pathname === '/api/hosted-execution/heartbeat' ||
     pathname === '/api/hosted-execution/commands/next' ||
@@ -846,6 +856,9 @@ async function handleHostedExecutionApi(req, res, pathname) {
     );
     if (!persisted) {
       throw identityError('GCP_REQUEST_REPLAY', 'Google worker request telah digunakan.', 409);
+    }
+    if (pathname === '/api/hosted-execution/assignments') {
+      return sendJson(res, 200, await autoTradeState.service.listHostedAssignments(identity));
     }
     if (pathname === '/api/hosted-execution/lease') {
       return sendJson(res, 200, await autoTradeState.service.leaseHostedAccount(identity, body));
