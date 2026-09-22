@@ -58,6 +58,15 @@ function publicClient(row) {
   };
 }
 
+function detailedClient(row) {
+  const client = publicClient(row);
+  if (!client) return null;
+  return {
+    ...client,
+    identityNumber: String(row.ic_number || '')
+  };
+}
+
 class PostgresAuthStore {
   constructor(databaseUrl) {
     const local = /(?:localhost|127\.0\.0\.1)/i.test(databaseUrl);
@@ -723,7 +732,7 @@ class PostgresAuthStore {
        LIMIT 1`,
       [clientId]
     );
-    return publicClient(result.rows[0]);
+    return detailedClient(result.rows[0]);
   }
 
   async getClientForIb(ibUserId, clientId) {
@@ -745,16 +754,80 @@ class PostgresAuthStore {
     return this.getClientForAdmin(userId);
   }
 
-  async updateOwnClientProfile(userId, { displayName, phone }) {
-    const result = await this.pool.query(
-      `UPDATE zencore_users
-       SET display_name = $2, phone = $3
-       WHERE id = $1 AND role = 'client' AND status = 'active'
-       RETURNING id`,
-      [userId, displayName, phone]
-    );
-    if (!result.rows[0]) return null;
-    return this.getClientForAdmin(userId);
+  async updateOwnClientProfile(userId, { displayName, email, phone, icNumber }) {
+    try {
+      const result = await this.pool.query(
+        `UPDATE zencore_users
+         SET display_name = $2, email = $3, phone = $4, ic_number = $5
+         WHERE id = $1 AND role = 'client' AND status = 'active'
+         RETURNING id`,
+        [userId, displayName, email, phone, icNumber]
+      );
+      if (!result.rows[0]) return null;
+      return this.getClientForAdmin(userId);
+    } catch (error) {
+      if (error?.code === '23505') {
+        const duplicate = new Error('Account data already registered');
+        if (String(error.constraint || '').includes('ic_number')) duplicate.code = 'IC_EXISTS';
+        else duplicate.code = 'EMAIL_EXISTS';
+        throw duplicate;
+      }
+      throw error;
+    }
+  }
+
+  async updateClientProfileForAdmin(clientId, { displayName, email, phone, icNumber }) {
+    try {
+      const result = await this.pool.query(
+        `UPDATE zencore_users
+         SET display_name = $2, email = $3, phone = $4, ic_number = $5
+         WHERE id = $1 AND role = 'client'
+         RETURNING id`,
+        [clientId, displayName, email, phone, icNumber]
+      );
+      if (!result.rows[0]) return null;
+      return this.getClientForAdmin(clientId);
+    } catch (error) {
+      if (error?.code === '23505') {
+        const duplicate = new Error('Account data already registered');
+        if (String(error.constraint || '').includes('ic_number')) duplicate.code = 'IC_EXISTS';
+        else duplicate.code = 'EMAIL_EXISTS';
+        throw duplicate;
+      }
+      throw error;
+    }
+  }
+
+  async updatePasswordForUser(userId, passwordHash, requiredRole = null) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const values = [userId, passwordHash];
+      let roleFilter = '';
+      if (requiredRole) {
+        values.push(requiredRole);
+        roleFilter = ' AND role = $3';
+      }
+      const result = await client.query(
+        `UPDATE zencore_users
+         SET password_hash = $2
+         WHERE id = $1${roleFilter}
+         RETURNING id`,
+        values
+      );
+      if (!result.rows[0]) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query('DELETE FROM zencore_sessions WHERE user_id = $1', [userId]);
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async findUserForLogin(email) {
@@ -1162,7 +1235,7 @@ class MemoryAuthStore {
   async getClientForAdmin(clientId) {
     const row = this.usersById.get(clientId);
     if (!row || row.role !== 'client') return null;
-    return publicClient(row);
+    return detailedClient(row);
   }
 
   async getClientForIb(ibUserId, clientId) {
@@ -1248,5 +1321,6 @@ module.exports = {
   createAuthStore,
   publicUser,
   publicReferrer,
-  publicClient
+  publicClient,
+  detailedClient
 };
