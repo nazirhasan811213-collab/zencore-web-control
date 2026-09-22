@@ -1298,6 +1298,8 @@ class MemoryAutoTradeStore {
     this.pairingsByUser = new Map();
     this.pairingsByCode = new Map();
     this.hostedAccounts = new Map();
+    this.workerHosts = new Map();
+    this.workerSlots = new Map();
     this.hostedWorkerRequests = new Map();
     this.positions = new Map();
     this.commands = new Map();
@@ -1323,7 +1325,103 @@ class MemoryAutoTradeStore {
   }
 
   async getHostedAccount(userId) {
-    return publicHostedAccount(this.hostedAccounts.get(userId));
+    const row = this.hostedAccounts.get(userId);
+    if (!row) return null;
+    const slot = [...this.workerSlots.values()].find(item => item.accountId === row.id) || null;
+    const host = slot ? this.workerHosts.get(slot.hostId) : null;
+    return publicHostedAccount({
+      ...row,
+      workerSlotId: slot?.id || null,
+      workerSlotCode: slot?.slotCode || null,
+      workerSlotNumber: slot?.slotNo || null,
+      workerHostId: host?.id || null,
+      workerHostName: host?.instanceName || null
+    });
+  }
+
+  async ensureHostedWorkerHost(input) {
+    const provider = String(input.provider || 'GOOGLE_CLOUD');
+    const projectId = String(input.projectId || '');
+    const zone = String(input.zone || '');
+    const instanceName = String(input.instanceName || '');
+    const capacity = Math.min(50, Math.max(1, Number(input.capacity) || 10));
+    if (!projectId || !zone || !instanceName) return null;
+
+    const key = `${provider}|${projectId}|${zone}|${instanceName}`;
+    let host = this.workerHosts.get(key);
+    if (!host) {
+      host = {
+        id: crypto.randomUUID(), provider, projectId, zone, instanceName,
+        instanceId: null, capacity, enabled: true, lastSeenAt: null,
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      this.workerHosts.set(key, host);
+    } else {
+      host.capacity = capacity;
+      host.enabled = true;
+      host.updatedAt = Date.now();
+    }
+
+    for (let slotNo = 1; slotNo <= capacity; slotNo += 1) {
+      const slotKey = `${host.id}|${slotNo}`;
+      if (!this.workerSlots.has(slotKey)) {
+        this.workerSlots.set(slotKey, {
+          id: crypto.randomUUID(),
+          hostId: host.id,
+          slotNo,
+          slotCode: `${instanceName}-s${String(slotNo).padStart(2, '0')}`,
+          status: 'AVAILABLE',
+          accountId: null,
+          assignedAt: null,
+          lastSeenAt: null,
+          lastError: null
+        });
+      }
+    }
+    return { ...host };
+  }
+
+  async assignHostedAccountSlot(accountId) {
+    let slot = [...this.workerSlots.values()].find(item => item.accountId === accountId) || null;
+    if (slot) {
+      const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+      if (row && !['CONNECTED_LOCKED','HOSTED_READY'].includes(row.status)) row.status = 'QUEUED_FOR_WORKER';
+      return { ...slot };
+    }
+    slot = [...this.workerSlots.values()].find(item => {
+      const host = [...this.workerHosts.values()].find(value => value.id === item.hostId);
+      return host?.enabled === true && item.status === 'AVAILABLE' && !item.accountId;
+    }) || null;
+    const row = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+    if (!slot) {
+      if (row) row.status = 'WAITING_FOR_SLOT';
+      return null;
+    }
+    slot.accountId = accountId;
+    slot.status = 'RESERVED';
+    slot.assignedAt = Date.now();
+    if (row) row.status = 'QUEUED_FOR_WORKER';
+    return { ...slot };
+  }
+
+  async getHostedSlotForAccount(accountId) {
+    const slot = [...this.workerSlots.values()].find(item => item.accountId === accountId) || null;
+    if (!slot) return null;
+    const host = [...this.workerHosts.values()].find(item => item.id === slot.hostId) || null;
+    if (!host) return null;
+    return {
+      id: slot.id,
+      slot_code: slot.slotCode,
+      slot_no: slot.slotNo,
+      status: slot.status,
+      host_id: host.id,
+      provider: host.provider,
+      project_id: host.projectId,
+      zone: host.zone,
+      instance_name: host.instanceName,
+      instance_id: host.instanceId,
+      enabled: host.enabled
+    };
   }
 
 
