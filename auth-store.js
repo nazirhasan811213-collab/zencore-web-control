@@ -4,7 +4,7 @@ const { Pool } = require('pg');
 const DEFAULT_IB_CODE = 'nazir';
 const DEFAULT_IB_NAME = 'Nazir (Admin)';
 const DEFAULT_IB_ID = '00000000-0000-4000-8000-000000000001';
-const USER_ROLES = Object.freeze(['admin', 'ib', 'client']);
+const USER_ROLES = Object.freeze(['admin', 'ib', 'client', 'viewer']);
 
 function publicUser(row) {
   if (!row) return null;
@@ -106,15 +106,23 @@ class PostgresAuthStore {
         ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'client',
         ADD COLUMN IF NOT EXISTS ib_referrer_id UUID;
 
-      DO $$
+      DO $
       BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'zencore_users_role_check'
+            AND pg_get_constraintdef(oid) NOT ILIKE '%viewer%'
+        ) THEN
+          ALTER TABLE zencore_users DROP CONSTRAINT zencore_users_role_check;
+        END IF;
+
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint
           WHERE conname = 'zencore_users_role_check'
         ) THEN
           ALTER TABLE zencore_users
             ADD CONSTRAINT zencore_users_role_check
-            CHECK (role IN ('admin','ib','client'));
+            CHECK (role IN ('admin','ib','client','viewer'));
         END IF;
 
         IF NOT EXISTS (
@@ -242,6 +250,36 @@ class PostgresAuthStore {
       [userId, role]
     );
     return result.rows[0] || null;
+  }
+
+
+  async upsertPublicViewer({ displayName, email, passwordHash }) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const existing = await this.pool.query(
+      `SELECT id, role FROM zencore_users WHERE LOWER(email) = $1 LIMIT 1`,
+      [normalizedEmail]
+    );
+    if (existing.rows[0] && existing.rows[0].role !== 'viewer') {
+      const error = new Error('Public viewer email belongs to a non-viewer account');
+      error.code = 'VIEWER_EMAIL_CONFLICT';
+      throw error;
+    }
+    const result = await this.pool.query(
+      `INSERT INTO zencore_users
+        (id, display_name, email, password_hash, role, status, ic_number, phone, ib_referrer_id)
+       VALUES ($1, $2, $3, $4, 'viewer', 'active', NULL, NULL, NULL)
+       ON CONFLICT (email) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         password_hash = EXCLUDED.password_hash,
+         role = 'viewer',
+         status = 'active',
+         ic_number = NULL,
+         phone = NULL,
+         ib_referrer_id = NULL
+       RETURNING *`,
+      [crypto.randomUUID(), displayName, normalizedEmail, passwordHash]
+    );
+    return publicUser(result.rows[0]);
   }
 
   async resolveReferrer(code, defaultCode = DEFAULT_IB_CODE) {
@@ -726,6 +764,35 @@ class MemoryAuthStore {
     if (!row) return null;
     row.role = role;
     return { id: row.id, role };
+  }
+
+
+  async upsertPublicViewer({ displayName, email, passwordHash }) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const existing = this.usersByEmail.get(normalizedEmail);
+    if (existing && existing.role !== 'viewer') {
+      const error = new Error('Public viewer email belongs to a non-viewer account');
+      error.code = 'VIEWER_EMAIL_CONFLICT';
+      throw error;
+    }
+    if (existing) {
+      existing.display_name = displayName;
+      existing.password_hash = passwordHash;
+      existing.role = 'viewer';
+      existing.status = 'active';
+      existing.ic_number = null;
+      existing.phone = null;
+      existing.ib_referrer_id = null;
+      existing.ib_code = null;
+      existing.ib_name = null;
+      return publicUser(existing);
+    }
+    return this.createUser({
+      displayName,
+      email: normalizedEmail,
+      passwordHash,
+      role: 'viewer'
+    });
   }
 
   async resolveReferrer(code, defaultCode = DEFAULT_IB_CODE) {
