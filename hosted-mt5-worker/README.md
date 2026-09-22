@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.0-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Broker execution still requires the server rollout gate, the local DEMO gate, an approved connector version, an assigned worker slot and all runtime safety checks.
+This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.1-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
 
 ## Implemented now
 
@@ -10,10 +10,11 @@ This directory contains the reviewed hosted MT5 Demo worker, the Windows release
 - `gcp_kms_unwrapper.py` implements the Google Cloud adapter through the fixed Compute metadata identity and Cloud KMS REST API. It verifies request and response CRC32C values and never creates a service-account key file.
 - `gcp_control_plane.py` requests a full Google-signed instance JWT, calls only the exact ZenCore HTTPS audience, rejects redirects and adds a fresh UUID/timestamp to every lease or heartbeat request.
 - `hosted_worker.py` loads a strict non-secret cell assignment, leases one encrypted account, decrypts only through Cloud HSM, initializes the approved InterStellar Demo terminal, wipes the local credential buffers and reports masked telemetry plus broker symbol specifications.
-- The worker refuses a missing execution-lock file, a REAL account, a changed MT5 account, an unapproved server, an unassigned cell, an unlocked lease or any pre-existing ZenCore-magic position.
+- In preflight, the worker requires `executionEnabled=false`, a server-locked lease and an absent local execution gate. If the gate appears unexpectedly, the worker stops. In execution mode all three gates must agree or the worker stops.
+- The worker refuses a REAL account, a changed MT5 account, an unapproved server, an unassigned cell or any pre-existing ZenCore-magic position.
 - The worker stops heartbeats at lease expiry and reconnects for a fresh ciphertext lease; the control plane also rejects expired lease IDs.
 - `Install-ZenCoreHostedWorker.ps1` verifies the internal release manifest and installs a SYSTEM scheduled task. The task remains disabled until both the hosted-account UUID and MT5 terminal are present.
-- `Build-ZenCoreHostedWorker.ps1` runs every worker test, creates a Windows executable with pinned dependencies, writes an execution-locked manifest and emits a ZIP plus SHA-256. The GitHub workflow performs the same build without Google Cloud credentials.
+- `Build-ZenCoreHostedWorker.ps1` runs every worker test, creates Windows executables with pinned dependencies, records both preflight and execution capability in the manifest and emits a ZIP plus SHA-256. The GitHub workflow performs the same build without Google Cloud credentials.
 - Decrypted credentials are DEMO-only, short-lived and exposed to the future MT5 adapter only long enough to initialize a terminal session.
 - Entry commands must contain `ZENCORE_ANALYSIS_EXECUTION_V1`; every flattened Entry/SL/TP field must exactly equal the signed Analysis snapshot.
 - The worker recognizes all 11 canonical ZenCore markets. Broker symbol discovery/mapping remains a preflight requirement.
@@ -47,7 +48,7 @@ On a clean Windows build host with Python 3.12:
 .\Build-ZenCoreHostedWorker.ps1 -OutputDirectory .\dist
 ```
 
-The output is `ZenCore_Hosted_Worker_GCP_v2.2.0-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
+The output is `ZenCore_Hosted_Worker_GCP_v2.2.1-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
 
@@ -88,7 +89,7 @@ Phase 1 covers the central allocation and lease boundary.
 
 The manager never receives the encrypted credential envelope and never receives MT5 login/password/server plaintext. Each child worker leases its own envelope directly from ZenCore and decrypts it through Cloud KMS/HSM.
 
-The release now also includes `ZenCoreHostedWorkerManager.exe` and `Install-ZenCoreWorkerManager.ps1`. The manager installer is intentionally staged: the legacy one-to-one scheduled task remains untouched unless `-MigrateLegacyWorker` is explicitly supplied.
+The release also includes `ZenCoreHostedWorkerManager.exe` and `Install-ZenCoreWorkerManager.ps1`. Installation is fail-closed: without `-MigrateLegacyWorker`, the new Manager task is registered but disabled and the legacy worker is untouched. With `-MigrateLegacyWorker`, the legacy worker is disabled before the Manager starts.
 
 A local terminal template can be prepared from the reviewed legacy MT5 installation with:
 
@@ -96,6 +97,10 @@ A local terminal template can be prepared from the reviewed legacy MT5 installat
 .\Install-ZenCoreWorkerManager.ps1 -PrepareTerminalTemplate
 ```
 
-This does **not** unlock the Render execution gate. If the local `DEMO_EXECUTION_ENABLED` gate is absent, the manager stays fail-closed and does not launch slot workers.
+If the template already exists, the installer refuses to replace it unless `-ReplaceTerminalTemplate` is also supplied after reviewing the exact target.
+
+The default Manager config sets `executionEnabled=false`. In this mode the local `DEMO_EXECUTION_ENABLED` file must be absent, child workers accept only a server-locked lease, report telemetry with `demoExecutionUnlocked=false`, and never poll commands. This permits slot and broker preflight without order capability.
+
+`-EnableDemoExecution` is a separate controlled-rollout action. It is rejected unless the legacy seed config is already execution-enabled, the local execution gate exists and `EXECUTION_LOCKED` is absent. Render's server gate must independently agree before the child accepts its lease.
 
 Before enabling multi-client DEMO execution, verify on the Windows VM that each copied terminal keeps independent account/profile state and that no broker credential persists outside its assigned slot boundary.

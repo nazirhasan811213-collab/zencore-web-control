@@ -58,7 +58,7 @@ try {
         $canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
         $configuredSymbols = @($config.allowedDemoSymbols | ForEach-Object { [string]$_ })
         $invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
-        if ($config.connectorVersion -ne "2.2.0-gcp-multiuser-multipair" -or
+        if ($config.connectorVersion -ne "2.2.1-gcp-multiuser-multipair" -or
             $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
             @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count) {
             throw "DEMO execution assignment is not certified for this release."

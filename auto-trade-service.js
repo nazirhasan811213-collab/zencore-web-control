@@ -106,7 +106,7 @@ function createAutoTradeService(options = {}) {
     String(options.credentialPublicKey || '')
   );
   const requiredDemoConnectorVersion = String(
-    options.requiredDemoConnectorVersion || '1.4.0-demo-execution'
+    options.requiredDemoConnectorVersion || '2.2.1-gcp-multiuser-multipair'
   );
   const allowedDemoSymbols = [...new Set(
     (Array.isArray(options.allowedDemoSymbols) ? options.allowedDemoSymbols : ['XAUUSD'])

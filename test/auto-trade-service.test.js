@@ -5,6 +5,7 @@ const { MemoryAutoTradeStore } = require('../auto-trade-store');
 const { createAutoTradeService } = require('../auto-trade-service');
 
 const SIGNING_KEY = 'test-signing-key-that-is-longer-than-thirty-two-bytes';
+const LEGACY_WINDOWS_CONNECTOR = '1.4.0-demo-execution';
 
 async function setup() {
   let currentTime = 1_790_000_000_000;
@@ -13,6 +14,7 @@ async function setup() {
     store,
     commandSigningKey: SIGNING_KEY,
     allowDemoExecution: true,
+    requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
     allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
     now: () => currentTime
   });
@@ -27,7 +29,7 @@ async function setup() {
     accountTradeAllowed: true,
     expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '1.4.0-demo-execution',
+    connectorVersion: LEGACY_WINDOWS_CONNECTOR,
     terminalBuild: '5000',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
@@ -278,6 +280,7 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
     store,
     commandSigningKey: SIGNING_KEY,
     allowDemoExecution: true,
+    requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
     allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
     allowedDemoSymbols: ['XAUUSD', 'EURUSD'],
     now: () => currentTime
@@ -308,7 +311,7 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
       accountTradeAllowed: true,
       expertTradeAllowed: true,
       demoExecutionUnlocked: true,
-      connectorVersion: '1.4.0-demo-execution',
+      connectorVersion: LEGACY_WINDOWS_CONNECTOR,
       terminalBuild: '5000',
       symbolSpecs: [
         { symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 },
@@ -433,7 +436,7 @@ test('an open symbol position blocks a second setup command', async () => {
     accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
     tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
     expertTradeAllowed: true, demoExecutionUnlocked: true,
-    connectorVersion: '1.4.0-demo-execution',
+    connectorVersion: LEGACY_WINDOWS_CONNECTOR,
     positions: [{
       ticket: '900010', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
       entry: 2500, currentPrice: 2501, activeSl: 2495
@@ -747,7 +750,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     allowDemoExecution: true,
     hostedWorkerEnabled: true,
     hostedWorkerAccountId: accountId,
-    requiredDemoConnectorVersion: '2.2.0-gcp-multiuser-multipair',
+    requiredDemoConnectorVersion: '2.2.1-gcp-multiuser-multipair',
     allowedDemoSymbols: ['XAUUSD']
   });
   await service.saveSettings(userId, {
@@ -772,7 +775,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     connectionStatus: 'CONNECTED', terminalTradeAllowed: true,
     accountTradeAllowed: true, expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '2.2.0-gcp-multiuser-multipair', terminalBuild: '6204',
+    connectorVersion: '2.2.1-gcp-multiuser-multipair', terminalBuild: '6204',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
       volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01

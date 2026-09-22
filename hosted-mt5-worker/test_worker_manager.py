@@ -57,14 +57,15 @@ def assignment(slot_no, account_id, account_tail):
 
 
 class WorkerManagerTests(unittest.TestCase):
-    def _config(self, root: Path) -> ManagerConfig:
+    def _config(self, root: Path, *, execution_enabled: bool = True) -> ManagerConfig:
         template = root / "template"
         template.mkdir()
         (template / "terminal64.exe").write_bytes(b"fake-terminal")
         child = root / "ZenCoreHostedWorker.exe"
         child.write_bytes(b"fake-worker")
         gate = root / "DEMO_EXECUTION_ENABLED"
-        gate.write_text("enabled", encoding="ascii")
+        if execution_enabled:
+            gate.write_text("enabled", encoding="ascii")
         slots = root / "slots"
         return ManagerConfig(
             control_plane_url="https://zencore-precision-entry.onrender.com",
@@ -82,9 +83,46 @@ class WorkerManagerTests(unittest.TestCase):
             allowed_demo_symbols=("XAUUSD", "EURUSD"),
             heartbeat_seconds=10,
             poll_seconds=10,
-            connector_version="2.2.0-gcp-multiuser-multipair",
+            connector_version="2.2.1-gcp-multiuser-multipair",
+            execution_enabled=execution_enabled,
             max_slots=10,
         )
+
+    def test_manager_config_requires_explicit_boolean_execution_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            config = self._config(root, execution_enabled=False)
+            raw = {
+                "schemaVersion": 1,
+                "provider": "GOOGLE_CLOUD",
+                "controlPlaneUrl": config.control_plane_url,
+                "keyAlias": config.key_alias,
+                "keyVersionResource": config.key_version_resource,
+                "childWorkerPath": r"C:\Program Files\ZenCore\HostedWorker\2.2.1\ZenCoreHostedWorker.exe",
+                "terminalTemplateRoot": r"C:\ProgramData\ZenCore\MT5Template",
+                "terminalExecutableName": config.terminal_executable_name,
+                "slotsRoot": r"C:\ProgramData\ZenCore\HostedWorker\slots",
+                "executionGatePath": r"C:\ProgramData\ZenCore\HostedWorker\DEMO_EXECUTION_ENABLED",
+                "approvedDemoServer": config.approved_demo_server,
+                "allowedDemoSymbols": list(config.allowed_demo_symbols),
+                "heartbeatIntervalSeconds": config.heartbeat_seconds,
+                "pollIntervalSeconds": config.poll_seconds,
+                "connectorVersion": config.connector_version,
+                "demoOnly": True,
+                "credentialStorage": "CHILD_WORKER_MEMORY_ONLY",
+                "privateKeyAvailable": False,
+                "executionEnabled": False,
+                "maxSlots": config.max_slots,
+            }
+            path = root / "manager-config.json"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            loaded = ManagerConfig.load(path)
+            self.assertFalse(loaded.execution_enabled)
+
+            raw["executionEnabled"] = "false"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            with self.assertRaisesRegex(ManagerFailure, "MANAGER_SECURITY_BOUNDARY_INVALID"):
+                ManagerConfig.load(path)
 
     def test_assignment_schema_rejects_secret_fields(self):
         item = assignment(
@@ -134,6 +172,7 @@ class WorkerManagerTests(unittest.TestCase):
                 self.assertEqual(data["hostedAccountId"], item["accountId"])
                 self.assertEqual(data["mt5TerminalPath"], str(terminal))
                 self.assertEqual(data["allowedDemoSymbols"], ["XAUUSD", "EURUSD"])
+                self.assertTrue(data["executionEnabled"])
                 serialized = json.dumps(data).lower()
                 self.assertNotIn("password", serialized)
                 self.assertNotIn("credentialenvelope", serialized)
@@ -202,6 +241,41 @@ class WorkerManagerTests(unittest.TestCase):
                 manager.children[item["slotCode"]].assignment.account_id,
                 item["accountId"],
             )
+
+    def test_connection_only_preflight_launches_without_gate_and_stops_on_gate_drift(self):
+        item = assignment(
+            1,
+            "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+            "123456",
+        )
+        launched = []
+
+        def start(_command, _cwd):
+            process = FakeProcess()
+            launched.append(process)
+            return process
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            config = self._config(root, execution_enabled=False)
+            manager = WorkerManager(
+                config,
+                FakeControlPlane([item]),
+                process_factory=start,
+            )
+            result = manager.reconcile_once()
+            self.assertEqual(result["running"], 1)
+            child_config = json.loads((
+                Path(config.slots_root) / item["slotCode"] /
+                "worker" / "worker-config.json"
+            ).read_text(encoding="utf-8"))
+            self.assertFalse(child_config["executionEnabled"])
+
+            Path(config.execution_gate_path).write_text("unexpected", encoding="ascii")
+            with self.assertRaisesRegex(ManagerFailure, "PREFLIGHT_EXECUTION_GATE_PRESENT"):
+                manager.reconcile_once()
+            self.assertTrue(launched[0].terminated)
+            self.assertEqual(manager.children, {})
 
 
 if __name__ == "__main__":
