@@ -736,6 +736,33 @@ async function handleAuthApi(req, res, pathname) {
     if (!registration.effective) {
       return sendJson(res, 403, { ok: false, error: 'Pendaftaran baharu sedang ditutup oleh Admin.' });
     }
+    const ibCode = String(body.ibCode || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(ibCode)) {
+      return sendJson(res, 400, {
+        ok: false,
+        code: 'REGISTRATION_LINK_REQUIRED',
+        error: 'Pendaftaran hanya melalui link rasmi Admin atau IB.',
+        fields: { ibCode: 'Link pendaftaran yang sah diperlukan.' }
+      });
+    }
+    try {
+      const referrer = await authState.service.resolveReferrer(ibCode);
+      if (referrer?.fallback === true || String(referrer?.code || '').toLowerCase() !== ibCode) {
+        return sendJson(res, 400, {
+          ok: false,
+          code: 'INVALID_REGISTRATION_LINK',
+          error: 'Link pendaftaran tidak sah atau tidak aktif.',
+          fields: { ibCode: 'Minta link baharu daripada Admin atau IB.' }
+        });
+      }
+    } catch (_) {
+      return sendJson(res, 400, {
+        ok: false,
+        code: 'INVALID_REGISTRATION_LINK',
+        error: 'Link pendaftaran tidak sah atau tidak aktif.',
+        fields: { ibCode: 'Minta link baharu daripada Admin atau IB.' }
+      });
+    }
   }
   if (pathname === '/auth/register' && body.riskAccepted !== true) {
     return sendJson(res, 400, {
@@ -1148,6 +1175,20 @@ const server = http.createServer(async (req, res) => {
         if (session) return redirect(res, landingForRole(session.user.role));
       } catch (_) {}
     }
+    if (pathname === '/register') {
+      if (!authState.ready || !authState.service) return redirect(res, '/login');
+      const pageUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      const ibCode = String(pageUrl.searchParams.get('ib') || '').trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(ibCode)) return redirect(res, '/login');
+      try {
+        const referrer = await authState.service.resolveReferrer(ibCode);
+        if (referrer?.fallback === true || String(referrer?.code || '').toLowerCase() !== ibCode) {
+          return redirect(res, '/login');
+        }
+      } catch (_) {
+        return redirect(res, '/login');
+      }
+    }
     return sendAuthAsset(res, pathname === '/login' ? 'login.html' : 'register.html', 'text/html; charset=utf-8');
   }
 
@@ -1159,7 +1200,17 @@ const server = http.createServer(async (req, res) => {
         if (session) return redirect(res, landingForRole(session.user.role));
       } catch (_) {}
     }
-    return redirect(res, `/register?ib=${encodeURIComponent(shortReferralMatch[1].toLowerCase())}`);
+    if (!authState.ready || !authState.service) return redirect(res, '/login');
+    const ibCode = shortReferralMatch[1].toLowerCase();
+    try {
+      const referrer = await authState.service.resolveReferrer(ibCode);
+      if (referrer?.fallback === true || String(referrer?.code || '').toLowerCase() !== ibCode) {
+        return redirect(res, '/login');
+      }
+    } catch (_) {
+      return redirect(res, '/login');
+    }
+    return redirect(res, `/register?ib=${encodeURIComponent(ibCode)}`);
   }
 
   if (req.method === 'GET' && pathname === '/precision-entry.css') return sendAsset(res, 'precision-entry.css', 'text/css; charset=utf-8');
