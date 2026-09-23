@@ -1,10 +1,12 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from worker_manager import (
     Assignment,
+    CONNECTOR_VERSION,
     ManagerConfig,
     ManagerFailure,
     WorkerManager,
@@ -83,7 +85,7 @@ class WorkerManagerTests(unittest.TestCase):
             allowed_demo_symbols=("XAUUSD", "EURUSD"),
             heartbeat_seconds=10,
             poll_seconds=10,
-            connector_version="2.2.1-gcp-multiuser-multipair",
+            connector_version=CONNECTOR_VERSION,
             execution_enabled=execution_enabled,
             max_slots=10,
         )
@@ -98,7 +100,7 @@ class WorkerManagerTests(unittest.TestCase):
                 "controlPlaneUrl": config.control_plane_url,
                 "keyAlias": config.key_alias,
                 "keyVersionResource": config.key_version_resource,
-                "childWorkerPath": r"C:\Program Files\ZenCore\HostedWorker\2.2.1\ZenCoreHostedWorker.exe",
+                "childWorkerPath": r"C:\Program Files\ZenCore\HostedWorker\2.2.2\ZenCoreHostedWorker.exe",
                 "terminalTemplateRoot": r"C:\ProgramData\ZenCore\MT5Template",
                 "terminalExecutableName": config.terminal_executable_name,
                 "slotsRoot": r"C:\ProgramData\ZenCore\HostedWorker\slots",
@@ -158,6 +160,9 @@ class WorkerManagerTests(unittest.TestCase):
             self.assertEqual(result["assigned"], 2)
             self.assertEqual(result["running"], 2)
             self.assertEqual(len(launched), 2)
+            for command, _cwd, _process in launched:
+                manager_pid_index = command.index("--manager-pid") + 1
+                self.assertEqual(command[manager_pid_index], str(os.getpid()))
 
             configs = []
             for item in items:

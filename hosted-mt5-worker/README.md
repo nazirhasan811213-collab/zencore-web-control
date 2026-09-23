@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.1-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
+This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.2-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
 
 ## Implemented now
 
@@ -18,6 +18,7 @@ This directory contains the reviewed hosted MT5 Demo worker, the Windows release
 - Decrypted credentials are DEMO-only, short-lived and exposed to the future MT5 adapter only long enough to initialize a terminal session.
 - Entry commands must contain `ZENCORE_ANALYSIS_EXECUTION_V1`; every flattened Entry/SL/TP field must exactly equal the signed Analysis snapshot.
 - The worker recognizes all 11 canonical ZenCore markets. Broker symbol discovery/mapping remains a preflight requirement.
+- Frozen manager and worker payloads hold exact Windows handles to their PyInstaller bootloader and manager supervisors. If a Scheduled Task stop, crash or upgrade removes a supervisor, the payload terminates fail-closed instead of surviving as an orphan.
 
 ## Required production boundary
 
@@ -48,7 +49,7 @@ On a clean Windows build host with Python 3.12:
 .\Build-ZenCoreHostedWorker.ps1 -OutputDirectory .\dist
 ```
 
-The output is `ZenCore_Hosted_Worker_GCP_v2.2.1-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
+The output is `ZenCore_Hosted_Worker_GCP_v2.2.2-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
 
@@ -90,6 +91,8 @@ Phase 1 covers the central allocation and lease boundary.
 The manager never receives the encrypted credential envelope and never receives MT5 login/password/server plaintext. Each child worker leases its own envelope directly from ZenCore and decrypts it through Cloud KMS/HSM.
 
 The release also includes `ZenCoreHostedWorkerManager.exe` and `Install-ZenCoreWorkerManager.ps1`. Installation is fail-closed: without `-MigrateLegacyWorker`, the new Manager task is registered but disabled and the legacy worker is untouched. With `-MigrateLegacyWorker`, the legacy worker is disabled before the Manager starts.
+
+During a controlled migration the installer stops both scheduled tasks, then terminates only `ZenCoreHostedWorker.exe` and `ZenCoreHostedWorkerManager.exe` processes whose executable paths are beneath the configured ZenCore release root. This bounded cleanup removes pre-`2.2.2` orphan processes without targeting unrelated Windows processes.
 
 A local terminal template can be prepared from the reviewed legacy MT5 installation with:
 

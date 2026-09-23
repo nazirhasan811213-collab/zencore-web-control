@@ -27,6 +27,7 @@ from gcp_kms_unwrapper import (
     KEY_VERSION_PATTERN,
 )
 from demo_executor import DemoExecutionError, DemoExecutor
+from process_guard import ProcessGuardError, install_process_lifetime_guard
 from security_boundary import (
     HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED,
     Mt5Credential,
@@ -36,7 +37,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.2.1-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
@@ -577,8 +578,15 @@ def main(argv: list[str] | None = None) -> int:
         "--execution-gate",
         default=r"C:\ProgramData\ZenCore\HostedWorker\DEMO_EXECUTION_ENABLED",
     )
+    parser.add_argument("--manager-pid", type=int, default=None)
     args = parser.parse_args(argv)
+    process_guard = None
     try:
+        try:
+            supervisors = () if args.manager_pid is None else (args.manager_pid,)
+            process_guard = install_process_lifetime_guard(supervisors)
+        except ProcessGuardError as exc:
+            raise WorkerFailure("WORKER_PROCESS_GUARD_FAILED") from exc
         config = WorkerConfig.load(Path(args.config))
         assert_clean_worker_environment()
         gate_exists = Path(args.execution_gate).is_file()
@@ -610,6 +618,9 @@ def main(argv: list[str] | None = None) -> int:
     except WorkerFailure as exc:
         print(f"ZenCore hosted worker state: {exc.code}", file=sys.stderr)
         return 2
+    finally:
+        if process_guard is not None:
+            process_guard.close()
     return 0
 
 
