@@ -339,8 +339,8 @@ class WorkerManagerTests(unittest.TestCase):
             manager = WorkerManager(self._config(Path(folder)), FakeControlPlane([item]),
                                     process_factory=lambda *_: self.fail("worker must not launch"),
                                     terminal_factory=lambda *_: terminal, sleeper=lambda _: None)
-            with self.assertRaisesRegex(ManagerFailure, "MT5_CONFIGURED_TERMINAL_EXITED"):
-                manager.reconcile_once()
+            self.assertEqual(manager.reconcile_once()["failed"], 1)
+            self.assertEqual(manager.failures[item["slotCode"]]["code"], "MT5_CONFIGURED_TERMINAL_EXITED")
             self.assertEqual(manager.children, {})
 
     def test_worker_launch_failure_cleans_up_terminal_and_redacts_error(self):
@@ -352,8 +352,8 @@ class WorkerManagerTests(unittest.TestCase):
             manager = WorkerManager(self._config(Path(folder)), FakeControlPlane([item]),
                                     process_factory=fail, terminal_factory=lambda *_: terminal,
                                     sleeper=lambda _: None)
-            with self.assertRaisesRegex(ManagerFailure, "^SLOT_PROCESS_START_FAILED$"):
-                manager.reconcile_once()
+            self.assertEqual(manager.reconcile_once()["failed"], 1)
+            self.assertEqual(manager.failures[item["slotCode"]]["code"], "SLOT_PROCESS_START_FAILED")
             self.assertTrue(terminal.terminated)
             self.assertEqual(manager.children, {})
 
@@ -369,6 +369,57 @@ class WorkerManagerTests(unittest.TestCase):
             with self.assertRaisesRegex(ManagerFailure, "PREFLIGHT_EXECUTION_GATE_PRESENT"):
                 manager.reconcile_once()
             self.assertTrue(terminal.terminated)
+
+    def test_s02_failure_does_not_block_s03_and_retry_preserves_healthy_slots(self):
+        items = [assignment(n, f"{n:08d}-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456") for n in (1, 2, 3)]
+        terminals, workers, events = {}, {}, []
+        failing = [True]
+        now = [0.0]
+        def terminal(command, cwd):
+            slot = cwd.parent.name
+            proc = FakeProcess()
+            if slot.endswith("s02") and failing[0]: proc.returncode = 1
+            terminals.setdefault(slot, []).append(proc)
+            return proc
+        def worker(command, cwd):
+            slot = Path(command[command.index("--config") + 1]).parents[1].name
+            proc = FakeProcess(); workers.setdefault(slot, []).append(proc)
+            return proc
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane(items),
+                                    process_factory=worker, terminal_factory=terminal,
+                                    sleeper=lambda _: None, clock=lambda: now[0],
+                                    reporter=lambda *args: events.append(args))
+            self.assertEqual(manager.reconcile_once()["running"], 2)
+            self.assertIn(items[2]["slotCode"], manager.children)
+            manager.reconcile_once()  # Backoff: no tight restart loop.
+            self.assertEqual(len(terminals[items[1]["slotCode"]]), 1)
+            failing[0] = False; now[0] = 100
+            self.assertEqual(manager.reconcile_once()["running"], 3)
+            self.assertEqual(len(workers[items[0]["slotCode"]]), 1)
+            self.assertEqual(len(workers[items[2]["slotCode"]]), 1)
+            self.assertEqual(manager.failures, {})
+            self.assertIn((items[1]["slotCode"], "MT5_CONFIGURED_TERMINAL_EXITED"), events)
+            manager.shutdown()
+            self.assertTrue(all(p.terminated for values in workers.values() for p in values))
+
+    def test_s02_filesystem_error_is_redacted_and_does_not_block_s03(self):
+        items = [assignment(n, f"{n:08d}-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456") for n in (1, 2, 3)]
+        events = []
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane(items),
+                                    process_factory=lambda *_: FakeProcess(),
+                                    terminal_factory=lambda *_: FakeProcess(), sleeper=lambda _: None,
+                                    reporter=lambda *args: events.append(args))
+            original = manager._materialize_slot
+            def materialize(item):
+                if item.slot_number == 2: raise PermissionError("secret-account-detail")
+                return original(item)
+            manager._materialize_slot = materialize
+            self.assertEqual(manager.reconcile_once()["running"], 2)
+            self.assertIn(items[2]["slotCode"], manager.children)
+            self.assertNotIn("secret-account-detail", str(events))
+            manager.shutdown()
 
 
 if __name__ == "__main__":

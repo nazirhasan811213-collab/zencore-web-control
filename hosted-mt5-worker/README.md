@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.4-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
+This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.5-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
 
 ## Implemented now
 
@@ -49,7 +49,7 @@ On a clean Windows build host with Python 3.12:
 .\Build-ZenCoreHostedWorker.ps1 -OutputDirectory .\dist
 ```
 
-The output is `ZenCore_Hosted_Worker_GCP_v2.2.4-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
+The output is `ZenCore_Hosted_Worker_GCP_v2.2.5-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
 
@@ -144,3 +144,35 @@ copy user credentials or automatically seed broker data from desktop profiles.
 Validation on a real Windows VM is still required: upgrade in connection-only
 mode, verify fresh CONNECTED_LOCKED telemetry, stop/restart the manager without
 manually starting a terminal task, then repeat verification after a VM reboot.
+
+
+## 2.2.5 restart and slot fault isolation
+
+- Each native Windows terminal and worker process starts suspended, is assigned to
+  its own non-inheritable kill-on-close Job Object, then resumes. A manager crash,
+  Task Scheduler stop, or one-file bootloader death cannot leave that job's process
+  tree alive. No desktop-terminal name matching is used by the runtime.
+- Local launch and filesystem failures back off per slot (10–300 seconds). They do
+  not prevent later assignments starting. Execution-gate violations remain global
+  fail-closed errors. The manager does not change account-to-slot assignments.
+- `manager-state.log` identifies the failing slot and sanitized stage/code.
+  `slots/<slot>/worker/worker-state.log` reports sanitized connection errors.
+  Logs rotate at 512 KiB, with three backups. No credentials, raw exceptions,
+  account login, envelope or token are passed to these loggers.
+- `worker-health.json` is updated only after a successful control-plane heartbeat,
+  or to a failure/startup state. It contains state, timestamp, PID and version only.
+  Process presence alone is never considered a connected account.
+- Extract the release and run `UPGRADE.cmd` on the VM. Windows elevation may be
+  required. It installs under SYSTEM, preserves execution locks, migrates the old
+  manual task, waits for fresh per-slot heartbeats, tests Task Scheduler stop/start,
+  and saves `upgrade-2.2.5-report.json` plus `upgrade-2.2.5.log` under HostedWorker.
+  It does not reboot, place trades, or unlock execution. A failed slot is reported,
+  not silently treated as a successful whole-host upgrade.
+- Native Windows CI tests create real child/grandchild processes and kill their
+  owner abruptly. Unrelated processes must remain alive. These tests exercise
+  Windows process ownership, not a real MT5 broker or Google Cloud deployment.
+
+Remaining acceptance: install on the target VM, verify fresh s03 and other active
+slot heartbeats after restart and reboot, then run explicitly authorized demo
+order/exit checks before any real-account rollout. Existing broker server catalogues
+are preserved; this release does not claim universal broker/server provisioning.

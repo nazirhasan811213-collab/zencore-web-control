@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $version = (Get-Content -Raw -LiteralPath (Join-Path $source "VERSION")).Trim()
-if ($version -ne "2.2.4-gcp-multiuser-multipair") {
+if ($version -ne "2.2.5-gcp-multiuser-multipair") {
     throw "Unexpected hosted worker version."
 }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
@@ -36,6 +36,13 @@ try {
         -r (Join-Path $source "requirements.txt") `
         -r (Join-Path $source "requirements-build.txt")
     if ($LASTEXITCODE -ne 0) { throw "Pinned worker build dependencies failed to install." }
+
+    foreach ($script in Get-ChildItem $source -Filter '*.ps1') {
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+        if ($parseErrors.Count -gt 0) { throw "PowerShell syntax check failed: $($script.Name): $parseErrors" }
+    }
 
     $oldPythonPath = $env:PYTHONPATH
     try {
@@ -77,7 +84,10 @@ try {
     Copy-Item -Force -LiteralPath (Join-Path $source "README.md") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "VERSION") -Destination $release
 
-    $files = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe", "README.md", "VERSION") | ForEach-Object {
+    Copy-Item -Force -LiteralPath (Join-Path $source "Upgrade-ZenCore-Automatic.ps1") -Destination $release
+    Copy-Item -Force -LiteralPath (Join-Path $source "UPGRADE.cmd") -Destination $release
+
+    $files = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe", "README.md", "VERSION", "Install-ZenCoreHostedWorker.ps1", "Install-ZenCoreWorkerManager.ps1", "Upgrade-ZenCore-Automatic.ps1", "UPGRADE.cmd") | ForEach-Object {
         $itemPath = Join-Path $release $_
         [ordered]@{
             path = $_

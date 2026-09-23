@@ -8,6 +8,8 @@ preflight and require matching server, config and local DEMO execution gates.
 
 from __future__ import annotations
 
+from state_log import make_worker_reporter
+
 import argparse
 import hashlib
 import json
@@ -37,7 +39,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.2.4-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.5-gcp-multiuser-multipair"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
@@ -401,6 +403,7 @@ class HostedConnectionWorker:
         self.clock_ms = clock_ms
         self.lease: dict[str, Any] | None = None
         self.entries_enabled = False
+        self.report = lambda code: None
 
     def _assert_runtime_boundary(self) -> None:
         if self.config.execution_enabled and not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
@@ -475,7 +478,13 @@ class HostedConnectionWorker:
                 "accountId": self.config.hosted_account_id,
                 "leaseId": self.lease["id"],
             })
-            return self.control_plane.heartbeat(telemetry)
+            result = self.control_plane.heartbeat(telemetry)
+            if result.get("ok") is not True:
+                raise WorkerFailure("CONTROL_PLANE_HEARTBEAT_FAILED")
+            self.report("CONNECTED" if all(telemetry.get(key) is True for key in (
+                "terminalTradeAllowed", "accountTradeAllowed", "expertTradeAllowed"))
+                else "CONNECTED_PERMISSIONS_PENDING")
+            return result
         except WorkerFailure:
             raise
         except ControlPlaneError as exc:
@@ -576,6 +585,7 @@ class HostedConnectionWorker:
             finally:
                 self.terminal.shutdown()
                 self.lease = None
+            self.report(failure)
             print(f"ZenCore hosted worker state: {failure}", file=sys.stderr, flush=True)
             self.sleeper(max(10.0, self.config.heartbeat_seconds))
 
@@ -624,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
             ),
             execution_gate_path=Path(args.execution_gate),
         )
+        worker.report = make_worker_reporter(Path(args.config).parent, config.cell_id, CONNECTOR_VERSION)
+        worker.report("WORKER_STARTED")
         worker.run_forever()
     except KeyboardInterrupt:
         return 0
