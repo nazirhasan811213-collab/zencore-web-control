@@ -25,7 +25,7 @@ from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
 from process_guard import ProcessGuardError, install_process_lifetime_guard
 
 
-CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.3-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",

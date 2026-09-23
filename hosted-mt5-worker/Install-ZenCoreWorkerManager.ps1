@@ -69,7 +69,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
+    $manifest.connectorVersion -ne "2.2.3-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
     $manifest.connectionOnlyPreflight -ne $true -or
     $manifest.workerManagerIncluded -ne $true -or

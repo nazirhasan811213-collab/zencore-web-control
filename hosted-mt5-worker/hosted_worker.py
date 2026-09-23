@@ -37,7 +37,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.3-gcp-multiuser-multipair"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
@@ -193,6 +193,18 @@ class MetaTraderConnection:
         self._connector_version = CONNECTOR_VERSION
         self._execution_enabled = False
 
+    def _initialize_failure(self) -> WorkerFailure:
+        # Keep only a bounded numeric code. Vendor text may include credentials
+        # or account details and must never enter logs or heartbeat payloads.
+        try:
+            result = self._mt5.last_error()
+            code = result[0] if isinstance(result, (tuple, list)) and result else None
+            if type(code) is int and -100000 <= code < 0:
+                return WorkerFailure(f"MT5_INITIALIZE_FAILED_{code}")
+        except Exception:
+            pass
+        return WorkerFailure("MT5_INITIALIZE_FAILED")
+
     def connect(self, config: WorkerConfig, credential: Mt5Credential) -> None:
         login, password, server = credential.text()
         if _normalise_server(server) != _normalise_server(config.approved_demo_server):
@@ -208,12 +220,12 @@ class MetaTraderConnection:
                 portable=False,
             )
         except Exception as exc:
-            raise WorkerFailure("MT5_INITIALIZE_FAILED") from exc
+            raise WorkerFailure("MT5_INITIALIZE_EXCEPTION") from None
         finally:
             password = ""
         if connected is not True:
             login = server = ""
-            raise WorkerFailure("MT5_INITIALIZE_FAILED")
+            raise self._initialize_failure()
         self._identity_digest = hashlib.sha256(
             f"{login}\n{_normalise_server(server)}".encode("utf-8")
         ).hexdigest()
