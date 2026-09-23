@@ -11,7 +11,7 @@ This module prepares one private Windows Server 2022 worker host. The Worker Man
 - The VM uses its attached service account through the metadata server. No service-account JSON key is created or copied to disk.
 - Render accepts a worker only when Google's signed full instance identity exactly matches a host in the configured fleet registry: project, zone, instance name, service account and HTTPS audience. Fresh request IDs are single-use, time-limited and recorded in a short PostgreSQL replay ledger across web-service restarts.
 - Decrypted MT5 values are permitted only in short-lived process memory. They are forbidden in environment variables, Terraform state, Render variables, logs and VM metadata.
-- The default locked configuration starts with `InterStellarFinancial-Demo` and `XAUUSD`. Connector `2.2.1-gcp-multiuser-multipair` can validate additional canonical pairs in connection-only preflight; execution remains unavailable until the independent server, manager-config and local gates match.
+- The default locked configuration starts with `InterStellarFinancial-Demo` and `XAUUSD`. Connector `2.2.2-gcp-multiuser-multipair` can validate additional canonical pairs in connection-only preflight; execution remains unavailable until the independent server, manager-config and local gates match.
 
 Google Cloud IAM separation of duties is required: the person who administers the KMS policy should not also control frontend releases, the Render database and the worker image. Absolute “admin-proof” auto-login is not possible when one person can replace every layer of the system.
 

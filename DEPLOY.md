@@ -92,10 +92,10 @@ Only after those values match the deployed VM may `ZENCORE_GCP_HOSTED_WORKER_ENA
 For the managed GCP multi-user/multi-pair worker rollout, set the reviewed connector pin to:
 
 ```text
-ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION=2.2.1-gcp-multiuser-multipair
+ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION=2.2.2-gcp-multiuser-multipair
 ```
 
-Version `2.2.1` supports a connection-only preflight. Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false`, keep the VM `DEMO_EXECUTION_ENABLED` gate absent, and configure the Manager with `executionEnabled=false`. In that state child slots may lease encrypted envelopes and report locked heartbeats, but they never poll execution commands. The earlier `1.4.0-demo-execution` pin above remains only for the legacy trader-owned Windows rollout.
+Version `2.2.2` supports a connection-only preflight with fail-closed Windows process supervision. Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false`, keep the VM `DEMO_EXECUTION_ENABLED` gate absent, and configure the Manager with `executionEnabled=false`. In that state child slots may lease encrypted envelopes and report locked heartbeats, but they never poll execution commands. The earlier `1.4.0-demo-execution` pin above remains only for the legacy trader-owned Windows rollout.
 
 ### Code-only worker release
 

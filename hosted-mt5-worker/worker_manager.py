@@ -22,9 +22,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
+from process_guard import ProcessGuardError, install_process_lifetime_guard
 
 
-CONNECTOR_VERSION = "2.2.1-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
@@ -378,6 +379,7 @@ class WorkerManager:
             str(child),
             "--config", str(config_path),
             "--execution-gate", str(gate),
+            "--manager-pid", str(os.getpid()),
         ]
         process = self._process_factory(command, child.parent)
         self.children[assignment.slot_code] = ChildState(
@@ -448,7 +450,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     manager: WorkerManager | None = None
+    process_guard = None
     try:
+        try:
+            process_guard = install_process_lifetime_guard()
+        except ProcessGuardError as exc:
+            raise ManagerFailure("MANAGER_PROCESS_GUARD_FAILED") from exc
         config = ManagerConfig.load(Path(args.config))
         manager = WorkerManager(
             config,
@@ -456,14 +463,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         manager.run_forever()
     except KeyboardInterrupt:
-        if manager is not None:
-            manager.shutdown()
         return 0
     except ManagerFailure as exc:
-        if manager is not None:
-            manager.shutdown()
         print(f"ZenCore worker manager state: {exc.code}", file=sys.stderr)
         return 2
+    finally:
+        if manager is not None:
+            manager.shutdown()
+        if process_guard is not None:
+            process_guard.close()
     return 0
 
 

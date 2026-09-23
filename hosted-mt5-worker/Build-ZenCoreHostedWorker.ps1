@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $version = (Get-Content -Raw -LiteralPath (Join-Path $source "VERSION")).Trim()
-if ($version -ne "2.2.1-gcp-multiuser-multipair") {
+if ($version -ne "2.2.2-gcp-multiuser-multipair") {
     throw "Unexpected hosted worker version."
 }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
@@ -90,7 +90,8 @@ try {
         executionUnlocked = $true
         connectionOnlyPreflight = $true
         workerManagerIncluded = $true
-        workerManagerVersion = "1.1.0"
+        processLifetimeGuardIncluded = $true
+        workerManagerVersion = "1.2.0"
         createdAt = (Get-Date).ToUniversalTime().ToString("o")
         files = @($files)
     }

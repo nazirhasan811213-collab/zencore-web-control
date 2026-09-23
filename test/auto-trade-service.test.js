@@ -750,7 +750,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     allowDemoExecution: true,
     hostedWorkerEnabled: true,
     hostedWorkerAccountId: accountId,
-    requiredDemoConnectorVersion: '2.2.1-gcp-multiuser-multipair',
+    requiredDemoConnectorVersion: '2.2.2-gcp-multiuser-multipair',
     allowedDemoSymbols: ['XAUUSD']
   });
   await service.saveSettings(userId, {
@@ -775,7 +775,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     connectionStatus: 'CONNECTED', terminalTradeAllowed: true,
     accountTradeAllowed: true, expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '2.2.1-gcp-multiuser-multipair', terminalBuild: '6204',
+    connectorVersion: '2.2.2-gcp-multiuser-multipair', terminalBuild: '6204',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
       volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01

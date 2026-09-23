@@ -28,6 +28,40 @@ if ($ReplaceTerminalTemplate -and -not $PrepareTerminalTemplate) {
     throw "ReplaceTerminalTemplate requires PrepareTerminalTemplate."
 }
 
+function Get-ZenCoreManagedProcesses {
+    param([Parameter(Mandatory = $true)][string]$ManagedReleaseRoot)
+
+    $rootPrefix = [System.IO.Path]::GetFullPath($ManagedReleaseRoot).TrimEnd([char]'\') + '\'
+    $allowedNames = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe")
+    return @(Get-CimInstance Win32_Process | Where-Object {
+        $path = [string]$_.ExecutablePath
+        $_.Name -in $allowedNames -and
+        -not [string]::IsNullOrWhiteSpace($path) -and
+        $path.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+    })
+}
+
+function Stop-ZenCoreManagedProcesses {
+    param([Parameter(Mandatory = $true)][string]$ManagedReleaseRoot)
+
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        $running = @(Get-ZenCoreManagedProcesses -ManagedReleaseRoot $ManagedReleaseRoot)
+        if ($running.Count -eq 0) {
+            return
+        }
+        $ordered = @($running | Sort-Object @{ Expression = {
+            if ($_.Name -eq "ZenCoreHostedWorkerManager.exe") { 0 } else { 1 }
+        } })
+        foreach ($process in $ordered) {
+            Stop-Process -Id ([int]$process.ProcessId) -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    if (@(Get-ZenCoreManagedProcesses -ManagedReleaseRoot $ManagedReleaseRoot).Count -gt 0) {
+        throw "A managed ZenCore worker process survived the bounded upgrade cleanup."
+    }
+}
+
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $manifestPath = Join-Path $source "release-manifest.json"
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
@@ -35,10 +69,11 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.2.1-gcp-multiuser-multipair" -or
+    $manifest.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
     $manifest.connectionOnlyPreflight -ne $true -or
-    $manifest.workerManagerIncluded -ne $true) {
+    $manifest.workerManagerIncluded -ne $true -or
+    $manifest.processLifetimeGuardIncluded -ne $true) {
     throw "Release manifest does not contain the approved multi-client manager boundary."
 }
 
@@ -170,6 +205,9 @@ $taskName = "ZenCore MT5 Worker Manager"
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($null -ne $existingTask) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+}
+if ($MigrateLegacyWorker) {
+    Stop-ZenCoreManagedProcesses -ManagedReleaseRoot $ReleaseRoot
 }
 $arguments = '--config "{0}"' -f $ManagerConfigPath
 $action = New-ScheduledTaskAction -Execute $managerExe -Argument $arguments -WorkingDirectory $releasePath
