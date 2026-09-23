@@ -336,7 +336,7 @@ class WorkerManager:
         startup_tmp = startup_path.with_suffix(".ini.tmp")
         startup_tmp.write_text(
             "[Experts]\r\nEnabled=1\r\nAllowLiveTrading=1\r\n",
-            encoding="utf-16",
+            encoding="utf-16", newline="",
         )
         os.replace(startup_tmp, startup_path)
         child_config = {
