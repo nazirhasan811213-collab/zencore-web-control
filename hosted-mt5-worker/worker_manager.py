@@ -25,7 +25,7 @@ from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
 from process_guard import ProcessGuardError, install_process_lifetime_guard
 
 
-CONNECTOR_VERSION = "2.2.3-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.4-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
@@ -257,6 +257,7 @@ class ChildState:
     assignment: Assignment
     process: Any
     slot_root: Path
+    terminal_process: Any
 
 
 class WorkerManager:
@@ -266,6 +267,7 @@ class WorkerManager:
         control_plane: GcpControlPlaneClient,
         *,
         process_factory: Callable[[list[str], Path], Any] | None = None,
+        terminal_factory: Callable[[list[str], Path], Any] | None = None,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.config = config
@@ -273,6 +275,7 @@ class WorkerManager:
         self.sleeper = sleeper
         self.children: dict[str, ChildState] = {}
         self._process_factory = process_factory or self._start_process
+        self._terminal_factory = terminal_factory or self._start_terminal
 
     @staticmethod
     def _start_process(command: list[str], working_directory: Path) -> subprocess.Popen:
@@ -286,6 +289,23 @@ class WorkerManager:
             close_fds=True,
             creationflags=flags,
         )
+
+    @staticmethod
+    def _start_terminal(command: list[str], working_directory: Path) -> subprocess.Popen:
+        # A frozen manager changes the Windows DLL search path for its bundled
+        # libraries. Do not pass that search path to the external MT5 executable.
+        if sys.platform == "win32" and getattr(sys, "frozen", False):
+            import ctypes
+            set_directory = ctypes.windll.kernel32.SetDllDirectoryW
+            set_directory.argtypes = [ctypes.c_wchar_p]
+            set_directory.restype = ctypes.c_int
+            if not set_directory(None):
+                raise ManagerFailure("MT5_LAUNCH_ENVIRONMENT_FAILED")
+            try:
+                return WorkerManager._start_process(command, working_directory)
+            finally:
+                set_directory(getattr(sys, "_MEIPASS", None))
+        return WorkerManager._start_process(command, working_directory)
 
     def _slot_root(self, slot_code: str) -> Path:
         if not _SLOT_RE.fullmatch(slot_code):
@@ -310,6 +330,15 @@ class WorkerManager:
             shutil.copytree(template, terminal_root)
 
         config_root.mkdir(parents=True, exist_ok=True)
+        # These are terminal permissions, not the independent ZenCore order gates.
+        # No account, password, server or strategy is written into this file.
+        startup_path = config_root / "mt5-start.ini"
+        startup_tmp = startup_path.with_suffix(".ini.tmp")
+        startup_tmp.write_text(
+            "[Experts]\r\nEnabled=1\r\nAllowLiveTrading=1\r\n",
+            encoding="utf-16",
+        )
+        os.replace(startup_tmp, startup_path)
         child_config = {
             "schemaVersion": 1,
             "cellId": assignment.slot_code,
@@ -355,6 +384,7 @@ class WorkerManager:
         state = self.children.pop(slot_code, None)
         if state:
             self._stop_process(state.process)
+            self._stop_process(state.terminal_process)
             if clean and state.slot_root.exists():
                 shutil.rmtree(state.slot_root, ignore_errors=True)
 
@@ -381,11 +411,33 @@ class WorkerManager:
             "--execution-gate", str(gate),
             "--manager-pid", str(os.getpid()),
         ]
-        process = self._process_factory(command, child.parent)
+        terminal = slot_root / "mt5" / self.config.terminal_executable_name
+        startup = config_path.parent / "mt5-start.ini"
+        terminal_process = None
+        process = None
+        try:
+            terminal_process = self._terminal_factory(
+                [str(terminal), f"/config:{startup}"], terminal.parent,
+            )
+            # Start the configured terminal before the Python bridge attaches.
+            # This also exposes an already-running/unmanaged terminal as a failure
+            # when this launcher exits instead of silently attaching without config.
+            self.sleeper(15)
+            if terminal_process.poll() is not None:
+                raise ManagerFailure("MT5_CONFIGURED_TERMINAL_EXITED")
+            self._assert_runtime_boundary()
+            process = self._process_factory(command, child.parent)
+        except BaseException as exc:
+            self._stop_process(process)
+            self._stop_process(terminal_process)
+            if isinstance(exc, (ManagerFailure, KeyboardInterrupt, SystemExit)):
+                raise
+            raise ManagerFailure("SLOT_PROCESS_START_FAILED") from None
         self.children[assignment.slot_code] = ChildState(
             assignment=assignment,
             process=process,
             slot_root=slot_root,
+            terminal_process=terminal_process,
         )
 
     def reconcile_once(self) -> dict[str, int]:
@@ -407,7 +459,8 @@ class WorkerManager:
         restarted = 0
         for assignment in assignments:
             state = self.children.get(assignment.slot_code)
-            if state is not None and state.process.poll() is None:
+            if (state is not None and state.process.poll() is None
+                    and state.terminal_process.poll() is None):
                 continue
             if state is not None:
                 self._retire_slot(assignment.slot_code, clean=False)

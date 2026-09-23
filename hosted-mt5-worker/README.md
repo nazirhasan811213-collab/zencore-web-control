@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.3-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
+This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.4-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
 
 ## Implemented now
 
@@ -49,7 +49,7 @@ On a clean Windows build host with Python 3.12:
 .\Build-ZenCoreHostedWorker.ps1 -OutputDirectory .\dist
 ```
 
-The output is `ZenCore_Hosted_Worker_GCP_v2.2.3-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
+The output is `ZenCore_Hosted_Worker_GCP_v2.2.4-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
 
@@ -116,3 +116,31 @@ never logged or returned. Missing or invalid codes retain the generic failure.
 An exception from initialize reports `MT5_INITIALIZE_EXCEPTION`. This release
 does not change credentials, server approval, timeout, portable mode or execution
 gates. Diagnose the slot assigned in the account API, not a hard-coded slot.
+
+
+### 2.2.4: configured terminal lifecycle
+
+The manager writes a credential-free UTF-16 `worker/mt5-start.ini` for each
+assigned slot, starts that slot's terminal with `/config:<absolute path>`, waits
+15 seconds, then starts the worker bridge. It supervises both processes. A dead
+terminal or worker causes the pair to be stopped and relaunched with the same
+configuration; retirement and shutdown stop the worker before the terminal.
+An immediately exiting terminal launcher blocks worker startup instead of
+silently attaching to an unmanaged terminal. Existing externally started slot
+terminals must be stopped during upgrade.
+
+`[Experts] Enabled=1, AllowLiveTrading=1` configures terminal permissions only.
+The DEMO account checks, server approval, worker executionEnabled flag, local
+gate file, and control-plane rollout lock still apply. No order gate is opened
+by this release. No broker password or login is written to the startup INI.
+
+With `-MigrateLegacyWorker`, the installer stops terminals only within the
+managed slots tree and disables the temporary `ZenCore MT5 s03 Config` task
+only if its action targets that tree. Desktop broker terminals are untouched.
+Existing SYSTEM MT5 profiles and their broker `servers.dat` are preserved.
+New slots still require broker server data provisioning; this release does not
+copy user credentials or automatically seed broker data from desktop profiles.
+
+Validation on a real Windows VM is still required: upgrade in connection-only
+mode, verify fresh CONNECTED_LOCKED telemetry, stop/restart the manager without
+manually starting a terminal task, then repeat verification after a VM reboot.

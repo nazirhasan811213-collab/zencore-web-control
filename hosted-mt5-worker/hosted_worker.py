@@ -37,7 +37,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.2.3-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.4-gcp-multiuser-multipair"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
