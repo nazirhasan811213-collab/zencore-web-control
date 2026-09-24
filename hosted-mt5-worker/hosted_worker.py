@@ -1,8 +1,9 @@
-"""ZenCore Google Cloud hosted MT5 worker (DEMO execution release).
+"""ZenCore Google Cloud hosted MT5 worker (DEMO preflight/execution release).
 
 This build can authenticate the assigned Google VM, lease an encrypted broker
 credential, unwrap it through Cloud HSM, initialize one MT5 Demo terminal and
-report sanitized telemetry and execute only validated XAUUSD DEMO commands behind explicit gates.
+report sanitized telemetry. Order commands remain unreachable in connection-only
+preflight and require matching server, config and local DEMO execution gates.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from gcp_kms_unwrapper import (
     KEY_VERSION_PATTERN,
 )
 from demo_executor import DemoExecutionError, DemoExecutor
+from process_guard import ProcessGuardError, install_process_lifetime_guard
 from security_boundary import (
     HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED,
     Mt5Credential,
@@ -35,7 +37,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.1.0-gcp-demo-execution"
+CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
@@ -122,14 +124,15 @@ class WorkerConfig:
         }
         if set(raw) != allowed:
             raise WorkerFailure("CONFIG_FIELDS_INVALID")
+        execution_enabled = raw.get("executionEnabled")
         if (
             raw.get("schemaVersion") != 1
             or raw.get("provider") != "GOOGLE_CLOUD"
             or raw.get("demoOnly") is not True
-            or raw.get("executionEnabled") is not True
+            or not isinstance(execution_enabled, bool)
             or raw.get("credentialStorage") != "MEMORY_ONLY"
             or raw.get("privateKeyAvailable") is not False
-            or not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED
+            or (execution_enabled and not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED)
         ):
             raise WorkerFailure("CONFIG_SECURITY_BOUNDARY_INVALID")
         cell_id = str(raw.get("cellId") or "")
@@ -176,7 +179,7 @@ class WorkerConfig:
             approved_demo_server=approved_server,
             heartbeat_seconds=heartbeat,
             connector_version=connector_version,
-            execution_enabled=True,
+            execution_enabled=execution_enabled,
         )
 
 
@@ -351,7 +354,7 @@ def _validate_lease(result: Any, config: WorkerConfig) -> dict[str, Any]:
         or lease.get("accountId") != config.hosted_account_id
         or lease.get("keyId") != config.key_alias
         or lease.get("demoOnly") is not True
-        or lease.get("executionEnabled") is not True
+        or lease.get("executionEnabled") is not config.execution_enabled
         or not isinstance(server_time, int)
         or not isinstance(lease.get("expiresAt"), int)
         or not server_time < lease["expiresAt"] <= server_time + 5 * 60 * 1000
@@ -387,14 +390,17 @@ class HostedConnectionWorker:
         self.lease: dict[str, Any] | None = None
         self.entries_enabled = False
 
-    def _assert_execution_gate(self) -> None:
-        if not self.config.execution_enabled or not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
+    def _assert_runtime_boundary(self) -> None:
+        if self.config.execution_enabled and not HOSTED_DEMO_ORDER_EXECUTION_BUILD_UNLOCKED:
             raise WorkerFailure("DEMO_EXECUTION_BUILD_LOCKED")
-        if not self.execution_gate_path.is_file():
+        gate_exists = self.execution_gate_path.is_file()
+        if self.config.execution_enabled and not gate_exists:
             raise WorkerFailure("DEMO_EXECUTION_GATE_MISSING")
+        if not self.config.execution_enabled and gate_exists:
+            raise WorkerFailure("PREFLIGHT_EXECUTION_GATE_PRESENT")
 
     def connect_once(self) -> dict[str, Any]:
-        self._assert_execution_gate()
+        self._assert_runtime_boundary()
         assert_clean_worker_environment()
         try:
             result = self.control_plane.lease(
@@ -434,7 +440,7 @@ class HostedConnectionWorker:
             "terminalTradeAllowed": False,
             "accountTradeAllowed": False,
             "expertTradeAllowed": False,
-            "demoExecutionUnlocked": False,
+            "demoExecutionUnlocked": self.config.execution_enabled,
             "connectorVersion": self.config.connector_version,
             "terminalBuild": "UNKNOWN",
             "symbolSpecs": [],
@@ -446,7 +452,7 @@ class HostedConnectionWorker:
             pass
 
     def heartbeat_once(self) -> dict[str, Any]:
-        self._assert_execution_gate()
+        self._assert_runtime_boundary()
         if not self.lease:
             raise WorkerFailure("LEASE_NOT_READY")
         if self.clock_ms() >= int(self.lease["expiresAt"]):
@@ -480,7 +486,9 @@ class HostedConnectionWorker:
             raise WorkerFailure("CONTROL_PLANE_ACK_FAILED") from exc
 
     def command_once(self) -> None:
-        self._assert_execution_gate()
+        self._assert_runtime_boundary()
+        if not self.config.execution_enabled:
+            return
         if not self.lease:
             raise WorkerFailure("LEASE_NOT_READY")
         try:
@@ -570,12 +578,22 @@ def main(argv: list[str] | None = None) -> int:
         "--execution-gate",
         default=r"C:\ProgramData\ZenCore\HostedWorker\DEMO_EXECUTION_ENABLED",
     )
+    parser.add_argument("--manager-pid", type=int, default=None)
     args = parser.parse_args(argv)
+    process_guard = None
     try:
+        try:
+            supervisors = () if args.manager_pid is None else (args.manager_pid,)
+            process_guard = install_process_lifetime_guard(supervisors)
+        except ProcessGuardError as exc:
+            raise WorkerFailure("WORKER_PROCESS_GUARD_FAILED") from exc
         config = WorkerConfig.load(Path(args.config))
         assert_clean_worker_environment()
-        if not Path(args.execution_gate).is_file():
+        gate_exists = Path(args.execution_gate).is_file()
+        if config.execution_enabled and not gate_exists:
             raise WorkerFailure("DEMO_EXECUTION_GATE_MISSING")
+        if not config.execution_enabled and gate_exists:
+            raise WorkerFailure("PREFLIGHT_EXECUTION_GATE_PRESENT")
         try:
             import MetaTrader5 as mt5  # type: ignore
         except ImportError as exc:
@@ -600,6 +618,9 @@ def main(argv: list[str] | None = None) -> int:
     except WorkerFailure as exc:
         print(f"ZenCore hosted worker state: {exc.code}", file=sys.stderr)
         return 2
+    finally:
+        if process_guard is not None:
+            process_guard.close()
     return 0
 
 

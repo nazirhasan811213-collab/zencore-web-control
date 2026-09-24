@@ -104,7 +104,7 @@ class DemoExecutor:
         if not isinstance(layers_raw, int) or isinstance(layers_raw, bool):
             raise DemoExecutionError("LAYERS_INVALID")
         layers = int(layers_raw)
-        if layers < 1 or layers > 3:
+        if layers < 1 or layers > 10:
             raise DemoExecutionError("LAYERS_OUT_OF_RANGE")
         total = round(lot * layers, 8)
         declared_total = _finite(payload.get("totalLot"), "TOTAL_LOT")

@@ -6,6 +6,7 @@ const {
   createGcpRequestReplayGuard,
   GOOGLE_JWKS_URL
 } = require('../gcp-instance-identity');
+const { parseGcpWorkerFleet } = require('../gcp-worker-fleet');
 
 const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const publicJwk = keyPair.publicKey.export({ format: 'jwk' });
@@ -80,6 +81,60 @@ test('valid full Google instance identity is pinned to project, zone, VM and ser
     issuedAt: NOW - 5000,
     expiresAt: NOW + 300000
   });
+});
+
+test('worker fleet accepts each registered host and rejects unknown instances', async () => {
+  const second = {
+    projectId: expected.projectId,
+    zone: expected.zone,
+    instanceName: 'zencore-mt5-demo-02',
+    serviceAccountEmail: expected.serviceAccountEmail
+  };
+  const make = () => createGcpInstanceIdentityVerifier({
+    audience: expected.audience,
+    workers: [expected, second],
+    fetcher: fakeFetcher(),
+    now: () => NOW
+  });
+  const identity = await make().verify(token({
+    google: { compute_engine: {
+      project_id: second.projectId,
+      zone: second.zone,
+      instance_id: '9876543210987654322',
+      instance_name: second.instanceName
+    } }
+  }));
+  assert.equal(identity.instanceName, second.instanceName);
+  await assert.rejects(() => make().verify(token({
+    google: { compute_engine: {
+      project_id: expected.projectId,
+      zone: expected.zone,
+      instance_id: '9876543210987654323',
+      instance_name: 'zencore-mt5-demo-99'
+    } }
+  })), error => error.code === 'GCP_IDENTITY_MISMATCH');
+});
+
+test('worker fleet JSON is strict, capacity bounded and duplicate-safe', () => {
+  const firstWorker = {
+    projectId: expected.projectId,
+    zone: expected.zone,
+    instanceName: expected.instanceName,
+    serviceAccountEmail: expected.serviceAccountEmail
+  };
+  const workers = parseGcpWorkerFleet(JSON.stringify([
+    { ...firstWorker, capacity: 10 },
+    { ...firstWorker, instanceName: 'zencore-mt5-demo-02', capacity: 20 }
+  ]));
+  assert.equal(workers.length, 2);
+  assert.equal(workers[1].capacity, 20);
+  assert.throws(() => parseGcpWorkerFleet(JSON.stringify([
+    { ...firstWorker, capacity: 10 },
+    { ...firstWorker, capacity: 10 }
+  ])), error => error.code === 'INVALID_GCP_WORKER_FLEET');
+  assert.throws(() => parseGcpWorkerFleet(JSON.stringify([
+    { ...firstWorker, capacity: 51 }
+  ])), error => error.code === 'INVALID_GCP_WORKER_FLEET');
 });
 
 test('Google identity keys are cached but each instance token can be consumed only once', async () => {

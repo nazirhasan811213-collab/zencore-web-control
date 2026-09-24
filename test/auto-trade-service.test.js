@@ -5,6 +5,7 @@ const { MemoryAutoTradeStore } = require('../auto-trade-store');
 const { createAutoTradeService } = require('../auto-trade-service');
 
 const SIGNING_KEY = 'test-signing-key-that-is-longer-than-thirty-two-bytes';
+const LEGACY_WINDOWS_CONNECTOR = '1.4.0-demo-execution';
 
 async function setup() {
   let currentTime = 1_790_000_000_000;
@@ -13,6 +14,7 @@ async function setup() {
     store,
     commandSigningKey: SIGNING_KEY,
     allowDemoExecution: true,
+    requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
     allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
     now: () => currentTime
   });
@@ -27,7 +29,7 @@ async function setup() {
     accountTradeAllowed: true,
     expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '1.4.0-demo-execution',
+    connectorVersion: LEGACY_WINDOWS_CONNECTOR,
     terminalBuild: '5000',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
@@ -271,6 +273,100 @@ test('high-risk READY signal is queued once because risk is warning-only', async
   assert.equal(setupCommand.command.payload.risk.blocksOrder, false);
 });
 
+test('central dispatcher fans multiple pairs to multiple users with isolated sizing and no duplicate setup', async () => {
+  let currentTime = 1_790_200_000_000;
+  const store = new MemoryAutoTradeStore();
+  const service = createAutoTradeService({
+    store,
+    commandSigningKey: SIGNING_KEY,
+    allowDemoExecution: true,
+    requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
+    allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
+    allowedDemoSymbols: ['XAUUSD', 'EURUSD'],
+    now: () => currentTime
+  });
+  const users = [
+    {
+      id: '41414141-4141-4141-8141-414141414141',
+      lotPerLayer: 0.01,
+      layers: 2,
+      accountMask: '****1111'
+    },
+    {
+      id: '42424242-4242-4242-8242-424242424242',
+      lotPerLayer: 0.02,
+      layers: 3,
+      accountMask: '****2222'
+    }
+  ];
+  for (const user of users) {
+    const pod = await service.provisionDemoPod(user.id, `Pool ${user.accountMask}`);
+    user.token = pod.token;
+    await service.heartbeat(user.token, {
+      accountMask: user.accountMask,
+      serverMask: '****Demo',
+      brokerMask: '****Stellar',
+      tradeMode: 'DEMO',
+      terminalTradeAllowed: true,
+      accountTradeAllowed: true,
+      expertTradeAllowed: true,
+      demoExecutionUnlocked: true,
+      connectorVersion: LEGACY_WINDOWS_CONNECTOR,
+      terminalBuild: '5000',
+      symbolSpecs: [
+        { symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 },
+        { symbol: 'EURUSD', tickSize: 0.00001, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 }
+      ],
+      positions: []
+    });
+    const saved = await service.saveSettings(user.id, {
+      capitalUsd: 1000,
+      lotPerLayer: user.lotPerLayer,
+      layers: user.layers,
+      symbols: ['BTCUSD'],
+      riskAcknowledged: true
+    });
+    assert.deepEqual(saved.settings.symbols, ['XAUUSD', 'EURUSD']);
+    await service.turnOn(user.id, { confirmation: 'AKTIFKAN DEMO' });
+    const on = await service.nextCommand(user.token);
+    await service.acknowledgeCommand(user.token, on.command.id, {
+      status: 'EXECUTED', code: 'POOL_ARMED'
+    });
+  }
+
+  const markets = [
+    {
+      symbol: 'XAUUSD', receivedAt: currentTime,
+      strategyNormal: { state: 'READY', side: 'BUY', plan: {
+        entry: 2500, sl: 2495, tp1: 2505, tp2: 2510, tp3: 2515
+      } }
+    },
+    {
+      symbol: 'EURUSD', receivedAt: currentTime + 1,
+      strategyNormal: { state: 'READY', side: 'SELL', plan: {
+        entry: 1.1, sl: 1.101, tp1: 1.099, tp2: 1.098, tp3: 1.097
+      } }
+    }
+  ];
+  assert.deepEqual(await service.dispatchMarkets(markets), { queued: 4 });
+
+  for (const user of users) {
+    const first = await service.nextCommand(user.token);
+    await service.acknowledgeCommand(user.token, first.command.id, {
+      status: 'EXECUTED', code: 'SETUP_ACCEPTED'
+    });
+    const second = await service.nextCommand(user.token);
+    assert.deepEqual([first.command.payload.symbol, second.command.payload.symbol], ['XAUUSD', 'EURUSD']);
+    assert.equal(first.command.payload.lotPerLayer, user.lotPerLayer);
+    assert.equal(second.command.payload.lotPerLayer, user.lotPerLayer);
+    assert.equal(first.command.payload.layers, user.layers);
+    assert.equal(second.command.payload.layers, user.layers);
+    assert.equal(first.command.payload.totalLot, user.lotPerLayer * user.layers);
+    assert.equal(second.command.payload.totalLot, user.lotPerLayer * user.layers);
+  }
+  assert.deepEqual(await service.dispatchMarkets(markets), { queued: 0 });
+});
+
 test('reviewed connector version is mandatory before Demo execution can arm', async () => {
   const { service, userId, token } = await setup();
   await service.heartbeat(token, {
@@ -292,16 +388,15 @@ test('reviewed connector version is mandatory before Demo execution can arm', as
   );
 });
 
-test('first Demo execution rollout blocks unvalidated symbols as a technical safeguard', async () => {
+test('server-managed pair scope ignores unvalidated user-supplied symbols', async () => {
   const { service, userId } = await setup();
-  await service.saveSettings(userId, {
+  const state = await service.saveSettings(userId, {
     capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
     symbols: ['EURUSD'], riskAcknowledged: true
   });
-  await assert.rejects(
-    () => service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' }),
-    error => error.code === 'DEMO_SYMBOL_NOT_VALIDATED'
-  );
+  assert.deepEqual(state.settings.symbols, ['XAUUSD']);
+  const armed = await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
+  assert.equal(armed.control.desiredState, 'ON');
 });
 
 test('STOP cancels queued entries and is delivered before any broker setup', async () => {
@@ -341,7 +436,7 @@ test('an open symbol position blocks a second setup command', async () => {
     accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
     tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
     expertTradeAllowed: true, demoExecutionUnlocked: true,
-    connectorVersion: '1.4.0-demo-execution',
+    connectorVersion: LEGACY_WINDOWS_CONNECTOR,
     positions: [{
       ticket: '900010', symbol: 'XAUUSD', side: 'BUY', volume: 0.03,
       entry: 2500, currentPrice: 2501, activeSl: 2495
@@ -655,7 +750,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     allowDemoExecution: true,
     hostedWorkerEnabled: true,
     hostedWorkerAccountId: accountId,
-    requiredDemoConnectorVersion: '2.1.0-gcp-demo-execution',
+    requiredDemoConnectorVersion: '2.2.2-gcp-multiuser-multipair',
     allowedDemoSymbols: ['XAUUSD']
   });
   await service.saveSettings(userId, {
@@ -680,7 +775,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     connectionStatus: 'CONNECTED', terminalTradeAllowed: true,
     accountTradeAllowed: true, expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '2.1.0-gcp-demo-execution', terminalBuild: '6204',
+    connectorVersion: '2.2.2-gcp-multiuser-multipair', terminalBuild: '6204',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
       volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01

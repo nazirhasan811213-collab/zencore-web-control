@@ -8,6 +8,8 @@ param(
     [string]$TerminalTemplateRoot = "C:\ProgramData\ZenCore\MT5Template",
     [int]$MaxSlots = 10,
     [switch]$PrepareTerminalTemplate,
+    [switch]$ReplaceTerminalTemplate,
+    [switch]$EnableDemoExecution,
     [switch]$MigrateLegacyWorker
 )
 
@@ -22,6 +24,43 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 if ($MaxSlots -lt 1 -or $MaxSlots -gt 50) {
     throw "MaxSlots must be between 1 and 50."
 }
+if ($ReplaceTerminalTemplate -and -not $PrepareTerminalTemplate) {
+    throw "ReplaceTerminalTemplate requires PrepareTerminalTemplate."
+}
+
+function Get-ZenCoreManagedProcesses {
+    param([Parameter(Mandatory = $true)][string]$ManagedReleaseRoot)
+
+    $rootPrefix = [System.IO.Path]::GetFullPath($ManagedReleaseRoot).TrimEnd([char]'\') + '\'
+    $allowedNames = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe")
+    return @(Get-CimInstance Win32_Process | Where-Object {
+        $path = [string]$_.ExecutablePath
+        $_.Name -in $allowedNames -and
+        -not [string]::IsNullOrWhiteSpace($path) -and
+        $path.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+    })
+}
+
+function Stop-ZenCoreManagedProcesses {
+    param([Parameter(Mandatory = $true)][string]$ManagedReleaseRoot)
+
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        $running = @(Get-ZenCoreManagedProcesses -ManagedReleaseRoot $ManagedReleaseRoot)
+        if ($running.Count -eq 0) {
+            return
+        }
+        $ordered = @($running | Sort-Object @{ Expression = {
+            if ($_.Name -eq "ZenCoreHostedWorkerManager.exe") { 0 } else { 1 }
+        } })
+        foreach ($process in $ordered) {
+            Stop-Process -Id ([int]$process.ProcessId) -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    if (@(Get-ZenCoreManagedProcesses -ManagedReleaseRoot $ManagedReleaseRoot).Count -gt 0) {
+        throw "A managed ZenCore worker process survived the bounded upgrade cleanup."
+    }
+}
 
 $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $manifestPath = Join-Path $source "release-manifest.json"
@@ -30,9 +69,11 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
+    $manifest.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
-    $manifest.workerManagerIncluded -ne $true) {
+    $manifest.connectionOnlyPreflight -ne $true -or
+    $manifest.workerManagerIncluded -ne $true -or
+    $manifest.processLifetimeGuardIncluded -ne $true) {
     throw "Release manifest does not contain the approved multi-client manager boundary."
 }
 
@@ -56,14 +97,34 @@ if (-not (Test-Path -LiteralPath $LegacyConfigPath -PathType Leaf)) {
     throw "Existing hosted worker config is required to seed non-secret manager settings."
 }
 $legacy = Get-Content -Raw -LiteralPath $LegacyConfigPath | ConvertFrom-Json
+$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
+$configuredSymbols = @($legacy.allowedDemoSymbols | ForEach-Object { [string]$_ })
+$invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
 if ($legacy.demoOnly -ne $true -or
     $legacy.privateKeyAvailable -ne $false -or
     $legacy.credentialStorage -ne "MEMORY_ONLY" -or
-    [string]$legacy.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
-    @($legacy.allowedDemoSymbols).Count -ne 1 -or
-    [string]$legacy.allowedDemoSymbols[0] -ne "XAUUSD" -or
+    $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
+    @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count -or
     [string]$legacy.approvedDemoServer -ne "InterStellarFinancial-Demo") {
     throw "Existing worker config does not match the reviewed DEMO boundary."
+}
+
+$lockPath = "C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED"
+$legacyConnector = [string]$legacy.connectorVersion
+if ($EnableDemoExecution) {
+    if ($legacy.executionEnabled -ne $true -or
+        $legacyConnector -ne [string]$manifest.connectorVersion -or
+        -not (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf) -or
+        (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "DEMO execution installation requires matching config and an explicit unlocked local gate."
+    }
+} else {
+    if ($legacy.executionEnabled -ne $false -or
+        $legacyConnector -ne "2.0.0-gcp-connect" -or
+        (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "Connection-only preflight requires the locked 2.0.0 legacy boundary."
+    }
 }
 
 $releasePath = Join-Path $ReleaseRoot $manifest.connectorVersion
@@ -91,6 +152,9 @@ $legacyTerminalRoot = Split-Path -Parent $legacyTerminalPath
 
 if ($PrepareTerminalTemplate) {
     if (Test-Path -LiteralPath $TerminalTemplateRoot) {
+        if (-not $ReplaceTerminalTemplate) {
+            throw "MT5 terminal template already exists. Use ReplaceTerminalTemplate only after reviewing the exact target."
+        }
         Remove-Item -Recurse -Force -LiteralPath $TerminalTemplateRoot
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $TerminalTemplateRoot) | Out-Null
@@ -116,13 +180,14 @@ $managerConfig = [ordered]@{
     slotsRoot = $SlotsRoot
     executionGatePath = $ExecutionGatePath
     approvedDemoServer = [string]$legacy.approvedDemoServer
-    allowedDemoSymbols = @([string]$legacy.allowedDemoSymbols[0])
+    allowedDemoSymbols = @($configuredSymbols)
     heartbeatIntervalSeconds = [double]$legacy.heartbeatIntervalSeconds
     pollIntervalSeconds = 10
-    connectorVersion = [string]$legacy.connectorVersion
+    connectorVersion = [string]$manifest.connectorVersion
     demoOnly = $true
     credentialStorage = "CHILD_WORKER_MEMORY_ONLY"
     privateKeyAvailable = $false
+    executionEnabled = $EnableDemoExecution.IsPresent
     maxSlots = $MaxSlots
 }
 $managerConfig | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ManagerConfigPath -Encoding UTF8
@@ -140,6 +205,9 @@ $taskName = "ZenCore MT5 Worker Manager"
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($null -ne $existingTask) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+}
+if ($MigrateLegacyWorker) {
+    Stop-ZenCoreManagedProcesses -ManagedReleaseRoot $ReleaseRoot
 }
 $arguments = '--config "{0}"' -f $ManagerConfigPath
 $action = New-ScheduledTaskAction -Execute $managerExe -Argument $arguments -WorkingDirectory $releasePath
@@ -169,17 +237,23 @@ $taskParams = @{
 }
 Register-ScheduledTask @taskParams | Out-Null
 Enable-ScheduledTask -TaskName $taskName | Out-Null
-Start-ScheduledTask -TaskName $taskName
+if ($MigrateLegacyWorker) {
+    Start-ScheduledTask -TaskName $taskName
+} else {
+    Disable-ScheduledTask -TaskName $taskName | Out-Null
+}
 
-Write-Host "ZenCore multi-client worker manager installed and started."
+Write-Host "ZenCore multi-client worker manager installed."
 Write-Host "Manager config: $ManagerConfigPath"
 Write-Host "MT5 template: $TerminalTemplateRoot"
 Write-Host "Slot root: $SlotsRoot"
-if (-not (Test-Path -LiteralPath $ExecutionGatePath -PathType Leaf)) {
-    Write-Warning "DEMO execution gate is absent. The manager will stay fail-closed and will not start slot workers."
+if (-not $EnableDemoExecution) {
+    Write-Host "Manager mode: CONNECTION-ONLY PREFLIGHT. Order commands are unreachable."
 }
 if (-not $MigrateLegacyWorker) {
-    Write-Host "Legacy one-to-one worker was left unchanged for staged migration."
+    Write-Host "Manager task is staged but disabled. Legacy one-to-one worker was left unchanged."
+} else {
+    Write-Host "Legacy worker was disabled and the manager was started for controlled migration."
 }
 
 # Manager config contains only non-secret control-plane and filesystem assignment data.

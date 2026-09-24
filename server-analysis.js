@@ -12,6 +12,7 @@ const {
   createGcpRequestReplayGuard,
   identityError
 } = require('./gcp-instance-identity');
+const { parseGcpWorkerFleet } = require('./gcp-worker-fleet');
 
 const { AnalysisAlerts } = require('./analysis-alert-service');
 let analysisAlerts = null;
@@ -43,7 +44,7 @@ const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || ''
 const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS || 'XAUUSD')
   .split(',').map(value => value.trim()).filter(Boolean);
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
-  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '1.4.0-demo-execution'
+  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.2-gcp-multiuser-multipair'
 );
 const HOSTED_MT5_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(
   String(process.env.ZENCORE_HOSTED_MT5_ENABLED || '')
@@ -57,6 +58,7 @@ const GCP_HOSTED_WORKER_SLOT_CAPACITY = Math.min(
   50,
   Math.max(1, Number(process.env.ZENCORE_GCP_WORKER_SLOT_CAPACITY || 10) || 10)
 );
+const GCP_HOSTED_WORKER_FLEET_JSON = String(process.env.ZENCORE_GCP_WORKER_FLEET_JSON || '').trim();
 
 process.env.PORT = String(V17_PORT);
 require('./server-v17.js');
@@ -154,26 +156,35 @@ if (AUTH_ENABLED) {
         allowMemory: AUTOTRADE_MEMORY && process.env.NODE_ENV !== 'production'
       });
       await autoStore.init();
-      if (GCP_HOSTED_WORKER_ENABLED && typeof autoStore.ensureHostedWorkerHost === 'function') {
-        const workerHost = await autoStore.ensureHostedWorkerHost({
-          provider: 'GOOGLE_CLOUD',
-          projectId: String(process.env.ZENCORE_GCP_WORKER_PROJECT_ID || ''),
-          zone: String(process.env.ZENCORE_GCP_WORKER_ZONE || ''),
-          instanceName: String(process.env.ZENCORE_GCP_WORKER_INSTANCE || ''),
+      let workerFleet = [];
+      if (GCP_HOSTED_WORKER_ENABLED) {
+        workerFleet = parseGcpWorkerFleet(GCP_HOSTED_WORKER_FLEET_JSON, {
+          projectId: process.env.ZENCORE_GCP_WORKER_PROJECT_ID,
+          zone: process.env.ZENCORE_GCP_WORKER_ZONE,
+          instanceName: process.env.ZENCORE_GCP_WORKER_INSTANCE,
+          serviceAccountEmail: process.env.ZENCORE_GCP_WORKER_SERVICE_ACCOUNT,
           capacity: GCP_HOSTED_WORKER_SLOT_CAPACITY
         });
-        if (workerHost) {
-          console.log(`ZenCore hosted worker pool ready: ${workerHost.instanceName} • ${workerHost.capacity} slots`);
+      }
+      if (GCP_HOSTED_WORKER_ENABLED && typeof autoStore.ensureHostedWorkerHost === 'function') {
+        for (const configuredWorker of workerFleet) {
+          const workerHost = await autoStore.ensureHostedWorkerHost({
+            provider: 'GOOGLE_CLOUD',
+            projectId: configuredWorker.projectId,
+            zone: configuredWorker.zone,
+            instanceName: configuredWorker.instanceName,
+            capacity: configuredWorker.capacity
+          });
+          if (workerHost) {
+            console.log(`ZenCore hosted worker pool ready: ${workerHost.instanceName} • ${workerHost.capacity} slots`);
+          }
         }
       }
       autoTradeState.store = autoStore;
       if (GCP_HOSTED_WORKER_ENABLED) {
         autoTradeState.workerIdentityVerifier = createGcpInstanceIdentityVerifier({
           audience: process.env.ZENCORE_GCP_WORKER_AUDIENCE,
-          projectId: process.env.ZENCORE_GCP_WORKER_PROJECT_ID,
-          zone: process.env.ZENCORE_GCP_WORKER_ZONE,
-          instanceName: process.env.ZENCORE_GCP_WORKER_INSTANCE,
-          serviceAccountEmail: process.env.ZENCORE_GCP_WORKER_SERVICE_ACCOUNT
+          workers: workerFleet
         });
         autoTradeState.workerReplayGuard = createGcpRequestReplayGuard();
       }

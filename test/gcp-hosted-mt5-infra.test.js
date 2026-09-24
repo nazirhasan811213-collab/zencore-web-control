@@ -52,7 +52,7 @@ test('one hosted account is pinned to one Google worker identity and exact audie
   assert.match(variables, /hosted_account_id must be blank or a UUIDv4/);
   assert.match(main, /hostedAccountId\s*=\s*var\.hosted_account_id/);
   assert.match(main, /controlPlaneAudience\s*=\s*"\$\{var\.control_plane_url\}\/api\/hosted-execution"/);
-  assert.match(main, /connectorVersion\s*=\s*var\.execution_enabled \? "2\.1\.0-gcp-demo-execution" : "2\.0\.0-gcp-connect"/);
+  assert.match(main, /connectorVersion\s*=\s*var\.execution_enabled \? "2\.2\.2-gcp-multiuser-multipair" : "2\.0\.0-gcp-connect"/);
   assert.match(main, /approvedDemoServer\s*=\s*"InterStellarFinancial-Demo"/);
   assert.match(main, /mt5TerminalPath\s*=\s*var\.mt5_terminal_path/);
   assert.match(outputs, /ZENCORE_GCP_WORKER_AUDIENCE/);
@@ -74,17 +74,17 @@ test('Default MT5 terminal path matches the deployed MetaTrader 5 terminal', () 
   assert.match(example, /C:\\\\Program Files\\\\MetaTrader 5\\\\terminal64\.exe/);
 });
 
-test('Terraform and Windows bootstrap require explicit pinned XAUUSD DEMO execution gate', () => {
+test('Terraform and Windows bootstrap require explicit pinned multi-pair DEMO execution gate', () => {
   const variables = read('variables.tf');
   const main = read('main.tf');
   const bootstrap = read('bootstrap/Install-ZenCoreGcpHostedWorker.ps1.tftpl');
   assert.match(variables, /variable "execution_enabled"/);
-  assert.match(variables, /var\.allowed_demo_symbols == toset\(\["XAUUSD"\]\)/);
+  assert.match(variables, /length\(var\.allowed_demo_symbols\) > 0/);
   assert.match(variables, /worker_release_url != ""/);
   assert.match(variables, /worker_release_sha256/);
   assert.match(main, /execution\s*=\s*var\.execution_enabled \? "demo-enabled" : "locked"/);
   assert.match(bootstrap, /DEMO_EXECUTION_ENABLED/);
-  assert.match(bootstrap, /2\.1\.0-gcp-demo-execution/);
+  assert.match(bootstrap, /2\.2\.2-gcp-multiuser-multipair/);
   assert.match(bootstrap, /EXECUTION_LOCKED/);
   assert.match(bootstrap, /Get-FileHash -Algorithm SHA256/);
   assert.match(bootstrap, /Expand-Archive/);
@@ -108,15 +108,40 @@ test('Windows DEMO execution worker is test-built, hash-pinned and scheduled as 
   assert.match(build, /unittest discover/);
   assert.match(build, /PyInstaller/);
   assert.match(build, /executionUnlocked = \$true/);
+  assert.match(build, /connectionOnlyPreflight = \$true/);
   assert.match(build, /Get-FileHash -Algorithm SHA256/);
   assert.match(install, /release-manifest\.json/);
   assert.match(install, /Get-FileHash -Algorithm SHA256/);
   assert.match(install, /NT AUTHORITY\\SYSTEM/);
   assert.match(install, /executionEnabled -ne \$true/);
   assert.match(install, /DEMO_EXECUTION_ENABLED/);
-  assert.match(install, /XAUUSD/);
+  assert.match(install, /canonicalSymbols/);
+  assert.match(install, /EURUSD/);
   assert.match(install, /Disable-ScheduledTask/);
   assert.doesNotMatch(install, /ConvertTo-SecureString|PSCredential|service_account_key/);
+});
+
+test('Worker Manager stages connection-only preflight before explicit migration', () => {
+  const install = readWorker('Install-ZenCoreWorkerManager.ps1');
+  const manager = readWorker('worker_manager.py');
+  const worker = readWorker('hosted_worker.py');
+  const guard = readWorker('process_guard.py');
+  assert.match(install, /connectionOnlyPreflight/);
+  assert.match(install, /processLifetimeGuardIncluded/);
+  assert.match(install, /executionEnabled = \$EnableDemoExecution\.IsPresent/);
+  assert.match(install, /Connection-only preflight requires the locked 2\.0\.0 legacy boundary/);
+  assert.match(install, /Disable-ScheduledTask -TaskName \$taskName/);
+  assert.match(install, /MigrateLegacyWorker/);
+  assert.match(install, /Stop-ZenCoreManagedProcesses/);
+  assert.match(install, /ExecutablePath/);
+  assert.match(install, /StartsWith\(\$rootPrefix, \[System\.StringComparison\]::OrdinalIgnoreCase\)/);
+  assert.match(manager, /PREFLIGHT_EXECUTION_GATE_PRESENT/);
+  assert.match(manager, /"--manager-pid", str\(os\.getpid\(\)\)/);
+  assert.match(worker, /PREFLIGHT_EXECUTION_GATE_PRESENT/);
+  assert.match(worker, /if not self\.config\.execution_enabled:\s+return/);
+  assert.match(worker, /install_process_lifetime_guard/);
+  assert.match(guard, /WaitForSingleObject/);
+  assert.match(guard, /PROCESS_GUARD_EXIT_CODE/);
 });
 
 test('GitHub build workflow creates artifacts only and has no cloud credentials', () => {

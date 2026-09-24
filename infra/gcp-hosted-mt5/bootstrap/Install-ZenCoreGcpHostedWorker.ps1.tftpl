@@ -55,9 +55,12 @@ try {
         throw "Hosted worker must remain DEMO only."
     }
     if ($config.executionEnabled -eq $true) {
-        if ($config.connectorVersion -ne "2.1.0-gcp-demo-execution" -or
-            @($config.allowedDemoSymbols).Count -ne 1 -or
-            [string]$config.allowedDemoSymbols[0] -ne "XAUUSD") {
+        $canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
+        $configuredSymbols = @($config.allowedDemoSymbols | ForEach-Object { [string]$_ })
+        $invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
+        if ($config.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
+            $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
+            @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count) {
             throw "DEMO execution assignment is not certified for this release."
         }
     } elseif ($config.connectorVersion -ne "2.0.0-gcp-connect") {
@@ -69,7 +72,7 @@ try {
     [System.IO.File]::WriteAllText($configPath, $configJson, (New-Object System.Text.UTF8Encoding($false)))
     if ($config.executionEnabled -eq $true) {
         Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $lockPath
-        Set-Content -LiteralPath $executionGatePath -Value "ZenCore XAUUSD DEMO execution gate enabled." -Encoding ASCII
+        Set-Content -LiteralPath $executionGatePath -Value "ZenCore multi-pair DEMO execution gate enabled." -Encoding ASCII
     } else {
         Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $executionGatePath
         Set-Content -LiteralPath $lockPath -Value "Hosted Demo order execution is locked in this release." -Encoding ASCII

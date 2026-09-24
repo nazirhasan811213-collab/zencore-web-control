@@ -1,6 +1,6 @@
 # ZenCore hosted MT5 — Google Cloud staged Demo cell
 
-This module prepares one isolated Windows Server 2022 cell for one MT5 Demo account. It does not enable broker order execution and it does not claim compatibility with every broker server.
+This module prepares one private Windows Server 2022 worker host. The Worker Manager can create multiple isolated MT5 account slots on that host. It does not enable broker order execution by default and it does not claim compatibility with every broker server.
 
 ## Security boundary
 
@@ -9,9 +9,9 @@ This module prepares one isolated Windows Server 2022 cell for one MT5 Demo acco
 - The browser encrypts login, password and server with AES-256-GCM and wraps the AES key with the Cloud KMS public RSA key.
 - Cloud HSM owns the RSA-OAEP 3072 SHA-256 private key. The key cannot be exported. Only the worker service account has `asymmetricDecrypt` permission on this one key.
 - The VM uses its attached service account through the metadata server. No service-account JSON key is created or copied to disk.
-- Render accepts the worker only when Google's signed full instance identity exactly matches the configured project, zone, instance name, service account and HTTPS audience. Fresh request IDs are single-use, time-limited and recorded in a short PostgreSQL replay ledger across web-service restarts.
+- Render accepts a worker only when Google's signed full instance identity exactly matches a host in the configured fleet registry: project, zone, instance name, service account and HTTPS audience. Fresh request IDs are single-use, time-limited and recorded in a short PostgreSQL replay ledger across web-service restarts.
 - Decrypted MT5 values are permitted only in short-lived process memory. They are forbidden in environment variables, Terraform state, Render variables, logs and VM metadata.
-- The first rollout is limited to `InterStellarFinancial-Demo` and `XAUUSD`. Broker endpoint discovery and symbol suffix mapping must pass before expanding the matrix.
+- The default locked configuration starts with `InterStellarFinancial-Demo` and `XAUUSD`. Connector `2.2.2-gcp-multiuser-multipair` can validate additional canonical pairs in connection-only preflight; execution remains unavailable until the independent server, manager-config and local gates match.
 
 Google Cloud IAM separation of duties is required: the person who administers the KMS policy should not also control frontend releases, the Render database and the worker image. Absolute “admin-proof” auto-login is not possible when one person can replace every layer of the system.
 
@@ -72,7 +72,7 @@ After the base preflight, use this connection-only sequence:
 3. The trader enters the Demo login/password/server only in the ZenCore encrypted popup. Copy the resulting non-secret hosted-account UUID into `hosted_account_id` and apply the reviewed Terraform plan again.
 4. Copy the non-secret `render_worker_identity_environment` output—including the exact hosted-account UUID—into Render, then set `ZENCORE_GCP_HOSTED_WORKER_ENABLED=true`.
 5. Install the verified InterStellar terminal, then rerun the installer and `Test-ZenCoreGcpCell.ps1 -RequireWorker -RequireAssignment`.
-6. Confirm the UI reports `CONNECTED • EXECUTION LOCKED`. No order can be sent by this release.
+6. Confirm the UI reports `CONNECTED • EXECUTION LOCKED`. No order can be sent while this connection-only preflight state is intact.
 
 The Google identity audience is exactly `${control_plane_url}/api/hosted-execution`. One worker cell is assigned one hosted-account UUID; a different account or cell is rejected.
 
@@ -83,10 +83,10 @@ The feature remains locked until all of these pass:
 1. No public IP, Secure Boot and TPM preflight.
 2. KMS decrypt succeeds only from the worker service account and fails for Render/admin application identities.
 3. InterStellar Demo login succeeds without writing plaintext credentials to disk or logs.
-4. Exact broker symbol mapping and volume/tick specifications for XAUUSD are captured.
+4. Exact broker symbol mapping and volume/tick specifications are captured for every configured pair.
 5. Analysis snapshot parity, command replay protection and STOP semantics pass.
 6. Entry, TP1, TP2, TP3, SL, Close Separuh and opposite confirmed yellow reversal pass on Demo.
 7. Recovery, restart, stale-command and duplicate-order tests pass.
-8. A separate reviewed release changes the worker build gate; risk warnings still never become order blocks.
+8. A separate reviewed rollout changes all three execution gates together; risk warnings still never become order blocks.
 
 Only after certification should the hosted-account envelope gate be enabled. Real-money trading remains outside this phase.

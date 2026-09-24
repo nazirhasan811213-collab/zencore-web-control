@@ -6,17 +6,17 @@ This phase adds the hosted-MT5 control-plane foundation while keeping all broker
 
 1. **Render control plane**
    - Authenticates the ZenCore user.
-   - Stores capital, lot, layers, allowed symbols, desired control state, masked pod identity, positions and audit events.
+   - Stores capital, lot, layers, the server-managed pair scope, desired control state, masked pod identity, positions and audit events.
    - Dispatches Normal 3M SOP V32 entry commands and EXIT 32.3 StepLock management commands.
    - Accepts only a validated hybrid-encryption envelope for the optional hosted account flow; it has no credential private key or decrypt function.
    - Rejects plaintext broker credential keys recursively.
 2. **Google Cloud managed Windows execution cell (defined; not yet provisioned)**
-   - One isolated execution cell per trader account.
+   - One isolated MT5 execution slot per active trader account; a registered worker fleet can provide many slots across multiple hosts.
    - Runs Windows Server 2022 as a Shielded VM with Secure Boot, vTPM, integrity monitoring, no public IP and IAP-only temporary RDP.
    - Receives a short-lived encrypted envelope lease and unwraps the AES key only through an attached keyless service account and an HSM-backed Cloud KMS asymmetric key.
    - Runs MT5 and verifies every command against `ZENCORE_ANALYSIS_EXECUTION_V1` before broker translation.
    - `hosted-mt5-worker/security_boundary.py`, `gcp_kms_unwrapper.py`, `gcp_control_plane.py`, `hosted_worker.py` and `infra/gcp-hosted-mt5/` are implemented, tested and build-locked; the billable GCP cell is not provisioned.
-   - The control plane verifies a Google-signed full instance JWT against one exact project, zone, instance, service account and audience. Each request ID is fresh, instance-bound, time-limited and accepted once; the short replay ledger is persisted in PostgreSQL across Render restarts.
+   - The control plane verifies a Google-signed full instance JWT against an exact registered project, zone, instance, service account and audience. Each request ID is fresh, instance-bound, time-limited and accepted once; the short replay ledger is persisted in PostgreSQL across Render restarts.
    - Google Cloud Windows does not support Confidential VM. Application admins remain outside the credential path, but the system does not claim protection from a fully privileged GCP project owner.
 3. **Legacy trader-owned Windows Secure Pod (rollback)**
    - Runs the MetaTrader 5 terminal and `mt5-secure-pod/ZenCoreSecurePod.py` on the trader's secured PC for the XAUUSD Demo execution rollout, or inside a trader-owned Azure Confidential VM for future phases.
@@ -121,6 +121,7 @@ The hosted popup remains locked unless all three values are deliberately configu
 ```text
 ZENCORE_HOSTED_MT5_ENABLED=false
 ZENCORE_GCP_HOSTED_WORKER_ENABLED=false
+ZENCORE_GCP_WORKER_FLEET_JSON=[{"projectId":"...","zone":"...","instanceName":"...","serviceAccountEmail":"...","capacity":10}]
 ZENCORE_MT5_CREDENTIAL_KEY_ID=<external HSM RSA key version>
 ZENCORE_MT5_CREDENTIAL_PUBLIC_KEY=<public RSA key only>
 ```
@@ -142,6 +143,6 @@ Release `1.4.0-demo-execution` opens a deliberately narrow broker-test lane:
 - the local SQLite ledger claims a command before broker execution to block crash/retry duplication;
 - 3 × 0.01 partial close is rounded to 0.02, leaving one 0.01 runner when the broker volume step is 0.01.
 
-Live-money execution remains locked. The legacy worker stays XAUUSD/InterStellar Demo only. The hosted worker declares all 11 canonical symbols but cannot place any order until the per-user Google Shielded Windows cell, HSM key release, outbound-only private networking, broker symbol/server discovery, full Demo test matrix and independent security review pass.
+Live-money execution remains locked. The legacy worker stays XAUUSD/InterStellar Demo only. Hosted connector `2.2.2-gcp-multiuser-multipair` accepts a reviewed subset of the 11 canonical symbols and 1–10 layers. Its default connection-only preflight requires both the manager and child config to declare execution disabled and rejects a present local execution gate; it leases only a server-locked envelope, reports telemetry and never polls commands. Order execution remains unavailable until the server gate, manager config and local gate are all explicitly changed together and the HSM, network, broker and independent security checks pass.
 
-The current hosted executable is connection-only. It has no order API, requires an `EXECUTION_LOCKED` file, rejects REAL accounts and existing ZenCore-magic positions, and reports only masked identity/telemetry. The Windows scheduled task is disabled until account assignment and terminal installation are both present.
+The legacy `2.0.0-gcp-connect` worker is connection-only and remains the rollback path. Connector `2.2.2-gcp-multiuser-multipair` can replace it first in connection-only preflight, where a present local execution gate is treated as a fatal configuration mismatch. Its frozen manager and worker payloads monitor exact supervisor process handles and terminate fail-closed if a scheduled-task bootloader or manager disappears. Its guarded Demo order adapter stays inert unless the reviewed server rollout gate, execution-enabled manager config, pinned artifact, local execution gate, assigned slot and runtime checks all pass. REAL accounts remain blocked.

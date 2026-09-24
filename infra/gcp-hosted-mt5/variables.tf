@@ -213,10 +213,10 @@ variable "execution_enabled" {
 
   validation {
     condition = var.execution_enabled == false || (
-      var.allowed_demo_symbols == toset(["XAUUSD"]) &&
+      length(var.allowed_demo_symbols) > 0 &&
       var.worker_release_url != "" &&
       can(regex("^[A-Fa-f0-9]{64}$", var.worker_release_sha256))
     )
-    error_message = "DEMO execution requires exactly XAUUSD plus a pinned HTTPS worker release and SHA-256."
+    error_message = "DEMO execution requires at least one broker-validated canonical symbol plus a pinned HTTPS worker release and SHA-256."
   }
 }
