@@ -18,6 +18,28 @@ class AnalysisAlerts {
     if(this.pool && this.token) { this.timer=setInterval(()=>this.deliver().catch(()=>console.error('Telegram delivery unavailable')),2000); this.timer.unref?.(); }
     this.cleanupTimer=setInterval(()=>this.pool?.query("DELETE FROM zencore_analysis_alerts WHERE created_at < NOW()-INTERVAL '7 days'").catch(()=>{}),3600000); this.cleanupTimer.unref?.();
   }
+  async withUserLock(user, method, argument) {
+    // Serialise code attempts and ID changes across concurrent requests/instances.
+    if (!this.pool) {
+      this.userLocks ||= new Map();
+      const previous=this.userLocks.get(user)||Promise.resolve();
+      const pending=previous.catch(()=>{}).then(()=>this[method](user,argument));
+      this.userLocks.set(user,pending);
+      try{return await pending;}finally{if(this.userLocks.get(user)===pending)this.userLocks.delete(user);}
+    }
+    const c=await this.pool.connect();
+    let result,error;
+    try {
+      await c.query('BEGIN');
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['alert-user:'+user]);
+      const scoped=Object.create(this);scoped.pool=c;
+      try {result=await scoped[method](user,argument);}catch(e){error=e;}
+      // Failed verification still persists its attempt count / request cooldown.
+      await c.query('COMMIT');
+      if(error)throw error;
+      return result;
+    }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+  }
   async get(user) {
     const data=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_preferences WHERE user_id=$1',[user])).rows[0]?.data:this.prefs.get(user);
     return {...defaults(),...data};

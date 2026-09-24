@@ -16,10 +16,13 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   assert.equal((await a.feed('0')).events.length,1);
   assert.equal((await pool.query('SELECT * FROM zencore_telegram_deliveries')).rows.length,1);
   assert.equal((await b.get(user)).telegramEnabled,true);
-  await b.save(user,{popup:true,sound:true,telegramEnabled:false,telegramId:'123456789'});
+  await b.withUserLock(user,'save',{popup:true,sound:true,telegramEnabled:false,telegramId:'123456789'});
   let sends=0;a.telegram=async()=>{sends++;};await a.deliver();assert.equal(sends,0);
   assert.equal((await pool.query('SELECT status FROM zencore_telegram_deliveries')).rows[0].status,'skipped');
   await a.record({...m,receivedAt:m.receivedAt+2,positionManagement:{action:'CLOSE_50_NOW'}});
   assert.equal((await b.feed('0')).events.length,2);
+  await a.put(user,{...await a.get(user),code:'not-a-valid-code',expires:Date.now()+60000,attempts:0});
+  await Promise.allSettled(Array.from({length:10},(_,i)=>(i%2?a:b).withUserLock(user,'verify','000000')));
+  assert.equal((await a.get(user)).attempts,5);
  }finally{for(const s of [a,b])if(s){clearInterval(s.timer);clearInterval(s.cleanupTimer);}await pool?.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end();}
 });

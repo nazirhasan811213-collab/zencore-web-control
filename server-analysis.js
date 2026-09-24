@@ -1516,9 +1516,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res,200,{ok:true,...await analysisAlerts.feed(new URL(req.url,'http://localhost').searchParams.get('after'))});
       if(req.method==='POST') {
         const body=await readJson(req);
-        if(pathname==='/api/analysis-alerts/settings') return sendJson(res,200,{ok:true,settings:await analysisAlerts.save(user,body)});
-        if(pathname==='/api/analysis-alerts/telegram/code') {await analysisAlerts.requestCode(user);return sendJson(res,200,{ok:true});}
-        if(pathname==='/api/analysis-alerts/telegram/verify') return sendJson(res,200,{ok:true,settings:await analysisAlerts.verify(user,body.code)});
+        if(pathname==='/api/analysis-alerts/settings') return sendJson(res,200,{ok:true,settings:await analysisAlerts.withUserLock(user,'save',body)});
+        if(pathname==='/api/analysis-alerts/telegram/code') {await analysisAlerts.withUserLock(user,'requestCode');return sendJson(res,200,{ok:true});}
+        if(pathname==='/api/analysis-alerts/telegram/verify') return sendJson(res,200,{ok:true,settings:await analysisAlerts.withUserLock(user,'verify',body.code)});
       }
       return sendJson(res,404,{ok:false,error:'Alert route tidak ditemui.'});
     }catch(e){return sendJson(res,e.status||500,{ok:false,error:e.status?e.message:'Permintaan alert gagal. Cuba lagi.'});}
