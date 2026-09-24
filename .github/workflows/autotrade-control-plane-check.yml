@@ -3,6 +3,11 @@ name: Auto Trade control plane checks
 "on":
   pull_request:
     paths:
+      - "analysis-alert*"
+      - "precision-entry.*"
+      - "auto-trade-monitor.css"
+      - "viewer-mode.css"
+      - "scripts/check-analysis-alert-ui.cjs"
       - "auto-trade-*.js"
       - "gcp-instance-identity.js"
       - "server-analysis.js"
