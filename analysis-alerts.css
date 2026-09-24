@@ -1,3 +1,36 @@
 .alert-settings{margin:16px 0;padding:18px;border:1px solid #214759;border-radius:16px;background:#081b26;color:#e8f7ff}.alert-settings summary{cursor:pointer;font-weight:700;letter-spacing:.03em}.alert-settings p{color:#9bb8c8;font-size:13px;line-height:1.6}.alert-controls{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0}.alert-settings label{display:flex;gap:8px;align-items:center;font-size:13px}.alert-settings input[type=text]{background:#06131d;color:#fff;border:1px solid #396074;border-radius:8px;padding:10px;max-width:100%;width:220px}.alert-settings button,.alert-settings a{display:inline-block;background:#113e50;color:#d9fbff;border:1px solid #347088;border-radius:8px;padding:10px 14px;cursor:pointer;text-decoration:none;font:inherit;font-size:12px;margin:4px}.alert-settings button:disabled{opacity:.45;cursor:default}.alert-settings .alert-status{min-height:20px;color:#6de5cd}.alert-telegram{border-top:1px solid #214759;padding-top:14px}.alert-toasts{position:fixed;right:18px;top:100px;z-index:1000;width:min(380px,calc(100vw - 36px));display:grid;gap:10px}.alert-toast{background:#092b36;border:1px solid #25bdb4;border-left:5px solid #48e0b5;box-shadow:0 12px 40px #0008;border-radius:12px;padding:16px;color:#efffff}.alert-toast.close{border-color:#ffc46a}.alert-toast strong{font-size:16px}.alert-toast p{white-space:pre-line;line-height:1.6;font-size:13px}.alert-toast button{float:right;background:transparent;border:0;color:white;font-size:22px;cursor:pointer}.alert-toast small{color:#a9c6ce}.alert-history{white-space:pre-line;font-size:12px;max-height:220px;overflow:auto;line-height:1.6}.alert-history article{padding:9px 0;border-top:1px solid #214759}
 
 .alert-settings [hidden]{display:none!important}
+
+/* Full-width card in the Analysis mosaic; scoped to avoid other panels. */
+.app > .alert-settings{grid-column:1/-1;order:0;width:100%;min-width:0;box-sizing:border-box;margin:0;padding:0;align-self:stretch;background:linear-gradient(145deg,#0d1e2a,#08141e);overflow:hidden}
+.alert-settings > summary{padding:18px 22px;color:#62def2;font-size:13px;line-height:1.5;letter-spacing:.06em}
+.alert-settings[open] > summary{border-bottom:1px solid #214759}
+.alert-body{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:22px}
+.alert-body > section{min-width:0}
+.alert-settings h3{font-size:16px;margin:0 0 10px;color:#edf8ff}
+.alert-settings .alert-telegram{border-top:0;border-left:1px solid #214759;padding:0 0 0 24px}
+.alert-settings label{flex-wrap:wrap;line-height:1.6;margin:8px 0}
+.alert-settings input[type=text]{box-sizing:border-box;min-width:0;flex:1 1 160px}
+.alert-settings input[type=checkbox]{accent-color:#45e6ad}
+.alert-settings button,.alert-settings a{margin:6px 6px 6px 0;line-height:1.4}
+.alert-footer{padding:0 22px 18px}
+.alert-footer > button{background:#125244;border-color:#237e68;font-weight:700}
+.alert-footer > details{border-top:1px solid #214759;padding-top:12px;margin-top:12px}
+@media(min-width:1101px){
+ .app > .alert-settings{grid-row:2}
+ .app > .plan-top{grid-row:3}
+ .app > .hero,.app > .status-grid{grid-row:4}
+ .app > .chart-section,.app > .position-management{grid-row:5}
+ .app > .mt5-live-monitor{grid-row:6}
+ .app > .validation-layout,.app > .layout.lower{grid-row:7!important}
+ .app > .performance-layout{grid-row:8!important}
+ .app > .rules{grid-row:9!important}
+ .app > footer{grid-row:10!important}
+}
+@media(max-width:700px){
+ .alert-body{grid-template-columns:1fr;gap:18px;padding:16px}
+ .alert-settings .alert-telegram{border-left:0;border-top:1px solid #214759;padding:18px 0 0}
+ .alert-settings > summary{padding:16px}
+ .alert-footer{padding:0 16px 16px}
+}

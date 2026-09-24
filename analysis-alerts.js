@@ -3,16 +3,16 @@
   let prefs={popup:true,sound:true,telegramEnabled:false,telegramId:'',verified:false}, cursor=null, user='', audio, stopped=false;
   const root=document.createElement('details');root.className='alert-settings';root.open=false;
   root.innerHTML=`<summary>ALERT ANALYSIS · ENTRY & CLOSE</summary>
-    <p>Alert semua pair ZenCore untuk signal entry dan close posisi. Popup diterima semasa halaman Analysis dibuka. Telegram boleh diterima walaupun halaman ditutup.</p>
+    <div class="alert-body"><section class="alert-browser"><h3>Popup & bunyi</h3><p>Alert semua pair ZenCore untuk signal entry dan close posisi. Popup diterima semasa halaman Analysis dibuka. Telegram boleh diterima walaupun halaman ditutup.</p>
     <div class="alert-controls"><label><input id="zaPopup" type="checkbox" checked> Popup</label><label><input id="zaSound" type="checkbox" checked> Bunyi</label><button id="zaTest" type="button">Aktifkan / uji bunyi</button></div>
     <p id="zaAudio">Klik halaman atau butang uji untuk membenarkan bunyi dalam browser.</p>
-    <div class="alert-telegram"><label>Telegram ID <input id="zaId" type="text" inputmode="numeric" placeholder="Contoh: 123456789" maxlength="16"></label>
+    </section><section class="alert-telegram"><h3>Telegram pilihan</h3><label>Telegram ID <input id="zaId" type="text" inputmode="numeric" placeholder="Contoh: 123456789" maxlength="16"></label>
     <p id="zaTelegramHelp">Masukkan ID nombor akaun Telegram anda, bukan @username. Tekan Start pada bot sebelum meminta kod.</p>
     <a id="zaBot" target="_blank" rel="noopener" hidden>Buka bot ZenCore</a><button id="zaCode" type="button">Hantar kod pengesahan</button>
     <label>Kod <input id="zaVerifyCode" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 digit"></label><button id="zaVerify" type="button">Sahkan ID</button>
-    <label><input id="zaTelegram" type="checkbox"> Hantar alert ke Telegram</label></div>
+    <label><input id="zaTelegram" type="checkbox"> Hantar alert ke Telegram</label></section></div><div class="alert-footer">
     <button id="zaSave" type="button">Simpan tetapan</button><p id="zaStatus" class="alert-status" role="status">Memuatkan tetapan…</p>
-    <p id="zaConnection" role="status"></p><details><summary>Alert terkini</summary><div id="zaHistory" class="alert-history">Belum ada signal baharu.</div></details>`;
+    <p id="zaConnection" role="status"></p><details><summary>Alert terkini</summary><div id="zaHistory" class="alert-history">Belum ada signal baharu.</div></details></div>`;
   const app=document.querySelector('.app');if(!app)return;app.querySelector('header')?.insertAdjacentElement('afterend',root);
   const q=id=>document.getElementById(id),status=t=>{q('zaStatus').textContent=t;};
   const host=document.createElement('div');host.className='alert-toasts';host.setAttribute('aria-live','polite');document.body.append(host);
