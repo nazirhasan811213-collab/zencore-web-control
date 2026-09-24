@@ -82,7 +82,6 @@ function createAuthService(options = {}) {
         displayName: validation.value.displayName,
         email: validation.value.email,
         passwordHash,
-        icNumber: validation.value.icNumber,
         phone: validation.value.phone,
         ibReferrerId: referrer.id,
         role: ROLE_CLIENT
@@ -91,11 +90,6 @@ function createAuthService(options = {}) {
       if (error?.code === 'EMAIL_EXISTS') {
         throw authError('EMAIL_EXISTS', 'E-mel ini sudah mempunyai akaun ZenCore.', 409, {
           email: 'Gunakan e-mel lain atau log masuk.'
-        });
-      }
-      if (error?.code === 'IC_EXISTS') {
-        throw authError('IC_EXISTS', 'No. ID / Passport ini sudah mempunyai akaun ZenCore.', 409, {
-          icNumber: 'No. ID / Passport ini sudah didaftarkan.'
         });
       }
       throw error;
@@ -314,9 +308,9 @@ function createAuthService(options = {}) {
     if (!/^\+?\d{8,15}$/.test(phone)) {
       errors.phone = 'Masukkan nombor telefon yang sah.';
     }
-    if (icNumber.length < 3 || icNumber.length > 64 ||
+    if (icNumber && (icNumber.length < 3 || icNumber.length > 64 ||
         !/[\p{L}\p{N}]/u.test(icNumber) ||
-        !/^[\p{L}\p{N} ._\-/()]+$/u.test(icNumber)) {
+        !/^[\p{L}\p{N} ._\-/()]+$/u.test(icNumber))) {
       errors.icNumber = 'Masukkan No. IC, Passport atau National ID yang sah (3–64 aksara).';
     }
     return {

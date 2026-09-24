@@ -43,10 +43,6 @@
       : page === 'register' ? 'DAFTAR CLIENT' : 'MASUK KE ZENCORE';
   }
 
-  function normalizeIc(value) {
-    return String(value || '').replace(/\D/g, '');
-  }
-
   function normalizePhone(value) {
     return String(value || '').trim().replace(/[\s()-]/g, '');
   }
@@ -61,9 +57,6 @@
     if (page === 'register') {
       if (!payload.displayName || payload.displayName.trim().length < 2) {
         errors.displayName = 'Masukkan nama sekurang-kurangnya 2 aksara.';
-      }
-      if (!/^\d{12}$/.test(payload.icNumber)) {
-        errors.icNumber = 'No. IC mesti mengandungi 12 digit.';
       }
       if (!/^\+?\d{8,15}$/.test(payload.phone)) {
         errors.phone = 'Masukkan nombor telefon yang sah.';
@@ -141,16 +134,6 @@
     });
   });
 
-  const icInput = field('icNumber');
-  if (icInput) {
-    icInput.addEventListener('input', () => {
-      const digits = normalizeIc(icInput.value).slice(0, 12);
-      icInput.value = digits.length > 6
-        ? `${digits.slice(0, 6)}-${digits.slice(6, 8)}${digits.length > 8 ? `-${digits.slice(8)}` : ''}`
-        : digits;
-    });
-  }
-
   const passwordInput = field('password');
   const passwordMeter = document.getElementById('passwordMeter');
   if (passwordInput && passwordMeter) {
@@ -183,7 +166,6 @@
     };
     if (page === 'register') {
       payload.displayName = String(field('displayName')?.value || '').trim();
-      payload.icNumber = normalizeIc(field('icNumber')?.value);
       payload.phone = normalizePhone(field('phone')?.value);
       payload.ibCode = String(field('ibCode')?.value || '').trim().toLowerCase();
       payload.confirmPassword = String(field('confirmPassword')?.value || '');

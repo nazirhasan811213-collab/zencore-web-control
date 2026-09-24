@@ -197,7 +197,6 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const registration = {
       displayName: 'HTTP Test Trader',
       email: 'http-test@example.com',
-      icNumber: '900101011240',
       phone: '0123456782',
       ibCode: 'nazir',
       password: 'ZenCore2026!'
