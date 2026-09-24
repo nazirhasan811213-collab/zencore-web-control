@@ -25,7 +25,6 @@ function startServer() {
         ZENCORE_AUTOTRADE_ENABLED: 'true',
         ZENCORE_AUTOTRADE_EXECUTION_ENABLED: 'true',
         ZENCORE_AUTOTRADE_MEMORY: 'true',
-        ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION: '1.4.0-demo-execution',
         ZENCORE_HOSTED_MT5_ENABLED: 'false',
         ZENCORE_GCP_HOSTED_WORKER_ENABLED: 'false',
         ZENCORE_POD_PROVISIONING_SECRET: POD_PROVISIONING_SECRET,
@@ -250,6 +249,22 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.match(setCookie, /HttpOnly/);
     assert.match(setCookie, /SameSite=Strict/);
     const cookie = setCookie.split(';')[0];
+
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`);
+    assert.equal(response.status,401);
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`, {headers:{Cookie:cookie}});
+    const alertSettings = await response.json();
+    assert.equal(alertSettings.settings.popup,true);
+    assert.equal(alertSettings.settings.sound,true);
+    assert.equal(alertSettings.settings.telegramEnabled,false);
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:'https://untrusted.example'},body:JSON.stringify({popup:false,sound:false,telegramEnabled:false,telegramId:''})});
+    assert.equal(response.status,403);
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:BASE},body:JSON.stringify({popup:false,sound:false,telegramEnabled:false,telegramId:''})});
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).settings.popup,false);
+    response = await fetch(`${BASE}/api/analysis-alerts/events?after=bad`, {headers:{Cookie:cookie}});
+    assert.equal(response.status,400);
+
 
     response = await fetch(`${BASE}/auth/register`, {
       method: 'POST',

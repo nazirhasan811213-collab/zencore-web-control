@@ -99,7 +99,6 @@ class FakeControlPlane:
         self.credential_envelope = credential_envelope
         self.execution_enabled = execution_enabled
         self.heartbeats = []
-        self.command_requests = 0
 
     def lease(self, account_id, cell_id):
         return {
@@ -123,21 +122,15 @@ class FakeControlPlane:
         self.heartbeats.append(json.loads(json.dumps(payload)))
         return {"ok": True, "connectionState": "CONNECTED_LOCKED", "executionEnabled": False}
 
-    def next_command(self, _account_id, _lease_id):
-        self.command_requests += 1
-        return {"ok": True, "command": None}
-
 
 class CapturingTerminal:
     def __init__(self):
         self.credential = None
         self.connect_count = 0
-        self.execution_enabled = None
 
-    def connect(self, config, credential):
+    def connect(self, _config, credential):
         self.connect_count += 1
         self.credential = credential
-        self.execution_enabled = config.execution_enabled
         self.assert_plaintext_available_during_connect()
 
     def assert_plaintext_available_during_connect(self):
@@ -156,7 +149,7 @@ class CapturingTerminal:
             "terminalTradeAllowed": True,
             "accountTradeAllowed": True,
             "expertTradeAllowed": True,
-            "demoExecutionUnlocked": self.execution_enabled,
+            "demoExecutionUnlocked": True,
             "connectorVersion": CONNECTOR_VERSION,
             "terminalBuild": "5000",
             "symbolSpecs": [{
@@ -235,12 +228,8 @@ class HostedWorkerTests(unittest.TestCase):
             config = WorkerConfig.load(write_config(folder))
             self.assertEqual(config.hosted_account_id, ACCOUNT_ID)
             self.assertEqual(config.allowed_demo_symbols, ("XAUUSD",))
-            preflight = WorkerConfig.load(write_config(
-                folder, config_dict(executionEnabled=False)
-            ))
-            self.assertFalse(preflight.execution_enabled)
             for changed in (
-                {"executionEnabled": "false"},
+                {"executionEnabled": False},
                 {"hostedAccountId": ""},
                 {"controlPlaneAudience": "https://different.invalid/audience"},
                 {"unknownField": "rejected"},
@@ -255,11 +244,11 @@ class HostedWorkerTests(unittest.TestCase):
         terminal = CapturingTerminal()
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
-            gate = Path(folder, "DEMO_EXECUTION_ENABLED")
-            gate.write_text("enabled", encoding="ascii")
+            lock = Path(folder, "EXECUTION_LOCKED")
+            lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
                 config, control, unwrapper, terminal, FakeExecutor(),
-                execution_gate_path=gate,
+                execution_gate_path=lock,
                 clock_ms=lambda: 1_790_000_001_000,
             )
             result = worker.connect_once()
@@ -280,7 +269,7 @@ class HostedWorkerTests(unittest.TestCase):
         terminal = CapturingTerminal()
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
-            missing = Path(folder, "DEMO_EXECUTION_ENABLED")
+            missing = Path(folder, "EXECUTION_LOCKED")
             worker = HostedConnectionWorker(
                 config, FakeControlPlane(credential_envelope), unwrapper, terminal, FakeExecutor(),
                 execution_gate_path=missing,
@@ -296,31 +285,6 @@ class HostedWorkerTests(unittest.TestCase):
                 worker.connect_once()
         self.assertEqual(terminal.connect_count, 0)
 
-    def test_connection_only_preflight_connects_without_gate_and_never_polls_commands(self):
-        credential_envelope, unwrapper = envelope()
-        control = FakeControlPlane(credential_envelope, execution_enabled=False)
-        terminal = CapturingTerminal()
-        with tempfile.TemporaryDirectory() as folder:
-            config = WorkerConfig.load(write_config(
-                folder, config_dict(executionEnabled=False)
-            ))
-            gate = Path(folder, "DEMO_EXECUTION_ENABLED")
-            worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, FakeExecutor(),
-                execution_gate_path=gate,
-                clock_ms=lambda: 1_790_000_001_000,
-            )
-            result = worker.connect_once()
-            worker.command_once()
-            self.assertEqual(result["connectionState"], "CONNECTED_LOCKED")
-            self.assertFalse(control.heartbeats[0]["demoExecutionUnlocked"])
-            self.assertEqual(control.command_requests, 0)
-            self.assertEqual(terminal.connect_count, 1)
-
-            gate.write_text("unexpected", encoding="ascii")
-            with self.assertRaisesRegex(WorkerFailure, "PREFLIGHT_EXECUTION_GATE_PRESENT"):
-                worker.heartbeat_once()
-
     def test_expired_lease_stops_heartbeat_and_forces_reconnect(self):
         credential_envelope, unwrapper = envelope()
         control = FakeControlPlane(credential_envelope)
@@ -328,10 +292,10 @@ class HostedWorkerTests(unittest.TestCase):
         clock = [1_790_000_000_000]
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
-            gate = Path(folder, "DEMO_EXECUTION_ENABLED")
-            gate.write_text("enabled", encoding="ascii")
+            lock = Path(folder, "EXECUTION_LOCKED")
+            lock.write_text("locked", encoding="ascii")
             worker = HostedConnectionWorker(
-                config, control, unwrapper, terminal, FakeExecutor(), execution_gate_path=gate,
+                config, control, unwrapper, terminal, FakeExecutor(), execution_gate_path=lock,
                 clock_ms=lambda: clock[0],
             )
             worker.connect_once()

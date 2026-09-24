@@ -19,6 +19,21 @@ jobs:
     name: Test control plane without cloud credentials
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: zencore_alert_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ZENCORE_ALERT_TEST_DATABASE_URL: postgres://postgres:test-only-password@localhost:5432/zencore_alert_test
     steps:
       - name: Check out reviewed source
         uses: actions/checkout@v4
@@ -34,3 +49,19 @@ jobs:
 
       - name: Run server and execution safety tests
         run: npm test
+
+      - name: Install browser test tools
+        run: npm install --no-save --package-lock=false playwright@1.58.2
+
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Check Analysis popup and mobile layout
+        run: node scripts/check-analysis-alert-ui.cjs
+
+      - name: Save Analysis previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-alert-previews
+          path: alert-ui-*.png
+          retention-days: 7

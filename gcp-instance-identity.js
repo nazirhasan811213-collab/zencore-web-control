@@ -73,37 +73,27 @@ function createGcpRequestReplayGuard(options = {}) {
 }
 
 function createGcpInstanceIdentityVerifier(options = {}) {
-  const audience = String(options.audience || '');
-  if (!/^https:\/\/[A-Za-z0-9.-]+(?::\d+)?\/[A-Za-z0-9/_-]+$/.test(audience)) {
+  const expected = {
+    audience: String(options.audience || ''),
+    projectId: String(options.projectId || ''),
+    zone: String(options.zone || ''),
+    instanceName: String(options.instanceName || ''),
+    serviceAccountEmail: String(options.serviceAccountEmail || '')
+  };
+  if (!/^https:\/\/[A-Za-z0-9.-]+(?::\d+)?\/[A-Za-z0-9/_-]+$/.test(expected.audience)) {
     throw new Error('ZENCORE_GCP_WORKER_AUDIENCE must be an exact HTTPS endpoint.');
   }
-  const configuredWorkers = Array.isArray(options.workers) && options.workers.length
-    ? options.workers
-    : [options];
-  if (configuredWorkers.length > 50) throw new Error('ZenCore worker fleet cannot exceed 50 hosts.');
-  const expectedWorkers = new Map();
-  for (const input of configuredWorkers) {
-    const worker = Object.freeze({
-      projectId: String(input.projectId || ''),
-      zone: String(input.zone || ''),
-      instanceName: String(input.instanceName || ''),
-      serviceAccountEmail: String(input.serviceAccountEmail || '')
-    });
-    if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(worker.projectId)) {
-      throw new Error('ZENCORE_GCP_WORKER_PROJECT_ID is invalid.');
-    }
-    if (!/^[a-z]+-[a-z]+\d-[a-z]$/.test(worker.zone)) {
-      throw new Error('ZENCORE_GCP_WORKER_ZONE is invalid.');
-    }
-    if (!/^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$/.test(worker.instanceName)) {
-      throw new Error('ZENCORE_GCP_WORKER_INSTANCE is invalid.');
-    }
-    if (!/^[a-z0-9-]{6,30}@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$/.test(worker.serviceAccountEmail)) {
-      throw new Error('ZENCORE_GCP_WORKER_SERVICE_ACCOUNT is invalid.');
-    }
-    const key = `${worker.projectId}|${worker.zone}|${worker.instanceName}`;
-    if (expectedWorkers.has(key)) throw new Error('ZenCore worker fleet contains a duplicate host.');
-    expectedWorkers.set(key, worker);
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(expected.projectId)) {
+    throw new Error('ZENCORE_GCP_WORKER_PROJECT_ID is invalid.');
+  }
+  if (!/^[a-z]+-[a-z]+\d-[a-z]$/.test(expected.zone)) {
+    throw new Error('ZENCORE_GCP_WORKER_ZONE is invalid.');
+  }
+  if (!/^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$/.test(expected.instanceName)) {
+    throw new Error('ZENCORE_GCP_WORKER_INSTANCE is invalid.');
+  }
+  if (!/^[a-z0-9-]{6,30}@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$/.test(expected.serviceAccountEmail)) {
+    throw new Error('ZENCORE_GCP_WORKER_SERVICE_ACCOUNT is invalid.');
   }
 
   const fetcher = options.fetcher || globalThis.fetch;
@@ -202,7 +192,8 @@ function createGcpInstanceIdentityVerifier(options = {}) {
       throw identityError('STALE_GCP_IDENTITY', 'Google worker identity telah tamat atau terlalu lama.');
     }
     exactString(claims.iss, 'https://accounts.google.com');
-    exactString(claims.aud, audience);
+    exactString(claims.aud, expected.audience);
+    exactString(claims.email, expected.serviceAccountEmail);
     if (claims.email_verified !== true) {
       throw identityError('GCP_IDENTITY_MISMATCH', 'Google service account belum disahkan.', 403);
     }
@@ -210,12 +201,9 @@ function createGcpInstanceIdentityVerifier(options = {}) {
     if (!compute || typeof compute !== 'object') {
       throw identityError('GCP_IDENTITY_MISMATCH', 'Full Google Compute identity diperlukan.', 403);
     }
-    const workerKey = `${String(compute.project_id || '')}|${String(compute.zone || '')}|${String(compute.instance_name || '')}`;
-    const expectedWorker = expectedWorkers.get(workerKey);
-    if (!expectedWorker) {
-      throw identityError('GCP_IDENTITY_MISMATCH', 'Google worker identity tidak sepadan dengan deployment yang diluluskan.', 403);
-    }
-    exactString(claims.email, expectedWorker.serviceAccountEmail);
+    exactString(compute.project_id, expected.projectId);
+    exactString(compute.zone, expected.zone);
+    exactString(compute.instance_name, expected.instanceName);
     if (!/^[0-9]{6,30}$/.test(String(compute.instance_id || ''))) {
       throw identityError('GCP_IDENTITY_MISMATCH', 'Google instance ID tidak sah.', 403);
     }
@@ -242,13 +230,7 @@ function createGcpInstanceIdentityVerifier(options = {}) {
     });
   }
 
-  return {
-    verify,
-    expected: Object.freeze({
-      audience,
-      workers: Object.freeze([...expectedWorkers.values()].map(worker => Object.freeze({ ...worker })))
-    })
-  };
+  return { verify, expected: Object.freeze({ ...expected }) };
 }
 
 module.exports = {

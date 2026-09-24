@@ -106,7 +106,7 @@ function createAutoTradeService(options = {}) {
     String(options.credentialPublicKey || '')
   );
   const requiredDemoConnectorVersion = String(
-    options.requiredDemoConnectorVersion || '2.2.2-gcp-multiuser-multipair'
+    options.requiredDemoConnectorVersion || '1.4.0-demo-execution'
   );
   const allowedDemoSymbols = [...new Set(
     (Array.isArray(options.allowedDemoSymbols) ? options.allowedDemoSymbols : ['XAUUSD'])
@@ -669,13 +669,7 @@ function createAutoTradeService(options = {}) {
     if (Core.containsForbiddenCredentialKey(input)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Jangan masukkan ID, password atau server MT5 pada halaman ini.', 400);
     }
-    // Pair scope is owned by the reviewed ZenCore rollout, not by individual
-    // traders. Users configure only capital, lot and layer; every currently
-    // broker-validated Analysis market is applied consistently server-side.
-    const validation = Core.validateSettings({
-      ...input,
-      symbols: allowedDemoSymbols
-    });
+    const validation = Core.validateSettings(input);
     if (!validation.ok) throw serviceError('VALIDATION_ERROR', 'Semak konfigurasi Auto Trade.', 400, validation.errors);
     if (input.riskAcknowledged !== true) {
       throw serviceError('RISK_ACK_REQUIRED', 'Pengesahan risiko diperlukan.', 400, {
@@ -691,7 +685,6 @@ function createAutoTradeService(options = {}) {
       lotPerLayer: saved.lotPerLayer,
       layers: saved.layers,
       symbols: saved.symbols,
-      symbolScope: 'ZENCORE_MANAGED',
       totalLot: validation.value.totalLot
     });
     return state(userId);

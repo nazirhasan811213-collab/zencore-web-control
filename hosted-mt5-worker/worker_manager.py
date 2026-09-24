@@ -22,15 +22,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
-from process_guard import ProcessGuardError, install_process_lifetime_guard
 
 
-CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.1.0-gcp-demo-execution"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
-SUPPORTED_MARKETS = (
-    "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
-    "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
-)
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
@@ -100,7 +95,6 @@ class ManagerConfig:
     heartbeat_seconds: float
     poll_seconds: float
     connector_version: str
-    execution_enabled: bool
     max_slots: int
 
     @staticmethod
@@ -117,8 +111,7 @@ class ManagerConfig:
             "terminalExecutableName", "slotsRoot", "executionGatePath",
             "approvedDemoServer", "allowedDemoSymbols", "heartbeatIntervalSeconds",
             "pollIntervalSeconds", "connectorVersion", "demoOnly",
-            "credentialStorage", "privateKeyAvailable", "executionEnabled",
-            "maxSlots",
+            "credentialStorage", "privateKeyAvailable", "maxSlots",
         }
         if set(raw) != allowed:
             raise ManagerFailure("MANAGER_CONFIG_FIELDS_INVALID")
@@ -128,7 +121,6 @@ class ManagerConfig:
             or raw.get("demoOnly") is not True
             or raw.get("credentialStorage") != "CHILD_WORKER_MEMORY_ONLY"
             or raw.get("privateKeyAvailable") is not False
-            or not isinstance(raw.get("executionEnabled"), bool)
         ):
             raise ManagerFailure("MANAGER_SECURITY_BOUNDARY_INVALID")
 
@@ -159,8 +151,7 @@ class ManagerConfig:
             or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", terminal_name)
             or approved_server != INTERSTELLAR_DEMO_SERVER
             or connector_version != CONNECTOR_VERSION
-            or not symbols
-            or any(symbol not in SUPPORTED_MARKETS for symbol in symbols)
+            or symbols != ("XAUUSD",)
             or not 5 <= heartbeat <= 30
             or not 5 <= poll <= 60
             or not 1 <= max_slots <= 50
@@ -180,7 +171,6 @@ class ManagerConfig:
             heartbeat_seconds=heartbeat,
             poll_seconds=poll,
             connector_version=connector_version,
-            execution_enabled=raw["executionEnabled"],
             max_slots=max_slots,
         )
 
@@ -320,7 +310,7 @@ class WorkerManager:
             "keyAlias": self.config.key_alias,
             "keyVersionResource": self.config.key_version_resource,
             "demoOnly": True,
-            "executionEnabled": self.config.execution_enabled,
+            "executionEnabled": True,
             "allowedDemoSymbols": list(self.config.allowed_demo_symbols),
             "credentialStorage": "MEMORY_ONLY",
             "privateKeyAvailable": False,
@@ -358,20 +348,11 @@ class WorkerManager:
             if clean and state.slot_root.exists():
                 shutil.rmtree(state.slot_root, ignore_errors=True)
 
-    def _assert_runtime_boundary(self) -> None:
-        gate = Path(self.config.execution_gate_path)
-        gate_exists = gate.is_file()
-        if self.config.execution_enabled and not gate_exists:
-            self.shutdown()
-            raise ManagerFailure("DEMO_EXECUTION_GATE_MISSING")
-        if not self.config.execution_enabled and gate_exists:
-            self.shutdown()
-            raise ManagerFailure("PREFLIGHT_EXECUTION_GATE_PRESENT")
-
     def _launch(self, assignment: Assignment) -> None:
         gate = Path(self.config.execution_gate_path)
         child = Path(self.config.child_worker_path)
-        self._assert_runtime_boundary()
+        if not gate.is_file():
+            raise ManagerFailure("DEMO_EXECUTION_GATE_MISSING")
         if not child.is_file():
             raise ManagerFailure("CHILD_WORKER_NOT_FOUND")
         slot_root, config_path = self._materialize_slot(assignment)
@@ -379,7 +360,6 @@ class WorkerManager:
             str(child),
             "--config", str(config_path),
             "--execution-gate", str(gate),
-            "--manager-pid", str(os.getpid()),
         ]
         process = self._process_factory(command, child.parent)
         self.children[assignment.slot_code] = ChildState(
@@ -389,7 +369,6 @@ class WorkerManager:
         )
 
     def reconcile_once(self) -> dict[str, int]:
-        self._assert_runtime_boundary()
         try:
             response = self.control_plane.assignments()
         except ControlPlaneError as exc:
@@ -450,12 +429,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     manager: WorkerManager | None = None
-    process_guard = None
     try:
-        try:
-            process_guard = install_process_lifetime_guard()
-        except ProcessGuardError as exc:
-            raise ManagerFailure("MANAGER_PROCESS_GUARD_FAILED") from exc
         config = ManagerConfig.load(Path(args.config))
         manager = WorkerManager(
             config,
@@ -463,15 +437,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         manager.run_forever()
     except KeyboardInterrupt:
-        return 0
-    except ManagerFailure as exc:
-        print(f"ZenCore worker manager state: {exc.code}", file=sys.stderr)
-        return 2
-    finally:
         if manager is not None:
             manager.shutdown()
-        if process_guard is not None:
-            process_guard.close()
+        return 0
+    except ManagerFailure as exc:
+        if manager is not None:
+            manager.shutdown()
+        print(f"ZenCore worker manager state: {exc.code}", file=sys.stderr)
+        return 2
     return 0
 
 

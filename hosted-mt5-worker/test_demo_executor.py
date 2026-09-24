@@ -71,9 +71,7 @@ class FakeMt5:
     def symbol_info(self, symbol):
         return SimpleNamespace(name=symbol, volume_min=0.01, volume_max=100.0, volume_step=0.01)
 
-    def symbol_info_tick(self, symbol):
-        if symbol == "EURUSD":
-            return SimpleNamespace(ask=1.1001, bid=1.1)
+    def symbol_info_tick(self, _symbol):
         return SimpleNamespace(ask=3001.0, bid=3000.5)
 
     def positions_get(self, **_kwargs):
@@ -105,41 +103,6 @@ class DemoExecutorTests(unittest.TestCase):
         self.assertEqual([x["tp"] for x in self.mt5.sent], [3010.0, 3020.0, 3030.0])
         self.assertTrue(all(x["magic"] == MAGIC for x in self.mt5.sent))
         self.assertTrue(all(x["volume"] == 0.01 for x in self.mt5.sent))
-
-    def test_ten_layers_match_user_configuration_and_keep_total_volume_cap(self):
-        command = payload()
-        command["layers"] = 10
-        command["totalLot"] = 0.1
-        result = self.executor.execute_place_setup(command)
-        self.assertEqual(result.layers, 10)
-        self.assertEqual(result.total_lot, 0.1)
-        self.assertEqual(len(self.mt5.sent), 10)
-        self.assertEqual(
-            [item["tp"] for item in self.mt5.sent],
-            [3010.0, 3020.0] + [3030.0] * 8,
-        )
-
-    def test_second_validated_pair_executes_in_the_same_account_runtime(self):
-        executor = DemoExecutor(
-            self.mt5,
-            approved_server="InterStellarFinancial-Demo",
-            allowed_symbols=("XAUUSD", "EURUSD"),
-            execution_enabled=True,
-            clock_ms=lambda: 1_790_000_000_000,
-        )
-        command = payload()
-        command["analysisSnapshot"].update({
-            "symbol": "EURUSD", "side": "SELL", "entry": 1.1,
-            "sl": 1.101, "tp1": 1.099, "tp2": 1.098, "tp3": 1.097,
-        })
-        command.update({
-            "symbol": "EURUSD", "side": "SELL", "entry": 1.1,
-            "sl": 1.101, "tp1": 1.099, "tp2": 1.098, "tp3": 1.097,
-        })
-        result = executor.execute_place_setup(command)
-        self.assertEqual(result.layers, 3)
-        self.assertEqual(len(self.mt5.sent), 3)
-        self.assertTrue(all(item["symbol"] == "EURUSD" for item in self.mt5.sent))
 
     def test_execution_gate_and_real_account_fail_closed(self):
         locked = DemoExecutor(

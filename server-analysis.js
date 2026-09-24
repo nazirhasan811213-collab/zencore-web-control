@@ -12,7 +12,10 @@ const {
   createGcpRequestReplayGuard,
   identityError
 } = require('./gcp-instance-identity');
-const { parseGcpWorkerFleet } = require('./gcp-worker-fleet');
+
+const { AnalysisAlerts } = require('./analysis-alert-service');
+let analysisAlerts = null;
+require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = 10003;
@@ -40,7 +43,7 @@ const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || ''
 const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS || 'XAUUSD')
   .split(',').map(value => value.trim()).filter(Boolean);
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
-  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.2-gcp-multiuser-multipair'
+  process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '1.4.0-demo-execution'
 );
 const HOSTED_MT5_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(
   String(process.env.ZENCORE_HOSTED_MT5_ENABLED || '')
@@ -54,7 +57,6 @@ const GCP_HOSTED_WORKER_SLOT_CAPACITY = Math.min(
   50,
   Math.max(1, Number(process.env.ZENCORE_GCP_WORKER_SLOT_CAPACITY || 10) || 10)
 );
-const GCP_HOSTED_WORKER_FLEET_JSON = String(process.env.ZENCORE_GCP_WORKER_FLEET_JSON || '').trim();
 
 process.env.PORT = String(V17_PORT);
 require('./server-v17.js');
@@ -138,6 +140,8 @@ if (AUTH_ENABLED) {
       sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
       defaultIbCode: DEFAULT_IB_CODE
     });
+    analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
+    try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
 
@@ -150,35 +154,26 @@ if (AUTH_ENABLED) {
         allowMemory: AUTOTRADE_MEMORY && process.env.NODE_ENV !== 'production'
       });
       await autoStore.init();
-      let workerFleet = [];
-      if (GCP_HOSTED_WORKER_ENABLED) {
-        workerFleet = parseGcpWorkerFleet(GCP_HOSTED_WORKER_FLEET_JSON, {
-          projectId: process.env.ZENCORE_GCP_WORKER_PROJECT_ID,
-          zone: process.env.ZENCORE_GCP_WORKER_ZONE,
-          instanceName: process.env.ZENCORE_GCP_WORKER_INSTANCE,
-          serviceAccountEmail: process.env.ZENCORE_GCP_WORKER_SERVICE_ACCOUNT,
+      if (GCP_HOSTED_WORKER_ENABLED && typeof autoStore.ensureHostedWorkerHost === 'function') {
+        const workerHost = await autoStore.ensureHostedWorkerHost({
+          provider: 'GOOGLE_CLOUD',
+          projectId: String(process.env.ZENCORE_GCP_WORKER_PROJECT_ID || ''),
+          zone: String(process.env.ZENCORE_GCP_WORKER_ZONE || ''),
+          instanceName: String(process.env.ZENCORE_GCP_WORKER_INSTANCE || ''),
           capacity: GCP_HOSTED_WORKER_SLOT_CAPACITY
         });
-      }
-      if (GCP_HOSTED_WORKER_ENABLED && typeof autoStore.ensureHostedWorkerHost === 'function') {
-        for (const configuredWorker of workerFleet) {
-          const workerHost = await autoStore.ensureHostedWorkerHost({
-            provider: 'GOOGLE_CLOUD',
-            projectId: configuredWorker.projectId,
-            zone: configuredWorker.zone,
-            instanceName: configuredWorker.instanceName,
-            capacity: configuredWorker.capacity
-          });
-          if (workerHost) {
-            console.log(`ZenCore hosted worker pool ready: ${workerHost.instanceName} • ${workerHost.capacity} slots`);
-          }
+        if (workerHost) {
+          console.log(`ZenCore hosted worker pool ready: ${workerHost.instanceName} • ${workerHost.capacity} slots`);
         }
       }
       autoTradeState.store = autoStore;
       if (GCP_HOSTED_WORKER_ENABLED) {
         autoTradeState.workerIdentityVerifier = createGcpInstanceIdentityVerifier({
           audience: process.env.ZENCORE_GCP_WORKER_AUDIENCE,
-          workers: workerFleet
+          projectId: process.env.ZENCORE_GCP_WORKER_PROJECT_ID,
+          zone: process.env.ZENCORE_GCP_WORKER_ZONE,
+          instanceName: process.env.ZENCORE_GCP_WORKER_INSTANCE,
+          serviceAccountEmail: process.env.ZENCORE_GCP_WORKER_SERVICE_ACCOUNT
         });
         autoTradeState.workerReplayGuard = createGcpRequestReplayGuard();
       }
@@ -1391,6 +1386,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/precision-entry.css') return sendAsset(res, 'precision-entry.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/analysis-alerts.js') return sendAsset(res, 'analysis-alerts.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/analysis-alerts.css') return sendAsset(res, 'analysis-alerts.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/precision-entry.js') return sendAsset(res, 'precision-entry.js', 'application/javascript; charset=utf-8');
 
   if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
@@ -1502,6 +1499,29 @@ const server = http.createServer(async (req, res) => {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
+  }
+
+  if (pathname.startsWith('/api/analysis-alerts')) {
+    if (!AUTH_ENABLED) return sendJson(res, 503, {ok:false,error:'Alert memerlukan login ZenCore.'});
+    const session = await requireSession(req,res);
+    if (!session) return;
+    if (!analysisAlerts?.ready) return sendJson(res,503,{ok:false,error:'Alert belum tersedia. Cuba lagi.'});
+    if (req.method !== 'GET' && (session.user.role === 'viewer' || !requestOriginAllowed(req)))
+      return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});
+    try {
+      const user=session.user.id;
+      if (req.method==='GET' && pathname==='/api/analysis-alerts/settings')
+        return sendJson(res,200,{ok:true,userId:user,settings:analysisAlerts.publicPrefs(await analysisAlerts.get(user)),readOnly:session.user.role==='viewer'});
+      if (req.method==='GET' && pathname==='/api/analysis-alerts/events')
+        return sendJson(res,200,{ok:true,...await analysisAlerts.feed(new URL(req.url,'http://localhost').searchParams.get('after'))});
+      if(req.method==='POST') {
+        const body=await readJson(req);
+        if(pathname==='/api/analysis-alerts/settings') return sendJson(res,200,{ok:true,settings:await analysisAlerts.save(user,body)});
+        if(pathname==='/api/analysis-alerts/telegram/code') {await analysisAlerts.requestCode(user);return sendJson(res,200,{ok:true});}
+        if(pathname==='/api/analysis-alerts/telegram/verify') return sendJson(res,200,{ok:true,settings:await analysisAlerts.verify(user,body.code)});
+      }
+      return sendJson(res,404,{ok:false,error:'Alert route tidak ditemui.'});
+    }catch(e){return sendJson(res,e.status||500,{ok:false,error:e.status?e.message:'Permintaan alert gagal. Cuba lagi.'});}
   }
 
   if (AUTH_ENABLED && pathname.startsWith('/api/auto-trade/')) {

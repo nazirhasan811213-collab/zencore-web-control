@@ -196,7 +196,7 @@ def validate_entry_command(payload: Any) -> dict[str, Any]:
     lot = _finite_number(payload.get("lotPerLayer"), "lotPerLayer")
     total_lot = _finite_number(payload.get("totalLot"), "totalLot")
     layers = payload.get("layers")
-    if not isinstance(layers, int) or isinstance(layers, bool) or layers < 1 or layers > 10:
+    if not isinstance(layers, int) or isinstance(layers, bool) or layers < 1 or layers > 3:
         raise RuntimeError("layers are invalid for hosted DEMO execution")
     if lot <= 0 or total_lot <= 0 or total_lot > 1.0 or abs((lot * layers) - total_lot) > 1e-8:
         raise RuntimeError("hosted DEMO volume is invalid")
