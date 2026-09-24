@@ -22,12 +22,12 @@ test('registration validation normalizes safe account input', () => {
   assert.equal(result.ok, true);
   assert.equal(result.value.displayName, 'Nazir Hasan');
   assert.equal(result.value.email, 'nazir@example.com');
-  assert.equal(result.value.icNumber, '900101011234');
+  assert.equal(result.value.icNumber, undefined);
   assert.equal(result.value.phone, '0123456789');
   assert.equal(normalizeEmail(' A@B.COM '), 'a@b.com');
 });
 
-test('registration validation accepts international passport and national ID formats', () => {
+test('registration ignores legacy identity input', () => {
   const passport = validateRegistration({
     displayName: 'Amina Yusuf',
     email: 'amina@example.com',
@@ -36,7 +36,7 @@ test('registration validation accepts international passport and national ID for
     password: 'ZenCore2026!'
   });
   assert.equal(passport.ok, true);
-  assert.equal(passport.value.icNumber, 'A12345678');
+  assert.equal(passport.value.icNumber, undefined);
 
   const nationalId = validateRegistration({
     displayName: 'Global Client',
@@ -46,7 +46,7 @@ test('registration validation accepts international passport and national ID for
     password: 'ZenCore2026!'
   });
   assert.equal(nationalId.ok, true);
-  assert.equal(nationalId.value.icNumber, 'ID/TH.7788_99');
+  assert.equal(nationalId.value.icNumber, undefined);
 });
 
 test('registration validation rejects weak or malformed fields', () => {
@@ -60,7 +60,7 @@ test('registration validation rejects weak or malformed fields', () => {
   assert.equal(result.ok, false);
   assert.ok(result.errors.displayName);
   assert.ok(result.errors.email);
-  assert.ok(result.errors.icNumber);
+  assert.equal(result.errors.icNumber, undefined);
   assert.ok(result.errors.phone);
   assert.ok(result.errors.password);
 });

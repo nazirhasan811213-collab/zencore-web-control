@@ -108,7 +108,7 @@ test('IB referral link is resolved and frozen into the new client account', asyn
   assert.equal(created.user.ibName, 'Azman IB');
 });
 
-test('missing or invalid IB link defaults to Nazir admin and duplicate IC is blocked', async () => {
+test('missing or invalid IB link defaults to Nazir admin and registration does not collect IC', async () => {
   const store = new MemoryAuthStore();
   const auth = createAuthService({ store, secureCookies: false });
 
@@ -124,17 +124,13 @@ test('missing or invalid IB link defaults to Nazir admin and duplicate IC is blo
     password: 'ZenCore2026!'
   });
 
-  await assert.rejects(() => auth.register({
-    displayName: 'Client Two',
-    email: 'client2@example.com',
-    icNumber: '900101011239',
-    phone: '0123456783',
-    password: 'ZenCore2026!'
-  }), error => {
-    assert.equal(error.code, 'IC_EXISTS');
-    assert.ok(error.fields.icNumber);
-    return true;
+  const second = await auth.register({
+    displayName: 'Client Two', email: 'client2@example.com',
+    phone: '0123456783', password: 'ZenCore2026!'
   });
+  assert.ok(second.user.id);
+  assert.equal((await store.findUserByIdForLogin(second.user.id)).ic_number,null);
+
 });
 
 
@@ -352,7 +348,6 @@ test('client can edit personal details and change password with reauthentication
   const created = await auth.register({
     displayName: 'Editable Client',
     email: 'editable@example.com',
-    icNumber: 'PASS-EDIT-01',
     phone: '+60123000991',
     password: 'ZenCore2026!'
   });
@@ -360,7 +355,6 @@ test('client can edit personal details and change password with reauthentication
   let updated = await auth.updateOwnClientProfile(created.user, {
     displayName: 'Editable Client Updated',
     email: 'editable@example.com',
-    icNumber: 'PASS-EDIT-01',
     phone: '+60123000992'
   });
   assert.equal(updated.displayName, 'Editable Client Updated');

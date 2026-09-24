@@ -40,7 +40,6 @@ function validateRegistration(input = {}) {
   const displayName = normalizeDisplayName(input.displayName);
   const email = normalizeEmail(input.email);
   const password = String(input.password || '');
-  const icNumber = normalizeIcNumber(input.icNumber);
   const phone = normalizePhone(input.phone);
   const ibCode = normalizeIbCode(input.ibCode);
   const errors = {};
@@ -50,11 +49,6 @@ function validateRegistration(input = {}) {
   }
   if (!validateEmail(email)) {
     errors.email = 'Masukkan alamat e-mel yang sah.';
-  }
-  if (icNumber.length < 3 || icNumber.length > 64 ||
-      !/[\p{L}\p{N}]/u.test(icNumber) ||
-      !/^[\p{L}\p{N} ._\-/()]+$/u.test(icNumber)) {
-    errors.icNumber = 'Masukkan No. IC, Passport atau National ID yang sah (3–64 aksara).';
   }
   if (!/^\+?\d{8,15}$/.test(phone)) {
     errors.phone = 'Masukkan nombor telefon yang sah.';
@@ -68,7 +62,7 @@ function validateRegistration(input = {}) {
   return {
     ok: Object.keys(errors).length === 0,
     errors,
-    value: { displayName, email, password, icNumber, phone, ibCode }
+    value: { displayName, email, password, phone, ibCode }
   };
 }
 

@@ -14,6 +14,10 @@ const {
 } = require('./gcp-instance-identity');
 const { parseGcpWorkerFleet } = require('./gcp-worker-fleet');
 
+const { AnalysisAlerts } = require('./analysis-alert-service');
+let analysisAlerts = null;
+require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(market));
+
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = 10003;
 const SITE_MODE = String(process.env.SITE_MODE || 'legacy').toLowerCase();
@@ -138,6 +142,8 @@ if (AUTH_ENABLED) {
       sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
       defaultIbCode: DEFAULT_IB_CODE
     });
+    analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
+    try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
 
@@ -1391,6 +1397,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/precision-entry.css') return sendAsset(res, 'precision-entry.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/analysis-alerts.js') return sendAsset(res, 'analysis-alerts.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/analysis-alerts.css') return sendAsset(res, 'analysis-alerts.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/precision-entry.js') return sendAsset(res, 'precision-entry.js', 'application/javascript; charset=utf-8');
 
   if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
@@ -1502,6 +1510,29 @@ const server = http.createServer(async (req, res) => {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
+  }
+
+  if (pathname.startsWith('/api/analysis-alerts')) {
+    if (!AUTH_ENABLED) return sendJson(res, 503, {ok:false,error:'Alert memerlukan login ZenCore.'});
+    const session = await requireSession(req,res);
+    if (!session) return;
+    if (!analysisAlerts?.ready) return sendJson(res,503,{ok:false,error:'Alert belum tersedia. Cuba lagi.'});
+    if (req.method !== 'GET' && (session.user.role === 'viewer' || !requestOriginAllowed(req)))
+      return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});
+    try {
+      const user=session.user.id;
+      if (req.method==='GET' && pathname==='/api/analysis-alerts/settings')
+        return sendJson(res,200,{ok:true,userId:user,settings:analysisAlerts.publicPrefs(await analysisAlerts.get(user)),readOnly:session.user.role==='viewer'});
+      if (req.method==='GET' && pathname==='/api/analysis-alerts/events')
+        return sendJson(res,200,{ok:true,...await analysisAlerts.feed(new URL(req.url,'http://localhost').searchParams.get('after'))});
+      if(req.method==='POST') {
+        const body=await readJson(req);
+        if(pathname==='/api/analysis-alerts/settings') return sendJson(res,200,{ok:true,settings:await analysisAlerts.withUserLock(user,'save',body)});
+        if(pathname==='/api/analysis-alerts/telegram/code') {await analysisAlerts.withUserLock(user,'requestCode');return sendJson(res,200,{ok:true});}
+        if(pathname==='/api/analysis-alerts/telegram/verify') return sendJson(res,200,{ok:true,settings:await analysisAlerts.withUserLock(user,'verify',body.code)});
+      }
+      return sendJson(res,404,{ok:false,error:'Alert route tidak ditemui.'});
+    }catch(e){return sendJson(res,e.status||500,{ok:false,error:e.status?e.message:'Permintaan alert gagal. Cuba lagi.'});}
   }
 
   if (AUTH_ENABLED && pathname.startsWith('/api/auto-trade/')) {

@@ -197,7 +197,6 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const registration = {
       displayName: 'HTTP Test Trader',
       email: 'http-test@example.com',
-      icNumber: '900101011240',
       phone: '0123456782',
       ibCode: 'nazir',
       password: 'ZenCore2026!'
@@ -250,6 +249,22 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.match(setCookie, /HttpOnly/);
     assert.match(setCookie, /SameSite=Strict/);
     const cookie = setCookie.split(';')[0];
+
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`);
+    assert.equal(response.status,401);
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`, {headers:{Cookie:cookie}});
+    const alertSettings = await response.json();
+    assert.equal(alertSettings.settings.popup,true);
+    assert.equal(alertSettings.settings.sound,true);
+    assert.equal(alertSettings.settings.telegramEnabled,false);
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:'https://untrusted.example'},body:JSON.stringify({popup:false,sound:false,telegramEnabled:false,telegramId:''})});
+    assert.equal(response.status,403);
+    response = await fetch(`${BASE}/api/analysis-alerts/settings`, {method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:BASE},body:JSON.stringify({popup:false,sound:false,telegramEnabled:false,telegramId:''})});
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).settings.popup,false);
+    response = await fetch(`${BASE}/api/analysis-alerts/events?after=bad`, {headers:{Cookie:cookie}});
+    assert.equal(response.status,400);
+
 
     response = await fetch(`${BASE}/auth/register`, {
       method: 'POST',

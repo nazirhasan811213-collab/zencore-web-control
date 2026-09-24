@@ -761,7 +761,7 @@ class PostgresAuthStore {
          SET display_name = $2, email = $3, phone = $4, ic_number = $5
          WHERE id = $1 AND role = 'client' AND status = 'active'
          RETURNING id`,
-        [userId, displayName, email, phone, icNumber]
+        [userId, displayName, email, phone, icNumber || null]
       );
       if (!result.rows[0]) return null;
       return this.getClientForAdmin(userId);
@@ -783,7 +783,7 @@ class PostgresAuthStore {
          SET display_name = $2, email = $3, phone = $4, ic_number = $5
          WHERE id = $1 AND role = 'client'
          RETURNING id`,
-        [clientId, displayName, email, phone, icNumber]
+        [clientId, displayName, email, phone, icNumber || null]
       );
       if (!result.rows[0]) return null;
       return this.getClientForAdmin(clientId);
@@ -1272,8 +1272,8 @@ class MemoryAuthStore {
     row.display_name = displayName;
     row.email = email;
     row.phone = phone;
-    row.ic_number = icNumber;
-    this.usersByIc.set(icNumber, row);
+    row.ic_number = icNumber || null;
+    if (icNumber) this.usersByIc.set(icNumber, row);
     return detailedClient(row);
   }
 
@@ -1300,8 +1300,8 @@ class MemoryAuthStore {
     row.display_name = displayName;
     row.email = email;
     row.phone = phone;
-    row.ic_number = icNumber;
-    this.usersByIc.set(icNumber, row);
+    row.ic_number = icNumber || null;
+    if (icNumber) this.usersByIc.set(icNumber, row);
     return detailedClient(row);
   }
 
