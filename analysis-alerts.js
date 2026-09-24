@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   let prefs={popup:true,sound:true,telegramEnabled:false,telegramId:'',verified:false}, cursor=null, user='', audio, stopped=false;
-  const root=document.createElement('details');root.className='alert-settings';root.open=true;
+  const root=document.createElement('details');root.className='alert-settings';root.open=false;
   root.innerHTML=`<summary>ALERT ANALYSIS · ENTRY & CLOSE</summary>
     <p>Alert semua pair ZenCore untuk signal entry dan close posisi. Popup diterima semasa halaman Analysis dibuka. Telegram boleh diterima walaupun halaman ditutup.</p>
     <div class="alert-controls"><label><input id="zaPopup" type="checkbox" checked> Popup</label><label><input id="zaSound" type="checkbox" checked> Bunyi</label><button id="zaTest" type="button">Aktifkan / uji bunyi</button></div>
@@ -36,5 +36,5 @@
   }
   try{for(const k of Object.keys(localStorage)){if(k.startsWith('zc-alert-seen:')&&Date.now()-Number(localStorage.getItem(k))>86400000)localStorage.removeItem(k);}}catch{}
   async function poll(){if(stopped)return;try{const data=await api('events'+(cursor===null?'':'?after='+encodeURIComponent(cursor)));for(const e of data.events){if(Date.now()-e.time<180000){const notify=()=>{const key='zc-alert-seen:'+user+':'+e.id;let seen=false;try{seen=!!localStorage.getItem(key);localStorage.setItem(key,String(Date.now()));}catch{}if(!seen)show(e);};if(navigator.locks)await navigator.locks.request('zencore-alert:'+user,notify);else notify();}}cursor=data.cursor;q('zaConnection').textContent='Alert aktif · signal baharu akan dipaparkan di sini.';}catch(e){q('zaConnection').textContent=e.message;}finally{if(!stopped)setTimeout(poll,2500);}}
-  api('settings').then(j=>{prefs=j.settings;user=j.userId;fill();if(j.readOnly){root.querySelectorAll('input,button').forEach(x=>x.disabled=true);q('zaTest').disabled=false;}poll();}).catch(e=>status(e.message));
+  api('settings').then(j=>{prefs=j.settings;user=j.userId;fill();status('Tetapan alert sedia.');if(j.readOnly){root.querySelectorAll('input,button').forEach(x=>x.disabled=true);q('zaTest').disabled=false;}poll();}).catch(e=>status(e.message));
 })();
