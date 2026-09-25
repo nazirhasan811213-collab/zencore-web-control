@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const {AnalysisAlerts}=require('../analysis-alert-service');
-const {messageQuality,telegramMessage,winRecord}=require('../analysis-telegram');
+const {messageQuality,telegramMessage,qualityGrade}=require('../analysis-telegram');
 const market=(t=Date.now())=>({symbol:'US30',receivedAt:t,strategyNormal:{state:'READY',side:'BUY',plan:{entry:51522.4,sl:51503.139,tp1:51541.661,tp2:51560.922,tp3:51580.183000000005}},positionManagement:{action:'HOLD'}});
 test('Telegram entry remains once per pair/direction/position without changing popup transitions or filtering ordinary entries',async()=>{
  const s=new AnalysisAlerts();await s.init();const m=market();let n=0;
@@ -37,14 +37,16 @@ test('Telegram quality labels match existing displayed Analysis quality, not a n
   const m=market();Object.assign(m,{predictionConfidence:i,stability:i,confluence:i%6,setupProbability:i,sidewaysGuard:i%3===0});
   Object.assign(m.strategyNormal,{side:i%2?'BUY':'SELL',sop:{marketPower:i%7===0?null:i,forecast:['BULLISH','BEARISH','NEUTRAL'][i%3],sopGreen:i%6,gates:Array.from({length:5},(_,j)=>({pass:j<i%6}))}});
   const q=context.existing(m),actual=messageQuality(m);
-  assert.equal(actual.score,q.score);assert.equal(actual.high,q.aPlusExecution);
+  assert.equal(qualityGrade(actual.score),q.grade);assert.equal(actual.score,q.score);assert.equal(actual.high,q.aPlusExecution);
  }
 });
-test('message rounds floating artefacts and separates historical win rate from Analysis score',()=>{
- const m=market();const text=telegramMessage({kind:'ENTRY',symbol:m.symbol,side:'BUY',time:Date.UTC(2026,8,25,11,12),id:'45',telegramPlan:m.strategyNormal.plan,telegramQuality:{score:85,high:true}},{wins:14,resolved:20});
- assert.match(text,/TP3: 51,580.183/);assert.doesNotMatch(text,/000000000005/);
- assert.match(text,/70.0% \(14\/20 validasi selesai\)/);assert.match(text,/bukan peluang menang signal ini/);
+test('message shows current Analysis quality grade without historical win rate',()=>{
+ const m=market();const event={kind:'ENTRY',symbol:m.symbol,side:'BUY',time:Date.UTC(2026,8,25,11,12),id:'45',telegramPlan:m.strategyNormal.plan,telegramQuality:{score:85,high:true}};
+ const text=telegramMessage(event);
+ assert.match(text,/TP3: 51,580.183/);assert.doesNotMatch(text,/000000000005|Win rate|validasi selesai/);
+ assert.match(text,/A\+ PROFIT QUALITY/);assert.match(text,/Gred: A • Quality: 85\/100/);
  assert.match(text,/POTENSI TINGGI/);assert.match(text,/19:12 MYT/);
- assert.match(winRecord(null),/Belum tersedia/);assert.match(winRecord({wins:0,resolved:0}),/Belum tersedia/);
- assert.match(winRecord({wins:2,resolved:3}),/sampel awal/);
+ const low=telegramMessage({...event,telegramQuality:{score:25,high:false}});
+ assert.match(low,/Gred: C • Quality: 25\/100/);assert.match(low,/LOW QUALITY/);
+ assert.doesNotMatch(low,/POTENSI TINGGI/);
 });
