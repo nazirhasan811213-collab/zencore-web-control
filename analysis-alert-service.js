@@ -1,6 +1,6 @@
 'use strict';
 const crypto = require('crypto');
-const {signals,transitions,defaults,telegramMessage} = require('./analysis-alert-core');
+const {signals,transitions,defaults} = require('./analysis-alert-core');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
   constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
@@ -13,7 +13,6 @@ class AnalysisAlerts {
       CREATE TABLE IF NOT EXISTS zencore_alert_states(symbol TEXT PRIMARY KEY, data JSONB NOT NULL);
       CREATE TABLE IF NOT EXISTS zencore_analysis_alerts(id BIGSERIAL PRIMARY KEY, data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
       CREATE TABLE IF NOT EXISTS zencore_telegram_deliveries(id BIGSERIAL PRIMARY KEY, event_id BIGINT REFERENCES zencore_analysis_alerts(id) ON DELETE CASCADE, user_id UUID REFERENCES zencore_users(id) ON DELETE CASCADE, status TEXT NOT NULL DEFAULT 'pending', UNIQUE(event_id,user_id));
-      CREATE TABLE IF NOT EXISTS zencore_telegram_chat_claims(event_id BIGINT REFERENCES zencore_analysis_alerts(id) ON DELETE CASCADE, chat_id TEXT NOT NULL, PRIMARY KEY(event_id,chat_id));
     `);
     this.ready=true;
     if(this.pool && this.token) { this.timer=setInterval(()=>this.deliver().catch(()=>console.error('Telegram delivery unavailable')),2000); this.timer.unref?.(); }
@@ -105,9 +104,8 @@ class AnalysisAlerts {
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['analysis-alert:'+next.symbol]);
       const prev=(await c.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[next.symbol])).rows[0]?.data;
       if(!prev||next.time>prev.time){
-        const events=transitions(prev,next);
         await c.query('INSERT INTO zencore_alert_states(symbol,data) VALUES($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=$2',[next.symbol,next]);
-        for(const e of events){
+        for(const e of transitions(prev,next)){
           const row=(await c.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1) RETURNING id',[e])).rows[0];
           await c.query(`INSERT INTO zencore_telegram_deliveries(event_id,user_id)
             SELECT $1,p.user_id FROM zencore_alert_preferences p JOIN zencore_users u ON u.id=p.user_id
@@ -135,9 +133,8 @@ class AnalysisAlerts {
           const p=await this.get(row.user_id);
           const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
-          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.policyVersion===2&&Date.now()-e.time<180000){
-            const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
-            if(claim.rows.length){await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)}));status='sent';}
+          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e&&Date.now()-e.time<180000){
+            await this.telegram(p.telegramId,`ZenCore Analysis\n${e.message}\n${new Date(e.time).toISOString()}\nSignal Analysis — bukan pengesahan transaksi MT5.`);status='sent';
           }
         }catch{status='failed';}
         await this.pool.query('UPDATE zencore_telegram_deliveries SET status=$2 WHERE id=$1',[row.id,status]);

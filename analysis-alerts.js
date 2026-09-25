@@ -6,7 +6,7 @@
     <div class="alert-body"><section class="alert-browser"><h3>Popup & bunyi</h3><p>Alert semua pair ZenCore untuk signal entry dan close posisi. Popup diterima semasa halaman Analysis dibuka. Telegram boleh diterima walaupun halaman ditutup.</p>
     <div class="alert-controls"><label><input id="zaPopup" type="checkbox" checked> Popup</label><label><input id="zaSound" type="checkbox" checked> Bunyi</label><button id="zaTest" type="button">Aktifkan / uji bunyi</button></div>
     <p id="zaAudio">Klik halaman atau butang uji untuk membenarkan bunyi dalam browser.</p>
-    </section><section class="alert-telegram"><h3>Telegram pilihan</h3><p>Entry ditapis: SOP 5/5, solid entry, candle disahkan, forecast dan HEMA 5m lulus, bukan sideways. Entry sehala dijarakkan 15 minit; setup sama disekat 30 minit. Alert close tetap diutamakan. Saringan ini bukan jaminan kemenangan.</p><label>Telegram ID <input id="zaId" type="text" inputmode="numeric" placeholder="Contoh: 123456789" maxlength="16"></label>
+    </section><section class="alert-telegram"><h3>Telegram pilihan</h3><label>Telegram ID <input id="zaId" type="text" inputmode="numeric" placeholder="Contoh: 123456789" maxlength="16"></label>
     <p id="zaTelegramHelp">Masukkan ID nombor akaun Telegram anda, bukan @username. Tekan Start pada bot sebelum meminta kod.</p>
     <a id="zaBot" target="_blank" rel="noopener" hidden>Buka bot ZenCore</a><button id="zaCode" type="button">Hantar kod pengesahan</button>
     <label>Kod <input id="zaVerifyCode" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 digit"></label><button id="zaVerify" type="button">Sahkan ID</button>
