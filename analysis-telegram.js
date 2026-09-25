@@ -47,15 +47,26 @@ function messageQuality(m){
 
 function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':score>=60?'B':'C';}
 
+// Current bridge supplies confirmed candle OPEN time in milliseconds.
+// Entry transport expires 30 seconds after both reception and candle close.
+function entryFresh(e,now=Date.now()){
+  const q=e.telegramMarket, duration=Number(q?.timeframe)*60000;
+  if(!q || q.feedMode!=='BAR-CLOSE' || !Number.isFinite(duration) || duration<=0 ||
+     !Number.isFinite(q.sourceBarTime) || q.sourceBarTime<=0 || numeric(q.price)===null)return false;
+  const close=q.sourceBarTime+duration;
+  return now-e.time>=-5000 && now-e.time<=30000 && now-close>=-5000 && now-close<=30000;
+}
+
 function telegramMessage(e){
-  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(e.time));
+  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
   if(!p||!q)return `ZENCORE | SIGNAL ENTRY\n\n${e.message}\n\nA+ PROFIT QUALITY\nQuality: Belum tersedia\n\n${footer}`;
   return `ZENCORE | SIGNAL ENTRY\n${e.symbol} • ${e.side} • NORMAL 3M\n\n`+
-    `Entry: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n`+
+    `Entry SOP: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n`+
+    `Harga feed ketika signal: ${price(e.telegramMarket?.price)}\nFeed: candle ${e.telegramMarket?.timeframe||'3'}M ditutup\n\n`+
     `A+ PROFIT QUALITY\nGred: ${qualityGrade(q.score)} • Quality: ${q.score}/100\nStatus: ${q.high?'POTENSI TINGGI':'VALID SOP • LOW QUALITY'}\n\n`+
     `Ulasan: ${q.high?'SOP READY dan quality tinggi. Semak harga entry, SL dan saiz risiko sebelum execute.':'Signal SOP sah, tetapi quality belum 80/100. Untuk precision mode, pertimbang skip setup ini.'}\n\nQuality menilai setup semasa; bukan jaminan profit.\n\n${footer}`;
 }
-module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade};
+module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade,entryFresh};

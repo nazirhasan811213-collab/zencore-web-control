@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const {AnalysisAlerts}=require('../analysis-alert-service');
-const {messageQuality,telegramMessage,qualityGrade}=require('../analysis-telegram');
+const {messageQuality,telegramMessage,qualityGrade,entryFresh}=require('../analysis-telegram');
 const market=(t=Date.now())=>({symbol:'US30',receivedAt:t,strategyNormal:{state:'READY',side:'BUY',plan:{entry:51522.4,sl:51503.139,tp1:51541.661,tp2:51560.922,tp3:51580.183000000005}},positionManagement:{action:'HOLD'}});
 test('Telegram entry remains once per pair/direction/position without changing popup transitions or filtering ordinary entries',async()=>{
  const s=new AnalysisAlerts();await s.init();const m=market();let n=0;
@@ -45,8 +45,17 @@ test('message shows current Analysis quality grade without historical win rate',
  const text=telegramMessage(event);
  assert.match(text,/TP3: 51,580.183/);assert.doesNotMatch(text,/000000000005|Win rate|validasi selesai/);
  assert.match(text,/A\+ PROFIT QUALITY/);assert.match(text,/Gred: A • Quality: 85\/100/);
- assert.match(text,/POTENSI TINGGI/);assert.match(text,/19:12 MYT/);
+ assert.match(text,/POTENSI TINGGI/);assert.match(text,/19:12:00 MYT/);
  const low=telegramMessage({...event,telegramQuality:{score:25,high:false}});
  assert.match(low,/Gred: C • Quality: 25\/100/);assert.match(low,/LOW QUALITY/);
  assert.doesNotMatch(low,/POTENSI TINGGI/);
+});
+
+test('entry transport rejects stale candle disguised by fresh reception and missing price',()=>{
+ const close=Date.UTC(2026,8,25,15,0), e={time:close+1000,telegramMarket:{sourceBarTime:close-180000,price:2000,timeframe:'3',feedMode:'BAR-CLOSE'}};
+ assert.equal(entryFresh(e,close+2000),true);
+ assert.equal(entryFresh({...e,time:close+60000},close+61000),false);
+ assert.equal(entryFresh(e,close+31001),false);
+ assert.equal(entryFresh({...e,telegramMarket:{...e.telegramMarket,price:null}},close+2000),false);
+ assert.equal(entryFresh({...e,telegramMarket:{...e.telegramMarket,sourceBarTime:close}},close+2000),false);
 });

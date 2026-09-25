@@ -30,6 +30,13 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   for(const id of [user,user2])await a.put(id,{popup:true,sound:true,telegramEnabled:true,telegramId:'123456789',verified:true});
   await a.record({...m,receivedAt:m.receivedAt+6,positionManagement:{action:'EXIT_ALL'}});
   await a.deliver();assert.equal(sends,1,'one shared chat receives one copy of the event');
+  let notify;const sent=new Promise(resolve=>{notify=resolve;});
+  a.telegram=async()=>{sends++;notify();};a.token='test';
+  const now=Date.now();
+  await a.record({...m,symbol:'EURUSD',receivedAt:now,sourceBarTime:now-180000,price:2000,timeframe:'3',feedMode:'BAR-CLOSE'});
+  await Promise.race([sent,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Immediate delivery did not run')),1500);timer.unref();})]);
+  assert.equal(sends,2,'committed fresh entry triggers delivery without a polling timer');
+  a.token='';
   await a.put(user,{...await a.get(user),code:'not-a-valid-code',expires:Date.now()+60000,attempts:0});
   await Promise.allSettled(Array.from({length:10},(_,i)=>(i%2?a:b).withUserLock(user,'verify','000000')));
   assert.equal((await a.get(user)).attempts,5);

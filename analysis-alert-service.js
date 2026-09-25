@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const {signals,transitions,defaults} = require('./analysis-alert-core');
-const {prepareTelegram,messageQuality,telegramMessage} = require('./analysis-telegram');
+const {prepareTelegram,messageQuality,telegramMessage,entryFresh} = require('./analysis-telegram');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
   constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
@@ -95,7 +95,7 @@ class AnalysisAlerts {
   async record(m) {
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
-      ...e,telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
+      ...e,telegramMarket:{sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
     }:e);
     if(!this.pool){
       const prev=this.states.get(next.symbol);if(prev&&next.time<=prev.time)return;
@@ -104,6 +104,7 @@ class AnalysisAlerts {
       for(const e of events) this.events.push({...e,id:++this.sequence});
       this.events=this.events.slice(-500);return;
     }
+    let queued=false;
     const c=await this.pool.connect();
     try {
       await c.query('BEGIN');
@@ -115,6 +116,7 @@ class AnalysisAlerts {
         for(const e of events){
           const row=(await c.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1) RETURNING id',[e])).rows[0];
           if(e.telegramDuplicate)continue;
+          queued=true;
           await c.query(`INSERT INTO zencore_telegram_deliveries(event_id,user_id)
             SELECT $1,p.user_id FROM zencore_alert_preferences p JOIN zencore_users u ON u.id=p.user_id
             WHERE u.status='active' AND u.role<>'viewer' AND p.data->>'telegramEnabled'='true' AND p.data->>'verified'='true'`,[row.id]);
@@ -122,6 +124,7 @@ class AnalysisAlerts {
       }
       await c.query('COMMIT');
     }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+    if(queued && this.token)this.deliver().catch(()=>console.error('Telegram delivery unavailable'));
   }
   async feed(after) {
     if(after===null){const id=this.pool?(await this.pool.query('SELECT COALESCE(MAX(id),0) AS id FROM zencore_analysis_alerts')).rows[0].id:this.sequence;return {events:[],cursor:String(id)};}
@@ -130,10 +133,13 @@ class AnalysisAlerts {
     return {events:rows,cursor:rows.length?String(rows.at(-1).id):after};
   }
   async deliver() {
-    if(this.delivering)return;this.delivering=true;
+    if(this.delivering){this.deliveryRequested=true;return;}this.delivering=true;
     try{
       // Claim once before sending: never duplicate an ambiguous Telegram timeout.
-      const rows=(await this.pool.query(`UPDATE zencore_telegram_deliveries SET status='sending' WHERE id IN
+      let rows;
+      do {
+      this.deliveryRequested=false;
+      rows=(await this.pool.query(`UPDATE zencore_telegram_deliveries SET status='sending' WHERE id IN
         (SELECT id FROM zencore_telegram_deliveries WHERE status='pending' ORDER BY id LIMIT 10 FOR UPDATE SKIP LOCKED) RETURNING *`)).rows;
       for(const row of rows){
         let status='skipped';
@@ -142,7 +148,7 @@ class AnalysisAlerts {
           const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e&&Date.now()-e.time<180000&&
-             (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate))){
+             (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
               await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)}));status='sent';
@@ -151,6 +157,7 @@ class AnalysisAlerts {
         }catch{status='failed';}
         await this.pool.query('UPDATE zencore_telegram_deliveries SET status=$2 WHERE id=$1',[row.id,status]);
       }
+      } while(rows.length===10 || this.deliveryRequested);
     }finally{this.delivering=false;}
   }
 }
