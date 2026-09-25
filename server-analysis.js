@@ -142,7 +142,14 @@ if (AUTH_ENABLED) {
       sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
       defaultIbCode: DEFAULT_IB_CODE
     });
-    analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
+    analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || '',
+      readPerformance:async symbol=>{
+        const response=await fetch(`http://127.0.0.1:${V17_PORT}/api/strategy-performance/${encodeURIComponent(symbol)}/NORMAL`,{signal:AbortSignal.timeout(1500)});
+        if(!response.ok)return null;
+        const result=await response.json();
+        return result.ok&&result.symbol===symbol&&result.mode==='NORMAL'?result.summary:null;
+      }
+    });
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
