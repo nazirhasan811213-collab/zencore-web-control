@@ -24,7 +24,7 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   let sends=0;a.telegram=async()=>{sends++;};await a.deliver();assert.equal(sends,0);
   assert.equal((await pool.query('SELECT status FROM zencore_telegram_deliveries')).rows[0].status,'skipped');
   await a.record({...m,receivedAt:m.receivedAt+5,positionManagement:{action:'CLOSE_50_NOW'}});
-  assert.equal((await b.feed('0')).events.length,4);
+  assert.equal((await b.feed('0')).events.length,5,'popup keeps both reverted-plan entry and partial-close events');
   const user2='22222222-2222-4222-8222-222222222222';
   await pool.query("INSERT INTO zencore_users VALUES($1,'active','client')",[user2]);
   for(const id of [user,user2])await a.put(id,{popup:true,sound:true,telegramEnabled:true,telegramId:'123456789',verified:true});
