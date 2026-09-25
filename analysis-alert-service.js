@@ -4,10 +4,9 @@ const {signals,transitions,defaults} = require('./analysis-alert-core');
 const {prepareTelegram,messageQuality,telegramMessage} = require('./analysis-telegram');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
-  constructor({pool=null,token='',botName='',fetchFn=fetch,readPerformance=async()=>null}={}) {
+  constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
     this.pool=pool; this.token=token; this.botName=/^[A-Za-z0-9_]+$/.test(botName)?botName:''; this.fetch=fetchFn;
     this.prefs=new Map(); this.states=new Map(); this.events=[]; this.sequence=0; this.queue=Promise.resolve(); this.ready=false;
-    this.readPerformance=readPerformance;
   }
   async init() {
     if(this.pool) await this.pool.query(`
@@ -146,9 +145,7 @@ class AnalysisAlerts {
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
-              let summary=null;
-              if(e.kind==='ENTRY')try{summary=await this.readPerformance(e.symbol);}catch{}
-              await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)},summary));status='sent';
+              await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)}));status='sent';
             }
           }
         }catch{status='failed';}

@@ -45,22 +45,17 @@ function messageQuality(m){
   return {score,high:String(n.state||'').toUpperCase()==='READY'&&score>=80&&!m.sidewaysGuard};
 }
 
-function winRecord(summary){
-  const wins=numeric(summary?.wins), resolved=numeric(summary?.resolved);
-  if(wins===null||resolved===null||!Number.isInteger(wins)||!Number.isInteger(resolved)||resolved<=0||wins<0||wins>resolved)
-    return 'Win rate rekod: Belum tersedia';
-  return `Win rate rekod: ${(wins/resolved*100).toFixed(1)}% (${wins}/${resolved} validasi selesai)\nRekod simulasi Normal bagi pair ini${resolved<20?' · sampel awal':''}; bukan peluang menang signal ini.`;
-}
+function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':score>=60?'B':'C';}
 
-function telegramMessage(e, summary){
+function telegramMessage(e){
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(!p||!q)return `ZENCORE | SIGNAL ENTRY\n\n${e.message}\n\nWin rate rekod: Belum tersedia\n\n${footer}`;
+  if(!p||!q)return `ZENCORE | SIGNAL ENTRY\n\n${e.message}\n\nA+ PROFIT QUALITY\nQuality: Belum tersedia\n\n${footer}`;
   return `ZENCORE | SIGNAL ENTRY\n${e.symbol} • ${e.side} • NORMAL 3M\n\n`+
     `Entry: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n`+
-    `Penilaian: ${q.high?'POTENSI TINGGI':'BIASA'}\nSkor kualiti Analysis: ${q.score}/100\n${winRecord(summary)}\n\n`+
-    `Ulasan: ${q.high?'SOP sah dan kualiti Analysis tinggi.':'SOP entry sah; kualiti Analysis pada tahap biasa.'}\n\n${footer}`;
+    `A+ PROFIT QUALITY\nGred: ${qualityGrade(q.score)} • Quality: ${q.score}/100\nStatus: ${q.high?'POTENSI TINGGI':'VALID SOP • LOW QUALITY'}\n\n`+
+    `Ulasan: ${q.high?'SOP READY dan quality tinggi. Semak harga entry, SL dan saiz risiko sebelum execute.':'Signal SOP sah, tetapi quality belum 80/100. Untuk precision mode, pertimbang skip setup ini.'}\n\nQuality menilai setup semasa; bukan jaminan profit.\n\n${footer}`;
 }
-module.exports={prepareTelegram,messageQuality,telegramMessage,winRecord};
+module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade};
