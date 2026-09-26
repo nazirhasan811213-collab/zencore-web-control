@@ -23,9 +23,11 @@ from typing import Any, Callable
 
 from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
 from process_guard import ProcessGuardError, install_process_lifetime_guard
+from owned_process import OwnedWindowsProcess, OwnedProcessError
+from state_log import make_state_logger
 
 
-CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.5-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
@@ -257,6 +259,7 @@ class ChildState:
     assignment: Assignment
     process: Any
     slot_root: Path
+    terminal_process: Any
 
 
 class WorkerManager:
@@ -266,16 +269,25 @@ class WorkerManager:
         control_plane: GcpControlPlaneClient,
         *,
         process_factory: Callable[[list[str], Path], Any] | None = None,
+        terminal_factory: Callable[[list[str], Path], Any] | None = None,
         sleeper: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+        reporter: Callable[..., None] = lambda *_: None,
     ) -> None:
         self.config = config
         self.control_plane = control_plane
         self.sleeper = sleeper
+        self.clock = clock
+        self.report = reporter
+        self.failures: dict[str, dict[str, Any]] = {}
         self.children: dict[str, ChildState] = {}
         self._process_factory = process_factory or self._start_process
+        self._terminal_factory = terminal_factory or self._start_terminal
 
     @staticmethod
     def _start_process(command: list[str], working_directory: Path) -> subprocess.Popen:
+        if os.name == "nt":
+            return OwnedWindowsProcess(command, working_directory)
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         return subprocess.Popen(
             command,
@@ -286,6 +298,23 @@ class WorkerManager:
             close_fds=True,
             creationflags=flags,
         )
+
+    @staticmethod
+    def _start_terminal(command: list[str], working_directory: Path) -> subprocess.Popen:
+        # A frozen manager changes the Windows DLL search path for its bundled
+        # libraries. Do not pass that search path to the external MT5 executable.
+        if sys.platform == "win32" and getattr(sys, "frozen", False):
+            import ctypes
+            set_directory = ctypes.windll.kernel32.SetDllDirectoryW
+            set_directory.argtypes = [ctypes.c_wchar_p]
+            set_directory.restype = ctypes.c_int
+            if not set_directory(None):
+                raise ManagerFailure("MT5_LAUNCH_ENVIRONMENT_FAILED")
+            try:
+                return WorkerManager._start_process(command, working_directory)
+            finally:
+                set_directory(getattr(sys, "_MEIPASS", None))
+        return WorkerManager._start_process(command, working_directory)
 
     def _slot_root(self, slot_code: str) -> Path:
         if not _SLOT_RE.fullmatch(slot_code):
@@ -310,6 +339,15 @@ class WorkerManager:
             shutil.copytree(template, terminal_root)
 
         config_root.mkdir(parents=True, exist_ok=True)
+        # These are terminal permissions, not the independent ZenCore order gates.
+        # No account, password, server or strategy is written into this file.
+        startup_path = config_root / "mt5-start.ini"
+        startup_tmp = startup_path.with_suffix(".ini.tmp")
+        startup_tmp.write_text(
+            "[Experts]\r\nEnabled=1\r\nAllowLiveTrading=1\r\n",
+            encoding="utf-16", newline="",
+        )
+        os.replace(startup_tmp, startup_path)
         child_config = {
             "schemaVersion": 1,
             "cellId": assignment.slot_code,
@@ -339,22 +377,29 @@ class WorkerManager:
 
     @staticmethod
     def _stop_process(process: Any) -> None:
-        if process is None or process.poll() is not None:
+        if process is None:
             return
         try:
-            process.terminate()
-            process.wait(timeout=15)
+            # Job termination includes descendants of an already-exited launcher.
+            if isinstance(process, OwnedWindowsProcess) or process.poll() is None:
+                process.terminate()
+                process.wait(timeout=15)
         except Exception:
             try:
                 process.kill()
                 process.wait(timeout=5)
             except Exception:
                 pass
+        finally:
+            close = getattr(process, "close", None)
+            if close is not None:
+                close()
 
     def _retire_slot(self, slot_code: str, *, clean: bool = True) -> None:
         state = self.children.pop(slot_code, None)
         if state:
             self._stop_process(state.process)
+            self._stop_process(state.terminal_process)
             if clean and state.slot_root.exists():
                 shutil.rmtree(state.slot_root, ignore_errors=True)
 
@@ -374,6 +419,7 @@ class WorkerManager:
         self._assert_runtime_boundary()
         if not child.is_file():
             raise ManagerFailure("CHILD_WORKER_NOT_FOUND")
+        self.report(assignment.slot_code, "SLOT_PREPARING")
         slot_root, config_path = self._materialize_slot(assignment)
         command = [
             str(child),
@@ -381,11 +427,39 @@ class WorkerManager:
             "--execution-gate", str(gate),
             "--manager-pid", str(os.getpid()),
         ]
-        process = self._process_factory(command, child.parent)
+        terminal = slot_root / "mt5" / self.config.terminal_executable_name
+        startup = config_path.parent / "mt5-start.ini"
+        terminal_process = None
+        process = None
+        try:
+            terminal_process = self._terminal_factory(
+                [str(terminal), f"/config:{startup}"], terminal.parent,
+            )
+            # Start the configured terminal before the Python bridge attaches.
+            # This also exposes an already-running/unmanaged terminal as a failure
+            # when this launcher exits instead of silently attaching without config.
+            self.report(assignment.slot_code, "TERMINAL_STARTED", getattr(terminal_process, "pid", None))
+            self.sleeper(15)
+            if terminal_process.poll() is not None:
+                code = int(terminal_process.poll())
+                self.report(assignment.slot_code, f"TERMINAL_EXIT_{code}")
+                raise ManagerFailure("MT5_CONFIGURED_TERMINAL_EXITED")
+            self._assert_runtime_boundary()
+            process = self._process_factory(command, child.parent)
+        except BaseException as exc:
+            self._stop_process(process)
+            self._stop_process(terminal_process)
+            if isinstance(exc, (ManagerFailure, KeyboardInterrupt, SystemExit)):
+                raise
+            if isinstance(exc, OwnedProcessError):
+                raise ManagerFailure(str(exc)) from None
+            raise ManagerFailure("SLOT_PROCESS_START_FAILED") from None
+        self.report(assignment.slot_code, "WORKER_STARTED", getattr(process, "pid", None))
         self.children[assignment.slot_code] = ChildState(
             assignment=assignment,
             process=process,
             slot_root=slot_root,
+            terminal_process=terminal_process,
         )
 
     def reconcile_once(self) -> dict[str, int]:
@@ -403,23 +477,47 @@ class WorkerManager:
             if next_assignment is None or next_assignment.account_id != state.assignment.account_id:
                 self._retire_slot(slot_code, clean=True)
 
+        self.failures = {key: value for key, value in self.failures.items() if key in desired}
         started = 0
         restarted = 0
         for assignment in assignments:
             state = self.children.get(assignment.slot_code)
-            if state is not None and state.process.poll() is None:
+            if (state is not None and state.process.poll() is None
+                    and state.terminal_process.poll() is None):
                 continue
             if state is not None:
                 self._retire_slot(assignment.slot_code, clean=False)
                 restarted += 1
-            self._launch(assignment)
+            failure = self.failures.get(assignment.slot_code)
+            if failure and self.clock() < failure["retryAt"]:
+                continue
+            try:
+                self._launch(assignment)
+            except (ManagerFailure, OSError, OwnedProcessError) as exc:
+                # Execution boundaries remain global and fail closed. Process or
+                # filesystem failures are scoped to this slot, never its neighbours.
+                code = exc.code if isinstance(exc, ManagerFailure) else "SLOT_PREPARATION_FAILED"
+                if code in {"DEMO_EXECUTION_GATE_MISSING", "PREFLIGHT_EXECUTION_GATE_PRESENT",
+                            "CHILD_WORKER_NOT_FOUND"}:
+                    self.shutdown()
+                    raise
+                attempts = min(6, (failure or {}).get("attempts", 0) + 1)
+                self.failures[assignment.slot_code] = {
+                    "code": code, "attempts": attempts,
+                    "retryAt": self.clock() + min(300, 5 * 2 ** attempts),
+                }
+                self.report(assignment.slot_code, code)
+                continue
+            self.failures.pop(assignment.slot_code, None)
             started += 1
 
         return {
             "assigned": len(assignments),
             "running": sum(
                 1 for state in self.children.values() if state.process.poll() is None
+                and state.terminal_process.poll() is None
             ),
+            "failed": len(self.failures),
             "started": started,
             "restarted": restarted,
         }
@@ -438,6 +536,7 @@ class WorkerManager:
                     flush=True,
                 )
             except ManagerFailure as exc:
+                self.report("manager", exc.code)
                 print(f"ZenCore worker manager state: {exc.code}", file=sys.stderr, flush=True)
             self.sleeper(self.config.poll_seconds)
 
@@ -457,9 +556,12 @@ def main(argv: list[str] | None = None) -> int:
         except ProcessGuardError as exc:
             raise ManagerFailure("MANAGER_PROCESS_GUARD_FAILED") from exc
         config = ManagerConfig.load(Path(args.config))
+        report = make_state_logger(Path(args.config).parent / "manager-state.log")
+        report("manager", "MANAGER_STARTED", os.getpid())
         manager = WorkerManager(
             config,
             GcpControlPlaneClient(config.control_plane_url),
+            reporter=report,
         )
         manager.run_forever()
     except KeyboardInterrupt:

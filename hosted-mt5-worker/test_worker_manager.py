@@ -155,6 +155,7 @@ class WorkerManagerTests(unittest.TestCase):
                 config,
                 FakeControlPlane(items),
                 process_factory=start,
+                terminal_factory=lambda *_: FakeProcess(), sleeper=lambda _: None,
             )
             result = manager.reconcile_once()
             self.assertEqual(result["assigned"], 2)
@@ -205,7 +206,8 @@ class WorkerManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             config = self._config(root)
-            manager = WorkerManager(config, control, process_factory=start)
+            manager = WorkerManager(config, control, process_factory=start,
+                                    terminal_factory=lambda *_: FakeProcess(), sleeper=lambda _: None)
             manager.reconcile_once()
             slot_root = Path(config.slots_root) / item["slotCode"]
             self.assertTrue(slot_root.exists())
@@ -235,6 +237,7 @@ class WorkerManagerTests(unittest.TestCase):
                 config,
                 FakeControlPlane([item]),
                 process_factory=start,
+                terminal_factory=lambda *_: FakeProcess(), sleeper=lambda _: None,
             )
             manager.reconcile_once()
             launched[0].returncode = 2
@@ -267,6 +270,7 @@ class WorkerManagerTests(unittest.TestCase):
                 config,
                 FakeControlPlane([item]),
                 process_factory=start,
+                terminal_factory=lambda *_: FakeProcess(), sleeper=lambda _: None,
             )
             result = manager.reconcile_once()
             self.assertEqual(result["running"], 1)
@@ -281,6 +285,141 @@ class WorkerManagerTests(unittest.TestCase):
                 manager.reconcile_once()
             self.assertTrue(launched[0].terminated)
             self.assertEqual(manager.children, {})
+
+    def test_configured_terminal_precedes_worker_and_contains_no_credentials(self):
+        items = [assignment(1, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456"),
+                 assignment(2, "11111111-2222-4333-8444-555555555555", "654321")]
+        events = []
+        def terminal(command, cwd):
+            events.append(("terminal", command))
+            startup = Path(command[1].removeprefix("/config:"))
+            self.assertEqual(startup.read_text(encoding="utf-16"),
+                             "[Experts]\nEnabled=1\nAllowLiveTrading=1\n")
+            self.assertEqual(Path(command[0]).parent, cwd)
+            return FakeProcess()
+        def worker(command, cwd):
+            events.append(("worker", command))
+            return FakeProcess()
+        with tempfile.TemporaryDirectory() as folder:
+            config = self._config(Path(folder), execution_enabled=False)
+            manager = WorkerManager(config, FakeControlPlane(items), process_factory=worker,
+                                    terminal_factory=terminal, sleeper=lambda _: events.append(("wait", [])))
+            manager.reconcile_once()
+            self.assertEqual([e[0] for e in events], ["terminal", "wait", "worker"] * 2)
+            self.assertNotEqual(events[0][1][1], events[3][1][1])
+            manager.reconcile_once()
+            self.assertEqual(len(events), 6)  # Healthy slots are not launched twice.
+
+    def test_crashed_terminal_retires_worker_and_relaunches_with_config(self):
+        item = assignment(1, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456")
+        terminals, workers, commands = [], [], []
+        def terminal(command, cwd):
+            proc = FakeProcess(); terminals.append(proc); commands.append(command)
+            return proc
+        def worker(command, cwd):
+            proc = FakeProcess(); workers.append(proc)
+            return proc
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane([item]),
+                                    process_factory=worker, terminal_factory=terminal, sleeper=lambda _: None)
+            manager.reconcile_once()
+            terminals[0].returncode = 1
+            result = manager.reconcile_once()
+            self.assertTrue(workers[0].terminated)
+            self.assertEqual(result["restarted"], 1)
+            self.assertEqual(commands[0], commands[1])
+            manager.shutdown()
+            self.assertTrue(workers[1].terminated)
+            self.assertTrue(terminals[1].terminated)
+
+    def test_terminal_launch_exit_never_starts_worker(self):
+        item = assignment(1, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456")
+        terminal = FakeProcess(); terminal.returncode = 0
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane([item]),
+                                    process_factory=lambda *_: self.fail("worker must not launch"),
+                                    terminal_factory=lambda *_: terminal, sleeper=lambda _: None)
+            self.assertEqual(manager.reconcile_once()["failed"], 1)
+            self.assertEqual(manager.failures[item["slotCode"]]["code"], "MT5_CONFIGURED_TERMINAL_EXITED")
+            self.assertEqual(manager.children, {})
+
+    def test_worker_launch_failure_cleans_up_terminal_and_redacts_error(self):
+        item = assignment(1, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456")
+        terminal = FakeProcess()
+        def fail(*_):
+            raise OSError("private launch details")
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane([item]),
+                                    process_factory=fail, terminal_factory=lambda *_: terminal,
+                                    sleeper=lambda _: None)
+            self.assertEqual(manager.reconcile_once()["failed"], 1)
+            self.assertEqual(manager.failures[item["slotCode"]]["code"], "SLOT_PROCESS_START_FAILED")
+            self.assertTrue(terminal.terminated)
+            self.assertEqual(manager.children, {})
+
+    def test_execution_gate_drift_during_terminal_start_stops_terminal(self):
+        item = assignment(1, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456")
+        terminal = FakeProcess()
+        with tempfile.TemporaryDirectory() as folder:
+            config = self._config(Path(folder), execution_enabled=False)
+            manager = WorkerManager(config, FakeControlPlane([item]),
+                                    process_factory=lambda *_: self.fail("worker must not launch"),
+                                    terminal_factory=lambda *_: terminal,
+                                    sleeper=lambda _: Path(config.execution_gate_path).write_text("drift"))
+            with self.assertRaisesRegex(ManagerFailure, "PREFLIGHT_EXECUTION_GATE_PRESENT"):
+                manager.reconcile_once()
+            self.assertTrue(terminal.terminated)
+
+    def test_s02_failure_does_not_block_s03_and_retry_preserves_healthy_slots(self):
+        items = [assignment(n, f"{n:08d}-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456") for n in (1, 2, 3)]
+        terminals, workers, events = {}, {}, []
+        failing = [True]
+        now = [0.0]
+        def terminal(command, cwd):
+            slot = cwd.parent.name
+            proc = FakeProcess()
+            if slot.endswith("s02") and failing[0]: proc.returncode = 1
+            terminals.setdefault(slot, []).append(proc)
+            return proc
+        def worker(command, cwd):
+            slot = Path(command[command.index("--config") + 1]).parents[1].name
+            proc = FakeProcess(); workers.setdefault(slot, []).append(proc)
+            return proc
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane(items),
+                                    process_factory=worker, terminal_factory=terminal,
+                                    sleeper=lambda _: None, clock=lambda: now[0],
+                                    reporter=lambda *args: events.append(args))
+            self.assertEqual(manager.reconcile_once()["running"], 2)
+            self.assertIn(items[2]["slotCode"], manager.children)
+            manager.reconcile_once()  # Backoff: no tight restart loop.
+            self.assertEqual(len(terminals[items[1]["slotCode"]]), 1)
+            failing[0] = False; now[0] = 100
+            self.assertEqual(manager.reconcile_once()["running"], 3)
+            self.assertEqual(len(workers[items[0]["slotCode"]]), 1)
+            self.assertEqual(len(workers[items[2]["slotCode"]]), 1)
+            self.assertEqual(manager.failures, {})
+            self.assertIn((items[1]["slotCode"], "MT5_CONFIGURED_TERMINAL_EXITED"), events)
+            manager.shutdown()
+            self.assertTrue(all(p.terminated for values in workers.values() for p in values))
+
+    def test_s02_filesystem_error_is_redacted_and_does_not_block_s03(self):
+        items = [assignment(n, f"{n:08d}-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456") for n in (1, 2, 3)]
+        events = []
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder)), FakeControlPlane(items),
+                                    process_factory=lambda *_: FakeProcess(),
+                                    terminal_factory=lambda *_: FakeProcess(), sleeper=lambda _: None,
+                                    reporter=lambda *args: events.append(args))
+            original = manager._materialize_slot
+            def materialize(item):
+                if item.slot_number == 2: raise PermissionError("secret-account-detail")
+                return original(item)
+            manager._materialize_slot = materialize
+            self.assertEqual(manager.reconcile_once()["running"], 2)
+            self.assertIn(items[2]["slotCode"], manager.children)
+            self.assertNotIn("secret-account-detail", str(events))
+            manager.shutdown()
 
 
 if __name__ == "__main__":
