@@ -398,8 +398,6 @@ async function requireSession(req, res, redirectTo = null) {
 
 
 function landingForRole(role) {
-  if (role === 'admin') return '/admin';
-  if (role === 'ib') return '/ib';
   return '/app';
 }
 
@@ -1489,8 +1487,6 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/app') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
-    if (session.user.role === 'admin') return redirect(res, '/admin');
-    if (session.user.role === 'ib') return redirect(res, '/ib');
     return sendAuthAsset(res, 'home.html', 'text/html; charset=utf-8');
   }
 

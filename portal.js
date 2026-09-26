@@ -34,6 +34,14 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
       const user = body.user || {};
+      const accountLink = byId('accountLink');
+      if (accountLink && user.role === 'admin') {
+        accountLink.href = '/admin';
+        accountLink.textContent = 'ADMIN DASHBOARD';
+      } else if (accountLink && user.role === 'ib') {
+        accountLink.href = '/ib';
+        accountLink.textContent = 'IB DASHBOARD';
+      }
       if (welcomeName) welcomeName.textContent = user.displayName || 'Trader';
       if (userPill) userPill.textContent = user.email || 'Akaun ZenCore';
     } catch (_) {

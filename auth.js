@@ -26,8 +26,6 @@
   }
 
   function landingForRole(role) {
-    if (role === 'admin') return '/admin';
-    if (role === 'ib') return '/ib';
     return '/app';
   }
 
