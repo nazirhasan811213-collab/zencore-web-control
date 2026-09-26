@@ -1,0 +1,28 @@
+# Apply only after recurring database cost is approved. No production resource is managed here.
+services:
+  - type: web
+    name: zencore-staging
+    runtime: node
+    region: singapore
+    plan: free
+    branch: staging
+    autoDeployTrigger: off
+    buildCommand: npm ci
+    startCommand: node ops/staging/start.cjs
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: zencore-staging-db
+          property: connectionString
+      - key: ZENCORE_ADMIN_EMAILS
+        value: nazirhasan811213@gmail.com
+      - key: ZENCORE_REGISTRATION_ENABLED
+        value: "false"
+databases:
+  - name: zencore-staging-db
+    databaseName: zencore_staging_db
+    region: singapore
+    postgresMajorVersion: "18"
+    plan: basic-256mb
+    diskSizeGB: 1
+    ipAllowList: []
