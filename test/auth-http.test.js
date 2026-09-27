@@ -583,6 +583,17 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(markets.ok, true);
     assert.equal(markets.markets.length, 11);
 
+    response = await fetch(`${BASE}/api/analysis-v33?symbol=XAUUSD`);
+    assert.equal(response.status, 401);
+    response = await fetch(`${BASE}/api/analysis-v33?symbol=XAUUSD`, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).status, 'WAIT');
+    response = await fetch(`${BASE}/api/analysis-ai`, {
+      method: 'POST', headers: { Cookie: cookie, Origin: 'https://untrusted.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({symbol:'XAUUSD'})
+    });
+    assert.equal(response.status, 403);
+
     response = await fetch(`${BASE}/auth/logout`, {
       method: 'POST',
       headers: { Cookie: cookie, Origin: BASE, Accept: 'application/json' }

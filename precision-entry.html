@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0">
 <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
 <link rel="stylesheet" href="/analysis-alerts.css?v=2">
+<link rel="stylesheet" href="/analysis-workspace.css?v=33.0">
 </head>
 <body>
 <div class="pro-bg-grid"></div>
@@ -65,6 +66,32 @@
     </div>
   </header>
 
+  <section class="workspace-head">
+    <div><span class="ws-kicker">ANALYSIS WORKSPACE · V33 PREVIEW</span><h2>Baca arah. Pilih harga entry.</h2><p>Setup utama 3 minit, pengesahan entry 1 minit dan penilaian pergerakan 15 minit. Bandingkan ZenCore dengan sumber luaran apabila diperlukan.</p></div>
+    <span class="ws-chip">11 PAIR · 3M · NEXT 5 CANDLES</span>
+  </section>
+  <section class="ws-panel" aria-labelledby="v33Heading">
+    <div class="ws-title"><div><span class="ws-kicker" id="v33Pair">MARKET</span><h3 id="v33Heading">Arah & kelayakan entry</h3></div><span id="v33Status" class="ws-status">MENUNGGU DATA</span></div>
+    <p id="v33Reason" class="ws-muted" role="status">Menunggu feed V33 dengan setup 3M confirmed dan pencetus 1M.</p>
+    <div class="ws-summary"><div><span>BIAS</span><b id="v33Direction">WAIT</b></div><div><span>FORECAST</span><b id="v33Forecast">—</b></div><div><span>ENTRY QUALITY</span><b id="v33Quality">—</b></div><div><span>HORIZON</span><b>5 candle · 15m</b></div></div>
+    <ul id="v33Checks" class="ws-checks" aria-label="Semakan setup"></ul>
+    <div class="ws-title"><h3>Entry, SL & sasaran</h3><span id="v33PlanState" class="ws-muted">MENUNGGU SETUP</span></div>
+    <div class="ws-plan"><div><span>ENTRY</span><b id="v33entry">—</b></div><div class="sl"><span>STOP LOSS</span><b id="v33sl">—</b></div><div class="tp"><span>TP1</span><b id="v33tp1">—</b></div><div class="tp"><span>TP2</span><b id="v33tp2">—</b></div><div class="tp"><span>TP3</span><b id="v33tp3">—</b></div></div>
+    <p id="v33Target" class="ws-muted">Paras disesuaikan dengan struktur, ATR dan spread pair.</p><p id="v33Position" class="ws-muted"></p>
+    <div class="ws-note ws-muted">Masa data: <span id="v33Data">Belum tersedia</span> · Skor ialah ukuran aturan, bukan kebarangkalian menang.</div>
+  </section>
+  <section class="ws-panel" aria-labelledby="aiHeading">
+    <div class="ws-title"><div><span class="ws-kicker">SECOND OPINION · ATAS PERMINTAAN</span><h3 id="aiHeading">Dua perspektif. Satu perbandingan.</h3><p class="ws-muted">Analisis dijana hanya selepas klik. Signal sistem tidak menunggu jawapan AI.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
+    <p id="aiStatus" class="ws-muted" role="status" aria-live="polite">Klik untuk analisis pair yang dipilih.</p>
+    <div id="aiResults" hidden>
+      <p id="aiStamp" class="ws-muted"></p><div class="ws-ai-grid">
+        <article class="ws-ai-card"><span class="ws-kicker">01 · SISTEM ZENCORE</span><h4>AI Analysis ZenCore</h4><strong id="aiZDirection">—</strong><p id="aiZReason"></p><span id="aiGptStatus" class="ws-kicker"></span><p id="aiNarrative"></p><div class="ws-note ws-muted">Masa data: <span id="aiZData"></span></div></article>
+        <article class="ws-ai-card"><span class="ws-kicker">02 · SUMBER LUARAN</span><h4>AI Analysis Luaran</h4><strong id="aiExternalStatus">—</strong><p id="aiExternalReason"></p><p id="aiExternalMethod" class="ws-muted"></p><div class="ws-note ws-muted">Masa data: <span id="aiExternalData"></span></div></article>
+      </div><div class="ws-compare"><span class="ws-kicker">RUMUSAN PERBANDINGAN</span><p><b id="aiComparison">—</b></p><div class="ws-scroll"><table class="ws-table"><thead><tr><th>Sumber</th><th>TF</th><th>Bias</th><th>Jenis</th></tr></thead><tbody><tr><td>ZenCore</td><td>3M + trigger 1M</td><td>Rujuk panel 01</td><td>Aturan ZenCore V33</td></tr><tr><td id="aiExternalSource">—</td><td>1M → 3M</td><td id="aiExternalBias">—</td><td>Dikira daripada OHLC luaran</td></tr></tbody></table></div><p id="aiFreshness" class="ws-muted"></p></div>
+    </div>
+  </section>
+  <p class="workspace-foot">Versi penyelidikan: paras V33 dan ulasan AI belum mengawal Telegram atau MT5. Jangkaan 15 minit ialah senario bersyarat. Analisis SOP sedia ada boleh dibuka di bawah.</p>
+  <details class="legacy-analysis"><summary>Analisis SOP sedia ada · carta, posisi, semakan dan prestasi</summary><div class="legacy-body">
   <!-- PROFESSIONAL TOP TRADING PLAN -->
     <div class="panel plan-panel plan-top pro-3d-card">
       <div class="panel-head">
@@ -331,9 +358,11 @@
   </section>
 
   <footer>ZenCore Precision Entry • SOP source signal kekal • A+ Quality = execution ranking, bukan jaminan profit • Gunakan risk management.</footer>
+</div></details>
 </div>
 <script src="/analysis-alerts.js?v=2" defer></script>
 <script src="/precision-entry.js?v=5.0"></script>
+<script src="/analysis-workspace.js?v=33.0" defer></script>
 <script src="/analysis-execution-contract.js?v=1.0"></script>
 <script src="/auto-trade-core.js?v=1.2"></script>
 <script src="/auto-trade-monitor.js?v=1.0"></script>

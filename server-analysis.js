@@ -1,4 +1,6 @@
 const http = require('http');
+const {AnalysisAIService}=require('./analysis-ai-service');
+const aiAnalysis=new AnalysisAIService();
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -1311,6 +1313,34 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(410, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end('ZenCore legacy service is closed.');
     }
+  }
+
+  if (req.method === 'GET' && ['/analysis-workspace.js','/analysis-workspace.css'].includes(pathname)) {
+    return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
+  }
+  if (pathname === '/webhook/v33' && req.method === 'POST') {
+    try {
+      const body=await readJson(req);
+      if(Array.isArray(body.contexts)){
+        if(body.contexts.length>11)return sendJson(res,400,{error:'Maksimum 11 pair.'});
+        const results=body.contexts.map(context=>aiAnalysis.ingest({token:body.token,context}));
+        return sendJson(res,results.some(r=>r.code===403)?403:results.some(r=>r.code===503)?503:200,{results});
+      }
+      const result=aiAnalysis.ingest(body);return sendJson(res,result.code,result);
+    }
+    catch (_) { return sendJson(res,400,{error:'Payload V33 tidak sah.'}); }
+  }
+  if (pathname === '/api/analysis-v33' || pathname === '/api/analysis-ai') {
+    const session=await requireSession(req,res);
+    if(!session)return;
+    if(pathname==='/api/analysis-v33' && req.method==='GET')return sendJson(res,200,aiAnalysis.snapshot(url.searchParams.get('symbol')));
+    if(pathname==='/api/analysis-ai' && req.method==='POST'){
+      if(!requestOriginAllowed(req))return sendJson(res,403,{error:'Origin tidak dibenarkan.'});
+      if(session.user.role==='viewer')return sendJson(res,403,{error:'Jana AI tersedia untuk akaun berdaftar.'});
+      try { const body=await readJson(req);const result=await aiAnalysis.generate(body.symbol,session.user.id);return sendJson(res,result.code,result); }
+      catch(_){return sendJson(res,503,{error:'Analisis tidak tersedia.'});}
+    }
+    return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
   }
 
   if (req.method === 'GET' && pathname === '/auth.css') return sendAuthAsset(res, 'auth.css', 'text/css; charset=utf-8');

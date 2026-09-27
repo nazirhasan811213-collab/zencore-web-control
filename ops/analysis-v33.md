@@ -1,0 +1,43 @@
+# Analysis V33 candidate — staging only
+
+## Delivered
+
+- All signed-in roles land on Market Radar (prior staging commit).
+- Responsive Analysis workspace: context, decision checks, Entry/SL/TP1–3, then two AI comparison cards. Existing SOP views remain in a disclosure panel.
+- One explicit generate button; no automatic paid model calls. Pair changes abort and clear the previous result. Data timestamps and expiry are visible.
+- Eleven supported pairs. Closed 3M setup plus closed 1M trigger, extension gate and adaptive structure/ATR/spread/tick targets.
+- Forecast strength and directional dominance are separate. Neutral >50 supports BUY; neutral <50 supports SELL; exactly 50 and CHOPPY do not enter.
+- Research tracker locks a setup plan, ignores pre-entry bar extremes, handles stop-first ambiguous bars, and records a 15-minute expiry. It does not execute orders.
+- Protected feed and authenticated, same-origin AI endpoint; provider failures produce explicit unavailable states.
+
+## Activation requirements (not performed)
+
+Use an isolated staging service and database, never the live webhook. Configure secrets through hosting settings, not repository files:
+
+| Variable | Purpose |
+| --- | --- |
+| ZENCORE_V33_FEED_SECRET | Separate random feed token, at least 24 characters |
+| OPENAI_API_KEY | Server-side Responses API key |
+| ZENCORE_AI_MODEL | Explicit supported model selected by operator |
+| TWELVE_DATA_API_KEY | Licensed external market-data API |
+| ZENCORE_EXTERNAL_SYMBOLS_JSON | Explicit pair-to-provider symbol map, verified instrument by instrument |
+
+Compile `ZenCore_V33_Research_Feed.pine` in TradingView first. It has not been compiled in TradingView in this change. Run on a 1M chart, verify all eleven symbols and provide realistic spread inputs in price units. Zero/default spread inputs deliberately block candidate entries. Create an alert for `alert()` calls to the staging `/webhook/v33` endpoint. The bridge uses confirmed prior minutes across symbols; it can therefore lag by a minute plus transport latency. It is not a tick-level feed or a promise of zero delay. For faster confirmed data, implement an authenticated market feed with actual timestamps and bid/ask.
+
+## Honest boundaries
+
+- The V33 rules and target multipliers are research heuristics, not calibrated profitability estimates. Quality is not win probability. Validate per pair with spread, slippage, out-of-sample and forward data before promoting to the signal engine.
+- Existing production SOP, Telegram dispatch and MT5 decisions are unchanged. No new live trades or real-user test alerts are sent.
+- GPT explains supplied snapshots; it cannot manufacture missing data or override entry levels.
+- External adapter computes EMA9/20 and simple RSI from licensed 1M OHLC aggregated to complete 3M bars. This is independent-data computation, **not** native 3M analysis published by other trading systems. Native third-party analysis is explicitly NOT_CONNECTED; its provider and access agreement are still required.
+- Research contexts and tracker records are in memory and reset on process restart. This tracker must not be promoted to production deduplication or execution without durable storage. Existing production alert persistence is unchanged.
+- Static spread inputs are estimates, not live broker spreads. Broker/CFD instrument mapping, especially US30, needs verification.
+- No staging URL has been provisioned for this change. No live deployment was made. UI browser rendering still requires visual acceptance on a staging deployment; source and server tests do not substitute for it.
+
+## Verification
+
+Run `npm test`. New tests cover forecast boundaries, all eleven pairs, missing/stale data, entry extension, locked plans, conservative intrabar resolution, minute aggregation, provider-unconfigured behavior, feed authentication, and HTTP session/origin protection. The PostgreSQL integration test requires its dedicated test database and is skipped when absent.
+
+## Promotion sequence
+
+Compile bridge; configure staging integrations; verify desktop/mobile rendering; collect forward observations for each pair; implement durable candidate state; review native external provider requirements; only then explicitly approve merge and live activation. Rollback of code alone does not restore database or VM state.

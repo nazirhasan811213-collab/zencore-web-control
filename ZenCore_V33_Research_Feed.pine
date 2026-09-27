@@ -1,0 +1,109 @@
+//@version=6
+indicator("ZenCore V33 Research Feed · 3M / 1M", overlay=false, dynamic_requests=true)
+// Staging research bridge. Run on a 1-minute chart. Does not change the original indicator.
+// Create alert: Any alert() function call. Webhook destination: STAGING /webhook/v33.
+secret=input.string("", "Staging feed token (minimum 24 characters)")
+s1=input.symbol("OANDA:XAUUSD","XAUUSD")
+s2=input.symbol("OANDA:EURUSD","EURUSD")
+s3=input.symbol("OANDA:GBPUSD","GBPUSD")
+s4=input.symbol("OANDA:USDJPY","USDJPY")
+s5=input.symbol("OANDA:US30USD","US30")
+s6=input.symbol("OANDA:USDCAD","USDCAD")
+s7=input.symbol("OANDA:USDCHF","USDCHF")
+s8=input.symbol("OANDA:EURJPY","EURJPY")
+s9=input.symbol("OANDA:GBPJPY","GBPJPY")
+s10=input.symbol("OANDA:EURGBP","EURGBP")
+s11=input.symbol("BITSTAMP:BTCUSD","BTCUSD")
+// Broker/source differences must be verified. Zero means unknown: no candidate entry.
+sp1=input.float(0,"XAUUSD spread in PRICE units",minval=0)
+sp2=input.float(0,"EURUSD spread in PRICE units",minval=0)
+sp3=input.float(0,"GBPUSD spread in PRICE units",minval=0)
+sp4=input.float(0,"USDJPY spread in PRICE units",minval=0)
+sp5=input.float(0,"US30 spread in PRICE units",minval=0)
+sp6=input.float(0,"USDCAD spread in PRICE units",minval=0)
+sp7=input.float(0,"USDCHF spread in PRICE units",minval=0)
+sp8=input.float(0,"EURJPY spread in PRICE units",minval=0)
+sp9=input.float(0,"GBPJPY spread in PRICE units",minval=0)
+sp10=input.float(0,"EURGBP spread in PRICE units",minval=0)
+sp11=input.float(0,"BTCUSD spread in PRICE units",minval=0)
+f_hema(float s,int n)=>
+    ta.ema(2*ta.ema(s,int(math.round(n/2)))-ta.ema(s,n),int(math.round(math.sqrt(n))))
+f_gd(float s,int n)=>ta.ema(s,n)*1.5-ta.ema(ta.ema(s,n),n)*.5
+f_t3(float s,int n)=>f_gd(f_gd(f_gd(s,n),n),n)
+f_num(float n)=>na(n)?"null":str.tostring(n,"#.##########")
+f_q(string s)=>"\""+str.replace_all(str.replace_all(s,"\\","\\\\"),"\"","\\\"")+"\""
+f_side(bool b,bool s)=>b?"BUY":s?"SELL":"WAIT"
+type Setup
+    int stamp
+    float atr
+    float zone
+    float swingLow
+    float swingHigh
+    float support
+    float resistance
+    string momentum
+    string hema
+    string basisSide
+    string candleSide
+    string forecast
+    float strength
+    float dominance
+    bool choppy
+f_setup()=>
+    float e9=ta.ema(close,9),e20=ta.ema(close,20),e50=ta.ema(close,50),a=ta.atr(14)
+    float h20=f_hema(close,20),h40=f_hema(close,40),basis=ta.sma(close,20)
+    float esa=ta.ema(hlc3,10),dev=ta.ema(math.abs(hlc3-esa),10)
+    float wt1=ta.ema(dev>0?(hlc3-esa)/(.015*dev):0,15),wt2=ta.sma(wt1,4)
+    float rg=ta.highest(high,14)-ta.lowest(low,14)
+    float chop=rg>0?100*math.log10(math.sum(ta.tr,14)/rg)/math.log10(14):100
+    bool choppy=chop>61.8
+    float fast=f_t3(close,5),slow=f_t3(close,8)
+    string mom=f_side(wt1>wt2,wt1<wt2)
+    string hema=f_side(h20>h40,h20<h40)
+    string bs=f_side(close>basis,close<basis)
+    string cs=f_side(fast>=slow and close>slow,fast<=slow and close<slow)
+    float dominance=50+(close>e20?15:close<e20?-15:0)+(h20>h40?15:h20<h40?-15:0)+(wt1>wt2?15:wt1<wt2?-15:0)+(close>open?5:close<open?-5:0)
+    float gap=math.abs(wt1-wt2),maxGap=ta.highest(gap,20)
+    float trend=(e9>e20 and e20>e50) or (e9<e20 and e20<e50)?30:15
+    float strength=math.min(100,trend+(maxGap>0?gap/maxGap*30:0)+math.min(20,a>0?math.abs(close-open)/a*20:0)+20)
+    string forecast=choppy?"CHOPPY":mom=="BUY" and hema=="BUY" and bs=="BUY"?"BULLISH":mom=="SELL" and hema=="SELL" and bs=="SELL"?"BEARISH":"NEUTRAL"
+    // Every field comes from the last COMPLETE 3M candle. No future HTF leakage.
+    Setup.new(time_close[1],a[1],e9[1],ta.lowest(low,5)[1],ta.highest(high,5)[1],ta.lowest(low,30)[1],ta.highest(high,30)[1],mom[1],hema[1],bs[1],cs[1],forecast[1],strength[1],dominance[1],choppy[1])
+type Minute
+    int stamp
+    int opened
+    float price
+    float hi
+    float lo
+    float tick
+    string trigger
+f_minute()=>
+    float e=ta.ema(close,9),esa=ta.ema(hlc3,10),dev=ta.ema(math.abs(hlc3-esa),10)
+    float w1=ta.ema(dev>0?(hlc3-esa)/(.015*dev):0,15),w2=ta.sma(w1,4)
+    bool buy=low<=e and close>e and close>open and w1>w2
+    bool sell=high>=e and close<e and close<open and w1<w2
+    // Use the prior complete minute for every requested symbol; never label a forming cross-symbol bar confirmed.
+    Minute.new(time_close[1],time[1],close[1],high[1],low[1],syminfo.mintick,f_side(buy[1],sell[1]))
+var symbols=array.from(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11)
+var names=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","US30","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP","BTCUSD")
+var spreads=array.from(sp1,sp2,sp3,sp4,sp5,sp6,sp7,sp8,sp9,sp10,sp11)
+string batch=""
+for i=0 to 10
+    string ticker=array.get(symbols,i)
+    Setup s=request.security(ticker,"3",f_setup(),lookahead=barmerge.lookahead_on,ignore_invalid_symbol=true)
+    Minute m=request.security(ticker,"1",f_minute(),lookahead=barmerge.lookahead_on,ignore_invalid_symbol=true)
+    if not na(s) and not na(m) and not na(s.stamp) and not na(m.stamp)
+        float spread=array.get(spreads,i)
+        string row="{\"schema\":\"33.0\",\"symbol\":"+f_q(array.get(names,i))+",\"dataAt\":"+str.tostring(m.stamp)+",\"setupAt\":"+str.tostring(s.stamp)+",\"confirmed3\":true,\"confirmed1\":true"
+        row+=",\"price\":"+f_num(m.price)+",\"atr\":"+f_num(s.atr)+",\"zone\":"+f_num(s.zone)+",\"tickSize\":"+f_num(m.tick)+",\"spread\":"+f_num(spread>0?spread:na)
+        row+=",\"swingLow\":"+f_num(s.swingLow)+",\"swingHigh\":"+f_num(s.swingHigh)+",\"support\":"+f_num(s.support)+",\"resistance\":"+f_num(s.resistance)
+        row+=",\"momentum\":"+f_q(s.momentum)+",\"hema\":"+f_q(s.hema)+",\"basisSide\":"+f_q(s.basisSide)+",\"candleSide\":"+f_q(s.candleSide)
+        row+=",\"forecast\":"+f_q(s.forecast)+",\"strength\":"+f_num(s.strength)+",\"dominance\":"+f_num(s.dominance)+",\"choppy\":"+(s.choppy?"true":"false")
+        row+=",\"trigger1\":"+f_q(m.trigger)+",\"barOpen1\":"+str.tostring(m.opened)+",\"high1\":"+f_num(m.hi)+",\"low1\":"+f_num(m.lo)+"}"
+        batch+=(str.length(batch)>0?",":"")+row
+if timeframe.period=="1" and barstate.isconfirmed and str.length(secret)>=24 and str.length(batch)>0
+    alert("{\"token\":"+f_q(secret)+",\"contexts\":["+batch+"]}",alert.freq_once_per_bar_close)
+var table status=table.new(position.top_right,1,2)
+if barstate.islast
+    table.cell(status,0,0,"V33 RESEARCH · STAGING ONLY",text_color=color.aqua)
+    table.cell(status,0,1,timeframe.period!="1"?"Gunakan carta 1 MINIT":str.length(secret)<24?"Token diperlukan":"3M setup / 1M trigger · 11 pair",text_color=color.white)
