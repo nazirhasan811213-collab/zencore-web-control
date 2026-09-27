@@ -45,7 +45,7 @@ class AnalysisAIService {
     clean.position=this.tracker.update(clean,decision,this.now());this.contexts.set(c.symbol,clean);
     return {code:200,ok:true};
   }
-  snapshot(symbol){const c=this.contexts.get(symbol)||{symbol};return {...analyse(c,this.now()),position:c.position||null};}
+  snapshot(symbol){const c=this.contexts.get(symbol)||{symbol};return {...analyse(c,this.now()),position:c.position||null, integrations:{feedConfigured:(this.env.ZENCORE_V33_FEED_SECRET||'').length>=24, gptConfigured:!!(this.env.OPENAI_API_KEY&&this.env.ZENCORE_AI_MODEL), externalConfigured:!!this.env.TWELVE_DATA_API_KEY, nativeExternalConnected:false}};}
   async external(symbol){
     if(!this.env.TWELVE_DATA_API_KEY)return {source:'Twelve Data',status:'NOT_CONFIGURED',reason:'Sumber harga luaran belum disambungkan.'};
     let mapping={};try{mapping=JSON.parse(this.env.ZENCORE_EXTERNAL_SYMBOLS_JSON||'{}');}catch{}

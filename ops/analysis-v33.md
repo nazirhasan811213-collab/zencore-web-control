@@ -3,7 +3,7 @@
 ## Delivered
 
 - All signed-in roles land on Market Radar (prior staging commit).
-- Responsive Analysis workspace: context, decision checks, Entry/SL/TP1–3, then two AI comparison cards. Existing SOP views remain in a disclosure panel.
+- Responsive Analysis workspace: context, decision checks, Entry/SL/TP1–3, then two AI comparison cards. Existing SOP views remain in an open disclosure panel, automatically promoted above the preview when the V33 feed is absent.
 - One explicit generate button; no automatic paid model calls. Pair changes abort and clear the previous result. Data timestamps and expiry are visible.
 - Eleven supported pairs. Closed 3M setup plus closed 1M trigger, extension gate and adaptive structure/ATR/spread/tick targets.
 - Forecast strength and directional dominance are separate. Neutral >50 supports BUY; neutral <50 supports SELL; exactly 50 and CHOPPY do not enter.
@@ -32,7 +32,7 @@ Compile `ZenCore_V33_Research_Feed.pine` in TradingView first. It has not been c
 - External adapter computes EMA9/20 and simple RSI from licensed 1M OHLC aggregated to complete 3M bars. This is independent-data computation, **not** native 3M analysis published by other trading systems. Native third-party analysis is explicitly NOT_CONNECTED; its provider and access agreement are still required.
 - Research contexts and tracker records are in memory and reset on process restart. This tracker must not be promoted to production deduplication or execution without durable storage. Existing production alert persistence is unchanged.
 - Static spread inputs are estimates, not live broker spreads. Broker/CFD instrument mapping, especially US30, needs verification.
-- No staging URL has been provisioned for this change. No live deployment was made. UI browser rendering still requires visual acceptance on a staging deployment; source and server tests do not substitute for it.
+- No staging URL has been provisioned for this change. Live publication is now authorized by the user; verify Render deployment status before claiming success. UI browser rendering still requires visual acceptance on a staging deployment; source and server tests do not substitute for it.
 
 ## Verification
 
