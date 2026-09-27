@@ -20,10 +20,28 @@
     text('v33Position',s.position?`${s.position.status} • TP dicapai: ${s.position.targetStage}/3 • Tamat penilaian: ${time(s.position.expiresAt)}`:'Satu setup, satu rekod entry. Signal calon ini belum dihantar ke Telegram atau MT5.');
   }
   async function refresh(){const symbol=pair();try{const r=await fetch('/api/analysis-v33?symbol='+encodeURIComponent(symbol),{cache:'no-store'});if(r.ok&&symbol===pair())renderSnapshot(await r.json());}catch{ text('v33Reason','Tidak dapat membaca feed calon.');}}
+  async function liveSop(symbol,signal){
+    try{
+      const response=await fetch('/api/prediction/'+encodeURIComponent(symbol),{cache:'no-store',signal});
+      if(!response.ok)return null;
+      const data=await response.json(),at=typeof data.receivedAt==='number'?data.receivedAt:Date.parse(data.receivedAt);
+      if(data.symbol!==symbol||data.freshness!=='LIVE'||!Number.isFinite(at)||at>Date.now()+5000||Date.now()-at>180000)return null;
+      const sop=data.strategyNormal;
+      if(!sop||!['BUY','SELL','WAIT'].includes(sop.side))return null;
+      return {side:sop.side,state:sop.state||'WAIT',reason:sop.reason||'Semak aturan SOP pada panel di bawah.',dataAt:at};
+    }catch{return null;}
+  }
   function renderResult(r){
     lastResult=r;$('aiResults').hidden=false;text('aiStamp',`${r.symbol} • Snapshot ${time(r.generatedAt)} • TF 3M / 15 minit`);
-    text('aiZDirection',r.zencore.side);text('aiZReason',r.zencore.reason);text('aiZData',time(r.zencore.dataAt));
-    text('aiNarrative',r.gpt.text);text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT':'ULASAN GPT BELUM TERSEDIA');
+    if(!r.zencore.dataAt&&r.liveSop){
+      text('aiZTitle','Analisis SOP ZenCore semasa');text('aiZDirection',r.liveSop.side+' · '+r.liveSop.state);
+      text('aiZReason',r.liveSop.reason);text('aiZData',time(r.liveSop.dataAt));
+      text('aiGptStatus','DATA SOP PINE · BUKAN V33');
+      text('aiNarrative','Feed V33 belum disambungkan. Ulasan GPT dan perbandingan AI belum tersedia; lihat analisis SOP semasa di bawah.');
+    }else{
+      text('aiZTitle','AI Analysis ZenCore');text('aiZDirection',r.zencore.side);text('aiZReason',r.zencore.reason);text('aiZData',time(r.zencore.dataAt));
+      text('aiNarrative',r.gpt.text);text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT':'ULASAN GPT BELUM TERSEDIA');
+    }
     text('aiExternalStatus',r.external.status);text('aiExternalReason',r.external.reason);text('aiExternalMethod',r.external.method||r.nativeExternal.reason);
     text('aiExternalData',time(r.external.dataAt));text('aiComparison',r.comparison);
     text('aiExternalSource',r.external.source);text('aiExternalBias',r.external.bias||'—');
@@ -33,6 +51,7 @@
     const id=++requestId,symbol=pair();controller?.abort();controller=new AbortController();
     $('generateAnalysis').disabled=true;text('generateAnalysis','SEDANG MENGANALISIS…');text('aiStatus','Membaca snapshot dan sumber yang tersedia…');
     try{const r=await fetch('/api/analysis-ai',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol}),signal:controller.signal});const body=await r.json();
+      if(r.ok&&!body.zencore?.dataAt)body.liveSop=await liveSop(symbol,controller.signal);
       if(id!==requestId||symbol!==pair())return;if(!r.ok)throw Error(body.error||'Analisis gagal.');renderResult(body);text('aiStatus','Analisis selesai. Semak masa data setiap sumber.');
     }catch(e){if(id===requestId&&e.name!=='AbortError')text('aiStatus',e.message||'Analisis tidak tersedia.');}
     finally{if(id===requestId){$('generateAnalysis').disabled=false;text('generateAnalysis','ANALISIS SEMULA');}}
