@@ -8,8 +8,6 @@
   function renderSnapshot(s){
     snapshot=s;
     if(s.integrations){const i=s.integrations;text('aiConnections',`Feed 3M/1M: ${i.feedConfigured?'dikonfigurasi':'belum disambungkan'} · GPT: ${i.gptConfigured?'dikonfigurasi':'belum disambungkan'} · Data luar: ${i.externalConfigured?'dikonfigurasi':'belum disambungkan'}`);}
-    const legacy=document.querySelector('.legacy-analysis'),hero=document.querySelector('.workspace-head');
-    if(!s.dataAt&&legacy&&hero){hero.after(legacy);legacy.open=true;}
     text('v33Pair',s.symbol);text('v33Status',s.status.replaceAll('_',' '));text('v33Reason',s.reason);
     text('v33Direction',s.side);text('v33Quality',s.entryQuality==null?'—':s.entryQuality+'/100');
     text('v33Forecast',s.forecast||'—');text('v33Data',time(s.dataAt));

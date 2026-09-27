@@ -11,3 +11,22 @@
 [hidden]{display:none!important}@media(max-width:900px){.ws-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.ws-ai-grid{grid-template-columns:1fr}.ws-plan{grid-template-columns:repeat(3,minmax(0,1fr))}.workspace-head{align-items:flex-start;flex-direction:column}.ws-chip{white-space:normal}}@media(max-width:540px){.pro-app{padding:12px!important;gap:14px!important}.ws-panel,.workspace-head{padding:18px}.ws-plan{grid-template-columns:repeat(2,minmax(0,1fr))}.ws-ai-button{width:100%;font-size:12px}.ws-summary b,.ws-plan b{font-size:18px}.ws-ai-card{padding:16px}.ws-title{gap:10px}.top-pricebox{max-width:100%}.ws-table{min-width:480px}}
 
 .ws-ai-card>strong{display:block;font-size:clamp(14px,2vw,23px);overflow-wrap:anywhere}.ws-status{max-width:100%;overflow-wrap:anywhere}
+
+/* Compact decision-first layout: the live SOP remains above advisory panels. */
+.pro-app{gap:12px!important;padding:16px!important}
+.pro-app>.hero{display:block!important;min-height:0!important;padding:16px 20px!important;margin:0!important;border-radius:14px!important}
+.pro-app>.hero .hero-side,.pro-app>.hero .hero-tags,.pro-app>.hero .eyebrow{display:none!important}
+.pro-app>.hero h2{font-size:clamp(20px,2.4vw,28px)!important;line-height:1.2!important;margin:0 0 6px!important}
+.pro-app>.hero p{font-size:13px!important;line-height:1.5!important;margin:0!important;max-width:none!important}
+.pro-app>.status-grid{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:10px!important;margin:0!important}
+.pro-app>.status-grid .status-card{grid-column:auto!important;min-height:0!important;padding:13px 15px!important;border-radius:12px!important}
+.pro-app>.status-grid strong{font-size:26px!important;line-height:1.2!important;margin:7px 0!important}
+.pro-app>.status-grid small{font-size:11px!important}.pro-app>.status-grid .status-card>span{font-size:10px!important}
+.pro-app>.plan-top{padding:16px!important;margin:0!important}.pro-app>.plan-top .panel-head{margin-bottom:10px!important}
+.pro-app>.plan-top .plan-grid{gap:8px!important}.pro-app>.plan-top .plan-grid>div{padding:10px!important;min-height:0!important}.pro-app>.plan-top .plan-grid b{font-size:20px!important}
+.pro-app>.plan-top .risk-strip{margin-top:8px!important;padding:8px!important}.pro-app>.plan-top .plan-note{margin-top:8px!important;padding:0!important}
+.ws-panel{padding:18px}.ws-title{margin-bottom:10px;gap:10px}.ws-title h3{font-size:18px;margin:3px 0}.ws-title p{margin:4px 0}.ws-ai-grid{gap:12px;margin-top:10px}.ws-ai-card{padding:16px}.ws-ai-card h4{font-size:17px;margin:6px 0 10px}.ws-ai-card p{font-size:13px;line-height:1.55;margin:9px 0}.ws-note{padding-top:9px;margin-top:10px}.ws-ai-button{padding:11px 16px;min-height:40px}
+#aiConnections,#aiStatus,#aiStamp{font-size:11px;margin:6px 0;line-height:1.5}.ws-compare{padding:12px;margin-top:12px}.ws-table th,.ws-table td{padding:8px}
+.v33-preview-details{border:1px solid #29404d;border-radius:12px;padding:14px}.v33-preview-details>summary{cursor:pointer;color:#a9bdca;font-size:13px}.v33-preview-details>.ws-panel{margin-top:12px}.workspace-foot{margin:0}.legacy-analysis{padding:16px}.legacy-body{gap:14px;margin-top:14px}
+@media(max-width:900px){.pro-app>.status-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}.pro-app>.plan-top .plan-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:540px){.pro-app{padding:10px!important}.pro-app>.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.pro-app>.status-grid .main{grid-column:1/-1!important}.pro-app>.plan-top .plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.pro-app>.status-grid strong{font-size:22px!important}}
