@@ -24,7 +24,7 @@
     try{
       const response=await fetch('/api/prediction/'+encodeURIComponent(symbol),{cache:'no-store',signal});
       if(!response.ok)return null;
-      const data=await response.json(),at=Date.parse(data.receivedAt);
+      const data=await response.json(),at=typeof data.receivedAt==='number'?data.receivedAt:Date.parse(data.receivedAt);
       if(data.symbol!==symbol||data.freshness!=='LIVE'||!Number.isFinite(at)||at>Date.now()+5000||Date.now()-at>180000)return null;
       const sop=data.strategyNormal;
       if(!sop||!['BUY','SELL','WAIT'].includes(sop.side))return null;
