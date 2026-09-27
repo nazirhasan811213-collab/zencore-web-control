@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   let prefs={popup:true,sound:true,telegramEnabled:false,telegramId:'',verified:false}, cursor=null, user='', audio, stopped=false;
-  const root=document.createElement('details');root.className='alert-settings';root.open=false;
+  const root=document.createElement('details');root.className='alert-settings';root.id='alerts';root.open=location.hash==='#alerts';
   root.innerHTML=`<summary>ALERT ANALYSIS · ENTRY & CLOSE</summary>
     <div class="alert-body"><section class="alert-browser"><h3>Popup & bunyi</h3><p>Alert semua pair ZenCore untuk signal entry dan close posisi. Popup diterima semasa halaman Analysis dibuka. Telegram boleh diterima walaupun halaman ditutup.</p>
     <div class="alert-controls"><label><input id="zaPopup" type="checkbox" checked> Popup</label><label><input id="zaSound" type="checkbox" checked> Bunyi</label><button id="zaTest" type="button">Aktifkan / uji bunyi</button></div>

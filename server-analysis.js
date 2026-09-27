@@ -1315,7 +1315,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/analysis-workspace.js','/analysis-workspace.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {

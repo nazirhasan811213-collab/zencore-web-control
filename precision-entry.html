@@ -8,8 +8,9 @@
 <link rel="stylesheet" href="/precision-entry.css?v=5.0">
 <link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0">
 <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
-<link rel="stylesheet" href="/analysis-alerts.css?v=2">
-<link rel="stylesheet" href="/analysis-workspace.css?v=34.4">
+<link rel="stylesheet" href="/analysis-alerts.css?v=35.0">
+<link rel="stylesheet" href="/analysis-workspace.css?v=35.0">
+<link rel="stylesheet" href="/workspace-shell.css?v=35.0">
 </head>
 <body>
 <div class="pro-bg-grid"></div>
@@ -132,13 +133,66 @@
       </div>
       <div class="risk-strip">
         <div><span>Risk State</span><b id="riskState">—</b></div>
-        <div><span>Setup Probability</span><b id="setupProbability">—</b></div>
+        <div><span>Setup Assessment</span><b id="setupProbability">—</b></div>
         <div><span>Confluence</span><b id="confluence">—</b></div>
         <div><span>Entry Zone</span><b id="entryZone">—</b></div>
       </div>
       <div id="planNote" class="plan-note">Plan hanya muncul apabila semua syarat entry lulus.</div>
     </div>
 
+
+  <section class="chart-section panel">
+    <div class="panel-head">
+      <div>
+        <span class="eyebrow">LIVE MARKET</span>
+        <h3 id="chartPairTitle">TradingView • XAUUSD • 3 Minute</h3>
+      </div>
+      <div class="chart-badges"><span id="chartSymbolBadge">OANDA:XAUUSD</span><span>3M</span></div>
+    </div>
+    <div class="chart-tabs">
+      <button class="chart-tab active" data-chart-mode="zencore">ZENCORE LIVE CHART</button>
+      <button class="chart-tab" data-chart-mode="tradingview">TRADINGVIEW</button>
+      <span id="nativeChartStatus">Waiting chart feed</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-stage">
+        <div id="zencoreChartPanel" class="chart-panel active">
+          <canvas id="zencoreCanvas"></canvas>
+          <div id="chartEmptyState" class="chart-empty">
+            <b>ZENCORE CHART FEED READY</b>
+            <span>Live candles + HEMA + Entry/SL/TP akan muncul selepas webhook 3M menerima candle confirmed.</span>
+          </div>
+          <div class="chart-overlay-brand">
+            <b>ZenCore AI Dashboard Pro</b>
+            <span>3M • Native Web Chart</span>
+          </div>
+        </div>
+        <div id="tradingViewPanel" class="chart-panel">
+          <div id="tradingViewHost" class="tradingview-widget-container">
+            <div class="tradingview-widget-container__widget"></div>
+          </div>
+        </div>
+      </div>
+      <aside class="execution-box">
+        <div class="execution-title">
+          <span class="eyebrow">EXECUTION PANEL</span>
+          <h3 id="executionTitle">WAIT</h3>
+          <p id="executionAdvice">Tunggu setup lengkap dan quality yang lebih baik.</p>
+        </div>
+        <div class="execution-grid">
+          <div><span>ENTRY LINE</span><b id="entryPrice">—</b></div>
+          <div><span>CURRENT</span><b id="closePrice">—</b></div>
+          <div><span>5M HEMA</span><b id="m5PositionMini">—</b></div>
+          <div><span>RR TO TP3</span><b id="rrTp3">—</b></div>
+        </div>
+        <div class="quality-meter">
+          <div><span>Execution Quality</span><b id="qualityMeterLabel">0%</b></div>
+          <div class="rail"><i id="qualityRail"></i></div>
+        </div>
+      </aside>
+    </div>
+    <div class="chart-note">ZenCore Live Chart meniru paparan indikator: candle, HEMA ribbon, Solid Entry, Entry/SL/TP dan SOP state daripada webhook Pine. TradingView standard kekal sebagai rujukan kedua.</div>
+  </section>
 
   <section class="ws-panel" aria-labelledby="aiHeading">
     <div class="ws-title"><div><span class="ws-kicker">AI ANALYSIS · TF 3M / 15 MINIT</span><h3 id="aiHeading">Bandingkan analisis AI</h3><p class="ws-muted">Analisis dijana hanya selepas klik. Signal sistem tidak menunggu jawapan AI.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
@@ -166,7 +220,7 @@
   </section>
   </details>
   <p class="workspace-foot">Versi penyelidikan: paras V33 dan ulasan AI belum mengawal Telegram atau MT5. Jangkaan 15 minit ialah senario bersyarat. Analisis SOP sedia ada boleh dibuka di bawah.</p>
-  <details class="legacy-analysis" open><summary>Analisis SOP sedia ada · carta, posisi, semakan dan prestasi</summary><div class="legacy-body">
+  <details class="legacy-analysis" open><summary>Posisi & butiran analisis</summary><div class="legacy-body">
   <section class="position-management panel">
     <div class="panel-head">
       <div>
@@ -242,58 +296,7 @@
     <div class="mt5-monitor-note"><b>STOP policy:</b> sekat entry baharu; posisi terbuka terus diurus oleh EXIT 32.3 StepLock. Emergency Close All hanya tersedia dalam Auto Trade Control Center.</div>
   </section>
 
-  <section class="chart-section panel">
-    <div class="panel-head">
-      <div>
-        <span class="eyebrow">LIVE MARKET</span>
-        <h3 id="chartPairTitle">TradingView • XAUUSD • 3 Minute</h3>
-      </div>
-      <div class="chart-badges"><span id="chartSymbolBadge">OANDA:XAUUSD</span><span>3M</span></div>
-    </div>
-    <div class="chart-tabs">
-      <button class="chart-tab active" data-chart-mode="zencore">ZENCORE LIVE CHART</button>
-      <button class="chart-tab" data-chart-mode="tradingview">TRADINGVIEW</button>
-      <span id="nativeChartStatus">Waiting chart feed</span>
-    </div>
-    <div class="chart-wrap">
-      <div class="chart-stage">
-        <div id="zencoreChartPanel" class="chart-panel active">
-          <canvas id="zencoreCanvas"></canvas>
-          <div id="chartEmptyState" class="chart-empty">
-            <b>ZENCORE CHART FEED READY</b>
-            <span>Live candles + HEMA + Entry/SL/TP akan muncul selepas webhook 3M menerima candle confirmed.</span>
-          </div>
-          <div class="chart-overlay-brand">
-            <b>ZenCore AI Dashboard Pro</b>
-            <span>3M • Native Web Chart</span>
-          </div>
-        </div>
-        <div id="tradingViewPanel" class="chart-panel">
-          <div id="tradingViewHost" class="tradingview-widget-container">
-            <div class="tradingview-widget-container__widget"></div>
-          </div>
-        </div>
-      </div>
-      <aside class="execution-box">
-        <div class="execution-title">
-          <span class="eyebrow">EXECUTION PANEL</span>
-          <h3 id="executionTitle">WAIT</h3>
-          <p id="executionAdvice">Tunggu setup lengkap dan quality yang lebih baik.</p>
-        </div>
-        <div class="execution-grid">
-          <div><span>ENTRY LINE</span><b id="entryPrice">—</b></div>
-          <div><span>CURRENT</span><b id="closePrice">—</b></div>
-          <div><span>5M HEMA</span><b id="m5PositionMini">—</b></div>
-          <div><span>RR TO TP3</span><b id="rrTp3">—</b></div>
-        </div>
-        <div class="quality-meter">
-          <div><span>Execution Quality</span><b id="qualityMeterLabel">0%</b></div>
-          <div class="rail"><i id="qualityRail"></i></div>
-        </div>
-      </aside>
-    </div>
-    <div class="chart-note">ZenCore Live Chart meniru paparan indikator: candle, HEMA ribbon, Solid Entry, Entry/SL/TP dan SOP state daripada webhook Pine. TradingView standard kekal sebagai rujukan kedua.</div>
-  </section>
+
 
   <section class="layout performance-layout">
     <div class="panel performance-panel">
@@ -362,12 +365,13 @@
 
   </details>
 </div>
-<script src="/analysis-alerts.js?v=3" defer></script>
+<script src="/analysis-alerts.js?v=35.0" defer></script>
 <script src="/precision-entry.js?v=5.0"></script>
 <script src="/analysis-workspace.js?v=34.0" defer></script>
 <script src="/analysis-execution-contract.js?v=1.0"></script>
 <script src="/auto-trade-core.js?v=1.2"></script>
 <script src="/auto-trade-monitor.js?v=1.0"></script>
   <script src="/viewer-mode.js?v=1.0" defer></script>
+<script src="/workspace-shell.js?v=35.0" defer></script>
 </body>
 </html>

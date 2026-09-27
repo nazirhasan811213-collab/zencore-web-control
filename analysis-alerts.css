@@ -34,3 +34,6 @@
  .alert-settings > summary{padding:16px}
  .alert-footer{padding:0 16px 16px}
 }
+
+/* Aligned, accessible notification switches. */
+.alert-controls{display:grid;grid-template-columns:1fr;gap:0}.alert-controls label{display:flex;flex-direction:row-reverse;justify-content:space-between;padding:13px 0;margin:0;border-bottom:1px solid #233c49;font-size:14px}.alert-settings input[type=checkbox]{appearance:none;flex:none;width:38px;height:22px;border:1px solid #527080;border-radius:20px;background:#213542;position:relative;cursor:pointer}.alert-settings input[type=checkbox]::before{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#bdd0dc;transition:transform .15s}.alert-settings input[type=checkbox]:checked{background:#19776b;border-color:#52d9bd}.alert-settings input[type=checkbox]:checked::before{transform:translateX(16px);background:#e5fff8}.alert-settings input[type=checkbox]:disabled{opacity:.4;cursor:not-allowed}.alert-settings input:focus-visible{outline:2px solid #80e7f1;outline-offset:3px}.alert-controls button{justify-self:start;margin-top:14px}.alert-settings summary{scroll-margin-top:65px}
