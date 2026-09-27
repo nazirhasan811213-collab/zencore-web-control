@@ -219,7 +219,7 @@ class MetaTraderConnection:
                 password=password,
                 server=server,
                 timeout=30_000,
-                portable=False,
+                portable=True,
             )
         except Exception as exc:
             raise WorkerFailure("MT5_INITIALIZE_EXCEPTION") from None

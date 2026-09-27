@@ -433,7 +433,7 @@ class WorkerManager:
         process = None
         try:
             terminal_process = self._terminal_factory(
-                [str(terminal), f"/config:{startup}"], terminal.parent,
+                [str(terminal), "/portable", f"/config:{startup}"], terminal.parent,
             )
             # Start the configured terminal before the Python bridge attaches.
             # This also exposes an already-running/unmanaged terminal as a failure

@@ -292,7 +292,8 @@ class WorkerManagerTests(unittest.TestCase):
         events = []
         def terminal(command, cwd):
             events.append(("terminal", command))
-            startup = Path(command[1].removeprefix("/config:"))
+            self.assertEqual(command[1], "/portable")
+            startup = Path(command[2].removeprefix("/config:"))
             self.assertEqual(startup.read_text(encoding="utf-16"),
                              "[Experts]\nEnabled=1\nAllowLiveTrading=1\n")
             self.assertEqual(Path(command[0]).parent, cwd)
@@ -306,7 +307,7 @@ class WorkerManagerTests(unittest.TestCase):
                                     terminal_factory=terminal, sleeper=lambda _: events.append(("wait", [])))
             manager.reconcile_once()
             self.assertEqual([e[0] for e in events], ["terminal", "wait", "worker"] * 2)
-            self.assertNotEqual(events[0][1][1], events[3][1][1])
+            self.assertNotEqual(events[0][1][2], events[3][1][2])
             manager.reconcile_once()
             self.assertEqual(len(events), 6)  # Healthy slots are not launched twice.
 

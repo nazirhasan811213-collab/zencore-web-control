@@ -391,6 +391,7 @@ class HostedWorkerTests(unittest.TestCase):
         self.assertTrue(telemetry["demoExecutionUnlocked"])
         self.assertFalse(hasattr(adapter, "order_send"))
         self.assertEqual(module.initialize_args[1]["server"], "InterStellarFinancial-Demo")
+        self.assertTrue(module.initialize_args[1]["portable"])
 
     def test_metatrader_adapter_reports_zencore_positions_and_rejects_real_account(self):
         with tempfile.TemporaryDirectory() as folder:
