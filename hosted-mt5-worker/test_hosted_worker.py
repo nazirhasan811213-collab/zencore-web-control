@@ -359,6 +359,22 @@ class HostedWorkerTests(unittest.TestCase):
         self.assertTrue(telemetry["demoExecutionUnlocked"])
         self.assertFalse(hasattr(adapter, "order_send"))
         self.assertEqual(module.initialize_args[1]["server"], "InterStellarFinancial-Demo")
+        self.assertFalse(module.initialize_args[1]["portable"])
+
+    def test_managed_slot_uses_isolated_terminal_profile(self):
+        with tempfile.TemporaryDirectory() as folder:
+            config = WorkerConfig.load(write_config(folder, config_dict(
+                mt5TerminalPath=(r"C:\ProgramData\ZenCore\HostedWorker\slots"
+                                 r"\zencore-mt5-demo-01-s03\mt5\terminal64.exe"),
+            )))
+        module = FakeMt5()
+        credential = Mt5Credential(
+            login=bytearray(b"123456"), password=bytearray(b"DemoPasswordOnly!"),
+            server=bytearray(b"InterStellarFinancial-Demo"), trade_mode="DEMO",
+            created_at=1_790_000_000_000,
+        )
+        MetaTraderConnection(module).connect(config, credential)
+        self.assertTrue(module.initialize_args[1]["portable"])
 
     def test_metatrader_adapter_reports_zencore_positions_and_rejects_real_account(self):
         with tempfile.TemporaryDirectory() as folder:
