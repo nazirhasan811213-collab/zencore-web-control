@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0">
 <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
 <link rel="stylesheet" href="/analysis-alerts.css?v=2">
-<link rel="stylesheet" href="/analysis-workspace.css?v=34.3">
+<link rel="stylesheet" href="/analysis-workspace.css?v=34.4">
 </head>
 <body>
 <div class="pro-bg-grid"></div>
@@ -313,20 +313,20 @@
   </section>
 
   <section class="layout lower">
-    <div class="panel">
-      <div class="panel-head"><div><span class="eyebrow">SOP CHECKLIST</span><h3>Pine 3M</h3></div></div>
-      <div id="sopList" class="sop-list"></div>
-    </div>
+    <details class="panel sop-disclosure"><summary>SOP Checklist · Pine 3M</summary><div class="disclosure-body">
 
-    <div class="panel">
-      <div class="panel-head"><div><span class="eyebrow">5M CONFIRMATION</span><h3>HEMA Ribbon</h3></div></div>
+      <div id="sopList" class="sop-list"></div>
+    </div></details>
+
+    <details class="panel sop-disclosure"><summary>HEMA Ribbon · Pengesahan 5M</summary><div class="disclosure-body">
+
       <div class="hema-box">
         <div><span>Position</span><b id="m5Position">—</b></div>
         <div><span>5M Close</span><b id="m5Close">—</b></div>
         <div><span>HEMA 20</span><b id="m5Hema20">—</b></div>
         <div><span>HEMA 40</span><b id="m5Hema40">—</b></div>
       </div>
-    </div>
+    </div></details>
   </section>
 
   <section class="rules">

@@ -40,3 +40,5 @@
 
 /* Keep visual order identical to document order; legacy flex orders otherwise put the decision strip last. */
 .pro-app > *, .legacy-body > * { order: 0 !important; }
+
+.sop-disclosure>summary{cursor:pointer;font-size:14px;font-weight:700;color:#c7d9e6;line-height:1.5}.sop-disclosure .disclosure-body{margin-top:14px}.layout.lower{align-items:start}.sop-disclosure{min-height:0!important}
