@@ -37,3 +37,6 @@
 .pro-app>.status-grid .main{border-color:#397a90!important;background:#102b37!important}.pro-app>.status-grid .quality{border-color:#39755a!important}.pro-app>.status-grid .status-card:last-child{background:#0a1720!important}
 
 .validation-details{border:1px solid #29404d;border-radius:12px;background:#0a1720;padding:14px 18px;color:#c7d9e6}.validation-details>summary{cursor:pointer;font-size:14px;font-weight:700;line-height:1.5}.validation-details>summary span{font-size:11px;color:#91adbe;font-weight:400;margin-left:12px}.validation-details[open]>summary{margin-bottom:14px}.validation-details .validation-layout{margin:0;align-items:start}.validation-details .panel{min-height:0}.validation-details .quality-disclaimer{font-size:11px}
+
+/* Keep visual order identical to document order; legacy flex orders otherwise put the decision strip last. */
+.pro-app > *, .legacy-body > * { order: 0 !important; }
