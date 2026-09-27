@@ -30,3 +30,8 @@
 .v33-preview-details{border:1px solid #29404d;border-radius:12px;padding:14px}.v33-preview-details>summary{cursor:pointer;color:#a9bdca;font-size:13px}.v33-preview-details>.ws-panel{margin-top:12px}.workspace-foot{margin:0}.legacy-analysis{padding:16px}.legacy-body{gap:14px;margin-top:14px}
 @media(max-width:900px){.pro-app>.status-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}.pro-app>.plan-top .plan-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 @media(max-width:540px){.pro-app{padding:10px!important}.pro-app>.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.pro-app>.status-grid .main{grid-column:1/-1!important}.pro-app>.plan-top .plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.pro-app>.status-grid strong{font-size:22px!important}}
+
+/* At-a-glance priority strip directly below the pair selector. */
+.pro-app>.hero{padding:11px 16px!important}.pro-app>.hero h2{font-size:clamp(19px,2vw,24px)!important;margin-bottom:3px!important}.pro-app>.hero p{font-size:12px!important}
+.pro-app>.status-grid .status-card{padding:11px 13px!important}.pro-app>.status-grid .status-card>span{font-size:11px!important;letter-spacing:.4px!important;color:#b0c6d5!important}.pro-app>.status-grid strong{font-size:27px!important;margin:5px 0!important}.pro-app>.status-grid small{font-size:12px!important;line-height:1.4!important;color:#a9c0cf!important}
+.pro-app>.status-grid .main{border-color:#397a90!important;background:#102b37!important}.pro-app>.status-grid .quality{border-color:#39755a!important}.pro-app>.status-grid .status-card:last-child{background:#0a1720!important}

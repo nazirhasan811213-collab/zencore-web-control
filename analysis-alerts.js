@@ -13,7 +13,7 @@
     <label><input id="zaTelegram" type="checkbox"> Hantar alert ke Telegram</label></section></div><div class="alert-footer">
     <button id="zaSave" type="button">Simpan tetapan</button><p id="zaStatus" class="alert-status" role="status">Memuatkan tetapan…</p>
     <p id="zaConnection" role="status"></p><details><summary>Alert terkini</summary><div id="zaHistory" class="alert-history">Belum ada signal baharu.</div></details></div>`;
-  const app=document.querySelector('.app');if(!app)return;app.querySelector('header')?.insertAdjacentElement('afterend',root);
+  const app=document.querySelector('.app');if(!app)return;(app.querySelector('[aria-labelledby="aiHeading"]')||app.querySelector('.status-grid')||app.querySelector('header'))?.insertAdjacentElement('afterend',root);
   const q=id=>document.getElementById(id),status=t=>{q('zaStatus').textContent=t;};
   const host=document.createElement('div');host.className='alert-toasts';host.setAttribute('aria-live','polite');document.body.append(host);
   async function api(path,body){const r=await fetch('/api/analysis-alerts/'+path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store',signal:AbortSignal.timeout(12000)});if(r.status===401){stopped=true;throw Error('Sesi tamat. Log masuk semula untuk menerima alert.');}const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Alert tidak tersedia.');return j;}
