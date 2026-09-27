@@ -195,12 +195,12 @@
   </section>
 
   <section class="ws-panel" aria-labelledby="aiHeading">
-    <div class="ws-title"><div><span class="ws-kicker">AI ANALYSIS · TF 3M / 15 MINIT</span><h3 id="aiHeading">Bandingkan analisis AI</h3><p class="ws-muted">Analisis dijana hanya selepas klik. Signal sistem tidak menunggu jawapan AI.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
+    <div class="ws-title"><div><span class="ws-kicker">AI ANALYSIS · TF 3M / 15 MINIT</span><h3 id="aiHeading">Bandingkan analisis AI</h3><p class="ws-muted">Apabila feed V33 belum tersedia, analisis SOP semasa dipaparkan dengan label dan masa data. Signal sistem tidak menunggu jawapan AI.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
     <p id="aiConnections" class="ws-muted" role="status">Menyemak sambungan analisis…</p>
     <p id="aiStatus" class="ws-muted" role="status" aria-live="polite">Klik untuk analisis pair yang dipilih.</p>
     <div id="aiResults" hidden>
       <p id="aiStamp" class="ws-muted"></p><div class="ws-ai-grid">
-        <article class="ws-ai-card"><span class="ws-kicker">01 · SISTEM ZENCORE</span><h4>AI Analysis ZenCore</h4><strong id="aiZDirection">—</strong><p id="aiZReason"></p><span id="aiGptStatus" class="ws-kicker"></span><p id="aiNarrative"></p><div class="ws-note ws-muted">Masa data: <span id="aiZData"></span></div></article>
+        <article class="ws-ai-card"><span class="ws-kicker">01 · SISTEM ZENCORE</span><h4 id="aiZTitle">AI Analysis ZenCore</h4><strong id="aiZDirection">—</strong><p id="aiZReason"></p><span id="aiGptStatus" class="ws-kicker"></span><p id="aiNarrative"></p><div class="ws-note ws-muted">Masa data: <span id="aiZData"></span></div></article>
         <article class="ws-ai-card"><span class="ws-kicker">02 · SUMBER LUARAN</span><h4>AI Analysis Luaran</h4><strong id="aiExternalStatus">—</strong><p id="aiExternalReason"></p><p id="aiExternalMethod" class="ws-muted"></p><div class="ws-note ws-muted">Masa data: <span id="aiExternalData"></span></div></article>
       </div><div class="ws-compare"><span class="ws-kicker">RUMUSAN PERBANDINGAN</span><p><b id="aiComparison">—</b></p><div class="ws-scroll"><table class="ws-table"><thead><tr><th>Sumber</th><th>TF</th><th>Bias</th><th>Jenis</th></tr></thead><tbody><tr><td>ZenCore</td><td>3M + trigger 1M</td><td>Rujuk panel 01</td><td>Aturan ZenCore V33</td></tr><tr><td id="aiExternalSource">—</td><td>1M → 3M</td><td id="aiExternalBias">—</td><td>Dikira daripada OHLC luaran</td></tr></tbody></table></div><p id="aiFreshness" class="ws-muted"></p></div>
     </div>
