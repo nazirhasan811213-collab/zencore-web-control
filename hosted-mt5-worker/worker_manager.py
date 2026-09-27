@@ -405,6 +405,7 @@ class WorkerManager:
 
         started = 0
         restarted = 0
+        failed = 0
         for assignment in assignments:
             state = self.children.get(assignment.slot_code)
             if state is not None and state.process.poll() is None:
@@ -412,7 +413,24 @@ class WorkerManager:
             if state is not None:
                 self._retire_slot(assignment.slot_code, clean=False)
                 restarted += 1
-            self._launch(assignment)
+            try:
+                self._launch(assignment)
+            except ManagerFailure as exc:
+                if exc.code in ("DEMO_EXECUTION_GATE_MISSING", "PREFLIGHT_EXECUTION_GATE_PRESENT"):
+                    raise
+                failed += 1
+                print(
+                    f"ZenCore worker manager slot {assignment.slot_code}: {exc.code}",
+                    file=sys.stderr, flush=True,
+                )
+                continue
+            except OSError:
+                failed += 1
+                print(
+                    f"ZenCore worker manager slot {assignment.slot_code}: SLOT_START_FAILED",
+                    file=sys.stderr, flush=True,
+                )
+                continue
             started += 1
 
         return {
@@ -422,6 +440,7 @@ class WorkerManager:
             ),
             "started": started,
             "restarted": restarted,
+            "failed": failed,
         }
 
     def shutdown(self) -> None:
