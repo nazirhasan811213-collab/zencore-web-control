@@ -199,13 +199,21 @@ class MetaTraderConnection:
             login = password = server = ""
             raise WorkerFailure("MT5_SERVER_NOT_APPROVED")
         try:
+            # A managed slot owns its terminal directory. Portable mode keeps
+            # its MT5 profile and IPC state beside that copy, rather than in
+            # the shared SYSTEM profile used by other slots.
+            isolated_slot = bool(re.search(
+                r"[\\/]slots[\\/][a-z0-9-]+[\\/]mt5[\\/]terminal64\.exe$",
+                config.mt5_terminal_path,
+                re.IGNORECASE,
+            ))
             connected = self._mt5.initialize(
                 config.mt5_terminal_path,
                 login=int(login),
                 password=password,
                 server=server,
                 timeout=30_000,
-                portable=False,
+                portable=isolated_slot,
             )
         except Exception as exc:
             raise WorkerFailure("MT5_INITIALIZE_FAILED") from exc
