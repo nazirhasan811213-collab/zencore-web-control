@@ -1297,7 +1297,11 @@ function fetchLocalSop(symbol) {
             .map(key => [key, sop.plan[key] != null && Number.isFinite(Number(sop.plan[key])) ? Number(sop.plan[key]) : null]));
           resolve({symbol,side: ['BUY','SELL'].includes(sop.side) ? sop.side : 'WAIT',
             state: String(sop.state || 'WAIT').slice(0, 24),
-            reason: String(sop.reason || '').slice(0, 200), dataAt, sourceBarTime, plan});
+            reason: String(sop.reason || '').slice(0, 200), dataAt, sourceBarTime, plan,
+            score: sop.score != null && Number.isFinite(Number(sop.score)) ? Math.max(0, Math.min(100, Number(sop.score))) : null,
+            grade: String(data.grade || '').slice(0, 8),
+            stability: data.stability != null && Number.isFinite(Number(data.stability)) ? Math.max(0, Math.min(100, Number(data.stability))) : null,
+            readiness: data.readiness != null && Number.isFinite(Number(data.readiness)) ? Math.max(0, Math.min(100, Number(data.readiness))) : null});
         } catch (_) { reject(new Error('SOP response invalid')); }
       });
     });
