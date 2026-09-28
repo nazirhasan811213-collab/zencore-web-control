@@ -1639,6 +1639,10 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res,200,{ok:true,userId:user,settings:analysisAlerts.publicPrefs(await analysisAlerts.get(user)),readOnly:session.user.role==='viewer'});
       if (req.method==='GET' && pathname==='/api/analysis-alerts/events')
         return sendJson(res,200,{ok:true,...await analysisAlerts.feed(new URL(req.url,'http://localhost').searchParams.get('after'))});
+      if (req.method==='GET' && pathname==='/api/analysis-alerts/active-plan') {
+        const symbol=String(new URL(req.url,'http://localhost').searchParams.get('symbol')||'').toUpperCase();
+        return sendJson(res,200,{ok:true,activePlan:await analysisAlerts.activePlan(symbol)});
+      }
       if(req.method==='POST') {
         const body=await readJson(req);
         if(pathname==='/api/analysis-alerts/settings') return sendJson(res,200,{ok:true,settings:await analysisAlerts.withUserLock(user,'save',body)});
