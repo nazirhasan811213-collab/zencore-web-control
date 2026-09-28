@@ -112,7 +112,8 @@ function qualityLayer(m){
   const predConf=num(m?.predictionConfidence)||0;
   const stability=num(m?.stability)||0;
   const sopGreen=num(s.sopGreen)||0;
-  const hardGates=(Array.isArray(s.gates)?s.gates:[]).filter(g=>g.pass).length;
+  const gateList=Array.isArray(s.gates)?s.gates:[];
+  const hardGates=gateList.filter(g=>g.pass).length;
   const rr=rrFromPlan(p)??num(m?.rr);
 
   const directionalForecast=
@@ -124,7 +125,7 @@ function qualityLayer(m){
     (side==='SELL'&&forecast==='NEUTRAL'&&power!=null&&power<50);
 
   const checks=[
-    {label:'All 5 Hard Gates',detail:hardGates+'/5',earned:hardGates===5?25:0,max:25},
+    {label:'All Entry Gates',detail:hardGates+'/'+(gateList.length||4),earned:gateList.length>=2&&hardGates===gateList.length?25:0,max:25},
     {label:'SOP Confluence',detail:sopGreen+'/5 green',earned:sopGreen>=5?15:sopGreen>=4?10:0,max:15},
     {label:'Forecast Strength',detail:forecast+' '+(power==null?'—':Math.round(power)+'%'),earned:directionalForecast?15:neutralAllowed?6:0,max:15},
     {label:'No Sideways / Chop Guard',detail:m?.sidewaysGuard?'Sideways active':'Market clear',earned:m?.sidewaysGuard?0:10,max:10},
@@ -259,8 +260,8 @@ function renderMarket(m){
   setText('executionAdvice',q.advice);
 
   const gates=Array.isArray(s.gates)?s.gates:[];
-  setText('gateScore',gates.filter(x=>x.pass).length+'/5');
-  if($('gateList'))$('gateList').innerHTML=gates.length?gates.map(gateMarkup).join(''):'<div class="gate fail"><span class="icon">…</span><div><b>Waiting Pine V32 feed</b><small>No entry data received yet</small></div><strong class="warn">WARMING</strong></div>';
+  setText('gateScore',gates.filter(x=>x.pass).length+'/'+(gates.length||4));
+  if($('gateList'))$('gateList').innerHTML=gates.length?gates.map(gateMarkup).join(''):'<div class="gate fail"><span class="icon">…</span><div><b>Waiting Pine SOP 32.4 feed</b><small>No entry data received yet</small></div><strong class="warn">WARMING</strong></div>';
   if($('qualityChecklist'))$('qualityChecklist').innerHTML=q.checks.map(qualityMarkup).join('');
 
   if($('sopList'))$('sopList').innerHTML=[1,2,3,4,5].map(i=>{
@@ -274,7 +275,7 @@ function renderMarket(m){
   setText('m5Hema20',fmtPrice(s.m5Hema20));
   setText('m5Hema40',fmtPrice(s.m5Hema40));
 
-  setText('planTitle',p?(side+' PLAN READY'):'No Active Plan');
+  setText('planTitle',p?(side+' '+(n.entryType?.includes('REENTRY')?'RE-ENTRY':'ENTRY')+' PLAN READY'):'No Active Plan');
   setText('planEntry',fmtPrice(p?.entry));
   setText('planSL',fmtPrice(p?.sl));
   setText('planTP1',fmtPrice(p?.tp1));

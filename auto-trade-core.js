@@ -347,6 +347,16 @@
     return Contract.createEntryDecision(market)?.signalKey || null;
   }
 
+  function permitsPositionEntry(market = {}, positions = []) {
+    const symbol=normaliseSymbol(market.symbol);
+    const open=positions.filter(position=>normaliseSymbol(position.symbol)===symbol);
+    if (!open.length) return true;
+    const normal=market.strategyNormal||{};
+    return /^(NORMAL|HIGH)_REENTRY$/.test(String(normal.entryType||'')) &&
+      ['BUY','SELL'].includes(normal.side) &&
+      open.every(position=>String(position.side||'').toUpperCase()===normal.side);
+  }
+
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null) {
     const validation = validateSettings(settings);
     const decision = Contract.createEntryDecision(market);
@@ -421,6 +431,7 @@
     normaliseHeartbeat,
     podConnectionState,
     makeSignalKey,
+    permitsPositionEntry,
     buildSetupCommand,
     buildManagementCommand
   };

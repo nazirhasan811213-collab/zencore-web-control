@@ -42,6 +42,16 @@ test('execution contract never promotes WATCH or incomplete plans into an entry'
   })), null);
 });
 
+test('active position permits only explicit same-side Normal or High re-entry',()=>{
+  const open=[{symbol:'XAUUSD',side:'SELL'}];
+  const base={symbol:'XAUUSD',strategyNormal:{side:'SELL',entryType:'HIGH_REENTRY'}};
+  assert.equal(Core.permitsPositionEntry(base,open),true);
+  assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,entryType:'NORMAL_REENTRY'}},open),true);
+  assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,entryType:'SOLID_ENTRY'}},open),false);
+  assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,side:'BUY'}},open),false);
+  assert.equal(Core.permitsPositionEntry(base,[...open,{symbol:'XAUUSD',side:'BUY'}]),false);
+});
+
 test('Core command carries the immutable Analysis snapshot without recalculating TP or SL', () => {
   const market = readyMarket();
   const command = Core.buildSetupCommand(market, {
