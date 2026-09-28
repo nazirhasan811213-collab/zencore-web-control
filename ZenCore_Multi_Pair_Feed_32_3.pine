@@ -1,5 +1,5 @@
 //@version=6
-indicator("ZenCore Multi-Pair Feed 32.3", shorttitle="ZenCore MP Feed", overlay=false, dynamic_requests=true, max_bars_back=650)
+indicator("ZenCore Multi-Pair Feed 32.4", shorttitle="ZC MP 32.4", overlay=false, dynamic_requests=true, max_bars_back=650)
 
 // One permanent alert feeds all supported markets to ZenCore Web Control.
 // Run this bridge on a 3-minute chart. It does not draw or alter the original indicator.
@@ -239,19 +239,13 @@ f_scan3()=>
     bool crossE9Down=ta.crossunder(close,e9)
     bool crossEntryUp=ta.crossover(close,entry)
     bool crossEntryDown=ta.crossunder(close,entry)
-    bool reBuy=(slHit and isBuy and (crossEntryUp or (close>entry and wtBuy)) and close>e9) or
-        (active and isBuy and crossE9Up and w1>w2 and close>e20 and close>entry) or
-        (h20>h40 and not active and crossE9Up and w1>w2)
-    bool reSell=(slHit and not isBuy and (crossEntryDown or (close<entry and wtSell)) and close<e9) or
-        (active and not isBuy and crossE9Down and w1<w2 and close<e20 and close<entry) or
-        (h20<h40 and not active and crossE9Down and w1<w2)
+    bool reBuy=(slHit and isBuy and (crossEntryUp or (close>entry and wtBuy)) and close>e9) or (active and isBuy and crossE9Up and w1>w2 and close>e20 and close>entry) or (h20>h40 and not active and crossE9Up and w1>w2)
+    bool reSell=(slHit and not isBuy and (crossEntryDown or (close<entry and wtSell)) and close<e9) or (active and not isBuy and crossE9Down and w1<w2 and close<e20 and close<entry) or (h20<h40 and not active and crossE9Down and w1<w2)
     bool reBuyOnly=reBuy and not reSell
     bool reSellOnly=reSell and not reBuy
-    bool reHema=(reBuyOnly and math.min(open,close)>math.max(h20,h40)) or
-        (reSellOnly and math.max(open,close)<math.min(h20,h40))
+    bool reHema=(reBuyOnly and math.min(open,close)>math.max(h20,h40)) or (reSellOnly and math.max(open,close)<math.min(h20,h40))
     int mtfTotal=mtf15+mtf30+mtf60
-    bool reHigh=(reBuyOnly and mtfTotal>=2 and stars>=3 and rv>1) or
-        (reSellOnly and mtfTotal<=-2 and stars>=3 and rv>1)
+    bool reHigh=(reBuyOnly and mtfTotal>=2 and stars>=3 and rv>1) or (reSellOnly and mtfTotal<=-2 and stars>=3 and rv>1)
     bool reWeak=(reBuyOnly and mtfTotal<=0) or (reSellOnly and mtfTotal>=0) or stars<=2
     bool reTriggered=(reBuyOnly or reSellOnly) and reHema and not reWeak and bar_index-lastReentryBar>5
     string reType=reTriggered?(reHigh?"HIGH":"NORMAL"):"NONE"
