@@ -52,7 +52,7 @@ function connectPredictionStream(){
     predictionStream=new EventSource('/prediction-events/'+encodeURIComponent(pair));
     predictionStream.addEventListener('prediction',e=>{
       if(pair!==activePair)return;
-      try{const payload=JSON.parse(e.data);if(normalisePair(payload?.symbol)===activePair)renderMarket(payload)}catch(_){}
+      try{const payload=JSON.parse(e.data);if(normalisePair(payload?.symbol)===activePair){payload.activeTradePlan=lastMarket?.activeTradePlan||null;renderMarket(payload);loadActivePlan(pair,pairSwitchToken)}}catch(_){}
     });
   }catch(_){}
 }
@@ -219,11 +219,20 @@ function renderPositionManagement(m){
   }
 }
 
+async function loadActivePlan(pair,token){
+  try{const r=await fetch('/api/analysis-alerts/active-plan?symbol='+encodeURIComponent(pair),{cache:'no-store'});
+    if(!r.ok)return;const result=await r.json();
+    if(pair===activePair&&token===pairSwitchToken&&lastMarket){lastMarket.activeTradePlan=result.activePlan;renderMarket(lastMarket);}
+  }catch(_){}
+}
+
 function renderMarket(m){
   const responsePair=normalisePair(m?.symbol);
   if(responsePair&&responsePair!==activePair)return;
   lastMarket=m;
-  const n=m?.strategyNormal||{},s=n?.sop||{},p=n?.plan||null;
+  const n=m?.strategyNormal||{},s=n?.sop||{};
+  const active=m?.activeTradePlan||null,p=active?.plan||n?.plan||null;
+  const planSide=active?.side||n.side||'WAIT';
   const q=qualityLayer(m);
   window.__lastReceived=m?.receivedAt||null;
 
@@ -275,15 +284,16 @@ function renderMarket(m){
   setText('m5Hema20',fmtPrice(s.m5Hema20));
   setText('m5Hema40',fmtPrice(s.m5Hema40));
 
-  setText('planTitle',p?(side+' '+(n.entryType?.includes('REENTRY')?'RE-ENTRY':'ENTRY')+' PLAN READY'):'No Active Plan');
+  setText('planTitle',p?(planSide+' '+((active?.entryType||n.entryType||'').includes('REENTRY')?'RE-ENTRY':'ENTRY')+(active?' PLAN ACTIVE':' PLAN READY')):'No Active Plan');
   setText('planEntry',fmtPrice(p?.entry));
   setText('planSL',fmtPrice(p?.sl));
   setText('planTP1',fmtPrice(p?.tp1));
   setText('planTP2',fmtPrice(p?.tp2));
   setText('planTP3',fmtPrice(p?.tp3));
   setText('riskDistance',fmtPrice(p?.riskDistance));
-  setText('rrTp3',q.rr==null?'—':q.rr.toFixed(1)+'R');
-  setText('planNote',p?'Hard gates passed. SOP signal valid; A+ Quality ialah lapisan execution berasingan.':'Plan hanya muncul apabila semua syarat SOP entry lulus.');
+  const planRr=rrFromPlan(p);
+  setText('rrTp3',planRr==null?'—':planRr.toFixed(1)+'R');
+  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Hard gates passed. SOP signal valid; A+ Quality ialah lapisan execution berasingan.':'Plan hanya muncul apabila semua syarat SOP entry lulus.');
 
   setText('riskState',m?.sidewaysGuard?'HIGH / SIDEWAYS':state==='READY'?'CONTROLLED':'WAIT');
   setText('setupProbability',m?.setupProbability==null?'—':Math.round(num(m.setupProbability))+'%');
@@ -338,7 +348,7 @@ async function refreshMarket(){
     const r=await fetch('/api/prediction/'+encodeURIComponent(pair),{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const payload=await r.json();
-    if(pair===activePair&&token===pairSwitchToken)renderMarket(payload);
+    if(pair===activePair&&token===pairSwitchToken){payload.activeTradePlan=lastMarket?.activeTradePlan||null;renderMarket(payload);loadActivePlan(pair,token);}
   }catch(e){
     if(pair!==activePair||token!==pairSwitchToken)return;
     setText('feedState','OFFLINE');
