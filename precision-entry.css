@@ -359,3 +359,13 @@ footer{order:9}
 @media(max-width:520px){
   .pair-selector{font-size:15px;min-width:125px}
 }
+
+.new-entry-opportunity:not([hidden]){display:flex;align-items:center;justify-content:space-between;gap:18px;margin:12px 0;padding:16px 20px;border:1px solid rgba(49,227,141,.55);border-radius:16px;background:linear-gradient(110deg,#10362f,#09202c);box-shadow:0 8px 30px rgba(26,193,123,.12)}
+.new-entry-opportunity h3{margin:5px 0;color:#f2fff9;font-size:22px}
+.new-entry-opportunity small{color:#a7d9cb}
+.new-entry-levels{display:flex;gap:10px;flex-wrap:wrap}
+.new-entry-levels>div{min-width:135px;padding:9px 13px;border:1px solid #3c796a;border-radius:10px;background:#081e25}
+.new-entry-levels span{display:block;font-size:10px;color:#8acdb8;letter-spacing:.6px}
+.new-entry-levels strong{display:block;margin-top:4px;color:#41eaa4;font-size:19px}
+.new-entry-levels strong.sell{color:#ff8585}
+@media(max-width:700px){.new-entry-opportunity:not([hidden]){align-items:stretch;flex-direction:column}.new-entry-levels>div{flex:1}}
