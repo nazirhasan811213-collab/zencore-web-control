@@ -22,3 +22,10 @@ test('collector upserts by stable signal id and reads saved history',async()=>{
  assert.equal(calls.filter(s=>s.includes('INSERT INTO')).length,2);
  assert.equal(PAIRS.length,11);
 });
+test('target hit statistics are scoped to the same pair and direction',async()=>{
+ let args;const store=new SignalOutcomeStore({pool:{query:async(sql,values)=>{
+   assert.match(sql,/symbol=\$1 AND side=\$2/);assert.match(sql,/AMBIGUOUS/);args=values;
+   return {rows:[{sample:40,hit_tp1:30,hit_tp2:12,hit_tp3:2}]};}}});
+ assert.deepEqual(await store.targetStats('XAUUSD','SELL'),{sample:40,hitTp1:30,hitTp2:12,hitTp3:2});
+ assert.deepEqual(args,['XAUUSD','SELL']);assert.equal(await store.targetStats('INVALID','SELL'),null);
+});
