@@ -50,6 +50,23 @@ test('unconfigured integrations do not invent external or GPT analysis',async()=
  const r=await s.generate('XAUUSD','test');assert.equal(r.external.status,'NOT_CONFIGURED');assert.equal(r.gpt.status,'NOT_CONFIGURED');assert.equal(r.comparison,'TIDAK CUKUP DATA');
  assert.equal((await s.generate('XAUUSD','test')).code,429);
 });
+test('external source reports a fresh minute price and completed 3M analysis',async()=>{
+ const values=Array.from({length:150},(_,i)=>{
+  const t=now-(i+1)*60000;
+  return {datetime:new Date(t).toISOString().slice(0,19).replace('T',' '),open:'100',high:'102',low:'99',close:String(100+(149-i)*.01)};
+ });
+ const s=new AnalysisAIService({env:{TWELVE_DATA_API_KEY:'test'},now:()=>now,
+  fetchImpl:async url=>{assert.equal(url.searchParams.get('symbol'),'XAU/USD');return {ok:true,json:async()=>({meta:{interval:'1min'},values})};}});
+ const result=await s.external('XAUUSD');
+ assert.equal(result.status,'AVAILABLE');assert.equal(result.currentPrice,101.49);
+ assert.equal(result.priceAt,now-60000);assert.equal(result.dataAt,now);
+ assert.equal(result.timeframe,'3M');
+});
+test('GPT does not spend tokens when both analysis feeds lack current data',async()=>{
+ const s=new AnalysisAIService({env:{OPENAI_API_KEY:'test',ZENCORE_AI_MODEL:'test'},now:()=>now,
+  fetchImpl:async()=>{throw Error('must not call');}});
+ assert.equal((await s.generate('XAUUSD','test')).gpt.status,'WAIT_DATA');
+});
 test('feed authentication, ordering and symbol validation',()=>{
  const s=new AnalysisAIService({env:{ZENCORE_V33_FEED_SECRET:'test-secret-long-enough-for-feed'},now:()=>now});
  assert.equal(s.ingest({context:context()}).code,403);

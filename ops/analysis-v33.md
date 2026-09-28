@@ -22,6 +22,24 @@ Use an isolated staging service and database, never the live webhook. Configure 
 | TWELVE_DATA_API_KEY | Licensed external market-data API |
 | ZENCORE_EXTERNAL_SYMBOLS_JSON | Explicit pair-to-provider symbol map, verified instrument by instrument |
 
+The external panel uses Twelve Data 1-minute OHLC (UTC) to compute closed
+3-minute EMA9/20 and RSI. It also shows the latest 1-minute candle close and
+that candle's timestamp; this is not an MT5 broker tick. Built-in mappings cover
+XAU/USD, BTC/USD and the eight listed forex pairs. US30 deliberately requires
+an instrument mapping in `ZENCORE_EXTERNAL_SYMBOLS_JSON`, for example only after
+verifying the exact provider instrument and access rights. Configure the API key
+as a server-side Render secret. Provider credits and data licensing must be
+checked for the intended display and request volume. The current integration
+does not scrape other websites or claim that its calculated indicator is a
+third-party trading signal.
+
+With `OPENAI_API_KEY` and `ZENCORE_AI_MODEL` configured server-side, the GPT
+button narrates the fresh external 3-minute analysis even when the separate V33
+feed is absent. It explicitly describes the external-only scope; missing or
+stale input does not trigger a model call. ChatGPT subscriptions do not supply
+an API key or cover API usage. These variables remain unset until the service
+owner provides an API account and authorizes its usage.
+
 Compile `ZenCore_V33_Research_Feed.pine` in TradingView first. It has not been compiled in TradingView in this change. Run on a 1M chart, verify all eleven symbols and provide realistic spread inputs in price units. Zero/default spread inputs deliberately block candidate entries. Create an alert for `alert()` calls to the staging `/webhook/v33` endpoint. The bridge uses confirmed prior minutes across symbols; it can therefore lag by a minute plus transport latency. It is not a tick-level feed or a promise of zero delay. For faster confirmed data, implement an authenticated market feed with actual timestamps and bid/ask.
 
 ## Honest boundaries
