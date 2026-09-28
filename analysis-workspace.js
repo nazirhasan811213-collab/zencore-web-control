@@ -36,14 +36,17 @@
     if(!r.zencore.dataAt&&r.liveSop){
       text('aiZTitle','Analisis SOP ZenCore semasa');text('aiZDirection',r.liveSop.side+' · '+r.liveSop.state);
       text('aiZReason',r.liveSop.reason);text('aiZData',time(r.liveSop.dataAt));
-      text('aiGptStatus','DATA SOP PINE · BUKAN V33');
-      text('aiNarrative','Feed V33 belum disambungkan. Ulasan GPT dan perbandingan AI belum tersedia; lihat analisis SOP semasa di bawah.');
+      text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT · DATA LUARAN':'DATA SOP PINE · BUKAN V33');
+      text('aiNarrative',r.gpt.status==='AVAILABLE'?r.gpt.text:'Feed V33 belum disambungkan. '+r.gpt.text+' Lihat analisis SOP semasa di bawah.');
     }else{
       text('aiZTitle','AI Analysis ZenCore');text('aiZDirection',r.zencore.side);text('aiZReason',r.zencore.reason);text('aiZData',time(r.zencore.dataAt));
       text('aiNarrative',r.gpt.text);text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT':'ULASAN GPT BELUM TERSEDIA');
     }
     text('aiExternalStatus',r.external.status);text('aiExternalReason',r.external.reason);text('aiExternalMethod',r.external.method||r.nativeExternal.reason);
-    text('aiExternalData',time(r.external.dataAt));text('aiComparison',r.comparison);
+    text('aiExternalData',time(r.external.dataAt));text('aiExternalPrice',price(r.external.currentPrice));text('aiExternalPriceAt',time(r.external.priceAt));
+    const aligned=r.liveSop&&r.external.status==='AVAILABLE'&&Math.abs(r.liveSop.dataAt-r.external.dataAt)<=240000;
+    const compared=aligned&&['BUY','SELL'].includes(r.liveSop.side)&&['BUY','SELL'].includes(r.external.bias);
+    text('aiComparison',compared?(r.liveSop.side===r.external.bias?'ARAH SELARAS · SOP vs OHLC LUARAN':'ARAH BERBEZA · SOP vs OHLC LUARAN'):r.comparison);
     text('aiExternalSource',r.external.source);text('aiExternalBias',r.external.bias||'—');
     text('aiFreshness','Snapshot kekal. Klik Analisis Semula untuk keadaan baharu.');
   }
