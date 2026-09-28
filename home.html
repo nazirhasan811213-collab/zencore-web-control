@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/home.css?v=2.0">
   <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
+<link rel="stylesheet" href="/zencore-motion.css?v=1.0">
 </head>
 <body>
   <main class="portal-shell radar-shell">
@@ -35,6 +36,7 @@
 
       <section class="radar-hero">
         <div class="radar-intro">
+          <div class="radar-holo" aria-hidden="true"><i class="radar-holo-ring ring-one"></i><i class="radar-holo-ring ring-two"></i><i class="radar-holo-ring ring-three"></i><i class="radar-holo-core"></i><i class="radar-holo-floor"></i></div>
           <div class="hero-line">
             <span class="eyebrow">ZenCore Command Center</span>
             <span id="feedConnection" class="connection-pill connecting"><i></i> MENYAMBUNG</span>
@@ -56,6 +58,12 @@
           <small id="bestAction">Belum ada setup yang cukup lengkap.</small>
         </a>
       </section>
+
+      <nav class="command-dock" aria-label="Pusat ZenCore">
+        <a href="/analysis?pair=XAUUSD"><span>01 · ANALYSIS</span><b>Nilai entry semasa</b><small>SOP · harga · senario 3M <i aria-hidden="true">↗</i></small></a>
+        <a href="/results"><span>02 · RESULT</span><b>Semak rekod signal</b><small>Validasi · arkib keputusan <i aria-hidden="true">↗</i></small></a>
+        <a href="/auto-trade"><span>03 · AUTO TRADE</span><b>Urus sambungan MT5</b><small>Status akaun dan kawalan <i aria-hidden="true">↗</i></small></a>
+      </nav>
 
       <section class="radar-summary" aria-label="Ringkasan market">
         <article><span>MARKET</span><b id="summaryTotal">11</b><small>Dalam radar</small></article>
@@ -101,5 +109,6 @@
   <script src="/portal.js?v=2.0" defer></script>
   <script src="/viewer-mode.js?v=1.0" defer></script>
 <script src="/workspace-shell.js?v=35.0" defer></script>
+<script src="/zencore-motion.js?v=1.0" defer></script>
 </body>
 </html>
