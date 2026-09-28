@@ -284,6 +284,24 @@ function renderMarket(m){
   setText('m5Hema20',fmtPrice(s.m5Hema20));
   setText('m5Hema40',fmtPrice(s.m5Hema40));
 
+  const newPlan=n.plan;
+  const triggerReady=String(m?.freshness||'').toUpperCase()==='LIVE' &&
+    String(n.state||'').toUpperCase()==='READY' &&
+    ['BUY','SELL'].includes(side) && newPlan && Number.isFinite(Number(newPlan.entry));
+  const sameActive=active && active.side===side &&
+    Number(active.plan?.entry)===Number(newPlan?.entry) &&
+    String(active.entryType||'SOLID_ENTRY')===String(n.entryType||'SOLID_ENTRY');
+  const opportunity=$('newEntryOpportunity');
+  if(opportunity)opportunity.hidden=!triggerReady||!!sameActive;
+  if(triggerReady&&!sameActive){
+    const type=String(n.entryType||'SOLID_ENTRY').toUpperCase();
+    setText('newEntryType',type==='HIGH_REENTRY'?'HIGH RE-ENTRY':type==='NORMAL_REENTRY'?'NORMAL RE-ENTRY':'SOLID ENTRY');
+    setText('newEntrySide',side);
+    setText('newEntryPrice',fmtPrice(newPlan.entry));
+    setText('newEntryTime','Trigger confirmed • '+(m.sourceBarTime?new Date(m.sourceBarTime).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'feed terkini')+' MYT');
+    $('newEntrySide')?.classList.toggle('sell',side==='SELL');
+  }
+
   setText('planTitle',p?(planSide+' '+((active?.entryType||n.entryType||'').includes('REENTRY')?'RE-ENTRY':'ENTRY')+(active?' PLAN ACTIVE':' PLAN READY')):'No Active Plan');
   setText('planEntry',fmtPrice(p?.entry));
   setText('planSL',fmtPrice(p?.sl));
