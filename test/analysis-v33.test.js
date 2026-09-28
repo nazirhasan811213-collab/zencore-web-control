@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {PAIRS,forecastGate,analyse,PositionTracker}=require('../analysis-v33');
-const {AnalysisAIService,aggregate3m,externalTechnical}=require('../analysis-ai-service');
+const {AnalysisAIService,aggregate3m,externalTechnical,scalpScenario}=require('../analysis-ai-service');
 const now=1800000000000;
 function context(symbol='XAUUSD',scale=1){return {schema:'33.0',symbol,dataAt:now,setupAt:now-180000,confirmed3:true,confirmed1:true,momentum:'BUY',forecast:'BULLISH',strength:70,dominance:80,hema:'BUY',basisSide:'BUY',candleSide:'BUY',choppy:false,price:100*scale,atr:2*scale,zone:100*scale,tickSize:.01*scale,spread:.05*scale,swingLow:99*scale,swingHigh:101*scale,support:92*scale,resistance:108*scale,trigger1:'BUY',barOpen1:now-60000,high1:100.5*scale,low1:99.5*scale};}
 test('forecast direction rules distinguish dominance from strength',()=>{
@@ -61,6 +61,47 @@ test('external source reports a fresh minute price and completed 3M analysis',as
  assert.equal(result.status,'AVAILABLE');assert.equal(result.currentPrice,101.49);
  assert.equal(result.priceAt,now-60000);assert.equal(result.dataAt,now);
  assert.equal(result.timeframe,'3M');
+ assert(result.atr3m>0);
+});
+test('3M scenario is conditional and blocks stale, conflict, chase and adverse prices',()=>{
+ const external={status:'AVAILABLE',bias:'BUY',currentPrice:100,priceAt:now-60000,atr3m:2,dataAt:now};
+ const sop={symbol:'XAUUSD',dataAt:now,side:'BUY',state:'READY',plan:{entry:100,sl:98}};
+ const run=(e=external,s= sop)=>scalpScenario({external:e,liveSop:s,now});
+ assert.equal(run().status,'NEAR_ENTRY');
+ assert.equal(run().next3m.low,99);assert.equal(run().next15m.high,103);
+ assert.equal(run({...external,currentPrice:101}).status,'CHASE');
+ assert.equal(run({...external,currentPrice:99}).status,'ADVERSE');
+ assert.equal(run({...external,bias:'SELL'}).status,'DIVERGENT');
+ assert.equal(run({...external,priceAt:now-180000}).status,'WAIT_DATA');
+ assert.equal(run({...external,priceAt:now-30000}).status,'WAIT_DATA');
+ assert.equal(run(external,null).status,'NO_SOP');
+ assert.equal(run(external,{...sop,state:'WATCH'}).status,'WAIT_SETUP');
+});
+test('GPT receives verified current SOP and scenario without changing entry decision',async()=>{
+ let modelInput;
+ const values=Array.from({length:150},(_,i)=>{
+  const t=now-(i+1)*60000;
+  return {datetime:new Date(t).toISOString().slice(0,19).replace('T',' '),open:'100',high:'102',low:'99',close:String(100+(149-i)*.01)};
+ });
+ const service=new AnalysisAIService({env:{TWELVE_DATA_API_KEY:'test',OPENAI_API_KEY:'test',ZENCORE_AI_MODEL:'test'},now:()=>now,
+  liveSopProvider:async symbol=>({symbol,dataAt:now,sourceBarTime:now-180000,side:'BUY',state:'READY',plan:{entry:101.49,sl:99}}),
+  fetchImpl:async (url,opts)=>{
+   if(url instanceof URL)return {ok:true,json:async()=>({meta:{interval:'1min'},values})};
+   modelInput=JSON.parse(JSON.parse(opts.body).input);
+   return {ok:true,json:async()=>({output:[{content:[{type:'output_text',text:'Senario bersyarat.'}]}]})};
+  }});
+ const result=await service.generate('XAUUSD','user');
+ assert.equal(result.liveSop.state,'READY');assert.equal(result.scenario.status,'NEAR_ENTRY');
+ assert.equal(modelInput.liveSop.plan.entry,101.49);assert.equal(modelInput.scenario.status,'NEAR_ENTRY');
+ assert.equal(result.comparison,'SELARAS');
+});
+test('a newly received old source candle cannot authorize a scalp scenario',async()=>{
+ const service=new AnalysisAIService({env:{},now:()=>now,
+  liveSopProvider:async symbol=>({symbol,dataAt:now,sourceBarTime:now-600000,side:'BUY',state:'READY',plan:{entry:100,sl:98}})});
+ service.external=async()=>({status:'AVAILABLE',bias:'BUY',currentPrice:100,priceAt:now-60000,atr3m:2,dataAt:now});
+ const result=await service.generate('XAUUSD','user');
+ assert.equal(result.liveSop,null);assert.equal(result.scenario.status,'NO_SOP');
+ assert.equal(result.comparison,'TIDAK CUKUP DATA');
 });
 test('GPT does not spend tokens when both analysis feeds lack current data',async()=>{
  const s=new AnalysisAIService({env:{OPENAI_API_KEY:'test',ZENCORE_AI_MODEL:'test'},now:()=>now,

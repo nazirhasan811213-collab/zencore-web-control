@@ -59,3 +59,18 @@ Run `npm test`. New tests cover forecast boundaries, all eleven pairs, missing/s
 ## Promotion sequence
 
 Compile bridge; configure staging integrations; verify desktop/mobile rendering; collect forward observations for each pair; implement durable candidate state; review native external provider requirements; only then explicitly approve merge and live activation. Rollback of code alone does not restore database or VM state.
+# Senario scalping 3M dalam panel AI
+
+Panel AI mengambil SOP semasa daripada perkhidmatan prediction dalaman di server,
+bukan daripada input browser. Ia hanya menganggap SOP sah apabila masa terima
+kurang 90 saat dan masa candle asal tidak lebih 4 minit. Close 1M sumber luaran
+mesti benar-benar lengkap dan tidak lebih 90 saat. Jika salah satu sumber tiada,
+senario entry kekal menunggu. Ulasan GPT mendapat snapshot SOP yang sama dengan
+panel; ia tidak mengawal signal, Telegram atau MT5.
+
+Julat 3 dan 15 minit ialah gandaan ATR 3M daripada 14 candle lengkap, untuk
+rujukan volatiliti bersyarat. Gandaan ini belum dikalibrasi menjadi kebarangkalian
+atau sasaran keuntungan. Status CHASE menandakan harga telah bergerak jauh dari
+entry SOP; ADVERSE menunjukkan pergerakan melawan pelan; DIVERGENT menunjukkan
+bias OHLC luaran yang bertentangan. Semua status ialah penerangan, bukan arahan
+broker. Spread/tick broker sebenar tetap perlu disemak sebelum sebarang tindakan.

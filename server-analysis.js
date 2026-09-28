@@ -1,6 +1,6 @@
 const http = require('http');
 const {AnalysisAIService}=require('./analysis-ai-service');
-const aiAnalysis=new AnalysisAIService();
+const aiAnalysis=new AnalysisAIService({liveSopProvider:fetchLocalSop});
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -1268,6 +1268,40 @@ function fetchLocalMarkets() {
       });
     });
     request.on('timeout', () => request.destroy(new Error('Market API timeout')));
+    request.on('error', reject);
+  });
+}
+
+function fetchLocalSop(symbol) {
+  return new Promise((resolve, reject) => {
+    const request = http.get({
+      hostname: '127.0.0.1', port: V17_PORT,
+      path: `/api/prediction/${encodeURIComponent(symbol)}`,
+      headers: { Accept: 'application/json' }, timeout: 3000
+    }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => {
+        body += chunk;
+        if (body.length > 128 * 1024) request.destroy(new Error('SOP response too large'));
+      });
+      response.on('end', () => {
+        if (response.statusCode !== 200) return reject(new Error('SOP unavailable'));
+        try {
+          const data = JSON.parse(body), sop = data.strategyNormal || {};
+          const dataAt = typeof data.receivedAt === 'number' ? data.receivedAt : Date.parse(data.receivedAt);
+          if (data.symbol !== symbol || data.freshness !== 'LIVE' || !Number.isFinite(dataAt))
+            return resolve(null);
+          const sourceBarTime = typeof data.sourceBarTime === 'number' ? data.sourceBarTime : Date.parse(data.sourceBarTime);
+          const plan = sop.plan && Object.fromEntries(['entry','sl','tp1','tp2','tp3']
+            .map(key => [key, sop.plan[key] != null && Number.isFinite(Number(sop.plan[key])) ? Number(sop.plan[key]) : null]));
+          resolve({symbol,side: ['BUY','SELL'].includes(sop.side) ? sop.side : 'WAIT',
+            state: String(sop.state || 'WAIT').slice(0, 24),
+            reason: String(sop.reason || '').slice(0, 200), dataAt, sourceBarTime, plan});
+        } catch (_) { reject(new Error('SOP response invalid')); }
+      });
+    });
+    request.on('timeout', () => request.destroy(new Error('SOP timeout')));
     request.on('error', reject);
   });
 }

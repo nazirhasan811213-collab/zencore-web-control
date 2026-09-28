@@ -36,7 +36,7 @@
     if(!r.zencore.dataAt&&r.liveSop){
       text('aiZTitle','Analisis SOP ZenCore semasa');text('aiZDirection',r.liveSop.side+' · '+r.liveSop.state);
       text('aiZReason',r.liveSop.reason);text('aiZData',time(r.liveSop.sourceBarTime||r.liveSop.dataAt));
-      text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT · DATA LUARAN':'DATA SOP PINE · BUKAN V33');
+      text('aiGptStatus',r.gpt.status==='AVAILABLE'?(r.sopInModel?'ULASAN GPT · SOP SEMASA':'ULASAN GPT · DATA LUARAN'):'DATA SOP PINE · BUKAN V33');
       text('aiNarrative',r.gpt.status==='AVAILABLE'?r.gpt.text:'Feed V33 belum disambungkan. '+r.gpt.text+' Lihat analisis SOP semasa di bawah.');
     }else{
       text('aiZTitle','AI Analysis ZenCore');text('aiZDirection',r.zencore.side);text('aiZReason',r.zencore.reason);text('aiZData',time(r.zencore.dataAt));
@@ -44,17 +44,22 @@
     }
     text('aiExternalStatus',r.external.status);text('aiExternalReason',r.external.reason);text('aiExternalMethod',r.external.method||r.nativeExternal.reason);
     text('aiExternalData',time(r.external.dataAt));text('aiExternalPrice',price(r.external.currentPrice));text('aiExternalPriceAt',time(r.external.priceAt));
-    const aligned=r.liveSop&&r.external.status==='AVAILABLE'&&Math.abs(r.liveSop.dataAt-r.external.dataAt)<=240000;
-    const compared=aligned&&['BUY','SELL'].includes(r.liveSop.side)&&['BUY','SELL'].includes(r.external.bias);
-    text('aiComparison',compared?(r.liveSop.side===r.external.bias?'ARAH SELARAS · SOP vs OHLC LUARAN':'ARAH BERBEZA · SOP vs OHLC LUARAN'):r.comparison);
+    text('aiComparison',r.comparison);
     text('aiExternalSource',r.external.source);text('aiExternalBias',r.external.bias||'—');
+    const s=r.scenario||{};
+    text('aiScenarioStatus',String(s.status||'WAIT_DATA').replaceAll('_',' '));
+    text('aiScenarioReason',s.reason||'Menunggu data lengkap.');
+    text('aiScenarioPrice',price(s.price));
+    text('aiScenario3m',s.next3m?`${price(s.next3m.low)} – ${price(s.next3m.high)}`:'—');
+    text('aiScenario15m',s.next15m?`${price(s.next15m.low)} – ${price(s.next15m.high)}`:'—');
+    text('aiScenarioNote',s.note||'Julat ialah rujukan volatiliti, bukan ramalan tepat atau arahan entry.');
     text('aiFreshness','Snapshot kekal. Klik Analisis Semula untuk keadaan baharu.');
   }
   $('generateAnalysis').addEventListener('click',async()=>{
     const id=++requestId,symbol=pair();controller?.abort();controller=new AbortController();
     $('generateAnalysis').disabled=true;text('generateAnalysis','SEDANG MENGANALISIS…');text('aiStatus','Membaca snapshot dan sumber yang tersedia…');
     try{const r=await fetch('/api/analysis-ai',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol}),signal:controller.signal});const body=await r.json();
-      if(r.ok&&!body.zencore?.dataAt)body.liveSop=await liveSop(symbol,controller.signal);
+      if(r.ok&&!body.zencore?.dataAt&&!body.liveSop)body.liveSop=await liveSop(symbol,controller.signal);
       if(id!==requestId||symbol!==pair())return;if(!r.ok)throw Error(body.error||'Analisis gagal.');renderResult(body);text('aiStatus','Analisis selesai. Semak masa data setiap sumber.');
     }catch(e){if(id===requestId&&e.name!=='AbortError')text('aiStatus',e.message||'Analisis tidak tersedia.');}
     finally{if(id===requestId){$('generateAnalysis').disabled=false;text('generateAnalysis','ANALISIS SEMULA');}}
