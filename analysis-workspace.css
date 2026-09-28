@@ -44,3 +44,12 @@
 .pro-app > *, .legacy-body > * { order: 0 !important; }
 
 .sop-disclosure>summary{cursor:pointer;font-size:14px;font-weight:700;color:#c7d9e6;line-height:1.5}.sop-disclosure .disclosure-body{margin-top:14px}.layout.lower{align-items:start}.sop-disclosure{min-height:0!important}
+
+.pine-scalp{border-color:#248b83;background:linear-gradient(130deg,#102f35,#0a1c2c);margin:12px 0 16px}
+.pine-scalp #aiPineAction{color:#80f3df;font-size:21px}
+.pine-scalp #aiPineSide{color:#69e9bc;font-size:18px}
+.pine-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
+.pine-check{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #275266;border-radius:9px;padding:9px 11px;background:#091e2a}
+.pine-check span{color:#9ab8c7;font-size:11px}.pine-check b{color:#e4f9f4;text-align:right;font-size:11px}
+.pine-check.support{border-color:#28745b}.pine-check.caution{border-color:#a9703b}.pine-check.caution b{color:#ffca83}
+@media(max-width:700px){.pine-checks{grid-template-columns:1fr}}
