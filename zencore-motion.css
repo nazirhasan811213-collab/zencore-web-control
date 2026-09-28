@@ -1,0 +1,34 @@
+/* Visual layer only. Signal state and numbers still come from the existing feed. */
+.zc-workspace .radar-intro{isolation:isolate;perspective:900px;background:radial-gradient(circle at 77% 37%,#23687844,transparent 42%),linear-gradient(135deg,#173545,#091f2c 65%,#071722)}
+.radar-intro>:not(.radar-holo){position:relative;z-index:2}
+.radar-holo{position:absolute;inset:0 0 0 auto;width:49%;pointer-events:none;z-index:0;perspective:850px;opacity:.82;transform:translateZ(0)}
+.radar-holo-ring{position:absolute;left:50%;top:48%;width:190px;height:190px;border-radius:50%;border:2px solid #7cebdc88;box-shadow:inset 0 0 18px #36dccc32,0 0 22px #40dace35;transform-style:preserve-3d;animation:zc-orbit 17s linear infinite}
+.radar-holo-ring.ring-two{width:250px;height:250px;margin:-30px;transform:rotateX(68deg) rotateY(-28deg);border-color:#69d4fa70;animation-duration:23s;animation-direction:reverse}
+.radar-holo-ring.ring-three{width:128px;height:128px;margin:31px;border-style:dashed;border-color:#c8fcf6a6;animation-duration:12s}
+.radar-holo-core{position:absolute;left:calc(50% + 63px);top:calc(48% + 63px);width:64px;height:64px;border-radius:18px;transform:rotateX(25deg) rotateZ(45deg);background:linear-gradient(135deg,#a1fff7,#41d9d1 45%,#195e78);box-shadow:inset -12px -12px 19px #073748bb,inset 5px 5px 12px #f4ffff90,0 0 45px #4ce4db8c,0 26px 40px #0008;animation:zc-core-float 5s ease-in-out infinite}
+.radar-holo-floor{position:absolute;left:30%;right:6%;bottom:6%;height:48px;border-radius:50%;background:radial-gradient(ellipse,#50e2dd43,transparent 70%);transform:rotateX(68deg);filter:blur(7px)}
+@keyframes zc-orbit{from{transform:rotateX(65deg) rotateY(-24deg) rotateZ(0deg)}to{transform:rotateX(65deg) rotateY(-24deg) rotateZ(360deg)}}
+@keyframes zc-core-float{50%{transform:translateY(-10px) rotateX(25deg) rotateZ(45deg)}}
+.zc-workspace .radar-intro h1,.zc-workspace .hero-copy h2{background:linear-gradient(110deg,#fff 10%,#d2ffff 58%,#82dfdc);background-clip:text;-webkit-background-clip:text;color:transparent;text-shadow:none}
+.zc-workspace .radar-intro p{max-width:610px;color:#bad5df;font-size:14px;line-height:1.6}
+.zc-workspace .hero-note{background:#061722c9;border-color:#3d7581;color:#b7d8df;font-size:11px}
+.command-dock{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.command-dock a{position:relative;display:flex;min-height:94px;flex-direction:column;justify-content:center;padding:17px 20px;overflow:hidden;border:1px solid #356579;border-radius:16px;background:linear-gradient(125deg,#153a48,#102634 65%,#0a202c);box-shadow:0 15px 22px -18px #000,inset 0 1px 0 #c4ffff27;color:#edfaff;text-decoration:none;transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease}
+.command-dock a::after{content:"";position:absolute;right:-40px;top:-65px;width:150px;height:150px;border:1px solid #72e5e745;border-radius:50%;box-shadow:0 0 0 24px #49a3c012,0 0 0 54px #49a3c009;pointer-events:none}
+.command-dock a span{font-size:10px;font-weight:900;color:#77dfd3;letter-spacing:.12em}.command-dock a b{font-size:17px;margin-top:7px}.command-dock a small{font-size:11px;color:#a3bfca;margin-top:7px}.command-dock a i{font-style:normal;color:#82efe1;margin-left:6px}
+.command-dock a:hover,.command-dock a:focus-visible{transform:translateY(-4px);border-color:#7ae6d9;box-shadow:0 22px 32px -19px #000,0 0 0 1px #67e5d35b,inset 0 1px 0 #e2ffff51;text-decoration:none}
+.zc-workspace .market-card,.zc-workspace .best-setup,.zc-workspace .ws-scenario{will-change:auto;transform-style:preserve-3d}
+@media(hover:hover) and (pointer:fine){.zc-workspace .market-card[data-depth-active],.zc-workspace .best-setup[data-depth-active],.zc-workspace .ws-scenario[data-depth-active]{transform:perspective(900px) translateY(-4px) rotateX(var(--zc-rotate-x,0deg)) rotateY(var(--zc-rotate-y,0deg));border-color:#70d9da;box-shadow:0 24px 42px -26px #000,0 0 0 1px #70e9de35,inset 0 1px 0 #e6ffff3d}.zc-workspace [data-depth-active]::after{opacity:.9}}
+.zc-workspace .market-card:focus-visible,.zc-workspace .best-setup:focus-visible,.command-dock a:focus-visible{outline:2px solid #9affea;outline-offset:3px}
+.zc-workspace .market-card .card-price,.zc-workspace .best-main,.zc-workspace .ws-scenario-grid{transform:translateZ(18px)}
+.zc-workspace .result-summary article,.zc-workspace .auto-summary article{transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease}
+@media(hover:hover) and (pointer:fine){.zc-workspace .result-summary article:hover,.zc-workspace .auto-summary article:hover{transform:translateY(-4px);border-color:#66bcbf;box-shadow:0 20px 28px -20px #000,inset 0 1px 0 #d5ffff48}}
+body[data-auth-page=login] .auth-story{perspective:900px;isolation:isolate}
+body[data-auth-page=login] .auth-story::after{border:1px solid #d9ffff55;box-shadow:inset -27px -25px 50px #071526a8,inset 18px 15px 36px #e7ffff61,0 34px 45px -20px #000b,0 0 65px #42c6df79;animation:zc-login-float 7s ease-in-out infinite}
+body[data-auth-page=login] .auth-story::before{transform:rotateX(68deg) rotateZ(-15deg);box-shadow:0 0 80px #43dcff2c,inset 0 0 70px #43dcff19;animation:zc-login-orbit 16s linear infinite}
+body[data-auth-page=login] .story-copy{position:relative;z-index:1}body[data-auth-page=login] .story-copy h1{max-width:660px;text-shadow:0 6px 18px #0007}
+@keyframes zc-login-float{50%{transform:translateY(-16px) rotate(7deg)}}
+@keyframes zc-login-orbit{50%{transform:rotateX(68deg) rotateZ(165deg)}to{transform:rotateX(68deg) rotateZ(345deg)}}
+@media(max-width:900px){.radar-holo{opacity:.38;width:58%}.command-dock{grid-template-columns:repeat(3,minmax(0,1fr))}.command-dock a{padding:14px}.command-dock a b{font-size:14px}}
+@media(max-width:650px){.radar-holo{width:64%;opacity:.19}.zc-workspace .radar-intro{min-height:260px}.zc-workspace .radar-intro p{font-size:13px}.command-dock{grid-template-columns:1fr;gap:8px}.command-dock a{min-height:70px;padding:12px 15px}.command-dock a b{font-size:16px}.command-dock a span,.command-dock a small{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.radar-holo *,body[data-auth-page=login] .auth-story::before,body[data-auth-page=login] .auth-story::after{animation:none!important}.zc-workspace .market-card,.zc-workspace .best-setup,.zc-workspace .ws-scenario,.command-dock a,.zc-workspace .result-summary article,.zc-workspace .auto-summary article{transform:none!important;transition:none!important}}
