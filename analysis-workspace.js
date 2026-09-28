@@ -61,7 +61,34 @@
     text('aiVerdictScore',v.score==null?'—':`${v.score}/100 · ${v.grade||'—'}`);
     text('aiVerdictStability',v.stability==null||v.readiness==null?'—':`${v.stability}/100 · ${v.readiness}/100`);
     text('aiVerdictRr',v.rrTp1==null?'—':`${v.rrTp1}R`);text('aiVerdictNote',v.note||'Skor bukan peluang menang.');
+    renderTargetMap(r.targetMap);
     text('aiFreshness','Snapshot kekal. Klik Analisis Semula untuk keadaan baharu.');
+  }
+  function renderTargetMap(map){
+    map=map||{};$('aiTargetMap').hidden=!Array.isArray(map.targets)||!map.targets.length;
+    if(!$('aiTargetMap').hidden){
+      text('aiTargetSide',map.side);text('aiTargetReason',map.reason);
+      text('aiTargetEntry',price(map.entry));text('aiTargetRisk',`${map.riskDistance} ${map.unit} · SL ${price(map.sl)}`);
+      text('aiTargetRoom',map.room15m==null?'Data belum cukup':`${map.room15m} ${map.unit}`);
+      text('aiTargetNote',map.note);
+      const rows=$('aiTargetRows');rows.replaceChildren();
+      for(const target of map.targets){
+        const tr=document.createElement('tr');
+        const cells=[target.name,price(target.price),`${target.distance} ${target.unit} · ${target.rr}R`,
+          `${target.reach}${target.remaining==null?'':` · baki ${target.remaining} ${target.unit}`}`,
+          target.historical?`${target.historical.rate}% · ${target.historical.hit}/${target.historical.sample} rekod`:'Belum cukup 30 rekod'];
+        cells.forEach((value,index)=>{const td=document.createElement('td');td.textContent=value;
+          if(index===3)td.className='reach '+(target.reach==='DI LUAR JULAT 15M'?'far':target.reach==='SUDAH DILEPASI'?'passed':'');tr.append(td);});
+        rows.append(tr);
+      }
+    }
+  }
+  async function refreshTargetMap(){
+    const symbol=pair(),id=requestId;
+    try{const response=await fetch('/api/target-map?symbol='+encodeURIComponent(symbol),{cache:'no-store',credentials:'same-origin'});
+      if(!response.ok)return;const result=await response.json();
+      if(id===requestId&&symbol===pair()&&!lastResult)renderTargetMap(result.targetMap);
+    }catch{}
   }
   $('generateAnalysis').addEventListener('click',async()=>{
     const id=++requestId,symbol=pair();controller?.abort();controller=new AbortController();
@@ -72,9 +99,13 @@
     }catch(e){if(id===requestId&&e.name!=='AbortError')text('aiStatus',e.message||'Analisis tidak tersedia.');}
     finally{if(id===requestId){$('generateAnalysis').disabled=false;text('generateAnalysis','ANALISIS SEMULA');}}
   });
-  $('pairSelector')?.addEventListener('change',()=>{requestId++;controller?.abort();lastResult=null;renderSnapshot({symbol:pair(),status:'WAIT',side:'WAIT',reason:'Membaca data pair yang dipilih…',checks:[]});$('aiResults').hidden=true;$('generateAnalysis').disabled=false;text('generateAnalysis','JANA & BANDING AI ANALYSIS');text('aiStatus','Klik untuk analisis pair yang dipilih.');refresh();});
+  $('pairSelector')?.addEventListener('change',()=>{requestId++;controller?.abort();lastResult=null;$('aiTargetMap').hidden=true;renderSnapshot({symbol:pair(),status:'WAIT',side:'WAIT',reason:'Membaca data pair yang dipilih…',checks:[]});$('aiResults').hidden=true;$('generateAnalysis').disabled=false;text('generateAnalysis','JANA & BANDING AI ANALYSIS');text('aiStatus','Klik untuk analisis pair yang dipilih.');refresh();refreshTargetMap();});
   setInterval(()=>{if(snapshot?.dataAt&&Date.now()-snapshot.dataAt>90000){text('v33Status','DATA LEWAT');text('v33Reason','Snapshot melebihi 90 saat. Tunggu data baharu sebelum menilai entry.');}
-    if(lastResult&&Date.now()-lastResult.generatedAt>180000)text('aiFreshness','Snapshot melebihi satu candle 3M. Jana semula untuk perbandingan terkini.');},1000);
+    if(lastResult&&Date.now()-lastResult.generatedAt>180000){
+      text('aiFreshness','Snapshot melebihi satu candle 3M. Jana semula untuk perbandingan terkini.');
+      if(!$('aiTargetMap').hidden){text('aiTargetRoom','DATA LEWAT · JANA SEMULA');
+        text('aiTargetReason','Harga dan ruang 15M pada snapshot ini sudah lewat. Jana semula sebelum menilai sasaran.');}
+    }},1000);
   document.querySelector('.legacy-analysis')?.addEventListener('toggle',()=>window.dispatchEvent(new Event('resize')));
-  refresh();setInterval(refresh,15000);
+  refresh();refreshTargetMap();setInterval(refresh,15000);setInterval(()=>{if(!lastResult)refreshTargetMap();},45000);
 })();
