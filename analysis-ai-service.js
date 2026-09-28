@@ -59,6 +59,7 @@ function scalpScenario({snapshot,external,liveSop,now=Date.now()}={}){
   const movement=(price-entry)*sign;
   const zone=Math.max(atr*.35,Math.abs(entry-sl)*.25);
   const context={...base,...reference,side:sop.side,entry:round(entry),sl:round(sl),
+    distanceFromEntry:round(movement),entryZone:round(zone),signalReceivedAt:sop.dataAt,
     status:'NEAR_ENTRY',reason:'Harga dekat dengan entry SOP. Semak spread dan tick broker sebelum keputusan.'};
   if(movement>zone)return {...context,status:'CHASE',reason:'Harga sudah bergerak jauh dari entry. Tunggu pullback; jangan kejar candle.'};
   if(movement< -zone)return {...context,status:'ADVERSE',reason:'Harga bergerak melawan pelan entry. Tunggu SOP baharu, jangan andaikan ia akan berpatah balik.'};
@@ -66,7 +67,7 @@ function scalpScenario({snapshot,external,liveSop,now=Date.now()}={}){
 }
 function setupVerdict(scenario,sop,external){
   const base={label:'DATA BELUM CUKUP',profitView:'BELUM DAPAT DINILAI',note:'Skor ialah kekuatan aturan, bukan peluang menang. Untung sebenar bergantung pada spread, slippage, kos dan exit.'};
-  if(!sop||!scenario||!['BUY','SELL'].includes(sop.side))return {...base,reason:'SOP semasa belum tersedia.'};
+  if(!sop||!scenario||!['BUY','SELL'].includes(sop.side))return {...base,entryNow:'TIADA ENTRY DISAHKAN',reason:'SOP semasa belum tersedia.'};
   const score=num(sop.score),stability=num(sop.stability),readiness=num(sop.readiness);
   const grade=sop.grade||'—',entry=num(sop.plan?.entry),sl=num(sop.plan?.sl),tp1=num(sop.plan?.tp1);
   const sign=sop.side==='BUY'?1:-1,risk=entry===null||sl===null?null:(entry-sl)*sign;
@@ -75,12 +76,12 @@ function setupVerdict(scenario,sop,external){
   const info={...base,score,grade,stability,readiness,rrTp1:rr};
   if(scenario.status==='WAIT_DATA'||scenario.status==='NO_SOP'||!Number.isFinite(score)||!Number.isFinite(stability)||
      !Number.isFinite(readiness)||rr===null||!Number.isFinite(num(external?.atr3m)))
-    return {...info,reason:'Data skor, harga, volatiliti atau pelan Entry/SL/TP1 belum lengkap.'};
-  if(scenario.status!=='NEAR_ENTRY')return {...info,label:'TUNGGU / ELAK',reason:scenario.reason};
+    return {...info,entryNow:'TUNGGU DATA',reason:'Data skor, harga, volatiliti atau pelan Entry/SL/TP1 belum lengkap.'};
+  if(scenario.status!=='NEAR_ENTRY')return {...info,label:'TUNGGU / ELAK',entryNow:scenario.status==='CHASE'?'TUNGGU PULLBACK':'TUNGGU PENGESAHAN',reason:scenario.reason};
   const atr=external.atr3m,room=1.5*atr;
   if(score>=80&&['A','A+'].includes(grade)&&stability>=60&&readiness>=75&&rr>=1&&reward<=room)
-    return {...info,label:'SETUP SOLID · BERSYARAT',profitView:'TP1 DALAM JULAT 15M',reason:'SOP siap, skor dan kestabilan memadai, harga dekat entry dan TP1 berada dalam julat pergerakan rujukan. Semak kos broker dan candle terkini.'};
-  return {...info,label:'SETUP PERLU SEMAKAN',profitView:reward>room?'TP1 DI LUAR JULAT 15M':'POTENSI BELUM JELAS',
+    return {...info,label:'SETUP SOLID · BERSYARAT',entryNow:'DALAM ZON · SEMAK TICK BROKER',profitView:'TP1 DALAM JULAT 15M',reason:'SOP siap, skor dan kestabilan memadai, harga dekat entry dan TP1 berada dalam julat pergerakan rujukan. Semak kos broker dan candle terkini.'};
+  return {...info,label:'SETUP PERLU SEMAKAN',entryNow:'DALAM ZON · NILAI RISIKO',profitView:reward>room?'TP1 DI LUAR JULAT 15M':'POTENSI BELUM JELAS',
     reason:'Salah satu syarat kekuatan, kestabilan, readiness, R:R atau ruang ke TP1 belum memadai.'};
 }
 class AnalysisAIService {

@@ -50,7 +50,7 @@
 
       <aside class="data-notice" aria-label="Penerangan data result">
         <i aria-hidden="true">i</i>
-        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span>History disimpan dalam memori server semasa dan boleh bermula semula selepas restart. Jumlah sebenar datang daripada engine; jadual memaparkan maksimum 20 keputusan terkini bagi setiap pair.</span></div>
+        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span>Ringkasan semasa datang daripada memori engine; arkib keputusan selesai disimpan berasingan selepas diselaraskan. Jumlah pada ringkasan boleh bermula semula selepas restart.</span></div>
       </aside>
 
       <section class="result-summary" aria-label="Ringkasan keputusan signal">
@@ -122,6 +122,12 @@
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section class="result-panel history-panel" aria-label="Arkib keputusan signal kekal">
+        <div class="panel-heading"><div><span class="eyebrow">DURABLE SIGNAL AUDIT</span><h2>Arkib validasi selepas restart</h2></div><span id="durableStatus" class="mini-pill">MENYEMAK</span></div>
+        <p class="data-notice">Rekod selesai yang diselaraskan ke pangkalan data. Ini bukan P/L broker; sejarah sebelum pengaktifan dan signal yang terlepas ketika servis tergendala tidak dapat direka semula.</p>
+        <div class="history-table-wrap"><table class="history-table"><thead><tr><th>MASA</th><th>PAIR</th><th>ARAH</th><th>ENTRY</th><th>HASIL</th><th>SKOR SOP</th></tr></thead><tbody id="durableRows"><tr><td colspan="6">Memuatkan arkib…</td></tr></tbody></table></div>
       </section>
 
       <footer class="portal-foot results-foot">
