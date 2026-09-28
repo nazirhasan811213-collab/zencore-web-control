@@ -68,10 +68,33 @@ class DemoExecutor:
         self.execution_enabled = execution_enabled is True
         self.clock_ms = clock_ms
         self.ledger = ExitLedger(ledger_path)
+        self.symbol_map = {symbol: symbol for symbol in self.allowed_symbols}
+        self._account_bound = self.approved_server != "ENVELOPE"
+
+    def bind_account(self, server: str, symbol_map: dict[str, str]) -> None:
+        if self.approved_server != "ENVELOPE" and server.strip().lower() != self.approved_server.strip().lower():
+            raise DemoExecutionError("SERVER_NOT_APPROVED")
+        if not symbol_map or not set(symbol_map).issubset(set(self.allowed_symbols)):
+            raise DemoExecutionError("SYMBOL_MAPPING_INVALID")
+        names = list(symbol_map.values())
+        if (len(set(names)) != len(names) or
+            any(not isinstance(name, str) or not name or len(name) > 32 or
+                not all(char.isalnum() or char in "._-" for char in name) for name in names)):
+            raise DemoExecutionError("SYMBOL_MAPPING_INVALID")
+        self.symbol_map = dict(symbol_map)
+        self._bound_server = server
+        self._account_bound = True
+
+    def unbind_account(self) -> None:
+        self._account_bound = self.approved_server != "ENVELOPE"
+        self._bound_server = ""
+        self.symbol_map = {symbol: symbol for symbol in self.allowed_symbols}
 
     def _assert_demo_boundary(self) -> tuple[Any, Any]:
         if not self.execution_enabled:
             raise DemoExecutionError("DEMO_EXECUTION_GATE_LOCKED")
+        if not self._account_bound:
+            raise DemoExecutionError("ACCOUNT_NOT_BOUND")
         account = self.mt5.account_info()
         terminal = self.mt5.terminal_info()
         if account is None or terminal is None:
@@ -79,7 +102,8 @@ class DemoExecutor:
         demo_mode = getattr(self.mt5, "ACCOUNT_TRADE_MODE_DEMO", 0)
         if getattr(account, "trade_mode", None) != demo_mode:
             raise DemoExecutionError("REAL_ACCOUNT_BLOCKED")
-        if str(getattr(account, "server", "")).strip().lower() != self.approved_server.strip().lower():
+        expected_server = getattr(self, "_bound_server", "") or self.approved_server
+        if str(getattr(account, "server", "")).strip().lower() != expected_server.strip().lower():
             raise DemoExecutionError("SERVER_NOT_APPROVED")
         if not bool(getattr(terminal, "trade_allowed", False)):
             raise DemoExecutionError("TERMINAL_TRADING_DISABLED")
@@ -100,6 +124,8 @@ class DemoExecutor:
         side = str(snapshot["side"]).upper()
         if symbol not in self.allowed_symbols:
             raise DemoExecutionError("SYMBOL_NOT_ALLOWED")
+        if symbol not in self.symbol_map:
+            raise DemoExecutionError("SYMBOL_NOT_AVAILABLE")
         if self.clock_ms() - int(snapshot.get("sourceReceivedAt") or 0) > MAX_SIGNAL_AGE_MS:
             raise DemoExecutionError("SIGNAL_STALE")
 
@@ -115,11 +141,12 @@ class DemoExecutor:
         if lot <= 0 or total <= 0 or total > MAX_DEMO_TOTAL_LOT or abs(total - declared_total) > 1e-8:
             raise DemoExecutionError("VOLUME_LIMIT")
 
-        info = self.mt5.symbol_info(symbol)
+        broker_symbol = self.symbol_map[symbol]
+        info = self.mt5.symbol_info(broker_symbol)
         if info is None:
             if hasattr(self.mt5, "symbol_select"):
-                self.mt5.symbol_select(symbol, True)
-                info = self.mt5.symbol_info(symbol)
+                self.mt5.symbol_select(broker_symbol, True)
+                info = self.mt5.symbol_info(broker_symbol)
         if info is None:
             raise DemoExecutionError("SYMBOL_UNAVAILABLE")
         volume_min = _finite(getattr(info, "volume_min", 0), "VOLUME_MIN")
@@ -128,7 +155,7 @@ class DemoExecutor:
         if lot < volume_min or lot > volume_max or not _volume_step_ok(lot, volume_step):
             raise DemoExecutionError("BROKER_VOLUME_INVALID")
 
-        tick = self.mt5.symbol_info_tick(symbol)
+        tick = self.mt5.symbol_info_tick(broker_symbol)
         if tick is None:
             raise DemoExecutionError("TICK_UNAVAILABLE")
         price = _finite(getattr(tick, "ask" if side == "BUY" else "bid", 0), "PRICE")
@@ -143,7 +170,7 @@ class DemoExecutor:
                 raise DemoExecutionError("PRICE_GEOMETRY_INVALID")
             order_type = self.mt5.ORDER_TYPE_SELL
 
-        existing = self.mt5.positions_get(symbol=symbol)
+        existing = self.mt5.positions_get(symbol=broker_symbol)
         if existing is None:
             raise DemoExecutionError("POSITION_READ_FAILED")
         if any(int(getattr(p, "magic", 0) or 0) == MAGIC for p in existing):
@@ -154,7 +181,7 @@ class DemoExecutor:
             tp = tps[min(index, 2)]
             request = {
                 "action": self.mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
+                "symbol": broker_symbol,
                 "volume": lot,
                 "type": order_type,
                 "price": price,
@@ -186,18 +213,19 @@ class DemoExecutor:
         )
 
     def _zencore_positions(self, symbol: str | None = None) -> list[Any]:
-        positions = self.mt5.positions_get(symbol=symbol) if symbol else self.mt5.positions_get()
+        broker_symbol = self.symbol_map.get(symbol, symbol) if symbol else None
+        positions = self.mt5.positions_get(symbol=broker_symbol) if symbol else self.mt5.positions_get()
         if positions is None:
             raise DemoExecutionError("POSITION_READ_FAILED")
         return [p for p in positions if int(getattr(p, "magic", 0) or 0) == MAGIC
-                and (symbol is None or str(getattr(p, "symbol", "")).upper() == symbol)]
+                and (symbol is None or str(getattr(p, "symbol", "")) == broker_symbol)]
 
     def _close_position(self, position: Any, percent: int, requested_volume: float | None = None) -> str:
-        symbol = str(getattr(position, "symbol", "")).upper()
-        if symbol not in self.allowed_symbols:
+        broker_symbol = str(getattr(position, "symbol", ""))
+        if broker_symbol not in self.symbol_map.values():
             raise DemoExecutionError("POSITION_SYMBOL_NOT_ALLOWED")
-        info = self.mt5.symbol_info(symbol)
-        tick = self.mt5.symbol_info_tick(symbol)
+        info = self.mt5.symbol_info(broker_symbol)
+        tick = self.mt5.symbol_info_tick(broker_symbol)
         if info is None or tick is None:
             raise DemoExecutionError("POSITION_MARKET_UNAVAILABLE")
         volume = _finite(getattr(position, "volume", 0), "POSITION_VOLUME")
@@ -225,7 +253,7 @@ class DemoExecutor:
         request = {
             "action": self.mt5.TRADE_ACTION_DEAL,
             "position": int(getattr(position, "ticket", 0)),
-            "symbol": symbol,
+            "symbol": broker_symbol,
             "volume": close_volume,
             "type": order_type,
             "price": price,
@@ -258,6 +286,8 @@ class DemoExecutor:
         symbol = str(snapshot["symbol"]).upper()
         if symbol not in self.allowed_symbols:
             raise DemoExecutionError("SYMBOL_NOT_ALLOWED")
+        if symbol not in self.symbol_map:
+            raise DemoExecutionError("SYMBOL_NOT_AVAILABLE")
         target_tickets = set(payload["positionTickets"])
         def targets():
             return [p for p in self._zencore_positions(symbol)
@@ -283,7 +313,7 @@ class DemoExecutor:
                     request = {
                         "action": self.mt5.TRADE_ACTION_SLTP,
                         "position": int(getattr(position, "ticket", 0)),
-                        "symbol": symbol,
+                        "symbol": self.symbol_map[symbol],
                         "sl": new_sl,
                         "tp": float(getattr(position, "tp", 0) or 0),
                         "magic": MAGIC,
@@ -313,7 +343,7 @@ class DemoExecutor:
                     if {str(getattr(p, "ticket", "")) for p in self._zencore_positions(symbol)} != target_tickets:
                         raise DemoExecutionError("POSITION_SET_CHANGED")
                     positions_now = sorted(targets(), key=lambda p: int(getattr(p, "ticket", 0)))
-                    info = self.mt5.symbol_info(symbol)
+                    info = self.mt5.symbol_info(self.symbol_map[symbol])
                     if info is None:
                         raise DemoExecutionError("POSITION_MARKET_UNAVAILABLE")
                     step = _finite(getattr(info, "volume_step", 0), "VOLUME_STEP")
@@ -361,8 +391,10 @@ class DemoExecutor:
         order_ids = tuple(self._close_position(position, 100) for position in list(positions))
         if self._zencore_positions():
             raise DemoExecutionError("CLOSE_RECONCILIATION_REQUIRED")
-        for symbol in {str(getattr(position, "symbol", "")).upper() for position in positions}:
-            self.ledger.campaign(symbol, [])
+        inverse = {broker.upper(): canonical for canonical, broker in self.symbol_map.items()}
+        for broker in {str(getattr(position, "symbol", "")).upper() for position in positions}:
+            if broker in inverse:
+                self.ledger.campaign(inverse[broker], [])
         return ExecutionResult(
             code="DEMO_EMERGENCY_CLOSE_EXECUTED",
             broker_order_ids=order_ids,

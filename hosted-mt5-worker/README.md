@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the reviewed hosted MT5 Demo worker, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.2-gcp-multiuser-multipair` accepts only a configured subset of the 11 canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, an approved connector version, an assigned worker slot and all runtime safety checks.
+This directory contains the staged hosted MT5 Demo worker source, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.6-gcp-multiuser-multipair` accepts configured canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, a reviewed connector artifact, an assigned worker slot and runtime checks. The 2.2.6 Windows binary has not been built or verified on the VM.
 
 ## Implemented now
 
@@ -9,7 +9,7 @@ This directory contains the reviewed hosted MT5 Demo worker, the Windows release
 - `security_boundary.py` accepts unwrap capability only through `ExternalKeyUnwrapper`. There is deliberately no file-key or environment-key implementation.
 - `gcp_kms_unwrapper.py` implements the Google Cloud adapter through the fixed Compute metadata identity and Cloud KMS REST API. It verifies request and response CRC32C values and never creates a service-account key file.
 - `gcp_control_plane.py` requests a full Google-signed instance JWT, calls only the exact ZenCore HTTPS audience, rejects redirects and adds a fresh UUID/timestamp to every lease or heartbeat request.
-- `hosted_worker.py` loads a strict non-secret cell assignment, leases one encrypted account, decrypts only through Cloud HSM, initializes the approved InterStellar Demo terminal, wipes the local credential buffers and reports masked telemetry plus broker symbol specifications.
+- `hosted_worker.py` loads a strict non-secret cell assignment, leases one encrypted account, decrypts only through Cloud HSM, initializes the isolated Demo terminal, wipes the credential buffers and reports masked telemetry plus broker symbol specifications. In ENVELOPE mode it checks the connected Demo server against the encrypted credential's server.
 - In preflight, the worker requires `executionEnabled=false`, a server-locked lease and an absent local execution gate. If the gate appears unexpectedly, the worker stops. In execution mode all three gates must agree or the worker stops.
 - The worker refuses a REAL account, a changed MT5 account, an unapproved server, an unassigned cell or any pre-existing ZenCore-magic position.
 - The worker stops heartbeats at lease expiry and reconnects for a fresh ciphertext lease; the control plane also rejects expired lease IDs.
@@ -49,7 +49,7 @@ On a clean Windows build host with Python 3.12:
 .\Build-ZenCoreHostedWorker.ps1 -OutputDirectory .\dist
 ```
 
-The output is `ZenCore_Hosted_Worker_GCP_v2.2.2-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
+The output is `ZenCore_Hosted_Worker_GCP_v2.2.6-gcp-multiuser-multipair.zip` and its `.sha256` file. Building does not create a VM, HSM key, network or billing charge. The ZIP must still be reviewed and hosted at an approved HTTPS URL before its exact SHA-256 is placed in Terraform.
 
 MetaTrader's [official Python initialize API](https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py) supports initializing a terminal with `login`, `password` and `server`. That API boundary necessarily creates short-lived Python strings even though ZenCore wipes its mutable credential buffers immediately afterward. The Demo certification must inspect the broker terminal profile and disk behavior before any claim that MT5 itself did not persist connection data.
 

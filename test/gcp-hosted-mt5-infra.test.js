@@ -52,7 +52,7 @@ test('one hosted account is pinned to one Google worker identity and exact audie
   assert.match(variables, /hosted_account_id must be blank or a UUIDv4/);
   assert.match(main, /hostedAccountId\s*=\s*var\.hosted_account_id/);
   assert.match(main, /controlPlaneAudience\s*=\s*"\$\{var\.control_plane_url\}\/api\/hosted-execution"/);
-  assert.match(main, /connectorVersion\s*=\s*var\.execution_enabled \? "2\.2\.2-gcp-multiuser-multipair" : "2\.0\.0-gcp-connect"/);
+  assert.match(main, /connectorVersion\s*=\s*var\.execution_enabled \? "2\.2\.6-gcp-multiuser-multipair" : "2\.0\.0-gcp-connect"/);
   assert.match(main, /approvedDemoServer\s*=\s*"InterStellarFinancial-Demo"/);
   assert.match(main, /mt5TerminalPath\s*=\s*var\.mt5_terminal_path/);
   assert.match(outputs, /ZENCORE_GCP_WORKER_AUDIENCE/);
@@ -84,7 +84,7 @@ test('Terraform and Windows bootstrap require explicit pinned multi-pair DEMO ex
   assert.match(variables, /worker_release_sha256/);
   assert.match(main, /execution\s*=\s*var\.execution_enabled \? "demo-enabled" : "locked"/);
   assert.match(bootstrap, /DEMO_EXECUTION_ENABLED/);
-  assert.match(bootstrap, /2\.2\.2-gcp-multiuser-multipair/);
+  assert.match(bootstrap, /2\.2\.6-gcp-multiuser-multipair/);
   assert.match(bootstrap, /EXECUTION_LOCKED/);
   assert.match(bootstrap, /Get-FileHash -Algorithm SHA256/);
   assert.match(bootstrap, /Expand-Archive/);

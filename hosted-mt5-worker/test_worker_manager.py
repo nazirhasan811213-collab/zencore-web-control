@@ -121,6 +121,10 @@ class WorkerManagerTests(unittest.TestCase):
             loaded = ManagerConfig.load(path)
             self.assertFalse(loaded.execution_enabled)
 
+            raw["approvedDemoServer"] = "ENVELOPE"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            self.assertEqual(ManagerConfig.load(path).approved_demo_server, "ENVELOPE")
+
             raw["executionEnabled"] = "false"
             path.write_text(json.dumps(raw), encoding="utf-8")
             with self.assertRaisesRegex(ManagerFailure, "MANAGER_SECURITY_BOUNDARY_INVALID"):
@@ -246,6 +250,25 @@ class WorkerManagerTests(unittest.TestCase):
                 manager.children[item["slotCode"]].assignment.account_id,
                 item["accountId"],
             )
+
+    def test_failed_slot_does_not_block_other_user_slot(self):
+        items = [assignment(1, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "123456"),
+                 assignment(3, "11111111-2222-4333-8444-555555555555", "654321")]
+        launched = []
+
+        def start(command, _cwd):
+            if "-s01" in command[2]:
+                raise OSError("simulated launch failure")
+            launched.append(command)
+            return FakeProcess()
+
+        with tempfile.TemporaryDirectory() as folder:
+            manager = WorkerManager(self._config(Path(folder), execution_enabled=False),
+                                    FakeControlPlane(items), process_factory=start)
+            result = manager.reconcile_once()
+            self.assertEqual(result["failed"], 1)
+            self.assertEqual(result["running"], 1)
+            self.assertIn("-s03", launched[0][2])
 
     def test_connection_only_preflight_launches_without_gate_and_stops_on_gate_drift(self):
         item = assignment(

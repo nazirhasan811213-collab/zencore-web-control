@@ -106,8 +106,12 @@ function createAutoTradeService(options = {}) {
     String(options.credentialPublicKey || '')
   );
   const requiredDemoConnectorVersion = String(
-    options.requiredDemoConnectorVersion || '2.2.2-gcp-multiuser-multipair'
+    options.requiredDemoConnectorVersion || '2.2.6-gcp-multiuser-multipair'
   );
+  if (hostedMt5Enabled && allowDemoExecution &&
+      requiredDemoConnectorVersion !== '2.2.6-gcp-multiuser-multipair') {
+    throw new Error('Hosted DEMO execution requires the reviewed ticket-scoped 2.2.6 connector.');
+  }
   const allowedDemoSymbols = [...new Set(
     (Array.isArray(options.allowedDemoSymbols) ? options.allowedDemoSymbols : ['XAUUSD'])
       .map(Core.normaliseSymbol)
@@ -728,6 +732,9 @@ function createAutoTradeService(options = {}) {
       if (!hostedConnection.ready) {
         throw serviceError('HOSTED_WORKER_NOT_READY', hostedConnection.label, 409);
       }
+      if (!settingsValidation.value.symbols.some(symbol => hostedAccount.symbolSpecs?.[symbol])) {
+        throw serviceError('NO_VALIDATED_BROKER_SYMBOL', 'Broker MT5 belum mengesahkan sebarang pair ZenCore.', 409);
+      }
       const issued = await issueHostedCommand({
         userId, accountId: hostedAccount.id, type: 'SYSTEM_ON',
         payload: {
@@ -1049,6 +1056,7 @@ function createAutoTradeService(options = {}) {
         } else if (typeof store.hasRecentEntryCommand === 'function' &&
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
+        if (hostedAccount && !symbolSpecs?.[symbol]) continue;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol]);
         if (!setup) continue;
         const issued = hostedAccount

@@ -200,15 +200,17 @@
   function renderExecutionScope(state) {
     const allowed = Array.isArray(state.control?.executionSymbols)
       ? state.control.executionSymbols : Core.SUPPORTED_MARKETS;
+    const brokerSpecs = state.hostedAccount?.symbolSpecs || state.pod?.symbolSpecs || {};
+    const connected = !!(state.hostedAccount || state.pod);
     const options = byId('symbolOptions');
     if (options) {
       options.innerHTML = allowed.length
-        ? allowed.map(symbol => `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
+        ? allowed.map(symbol => `<span class="symbol-option system${connected && !brokerSpecs[symbol] ? ' unavailable' : ''}"><span>${escape(symbol)}</span><small>${connected ? (brokerSpecs[symbol] ? escape(brokerSpecs[symbol].brokerSymbol || symbol) : 'Broker tidak tersedia') : 'Menunggu MT5'}</small></span>`).join('')
         : '<span class="symbol-scope-empty">Menunggu pair yang disahkan.</span>';
     }
     setText(
       'executionSymbolNotice',
-      `Skop automatik control plane: ${allowed.join(', ') || 'belum tersedia'}. Semua user aktif menerima skop pair yang sama.`
+      `ZenCore menyokong ${allowed.length} pair. Auto trade hanya menghantar order untuk pair yang disahkan oleh MT5 akaun ini.`
     );
   }
 

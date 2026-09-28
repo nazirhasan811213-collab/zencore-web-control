@@ -27,16 +27,20 @@ has an open position. A new, disjoint set of broker tickets starts a new
 campaign. Commands for tickets that have already closed cannot affect later
 positions in the same pair.
 
-This source tree's packaged connector is **2.2.2**, whereas the installed VM
-was reported as **2.2.5**. Do not deploy the server change on its own or turn
-on execution. First port these worker changes onto the reviewed 2.2.5 source,
-issue a new pinned connector artifact, upgrade the Windows slots in connection
-only mode, and verify exact ticket/volume/SL behavior on two Demo accounts and
-all configured broker symbols. Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false`
-and the manager/slot execution gates locked until that validation passes.
+The source now identifies as **2.2.6**, whereas the installed VM was reported
+as **2.2.5**. The 2.2.5 executable sources were not present in this repository;
+the new source includes its documented portable slot behavior but a Windows
+binary has not been built or compared with the installed release. Do not deploy
+the server change on its own or turn on execution. Build the pinned 2.2.6
+artifact on Windows with Python 3.12, review the binary and upgrade script,
+upgrade the Windows slots in connection-only mode, and verify exact
+ticket/volume/SL behavior on two Demo accounts and all offered broker symbols.
+Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` and the manager/slot execution
+gates locked until that validation passes.
 
-The current worker remains Demo-only, uses the approved InterStellar server and
-requires exact broker symbol names. Additional broker servers and suffixes need
-their own connection, symbol mapping and account isolation validation before
-they can be enabled. The VM slot capacity remains finite and additional users
-require more reviewed worker hosts.
+The source remains Demo-only. `ENVELOPE` server mode accepts the server in the
+user's encrypted credential and verifies the connected account's server and
+DEMO trade mode. Exact broker symbol names take priority; one unique suffix
+variant can be mapped to a ZenCore pair. Ambiguous aliases and unsupported
+symbols do not execute. Test each broker's symbol set before rollout. The VM
+slot capacity remains finite and additional users require more worker hosts.

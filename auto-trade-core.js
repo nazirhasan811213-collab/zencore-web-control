@@ -235,7 +235,9 @@
       const volumeStep = number(raw.volumeStep);
       if ([tickSize, tickValue, volumeMin, volumeMax, volumeStep]
         .some(value => value === null || value <= 0)) continue;
-      specs[symbol] = { tickSize, tickValue, volumeMin, volumeMax, volumeStep };
+      const brokerSymbol = String(raw.brokerSymbol || symbol);
+      if (!/^[A-Za-z0-9._-]{1,32}$/.test(brokerSymbol)) continue;
+      specs[symbol] = { brokerSymbol, tickSize, tickValue, volumeMin, volumeMax, volumeStep };
     }
     return specs;
   }

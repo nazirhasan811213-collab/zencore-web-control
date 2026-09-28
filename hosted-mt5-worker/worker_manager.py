@@ -25,7 +25,7 @@ from gcp_control_plane import ControlPlaneError, GcpControlPlaneClient
 from process_guard import ProcessGuardError, install_process_lifetime_guard
 
 
-CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.6-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
@@ -157,7 +157,7 @@ class ManagerConfig:
             not _KEY_ALIAS_RE.fullmatch(key_alias)
             or not _KEY_RESOURCE_RE.fullmatch(key_resource)
             or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", terminal_name)
-            or approved_server != INTERSTELLAR_DEMO_SERVER
+            or approved_server not in {INTERSTELLAR_DEMO_SERVER, "ENVELOPE"}
             or connector_version != CONNECTOR_VERSION
             or not symbols
             or any(symbol not in SUPPORTED_MARKETS for symbol in symbols)
@@ -405,6 +405,7 @@ class WorkerManager:
 
         started = 0
         restarted = 0
+        failed = 0
         for assignment in assignments:
             state = self.children.get(assignment.slot_code)
             if state is not None and state.process.poll() is None:
@@ -412,7 +413,20 @@ class WorkerManager:
             if state is not None:
                 self._retire_slot(assignment.slot_code, clean=False)
                 restarted += 1
-            self._launch(assignment)
+            try:
+                self._launch(assignment)
+            except ManagerFailure as exc:
+                if exc.code in ("DEMO_EXECUTION_GATE_MISSING", "PREFLIGHT_EXECUTION_GATE_PRESENT"):
+                    raise
+                failed += 1
+                print(f"ZenCore worker manager slot {assignment.slot_code}: {exc.code}",
+                      file=sys.stderr, flush=True)
+                continue
+            except OSError:
+                failed += 1
+                print(f"ZenCore worker manager slot {assignment.slot_code}: SLOT_START_FAILED",
+                      file=sys.stderr, flush=True)
+                continue
             started += 1
 
         return {
@@ -422,6 +436,7 @@ class WorkerManager:
             ),
             "started": started,
             "restarted": restarted,
+            "failed": failed,
         }
 
     def shutdown(self) -> None:

@@ -69,7 +69,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
+    $manifest.connectorVersion -ne "2.2.6-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
     $manifest.connectionOnlyPreflight -ne $true -or
     $manifest.workerManagerIncluded -ne $true -or
@@ -105,7 +105,7 @@ if ($legacy.demoOnly -ne $true -or
     $legacy.credentialStorage -ne "MEMORY_ONLY" -or
     $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
     @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count -or
-    [string]$legacy.approvedDemoServer -ne "InterStellarFinancial-Demo") {
+    [string]$legacy.approvedDemoServer -notin @("InterStellarFinancial-Demo", "ENVELOPE")) {
     throw "Existing worker config does not match the reviewed DEMO boundary."
 }
 

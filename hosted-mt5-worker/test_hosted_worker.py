@@ -360,6 +360,33 @@ class HostedWorkerTests(unittest.TestCase):
         self.assertFalse(hasattr(adapter, "order_send"))
         self.assertEqual(module.initialize_args[1]["server"], "InterStellarFinancial-Demo")
 
+    def test_encrypted_server_and_unique_broker_suffix_map_to_canonical_pair(self):
+        class SuffixMt5(FakeMt5):
+            def account_info(self):
+                account = super().account_info()
+                account.server = "ExampleBroker-Demo"
+                return account
+
+            def symbol_info(self, symbol):
+                return super().symbol_info(symbol) if symbol == "XAUUSDm" else None
+
+            def symbols_get(self):
+                return [SimpleNamespace(name="XAUUSDm")]
+
+        with tempfile.TemporaryDirectory() as folder:
+            config = WorkerConfig.load(write_config(folder,
+                config_dict(approvedDemoServer="ENVELOPE")))
+        adapter = MetaTraderConnection(SuffixMt5())
+        credential = Mt5Credential(login=bytearray(b"123456"),
+            password=bytearray(b"DemoPasswordOnly!"),
+            server=bytearray(b"ExampleBroker-Demo"), trade_mode="DEMO",
+            created_at=1_790_000_000_000)
+        adapter.connect(config, credential)
+        telemetry = adapter.snapshot()
+        self.assertEqual(telemetry["symbolSpecs"][0]["brokerSymbol"], "XAUUSDm")
+        self.assertEqual(adapter.symbol_map, {"XAUUSD": "XAUUSDm"})
+        self.assertEqual(adapter.connected_server, "ExampleBroker-Demo")
+
     def test_metatrader_adapter_reports_zencore_positions_and_rejects_real_account(self):
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))

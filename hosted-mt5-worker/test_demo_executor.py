@@ -310,6 +310,24 @@ class DemoExecutorTests(unittest.TestCase):
         self.assertEqual(self.mt5.sent, [])
         self.assertEqual(self.mt5.positions[0].ticket, 70003)
 
+    def test_encrypted_demo_server_and_suffix_symbol_bound_to_one_account(self):
+        self.mt5.server = "ExampleBroker-Demo"
+        self.mt5.positions = [SimpleNamespace(magic=MAGIC, ticket=70001,
+            symbol="XAUUSDm", type=0, volume=0.02, sl=2990.0, tp=3030.0)]
+        executor = DemoExecutor(self.mt5, approved_server="ENVELOPE",
+            allowed_symbols=("XAUUSD",), execution_enabled=True,
+            clock_ms=lambda: 1_790_000_000_000)
+        with self.assertRaisesRegex(DemoExecutionError, "ACCOUNT_NOT_BOUND"):
+            executor.execute_management(self._management([{"type": "CLOSE_PERCENT", "percent": 100}]))
+        executor.bind_account("ExampleBroker-Demo", {"XAUUSD": "XAUUSDm"})
+        result = executor.execute_management(self._management([{"type": "CLOSE_PERCENT", "percent": 100}]))
+        self.assertEqual(result.code, "DEMO_MANAGEMENT_EXECUTED")
+        self.assertEqual(self.mt5.sent[0]["symbol"], "XAUUSDm")
+        self.assertEqual(self.mt5.positions, [])
+        executor.unbind_account()
+        with self.assertRaisesRegex(DemoExecutionError, "ACCOUNT_NOT_BOUND"):
+            executor.execute_place_setup(payload())
+
     @staticmethod
     def _management(actions, tickets=None):
         now = 1_790_000_000_000
