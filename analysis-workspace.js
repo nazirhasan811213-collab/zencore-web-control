@@ -25,17 +25,17 @@
       const response=await fetch('/api/prediction/'+encodeURIComponent(symbol),{cache:'no-store',signal});
       if(!response.ok)return null;
       const data=await response.json(),at=typeof data.receivedAt==='number'?data.receivedAt:Date.parse(data.receivedAt);
-      if(data.symbol!==symbol||data.freshness!=='LIVE'||!Number.isFinite(at)||at>Date.now()+5000||Date.now()-at>180000)return null;
+      if(data.symbol!==symbol||data.freshness!=='LIVE'||!Number.isFinite(at)||at>Date.now()+5000)return null;
       const sop=data.strategyNormal;
       if(!sop||!['BUY','SELL','WAIT'].includes(sop.side))return null;
-      return {side:sop.side,state:sop.state||'WAIT',reason:sop.reason||'Semak aturan SOP pada panel di bawah.',dataAt:at};
+      return {side:sop.side,state:sop.state||'WAIT',reason:sop.reason||'Semak aturan SOP pada panel di bawah.',dataAt:at,sourceBarTime:data.sourceBarTime};
     }catch{return null;}
   }
   function renderResult(r){
     lastResult=r;$('aiResults').hidden=false;text('aiStamp',`${r.symbol} • Snapshot ${time(r.generatedAt)} • TF 3M / 15 minit`);
     if(!r.zencore.dataAt&&r.liveSop){
       text('aiZTitle','Analisis SOP ZenCore semasa');text('aiZDirection',r.liveSop.side+' · '+r.liveSop.state);
-      text('aiZReason',r.liveSop.reason);text('aiZData',time(r.liveSop.dataAt));
+      text('aiZReason',r.liveSop.reason);text('aiZData',time(r.liveSop.sourceBarTime||r.liveSop.dataAt));
       text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT · DATA LUARAN':'DATA SOP PINE · BUKAN V33');
       text('aiNarrative',r.gpt.status==='AVAILABLE'?r.gpt.text:'Feed V33 belum disambungkan. '+r.gpt.text+' Lihat analisis SOP semasa di bawah.');
     }else{
