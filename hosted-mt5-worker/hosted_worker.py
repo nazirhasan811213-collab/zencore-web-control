@@ -609,6 +609,7 @@ def main(argv: list[str] | None = None) -> int:
                 approved_server=config.approved_demo_server,
                 allowed_symbols=config.allowed_demo_symbols,
                 execution_enabled=config.execution_enabled,
+                ledger_path=Path(args.config).resolve().parent / "exit-ledger.json",
             ),
             execution_gate_path=Path(args.execution_gate),
         )

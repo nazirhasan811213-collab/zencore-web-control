@@ -12,8 +12,10 @@ import math
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
+from pathlib import Path
 
 from security_boundary import validate_entry_command, validate_management_command
+from exit_ledger import ExitLedger
 
 MAGIC = 3233001
 MAX_DEMO_TOTAL_LOT = 1.0
@@ -57,6 +59,7 @@ class DemoExecutor:
         approved_server: str,
         allowed_symbols: tuple[str, ...],
         execution_enabled: bool,
+        ledger_path: Path | None = None,
         clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
     ) -> None:
         self.mt5 = mt5_module
@@ -64,6 +67,7 @@ class DemoExecutor:
         self.allowed_symbols = tuple(str(s).upper() for s in allowed_symbols)
         self.execution_enabled = execution_enabled is True
         self.clock_ms = clock_ms
+        self.ledger = ExitLedger(ledger_path)
 
     def _assert_demo_boundary(self) -> tuple[Any, Any]:
         if not self.execution_enabled:
@@ -185,9 +189,10 @@ class DemoExecutor:
         positions = self.mt5.positions_get(symbol=symbol) if symbol else self.mt5.positions_get()
         if positions is None:
             raise DemoExecutionError("POSITION_READ_FAILED")
-        return [p for p in positions if int(getattr(p, "magic", 0) or 0) == MAGIC]
+        return [p for p in positions if int(getattr(p, "magic", 0) or 0) == MAGIC
+                and (symbol is None or str(getattr(p, "symbol", "")).upper() == symbol)]
 
-    def _close_position(self, position: Any, percent: int) -> str:
+    def _close_position(self, position: Any, percent: int, requested_volume: float | None = None) -> str:
         symbol = str(getattr(position, "symbol", "")).upper()
         if symbol not in self.allowed_symbols:
             raise DemoExecutionError("POSITION_SYMBOL_NOT_ALLOWED")
@@ -198,8 +203,12 @@ class DemoExecutor:
         volume = _finite(getattr(position, "volume", 0), "POSITION_VOLUME")
         step = _finite(getattr(info, "volume_step", 0), "VOLUME_STEP")
         minimum = _finite(getattr(info, "volume_min", 0), "VOLUME_MIN")
-        close_volume = volume if percent == 100 else math.floor((volume * percent / 100.0) / step + 1e-9) * step
+        close_volume = requested_volume if requested_volume is not None else (
+            volume if percent == 100 else math.floor((volume * percent / 100.0) / step + 1e-9) * step
+        )
         close_volume = round(close_volume, 8)
+        if close_volume > volume + 1e-8 or not _volume_step_ok(close_volume, step):
+            raise DemoExecutionError("CLOSE_VOLUME_INVALID")
         if close_volume < minimum:
             if percent == 100:
                 close_volume = volume
@@ -249,15 +258,28 @@ class DemoExecutor:
         symbol = str(snapshot["symbol"]).upper()
         if symbol not in self.allowed_symbols:
             raise DemoExecutionError("SYMBOL_NOT_ALLOWED")
-        positions = self._zencore_positions(symbol)
+        target_tickets = set(payload["positionTickets"])
+        def targets():
+            return [p for p in self._zencore_positions(symbol)
+                    if str(getattr(p, "ticket", "")) in target_tickets]
+        positions = targets()
         if not positions:
+            if not self._zencore_positions(symbol):
+                self.ledger.campaign(symbol, [])
             return ExecutionResult("NO_ZENCORE_POSITION", (), 0, 0.0)
+        campaign = self.ledger.campaign(symbol, [int(getattr(p, "ticket", 0))
+                                                 for p in self._zencore_positions(symbol)])
         order_ids: list[str] = []
         for action in snapshot["actions"]:
             action_type = str(action["type"]).upper()
             if action_type in {"MOVE_SL_ENTRY", "MOVE_SL_TP1", "MOVE_SL_TP2"}:
                 new_sl = _finite(action.get("activeSl"), "ACTIVE_SL")
-                for position in self._zencore_positions(symbol):
+                for position in targets():
+                    old_sl = float(getattr(position, "sl", 0) or 0)
+                    is_buy = int(getattr(position, "type", -1)) == int(getattr(self.mt5, "POSITION_TYPE_BUY", 0))
+                    if old_sl > 0 and ((is_buy and new_sl <= old_sl + 1e-8) or
+                                       (not is_buy and new_sl >= old_sl - 1e-8)):
+                        continue
                     request = {
                         "action": self.mt5.TRADE_ACTION_SLTP,
                         "position": int(getattr(position, "ticket", 0)),
@@ -276,22 +298,71 @@ class DemoExecutor:
                     }
                     if result is None or int(getattr(result, "retcode", -1)) not in good:
                         raise DemoExecutionError("SL_MOVE_SEND_REJECTED")
+                    observed = next((p for p in targets() if int(getattr(p, "ticket", 0)) ==
+                                     int(getattr(position, "ticket", 0))), None)
+                    if observed is not None and abs(float(getattr(observed, "sl", 0) or 0) - new_sl) > 1e-6:
+                        raise DemoExecutionError("SL_MOVE_RECONCILIATION_REQUIRED")
                     order_ids.append(str(getattr(result, "order", "") or getattr(result, "deal", "")))
             elif action_type == "CLOSE_PERCENT":
                 percent = int(action.get("percent") or 0)
-                for position in list(self._zencore_positions(symbol)):
-                    order_ids.append(self._close_position(position, percent))
+                if percent == 50:
+                    if campaign["partial"] == "DONE":
+                        continue
+                    if campaign["partial"] != "NONE":
+                        raise DemoExecutionError("PARTIAL_CLOSE_RECONCILIATION_REQUIRED")
+                    if {str(getattr(p, "ticket", "")) for p in self._zencore_positions(symbol)} != target_tickets:
+                        raise DemoExecutionError("POSITION_SET_CHANGED")
+                    positions_now = sorted(targets(), key=lambda p: int(getattr(p, "ticket", 0)))
+                    info = self.mt5.symbol_info(symbol)
+                    if info is None:
+                        raise DemoExecutionError("POSITION_MARKET_UNAVAILABLE")
+                    step = _finite(getattr(info, "volume_step", 0), "VOLUME_STEP")
+                    minimum = _finite(getattr(info, "volume_min", 0), "VOLUME_MIN")
+                    if step <= 0:
+                        raise DemoExecutionError("VOLUME_STEP_INVALID")
+                    before = sum(_finite(getattr(p, "volume", 0), "POSITION_VOLUME") for p in positions_now)
+                    target = round(math.floor(before / 2 / step + 1e-9) * step, 8)
+                    if target < minimum:
+                        raise DemoExecutionError("PARTIAL_VOLUME_TOO_SMALL")
+                    # Mark uncertain before the broker call: a crash or lost ACK must never repeat a close.
+                    self.ledger.partial_state(symbol, "IN_FLIGHT")
+                    remaining = target
+                    for position in positions_now:
+                        volume = _finite(getattr(position, "volume", 0), "POSITION_VOLUME")
+                        amount = round(min(remaining, volume), 8)
+                        if amount < minimum:
+                            continue
+                        order_ids.append(self._close_position(position, 50, amount))
+                        remaining = round(remaining - amount, 8)
+                        if remaining < minimum:
+                            break
+                    after = sum(_finite(getattr(p, "volume", 0), "POSITION_VOLUME")
+                                for p in targets())
+                    if remaining >= minimum or before - after + 1e-8 < target:
+                        raise DemoExecutionError("PARTIAL_CLOSE_RECONCILIATION_REQUIRED")
+                    self.ledger.partial_state(symbol, "DONE")
+                else:
+                    for position in list(targets()):
+                        order_ids.append(self._close_position(position, 100))
+                    if targets():
+                        raise DemoExecutionError("CLOSE_RECONCILIATION_REQUIRED")
+                    if not self._zencore_positions(symbol):
+                        self.ledger.campaign(symbol, [])
         return ExecutionResult(
             code="DEMO_MANAGEMENT_EXECUTED",
             broker_order_ids=tuple(order_ids),
-            layers=len(self._zencore_positions(symbol)),
-            total_lot=sum(float(getattr(p, "volume", 0) or 0) for p in self._zencore_positions(symbol)),
+            layers=len(targets()),
+            total_lot=sum(float(getattr(p, "volume", 0) or 0) for p in targets()),
         )
 
     def emergency_close_all(self) -> ExecutionResult:
         self._assert_demo_boundary()
         positions = self._zencore_positions()
         order_ids = tuple(self._close_position(position, 100) for position in list(positions))
+        if self._zencore_positions():
+            raise DemoExecutionError("CLOSE_RECONCILIATION_REQUIRED")
+        for symbol in {str(getattr(position, "symbol", "")).upper() for position in positions}:
+            self.ledger.campaign(symbol, [])
         return ExecutionResult(
             code="DEMO_EMERGENCY_CLOSE_EXECUTED",
             broker_order_ids=order_ids,

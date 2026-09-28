@@ -1093,8 +1093,13 @@ function createAutoTradeService(options = {}) {
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
-              type: 'MANAGE_POSITION', payload: management.payload,
-              dedupeKey: `MANAGE|${management.managementKey}`, ttlMs: 10 * 60 * 1000
+              type: 'MANAGE_POSITION', payload: {
+                ...management.payload,
+                positionTickets: positions.filter(position => position.symbol === symbol)
+                  .map(position => String(position.ticket)).filter(ticket => /^[0-9]{1,32}$/.test(ticket))
+              },
+              dedupeKey: `MANAGE|${management.managementKey}|${positions.filter(position => position.symbol === symbol).map(position => position.ticket).sort().join(',')}`,
+              ttlMs: 10 * 60 * 1000
             })
           : await issueCommand({
               userId: profile.userId, podId: pod.id,

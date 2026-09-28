@@ -230,6 +230,13 @@ def validate_management_command(payload: Any) -> dict[str, Any]:
         raise RuntimeError("management strategy/schema mismatch")
     if int(payload.get("signalReceivedAt") or 0) != int(snapshot.get("sourceReceivedAt") or 0):
         raise RuntimeError("management source time mismatch")
+    tickets = payload.get("positionTickets")
+    if (not isinstance(tickets, list) or not tickets or len(tickets) > 100 or
+            any(not isinstance(ticket, str) or not ticket.isascii() or
+                not ticket.isdigit() or len(ticket) > 32 for ticket in tickets)):
+        raise RuntimeError("management position tickets are invalid")
+    if len(set(tickets)) != len(tickets):
+        raise RuntimeError("management position tickets are invalid")
     actions = snapshot.get("actions")
     if not isinstance(actions, list) or not actions or len(actions) > 4 or payload.get("actions") != actions:
         raise RuntimeError("management actions are invalid")
