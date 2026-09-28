@@ -64,6 +64,25 @@ function scalpScenario({snapshot,external,liveSop,now=Date.now()}={}){
   if(movement< -zone)return {...context,status:'ADVERSE',reason:'Harga bergerak melawan pelan entry. Tunggu SOP baharu, jangan andaikan ia akan berpatah balik.'};
   return context;
 }
+function setupVerdict(scenario,sop,external){
+  const base={label:'DATA BELUM CUKUP',profitView:'BELUM DAPAT DINILAI',note:'Skor ialah kekuatan aturan, bukan peluang menang. Untung sebenar bergantung pada spread, slippage, kos dan exit.'};
+  if(!sop||!scenario||!['BUY','SELL'].includes(sop.side))return {...base,reason:'SOP semasa belum tersedia.'};
+  const score=num(sop.score),stability=num(sop.stability),readiness=num(sop.readiness);
+  const grade=sop.grade||'—',entry=num(sop.plan?.entry),sl=num(sop.plan?.sl),tp1=num(sop.plan?.tp1);
+  const sign=sop.side==='BUY'?1:-1,risk=entry===null||sl===null?null:(entry-sl)*sign;
+  const reward=entry===null||tp1===null?null:(tp1-entry)*sign;
+  const rr=risk>0&&reward>0?Number((reward/risk).toFixed(2)):null;
+  const info={...base,score,grade,stability,readiness,rrTp1:rr};
+  if(scenario.status==='WAIT_DATA'||scenario.status==='NO_SOP'||!Number.isFinite(score)||!Number.isFinite(stability)||
+     !Number.isFinite(readiness)||rr===null||!Number.isFinite(num(external?.atr3m)))
+    return {...info,reason:'Data skor, harga, volatiliti atau pelan Entry/SL/TP1 belum lengkap.'};
+  if(scenario.status!=='NEAR_ENTRY')return {...info,label:'TUNGGU / ELAK',reason:scenario.reason};
+  const atr=external.atr3m,room=1.5*atr;
+  if(score>=80&&['A','A+'].includes(grade)&&stability>=60&&readiness>=75&&rr>=1&&reward<=room)
+    return {...info,label:'SETUP SOLID · BERSYARAT',profitView:'TP1 DALAM JULAT 15M',reason:'SOP siap, skor dan kestabilan memadai, harga dekat entry dan TP1 berada dalam julat pergerakan rujukan. Semak kos broker dan candle terkini.'};
+  return {...info,label:'SETUP PERLU SEMAKAN',profitView:reward>room?'TP1 DI LUAR JULAT 15M':'POTENSI BELUM JELAS',
+    reason:'Salah satu syarat kekuatan, kestabilan, readiness, R:R atau ruang ke TP1 belum memadai.'};
+}
 class AnalysisAIService {
   constructor({env=process.env,fetchImpl=fetch,now=Date.now,liveSopProvider=null}={}){this.env=env;this.fetch=fetchImpl;this.now=now;this.liveSopProvider=liveSopProvider;this.contexts=new Map();this.tracker=new PositionTracker();this.cache=new Map();this.pending=new Map();this.users=new Map();}
   ingest(body){
@@ -128,14 +147,15 @@ class AnalysisAIService {
         now-liveSop.dataAt<=90000&&liveSop.dataAt<=now+5000&&Number.isFinite(liveSop.sourceBarTime)&&
         now-liveSop.sourceBarTime<=240000&&liveSop.sourceBarTime<=now?liveSop:null;
       const scenario=scalpScenario({snapshot,external,liveSop:safeSop,now});
+      const verdict=setupVerdict(scenario,safeSop,external);
       const gpt=await this.gpt(snapshot,external,safeSop,scenario);
       const reference=safeSop||(snapshot.dataAt&&now-snapshot.dataAt<=90000&&snapshot.status!=='WAIT'?snapshot:null);
       const comparable=reference&&external.status==='AVAILABLE'&&Math.abs(reference.dataAt-external.dataAt)<=180000;
       const comparison=!comparable?'TIDAK CUKUP DATA':external.bias==='WAIT'?'LUARAN NEUTRAL':external.bias===reference.side?'SELARAS':'BERCANGGAH';
-      const value={symbol,generatedAt:now,zencore:snapshot,liveSop:safeSop,sopInModel:!!safeSop,external,scenario,gpt,comparison,
+      const value={symbol,generatedAt:now,zencore:snapshot,liveSop:safeSop,sopInModel:!!safeSop,external,scenario,verdict,gpt,comparison,
         nativeExternal:{status:'NOT_CONNECTED',reason:'Tiada penyedia signal 3M asli yang disahkan. Panel luaran mengira indikator daripada data harga apabila disambungkan.'}};
       this.cache.set(symbol,{key,at:now,value});return {code:200,...value};
     })();this.pending.set(symbol,work);try{return await work;}finally{this.pending.delete(symbol);}
   }
 }
-module.exports={AnalysisAIService,aggregate3m,externalTechnical,scalpScenario};
+module.exports={AnalysisAIService,aggregate3m,externalTechnical,scalpScenario,setupVerdict};

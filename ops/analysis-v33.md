@@ -74,3 +74,6 @@ atau sasaran keuntungan. Status CHASE menandakan harga telah bergerak jauh dari
 entry SOP; ADVERSE menunjukkan pergerakan melawan pelan; DIVERGENT menunjukkan
 bias OHLC luaran yang bertentangan. Semua status ialah penerangan, bukan arahan
 broker. Spread/tick broker sebenar tetap perlu disemak sebelum sebarang tindakan.
+# Penilaian setup selepas signal
+
+Kad nasihat selepas signal mengguna skor SOP Normal, gred prediction, stability, readiness dan Entry/SL/TP1 sedia ada daripada V17. Label `SETUP SOLID · BERSYARAT` memerlukan SOP READY, harga hampir entry, feed luaran segar dan searah, skor SOP ≥80, gred A/A+, stability ≥60, readiness ≥75, R:R TP1 ≥1, dan jarak TP1 tidak melebihi 1.5 ATR 3M. Ambang ini heuristik paparan, belum dikalibrasi; ia tidak mengubah gate signal, Telegram atau MT5. Tanpa data sah, paparan menyatakan data belum cukup. `TP1 DALAM JULAT 15M` bermaksud jarak sasaran muat dalam julat volatiliti rujukan, bukan kebarangkalian atau keuntungan bersih. Kos broker dan slippage tidak dimodelkan.

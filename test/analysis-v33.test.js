@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {PAIRS,forecastGate,analyse,PositionTracker}=require('../analysis-v33');
-const {AnalysisAIService,aggregate3m,externalTechnical,scalpScenario}=require('../analysis-ai-service');
+const {AnalysisAIService,aggregate3m,externalTechnical,scalpScenario,setupVerdict}=require('../analysis-ai-service');
 const now=1800000000000;
 function context(symbol='XAUUSD',scale=1){return {schema:'33.0',symbol,dataAt:now,setupAt:now-180000,confirmed3:true,confirmed1:true,momentum:'BUY',forecast:'BULLISH',strength:70,dominance:80,hema:'BUY',basisSide:'BUY',candleSide:'BUY',choppy:false,price:100*scale,atr:2*scale,zone:100*scale,tickSize:.01*scale,spread:.05*scale,swingLow:99*scale,swingHigh:101*scale,support:92*scale,resistance:108*scale,trigger1:'BUY',barOpen1:now-60000,high1:100.5*scale,low1:99.5*scale};}
 test('forecast direction rules distinguish dominance from strength',()=>{
@@ -76,6 +76,19 @@ test('3M scenario is conditional and blocks stale, conflict, chase and adverse p
  assert.equal(run({...external,priceAt:now-30000}).status,'WAIT_DATA');
  assert.equal(run(external,null).status,'NO_SOP');
  assert.equal(run(external,{...sop,state:'WATCH'}).status,'WAIT_SETUP');
+});
+test('post-signal verdict uses existing grade and plan without claiming win probability',()=>{
+ const sop={side:'BUY',state:'READY',score:100,grade:'A',stability:72,readiness:85,
+  plan:{entry:100,sl:98,tp1:102.5}};
+ const external={atr3m:2},near={status:'NEAR_ENTRY',reason:'near'};
+ const solid=setupVerdict(near,sop,external);
+ assert.equal(solid.label,'SETUP SOLID · BERSYARAT');assert.equal(solid.profitView,'TP1 DALAM JULAT 15M');
+ assert.equal(solid.rrTp1,1.25);
+ assert.equal(setupVerdict(near,{...sop,stability:40},external).label,'SETUP PERLU SEMAKAN');
+ assert.equal(setupVerdict(near,{...sop,grade:'C'},external).label,'SETUP PERLU SEMAKAN');
+ assert.equal(setupVerdict({...near,status:'CHASE',reason:'Harga terkejar'},sop,external).label,'TUNGGU / ELAK');
+ assert.equal(setupVerdict(near,{...sop,plan:{...sop.plan,tp1:105}},external).profitView,'TP1 DI LUAR JULAT 15M');
+ assert.equal(setupVerdict(near,{...sop,score:null},external).label,'DATA BELUM CUKUP');
 });
 test('GPT receives verified current SOP and scenario without changing entry decision',async()=>{
  let modelInput;

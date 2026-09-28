@@ -53,6 +53,12 @@
     text('aiScenario3m',s.next3m?`${price(s.next3m.low)} – ${price(s.next3m.high)}`:'—');
     text('aiScenario15m',s.next15m?`${price(s.next15m.low)} – ${price(s.next15m.high)}`:'—');
     text('aiScenarioNote',s.note||'Julat ialah rujukan volatiliti, bukan ramalan tepat atau arahan entry.');
+    const v=r.verdict||{};
+    text('aiVerdictLabel',v.label||'DATA BELUM CUKUP');text('aiVerdictProfit',v.profitView||'BELUM DAPAT DINILAI');
+    text('aiVerdictReason',v.reason||'Menunggu data semasa.');
+    text('aiVerdictScore',v.score==null?'—':`${v.score}/100 · ${v.grade||'—'}`);
+    text('aiVerdictStability',v.stability==null||v.readiness==null?'—':`${v.stability}/100 · ${v.readiness}/100`);
+    text('aiVerdictRr',v.rrTp1==null?'—':`${v.rrTp1}R`);text('aiVerdictNote',v.note||'Skor bukan peluang menang.');
     text('aiFreshness','Snapshot kekal. Klik Analisis Semula untuk keadaan baharu.');
   }
   $('generateAnalysis').addEventListener('click',async()=>{
