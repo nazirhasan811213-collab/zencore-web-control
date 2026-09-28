@@ -60,11 +60,15 @@ try {
     $oldReleaseRoot = Join-Path $ReleaseRoot ([string]$old.connectorVersion)
     $oldProcesses = @()
     for ($attempt = 0; $attempt -lt 10; $attempt++) {
-        $oldProcesses = @(Get-CimInstance Win32_Process | Where-Object {
-            $_.ExecutablePath -and $_.ExecutablePath.StartsWith(
-                ($oldReleaseRoot + '\'), [StringComparison]::OrdinalIgnoreCase)
+        $oldProcesses = @(Get-CimInstance Win32_Process -Filter "Name='ZenCoreHostedWorkerManager.exe' OR Name='ZenCoreHostedWorker.exe'" | Where-Object {
+            $_.ExecutablePath -and
+            $_.ExecutablePath.StartsWith(($oldReleaseRoot + '\'), [StringComparison]::OrdinalIgnoreCase) -and
+            $_.Name -in @('ZenCoreHostedWorkerManager.exe', 'ZenCoreHostedWorker.exe')
         })
         if ($oldProcesses.Count -eq 0) { break }
+        foreach ($oldProcess in $oldProcesses) {
+            Stop-Process -Id $oldProcess.ProcessId -Force -ErrorAction SilentlyContinue
+        }
         Start-Sleep -Seconds 1
     }
     if ($oldProcesses.Count -gt 0) { throw 'OLD_RELEASE_PROCESSES_RUNNING' }
