@@ -233,14 +233,60 @@ f_scan3()=>
             closeType:="OPPOSITE_YELLOW"
             closeReason:="Confirmed opposite yellow candle"
 
+    // Re-entry is an event on this confirmed 3M bar, never a carried position label.
+    var int lastReentryBar=0
+    bool crossE9Up=ta.crossover(close,e9)
+    bool crossE9Down=ta.crossunder(close,e9)
+    bool crossEntryUp=ta.crossover(close,entry)
+    bool crossEntryDown=ta.crossunder(close,entry)
+    bool reBuy=(slHit and isBuy and (crossEntryUp or (close>entry and wtBuy)) and close>e9) or
+        (active and isBuy and crossE9Up and w1>w2 and close>e20 and close>entry) or
+        (h20>h40 and not active and crossE9Up and w1>w2)
+    bool reSell=(slHit and not isBuy and (crossEntryDown or (close<entry and wtSell)) and close<e9) or
+        (active and not isBuy and crossE9Down and w1<w2 and close<e20 and close<entry) or
+        (h20<h40 and not active and crossE9Down and w1<w2)
+    bool reBuyOnly=reBuy and not reSell
+    bool reSellOnly=reSell and not reBuy
+    bool reHema=(reBuyOnly and math.min(open,close)>math.max(h20,h40)) or
+        (reSellOnly and math.max(open,close)<math.min(h20,h40))
+    int mtfTotal=mtf15+mtf30+mtf60
+    bool reHigh=(reBuyOnly and mtfTotal>=2 and stars>=3 and rv>1) or
+        (reSellOnly and mtfTotal<=-2 and stars>=3 and rv>1)
+    bool reWeak=(reBuyOnly and mtfTotal<=0) or (reSellOnly and mtfTotal>=0) or stars<=2
+    bool reTriggered=(reBuyOnly or reSellOnly) and reHema and not reWeak and bar_index-lastReentryBar>5
+    string reType=reTriggered?(reHigh?"HIGH":"NORMAL"):"NONE"
+    string reSide=reTriggered?(reBuyOnly?"BUY":"SELL"):"WAIT"
+    if reTriggered
+        lastReentryBar:=bar_index
+        active:=true
+        isBuy:=reBuyOnly
+        lastSide:=reSide
+        entry:=close
+        initialSl:=reBuyOnly?entry-a14:entry+a14
+        activeSl:=initialSl
+        tp1:=reBuyOnly?entry+a14:entry-a14
+        tp2:=reBuyOnly?entry+2*a14:entry-2*a14
+        tp3:=reBuyOnly?entry+3*a14:entry-3*a14
+        triggered:=true
+        hit1:=false
+        hit2:=false
+        hit3:=false
+        slHit:=false
+        halfArmed:=false
+        completed:=false
+        lockStage:=0
+        closeType:="NONE"
+        closeReason:=""
+
     string side=active?(isBuy?"BUY":"SELL"):lastSide
+    bool priceCross=side=="BUY"?crossEntryUp:side=="SELL"?crossEntryDown:false
     bool pricePast=not na(entry) and (side=="BUY"?close>entry:side=="SELL"?close<entry:false)
     bool sopBuy=active?isBuy:h20>h40
     bool sop1=sopBuy?w1>w2:w1<w2
     bool sop2=sopBuy?close>b20:close<b20
     bool sop3=sopBuy?h20>h40:h20<h40
     bool sop4=sopBuy?v2uc:v2dc
-    bool solid=active and triggered and closeType!="REENTRY" and (isBuy?(close>entry and close>b20 and w1>w2 and not wtSell and r14<75):(close<entry and close<b20 and w1<w2 and not wtBuy and r14>25))
+    bool solid=active and triggered and not reTriggered and (isBuy?(close>entry and close>b20 and w1>w2 and not wtSell and r14<75):(close<entry and close<b20 and w1<w2 and not wtBuy and r14>25))
 
     bool closedNow=completed and bar_index==fullBar
     string exitStage=completed?"CLOSED":halfArmed?"WAIT_YELLOW":active?"HOLD":"IDLE"
@@ -250,7 +296,7 @@ f_scan3()=>
     string slLabel=completed?"CLOSED":not active?"IDLE":lockStage==3?"TP2_LOCKED":lockStage==2?"TP1_LOCKED":lockStage==1?"BREAKEVEN":"INITIAL"
     string webAction=zoneBuy?"BUY":zoneSell?"SELL":globalTrend>0?"LONG_BIAS":globalTrend<0?"SHORT_BIAS":"WAIT"
 
-    [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction]
+    [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema]
 
 var string[] symbols=array.from("OANDA:XAUUSD","OANDA:EURUSD","OANDA:GBPUSD","OANDA:USDJPY","OANDA:US30USD","OANDA:USDCAD","OANDA:USDCHF","OANDA:EURJPY","OANDA:GBPJPY","OANDA:EURGBP","OANDA:BTCUSD")
 var string[] aliases=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","US30","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP","BTCUSD")
@@ -262,7 +308,7 @@ if feedEnabled and correctTf and barstate.isconfirmed
     for i=0 to array.size(symbols)-1
         string ticker=array.get(symbols,i)
         string alias=array.get(aliases,i)
-        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction]=request.security(ticker,"3",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
+        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema]=request.security(ticker,"3",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
         [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
         string m5pos=na(m5close)?"WAIT":m5close>math.max(m5h20,m5h40)?"ABOVE":m5close<math.min(m5h20,m5h40)?"BELOW":"INSIDE"
         bool sop5=side=="BUY"?m5h20>m5h40:side=="SELL"?m5h20<m5h40:false
@@ -277,7 +323,7 @@ if feedEnabled and correctTf and barstate.isconfirmed
         row+=f_quote(side)+","+f_bool(solid)+","+f_bool(pricePast)+","+f_bool(sop1)+","+f_bool(sop2)+","+f_bool(sop3)+","+f_bool(sop4)+","+f_bool(sop5)+","
         row+=f_quote(forecast)+","+f_num(power)+","+f_quote(m5pos)+","+f_num(m5close)+","+f_num(m5h20)+","+f_num(m5h40)+","
         row+=f_quote(exitStage)+","+f_quote(exitAction)+","+f_bool(halfArmed)+","+f_bool(oppositeYellow)+","+f_int(remaining)+","+f_quote(yellowType)+","+f_quote(closeType)+","+f_quote(closeReason)+","
-        row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+"]"
+        row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+","+f_bool(priceCross)+","+f_quote(reType)+","+f_quote(reSide)+","+f_bool(reHema)+"]"
         marketsJson+=(i>0?",":"")+row
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"markets\":["+marketsJson+"]}"
@@ -289,7 +335,7 @@ if showStatus
         status:=table.new(position.top_right,2,4,bgcolor=color.new(#07131d,5),border_width=1)
     if barstate.islast
         table.cell(status,0,0,"ZENCORE MULTI-PAIR",text_color=color.aqua)
-        table.cell(status,1,0,"32.3 STEPLOCK",text_color=color.lime)
+        table.cell(status,1,0,"32.4 ENTRY SOP",text_color=color.lime)
         table.cell(status,0,1,"Markets",text_color=color.gray)
         table.cell(status,1,1,"11",text_color=color.white)
         table.cell(status,0,2,"Chart TF",text_color=color.gray)

@@ -28,6 +28,18 @@ test('Telegram entry remains once per pair/direction/position without changing p
   assert.equal((await s.feed('0')).events.filter(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).length,4,'direction and pair are independent');
  }finally{clearInterval(s.cleanupTimer);}
 });
+test('explicit HIGH re-entry on a new candle reaches Telegram once even with a same-side position',async()=>{
+ const s=new AnalysisAlerts();await s.init();const t=Date.now()-10000,m=market(t);
+ try{
+  await s.record(m);
+  const re={...m,receivedAt:t+1000,sourceBarTime:t-180000,strategyNormal:{...m.strategyNormal,entryType:'HIGH_REENTRY',plan:{...m.strategyNormal.plan,entry:51524,sl:51504}}};
+  await s.record(re);await s.record({...re,receivedAt:t+2000});
+  const entries=(await s.feed('0')).events.filter(e=>e.kind==='ENTRY');
+  assert.equal(entries.length,2);
+  assert.equal(entries[1].telegramDuplicate,false);
+  assert.match(entries[1].message,/RE-ENTRY BUY/);
+ }finally{clearInterval(s.cleanupTimer);}
+});
 test('Telegram quality labels match existing displayed Analysis quality, not a new strategy',()=>{
  const src=fs.readFileSync(require.resolve('../precision-entry.js'),'utf8');
  const rr=src.slice(src.indexOf('function rrFromPlan('),src.indexOf('function gateMarkup('));

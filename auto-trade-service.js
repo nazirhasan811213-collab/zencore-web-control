@@ -1040,10 +1040,9 @@ function createAutoTradeService(options = {}) {
       ]);
       const hostedConnection = hostedAccount ? hostedConnectionState(hostedAccount) : null;
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
-      const openSymbols = new Set(positions.map(position => Core.normaliseSymbol(position.symbol)));
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
-        if (!allowedDemoSymbols.includes(symbol) || openSymbols.has(symbol)) continue;
+        if (!allowedDemoSymbols.includes(symbol) || !Core.permitsPositionEntry(market,positions)) continue;
         if (hostedAccount) {
           if (typeof store.hasRecentHostedEntryCommand === 'function' &&
               await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;

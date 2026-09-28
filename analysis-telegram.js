@@ -11,7 +11,8 @@ function prepareTelegram(previous, next, events) {
   let newEntry=false;
   if(entry && !close){
     const eventExists=events.some(e=>e.kind==='ENTRY');
-    if(eventExists && (!position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
+    const freshReentry=/^(NORMAL|HIGH)_REENTRY$/.test(entry.entryType)&&Number.isFinite(entry.sourceBarTime)&&entry.sourceBarTime>0;
+    if(eventExists && (freshReentry || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
       position={side:entry.side,anchor,closed:false,idle:false};newEntry=true;
     }
   }
@@ -33,13 +34,14 @@ function messageQuality(m){
   const power=numeric(s.marketPower), green=numeric(s.sopGreen)||0;
   const conf=numeric(m.predictionConfidence)||0, stability=numeric(m.stability)||0;
   const stars=numeric(m.confluence)||0, probability=numeric(m.setupProbability)||0;
-  const gates=(Array.isArray(s.gates)?s.gates:[]).filter(g=>g.pass).length;
+  const gateList=Array.isArray(s.gates)?s.gates:[];
+  const gates=gateList.filter(g=>g.pass).length;
   const entry=numeric(p.entry), sl=numeric(p.sl), tp=numeric(p.tp3);
   const risk=entry!==null&&sl!==null?Math.abs(entry-sl):0;
   const rr=entry!==null&&tp!==null&&risk>0?Math.abs(tp-entry)/risk:numeric(m.rr);
   const directional=((side==='BUY'&&forecast==='BULLISH')||(side==='SELL'&&forecast==='BEARISH'))&&power!==null&&power>=65;
   const neutral=forecast==='NEUTRAL'&&power!==null&&((side==='BUY'&&power>50)||(side==='SELL'&&power<50));
-  const score=(gates===5?25:0)+(green>=5?15:green>=4?10:0)+(directional?15:neutral?6:0)+
+  const score=(gateList.length>=2&&gates===gateList.length?25:0)+(green>=5?15:green>=4?10:0)+(directional?15:neutral?6:0)+
     (m.sidewaysGuard?0:10)+(conf>=80?10:conf>=70?6:0)+(stability>=75?10:stability>=65?5:0)+
     (stars>=4?5:stars>=3?3:0)+(probability>=70?5:probability>=60?3:0)+(rr!==null&&rr>=2?5:0);
   return {score,high:String(n.state||'').toUpperCase()==='READY'&&score>=80&&!m.sidewaysGuard};

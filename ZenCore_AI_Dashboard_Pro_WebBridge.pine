@@ -891,15 +891,27 @@ bool universal_reentry_buy = is_hema_bull and not curr_active and price_cross_em
 bool universal_reentry_sell = is_hema_bear and not curr_active and price_cross_ema9_down and wt1 < wt2
 
 var int last_reentry_bar = 0
-bool trigger_reentry = (post_sl_buy or post_sl_sell or pullback_buy or pullback_sell or universal_reentry_buy or universal_reentry_sell) and (bar_index - last_reentry_bar > 5)
+bool reentry_buy_candidate = post_sl_buy or pullback_buy or universal_reentry_buy
+bool reentry_sell_candidate = post_sl_sell or pullback_sell or universal_reentry_sell
+bool reentry_is_buy = reentry_buy_candidate and not reentry_sell_candidate
+bool reentry_is_sell = reentry_sell_candidate and not reentry_buy_candidate
+// The full candle body must be above/below both 3M HEMA lines.
+bool reentry_hema_buy = math.min(open, close) > math.max(he1, he2)
+bool reentry_hema_sell = math.max(open, close) < math.min(he1, he2)
+bool reentry_hema_pass = (reentry_is_buy and reentry_hema_buy) or (reentry_is_sell and reentry_hema_sell)
+bool reentry_high = (reentry_is_buy and mtf_total >= 2 and conf_stars >= 3 and rvol > 1.0) or (reentry_is_sell and mtf_total <= -2 and conf_stars >= 3 and rvol > 1.0)
+bool reentry_weak = (reentry_is_buy and mtf_total <= 0) or (reentry_is_sell and mtf_total >= 0) or conf_stars <= 2
+bool trigger_reentry = (reentry_is_buy or reentry_is_sell) and reentry_hema_pass and not reentry_weak and (bar_index - last_reentry_bar > 5)
+string reentry_signal = trigger_reentry ? (reentry_high ? "HIGH" : "NORMAL") : "NONE"
+string reentry_side = trigger_reentry ? (reentry_is_buy ? "BUY" : "SELL") : "WAIT"
 
 if trigger_reentry
     string re_strength = ""
     color re_bg_col = na
     color re_txt_col = color.black
     
-    bool is_strong = (curr_isBuy and mtf_total >= 2 and conf_stars >= 3 and rvol > 1.0) or (not curr_isBuy and mtf_total <= -2 and conf_stars >= 3 and rvol > 1.0)
-    bool is_weak = (curr_isBuy and mtf_total <= 0) or (not curr_isBuy and mtf_total >= 0) or conf_stars <= 2
+    bool is_strong = reentry_high
+    bool is_weak = reentry_weak
 
     if is_strong
         re_strength := "🔥 STRONG Re-Entry\n(High Prob)"
@@ -912,23 +924,31 @@ if trigger_reentry
         re_bg_col := color.new(color.blue, 10)
         re_txt_col := color.white
         
-    float re_y = curr_isBuy ? low - (atr * 0.8) : high + (atr * 0.8)
-    string re_style = curr_isBuy ? label.style_label_up : label.style_label_down
+    float re_y = reentry_is_buy ? low - (atr * 0.8) : high + (atr * 0.8)
+    string re_style = reentry_is_buy ? label.style_label_up : label.style_label_down
     
     f_addMgmtLabel(bar_index, re_y, re_strength, re_style, re_bg_col, re_txt_col, size.small)
     
     // --- TRIGGER ALERT: RE-ENTRY ---
-    string re_alert_dir = (post_sl_buy or pullback_buy or universal_reentry_buy) ? "BUY 🟢" : "SELL 🔴"
+    string re_alert_dir = reentry_is_buy ? "BUY 🟢" : "SELL 🔴"
     if en_alert_reentry
         alert("⚡ [ZENCORE] RE-ENTRY OPPORTUNITY | Direction: " + re_alert_dir + " | Type: " + re_strength + " | Price: " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
 
     last_reentry_bar := bar_index
     curr_active      := true
+    curr_isBuy       := reentry_is_buy
     curr_sl_hit      := false
     curr_triggered   := true
     max_alert_level  := 1
     curr_entry       := close
+    curr_sl          := reentry_is_buy ? close - atr : close + atr
     curr_initial_sl  := curr_sl
+    curr_tp1         := reentry_is_buy ? close + atr : close - atr
+    curr_tp2         := reentry_is_buy ? close + 2 * atr : close - 2 * atr
+    curr_tp3         := reentry_is_buy ? close + 3 * atr : close - 3 * atr
+    curr_tp1_hit     := false
+    curr_tp2_hit     := false
+    curr_tp3_hit     := false
     exit_half_armed  := false
     exit_completed   := false
     exit_half_bar    := na
@@ -1457,7 +1477,7 @@ f_web_str(string _v) =>
 // FAST TRADE 1M is untouched.
 // ==========================================
 normal_tf3_ok = timeframe.period == "3"
-normal_sop_version = normal_tf3_ok ? "32.0" : "TF3_REQUIRED"
+normal_sop_version = normal_tf3_ok ? "32.4" : "TF3_REQUIRED"
 normal_3m_close = close
 
 var string normal_last_side = "WAIT"
@@ -1470,6 +1490,9 @@ normal_side = normal_last_side
 if curr_active
     normal_side := curr_isBuy ? "BUY" : "SELL"
 
+normal_cross_buy = ta.crossover(close, saved_entry_price)
+normal_cross_sell = ta.crossunder(close, saved_entry_price)
+normal_price_cross_entry = normal_tf3_ok and not na(saved_entry_price) and (normal_side == "BUY" ? normal_cross_buy : normal_side == "SELL" ? normal_cross_sell : false)
 normal_price_past_entry = false
 if normal_tf3_ok and not na(saved_entry_price)
     if normal_side == "BUY"
@@ -1584,6 +1607,10 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"normal3Side\":\"" + normal_side + "\","
     web_payload += "\"normal3Solid\":" + f_web_bool(normal_solid_entry) + ","
     web_payload += "\"normal3PricePastEntry\":" + f_web_bool(normal_price_past_entry) + ","
+    web_payload += "\"normal3PriceCrossEntry\":" + f_web_bool(normal_price_cross_entry) + ","
+    web_payload += "\"normal3ReentrySignal\":\"" + reentry_signal + "\","
+    web_payload += "\"normal3ReentrySide\":\"" + reentry_side + "\","
+    web_payload += "\"normal3ReentryHemaPass\":" + f_web_bool(trigger_reentry and reentry_hema_pass) + ","
     web_payload += "\"normal3Sop1\":" + f_web_bool(normal_sop1) + ","
     web_payload += "\"normal3Sop2\":" + f_web_bool(normal_sop2) + ","
     web_payload += "\"normal3Sop3\":" + f_web_bool(normal_sop3) + ","

@@ -2,6 +2,7 @@ const http=require('http');
 const fs=require('fs');
 const path=require('path');
 const {acceptsSnapshot,effectiveReceivedAt}=require('./market-feed-sync');
+const {normalEntrySop}=require('./normal-entry-sop');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
 const V16_PORT=PUBLIC_PORT===10001?10002:10001;
@@ -383,77 +384,37 @@ function fastTradeStrategy(symbol,d){
 }
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
-  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',confirmations:{m1:'WAIT',m3:'WAIT',m5:'WAIT'},sop:null,solid:false,plan:null};
-
-  const hasPineSop=d?.normalSopVersion==='32.0' || d?.normalSopVersion===32 || d?.normalSopVersion==='V32';
-  if(!hasPineSop){
-    return{
-      mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,
-      reason:'UPDATE FEED REQUIRED — Normal SOP perlukan data Pine V32 untuk Solid Entry + current 5m HEMA ribbon.',
-      confirmations:{m1:'WAIT',m3:'WAIT',m5:'WAIT'},
-      sop:{feedReady:false,passed:0,total:5},
-      solid:false,plan:null
-    };
-  }
-
-  const side=U(d?.normal3Side||'WAIT');
-  const entry=N(d?.normal3Entry),close3=N(d?.normal3Close),atr3=N(d?.normal3Atr);
-  const solid=d?.normal3Solid===true;
-  const pricePast=d?.normal3PricePastEntry===true;
-  const sopFlags=[d?.normal3Sop1,d?.normal3Sop2,d?.normal3Sop3,d?.normal3Sop4,d?.normal3Sop5].map(v=>v===true);
-  const sopGreen=sopFlags.filter(Boolean).length;
-  const forecast=U(d?.normal3Forecast||'WAIT').replace(/[^A-Z]/g,'');
-  const power=N(d?.normal3MarketPower);
-  const forecastPass=power!=null&&(
-    side==='BUY'?((forecast==='BULLISH'||forecast==='NEUTRAL')&&power>50):
-    side==='SELL'?((forecast==='BEARISH'&&power>50)||(forecast==='NEUTRAL'&&power<50)):false
-  );
-  const m5pos=U(d?.normal5Position||'WAIT');
-  const m5Pass=side==='BUY'?m5pos==='ABOVE':side==='SELL'?m5pos==='BELOW':false;
-  const allReady=(side==='BUY'||side==='SELL')&&solid&&pricePast&&sopGreen>=4&&forecastPass&&m5Pass;
-
-  const gates=[
-    {key:'solid',label:'Solid Entry Signal',pass:solid},
-    {key:'entry',label:'Price Lepas Entry Line',pass:pricePast},
-    {key:'sop',label:'SOP Checklist ≥4 Green',pass:sopGreen>=4,detail:`${sopGreen}/5`},
-    {key:'forecast',label:'10-Candle Forecast >50%',pass:forecastPass,detail:`${forecast} ${power==null?'—':power+'%'}`},
-    {key:'m5',label:'Current 5m vs HEMA Ribbon',pass:m5Pass,detail:m5pos}
-  ];
-  const passed=gates.filter(g=>g.pass).length;
-  const score=Math.round(passed/gates.length*100);
-
-  let state='WAIT',reason='Normal 3m belum ada setup yang lengkap.';
-  if(side==='BUY'||side==='SELL'){
-    state=passed>=3?'WATCH':'WAIT';
-    const failed=gates.filter(g=>!g.pass).map(g=>g.label);
-    reason=allReady?`SOLID ${side} ENTRY — semua SOP Normal lulus.`:`${side} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  }
-  if(allReady)state='READY';
-
+  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
+  if(d?.normalSopVersion!=='32.4')return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — SOP 32.4 perlu event cross entry dan re-entry daripada Pine.',sop:{feedReady:false,passed:0,total:4},plan:null};
+  const x=normalEntrySop(d),reentry=x.reentryReady;
+  const side=reentry?x.reentrySide:x.side;
+  const passed=x.gates.filter(g=>g.pass).length;
+  const ready=reentry||x.standardReady;
+  const gates=reentry?x.reentryGates:x.gates;
+  const failed=gates.filter(g=>!g.pass).map(g=>g.label);
+  const state=ready?'READY':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
+  const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — empat syarat SOP lulus.`):
+    `${side==='BUY'||side==='SELL'?side:'Normal 3M'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
+  const entry=reentry?x.close:x.entry,atr=x.atr;
   let plan=null;
-  if(allReady&&entry!=null&&atr3!=null&&atr3>0){
-    const riskDist=atr3;
-    const sl=side==='BUY'?entry-riskDist:entry+riskDist;
-    const tp1=side==='BUY'?entry+riskDist:entry-riskDist;
-    const tp2=side==='BUY'?entry+riskDist*2:entry-riskDist*2;
-    const tp3=side==='BUY'?entry+riskDist*3:entry-riskDist*3;
-    plan=makePlan(side,entry,sl,tp1,tp2,tp3,{
-      riskDistance:riskDist,rr1:1,rr2:2,rr3:3,
-      condition:'PINE SOP NORMAL',planType:'NORMAL SCALPING 3M — PINE SOP V32'
+  if(ready&&entry!=null&&atr!=null&&atr>0){
+    const direction=side==='BUY'?1:-1;
+    plan=makePlan(side,entry,entry-direction*atr,entry+direction*atr,entry+direction*atr*2,entry+direction*atr*3,{
+      riskDistance:atr,rr1:1,rr2:2,rr3:3,
+      condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:'PINE SOP NORMAL',
+      planType:reentry?`${x.reentryType} RE-ENTRY 3M`:'NORMAL SCALPING 3M — PINE SOP 32.4'
     });
   }
-
   return{
-    mode:'NORMAL',tf:'3m',state,side,score,reason,solid,plan,
-    confirmations:{m1:'N/A',m3:allReady?'PASS':'WAIT',m5:m5Pass?'PASS':'WAIT'},
-    sop:{
-      feedReady:true,passed,total:gates.length,gates,
-      solid,pricePastEntry:pricePast,sopGreen,
-      sop1:sopFlags[0],sop2:sopFlags[1],sop3:sopFlags[2],sop4:sopFlags[3],sop5:sopFlags[4],
-      forecast,marketPower:power,forecastPass,
-      m5Position:m5pos,m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),m5Pass,
-      entry,close3,atr3
-    }
+    mode:'NORMAL',tf:'3m',state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
+    confirmations:{m1:'N/A',m3:ready?'PASS':'WAIT',m5:'INFO'},
+    sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
+      solid:d?.normal3Solid===true,priceCrossEntry:x.cross,sopGreen:x.green,
+      sop1:x.flags[0],sop2:x.flags[1],sop3:x.flags[2],sop4:x.flags[3],sop5:x.flags[4],
+      forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
+      reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
+      m5Position:U(d?.normal5Position||'WAIT'),m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),
+      entry,close3:x.close,atr3:atr}
   };
 }
 
@@ -596,7 +557,7 @@ function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(c
 function broadcastPrediction(symbol){const summary=marketSummary(symbol);require('./analysis-alert-bus').emit('market',summary);const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(summary);for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
 function expandCompactMarket(row,batch){
   if(!Array.isArray(row)||row.length<61)return null;
-  const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action]=row;
+  const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action,normal3PriceCrossEntry,normal3ReentrySignal,normal3ReentrySide,normal3ReentryHemaPass]=row;
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
     source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:true,
@@ -604,7 +565,7 @@ function expandCompactMarket(row,batch){
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
     entry,sl:initialSl,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,
-    normalSopVersion:'32.0',normal3Side,normal3Solid,normal3PricePastEntry,
+    normalSopVersion:row.length>=65&&batch.schemaVersion==='32.3-EXIT-STEPLOCK'?'32.4':'32.0',normal3Side,normal3Solid,normal3PricePastEntry,normal3PriceCrossEntry,normal3ReentrySignal,normal3ReentrySide,normal3ReentryHemaPass,
     normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,
     normal3Forecast,normal3MarketPower,normal3Entry:entry,normal3Close:close,normal3Atr:atr,
     normal5Position,normal5Close,normal5Hema20,normal5Hema40,

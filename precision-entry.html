@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#071018">
 <title>ZenCore Precision Entry Pro</title>
-<link rel="stylesheet" href="/precision-entry.css?v=5.0">
+<link rel="stylesheet" href="/precision-entry.css?v=5.1">
 <link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0">
 <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
 <link rel="stylesheet" href="/analysis-alerts.css?v=35.0">
@@ -30,7 +30,7 @@
       </div>
       <div>
         <h1>ZenCore Precision Entry</h1>
-        <p>Normal Scalping 3M • Pine SOP V32 • Professional Execution Layer</p>
+        <p>Normal Scalping 3M • Pine SOP 32.4 • Professional Execution Layer</p>
       </div>
     </div>
     <div class="header-right">
@@ -72,7 +72,7 @@
       <h2 id="heroSignal">WAIT FOR VALID SETUP</h2>
       <p id="heroReason">SOP asal kekal. Profit Quality hanya menilai sama ada setup itu berkualiti tinggi untuk execution.</p>
       <div class="hero-tags">
-        <span>TF 3M</span><span>5M HEMA CONFIRM</span><span>NO SOP CHANGE</span>
+        <span>TF 3M</span><span>5M HEMA INFO</span><span>SOP 32.4</span>
       </div>
     </div>
     <div class="hero-side">
@@ -83,7 +83,7 @@
         <div class="holo-core"></div>
         <div class="holo-beam"></div>
         <span class="holo-chip chip-solid">SOLID ENTRY</span>
-        <span class="holo-chip chip-sop">SOP V32</span>
+        <span class="holo-chip chip-sop">SOP 32.4</span>
         <span class="holo-chip chip-hema">HEMA 5M</span>
         <div class="holo-floor"></div>
       </div>
@@ -108,7 +108,7 @@
     </article>
     <article class="status-card">
       <span>SOP SCORE</span>
-      <strong id="sopScore">0/5</strong>
+      <strong id="sopScore">0/4</strong>
       <small>Minimum 4 green</small>
     </article>
     <article class="status-card">
@@ -337,18 +337,19 @@
       <span class="eyebrow">ENTRY SOP — UNCHANGED</span>
       <h3>ZenCore Normal Entry Rules</h3>
     </div>
-    <p><b>BUY:</b> Solid Entry + harga melepasi Entry BUY + SOP ≥4/5 + Forecast BULLISH/NEUTRAL mengikut threshold + candle 5M di atas HEMA Ribbon.</p>
-    <p><b>SELL:</b> Solid Entry + harga di bawah Entry SELL + SOP ≥4/5 + Forecast BEARISH &gt;50% atau NEUTRAL &lt;50% + candle 5M di bawah HEMA Ribbon.</p>
+    <p><b>BUY:</b> Solid Entry + harga cross Entry BUY + SOP ≥4/5 + Forecast BULLISH atau NEUTRAL &gt;50%.</p>
+    <p><b>SELL:</b> Solid Entry + harga cross Entry SELL + SOP ≥4/5 + Forecast BEARISH &gt;50% atau NEUTRAL &lt;50%.</p>
+    <p><b>Re-entry:</b> Signal NORMAL/HIGH pada candle semasa. Badan candle BUY mesti di atas kedua-dua HEMA 3M; SELL mesti di bawah kedua-duanya.</p>
   </section>
 
   <footer>ZenCore Precision Entry • SOP source signal kekal • A+ Quality = execution ranking, bukan jaminan profit • Gunakan risk management.</footer>
 </div></details>
-  <details class="validation-details"><summary>Butiran kekuatan signal · 5 Hard Gates &amp; A+ Execution Filter <span>Klik untuk buka</span></summary>
+  <details class="validation-details"><summary>Butiran kekuatan signal · Entry Gates &amp; A+ Execution Filter <span>Klik untuk buka</span></summary>
   <section class="layout validation-layout">
     <div class="panel gates-panel">
       <div class="panel-head">
-        <div><span class="eyebrow">ENTRY VALIDATION</span><h3>5 Hard Gates</h3></div>
-        <div id="gateScore" class="score-ring">0/5</div>
+        <div><span class="eyebrow">ENTRY VALIDATION</span><h3>Entry Gates</h3></div>
+        <div id="gateScore" class="score-ring">0/4</div>
       </div>
       <div id="gateList" class="gate-list"></div>
     </div>
@@ -366,7 +367,7 @@
   </details>
 </div>
 <script src="/analysis-alerts.js?v=35.0" defer></script>
-<script src="/precision-entry.js?v=5.0"></script>
+<script src="/precision-entry.js?v=5.1"></script>
 <script src="/analysis-workspace.js?v=34.0" defer></script>
 <script src="/analysis-execution-contract.js?v=1.0"></script>
 <script src="/auto-trade-core.js?v=1.2"></script>
