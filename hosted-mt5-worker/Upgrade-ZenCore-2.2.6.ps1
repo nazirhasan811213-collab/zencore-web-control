@@ -46,8 +46,8 @@ Copy-Item -Force -LiteralPath (Join-Path $source 'release-manifest.json') -Desti
 $worker = Join-Path $destination 'ZenCoreHostedWorker.exe'
 $manager = Join-Path $destination 'ZenCoreHostedWorkerManager.exe'
 if (-not (Test-Path $worker) -or -not (Test-Path $manager)) { throw 'RELEASE_BINARY_MISSING' }
-$backup = "$ManagerConfigPath.before-2.2.6"
-Copy-Item -Force -LiteralPath $ManagerConfigPath -Destination $backup
+$backup = Join-Path $destination ('manager-config.before-2.2.6.' + [Guid]::NewGuid().ToString('N') + '.json')
+Copy-Item -LiteralPath $ManagerConfigPath -Destination $backup
 $new = Get-Content -Raw -LiteralPath $ManagerConfigPath | ConvertFrom-Json
 $new.connectorVersion = $version
 $new.childWorkerPath = $worker
