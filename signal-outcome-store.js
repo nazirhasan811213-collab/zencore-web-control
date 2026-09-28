@@ -51,5 +51,15 @@ class SignalOutcomeStore{
       note:'Hanya keputusan V17 yang sempat diselaraskan disimpan. Posisi open boleh terputus selepas restart; sejarah lama sebelum pengaktifan tidak boleh dipulihkan.',
       records:rows.map(r=>r.data)};
   }
+  async targetStats(symbol,side){
+    if(!PAIRS.includes(symbol)||!['BUY','SELL'].includes(side))return null;
+    const result=await this.pool.query(`SELECT COUNT(*)::int AS sample,
+      COUNT(*) FILTER (WHERE data->>'hitTp1'='true')::int AS hit_tp1,
+      COUNT(*) FILTER (WHERE data->>'hitTp2'='true')::int AS hit_tp2,
+      COUNT(*) FILTER (WHERE data->>'hitTp3'='true')::int AS hit_tp3
+      FROM zencore_signal_outcomes WHERE symbol=$1 AND side=$2 AND data->>'outcome'<>'AMBIGUOUS'`,[symbol,side]);
+    const row=result.rows[0];return row?{sample:Number(row.sample),hitTp1:Number(row.hit_tp1),
+      hitTp2:Number(row.hit_tp2),hitTp3:Number(row.hit_tp3)}:null;
+  }
 }
 module.exports={SignalOutcomeStore,cleanClosed};
