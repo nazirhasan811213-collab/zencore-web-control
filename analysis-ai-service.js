@@ -99,6 +99,7 @@ function pineScalpAnalysis(sop,now=Date.now()){
       (side==='BUY'&&((i.forecast==='BULLISH'&&power>50)||(i.forecast==='NEUTRAL'&&power>50)))||
       (side==='SELL'&&((i.forecast==='BEARISH'&&power>50)||(i.forecast==='NEUTRAL'&&power<50)))?'SUPPORT':'CAUTION'):'UNKNOWN'},
     {label:'RSI / WaveTrend',value:'RSI '+(rsi===null?'—':rsi.toFixed(1))+' · WT '+(num(i.waveTrend1)===null?'—':Number(i.waveTrend1).toFixed(1))+'/'+(num(i.waveTrend2)===null?'—':Number(i.waveTrend2).toFixed(1)),state:'INFO'},
+    {label:'Chop / global trend / basis',value:(num(i.chop)===null?'—':Number(i.chop).toFixed(1))+' · '+(num(i.globalTrend)===null?'—':Number(i.globalTrend).toFixed(2))+' / '+(num(i.basis)===null?'—':Number(i.basis).toFixed(2)),state:'INFO'},
     {label:'ATR 3M / relative volume',value:(atr===null?'—':atr.toFixed(5))+' · '+(num(i.relativeVolume)===null?'—':Number(i.relativeVolume).toFixed(2)+'x'),state:'INFO'}
   ];
   const ready=sop.state==='READY'&&sign!==0&&sop.plan&&
