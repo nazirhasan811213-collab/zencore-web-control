@@ -62,6 +62,7 @@
     const pineRange=s.status==='WAIT_DATA'&&pine.status==='AVAILABLE'&&pine.close3m!=null&&pine.atr3m>0;
     text('aiScenarioStatus',pineRange?'JULAT ATR PINE':String(s.status||'WAIT_DATA').replaceAll('_',' '));
     text('aiScenarioReason',pineRange?'Rujukan volatiliti daripada close dan ATR Pine 3M. Bukan harga tick semasa atau cadangan entry.':s.reason||'Menunggu data lengkap.');
+    text('aiScenarioRefLabel',pineRange?'CLOSE PINE 3M':'CLOSE LUARAN 1M');
     text('aiScenarioPrice',price(pineRange?pine.close3m:s.price));
     text('aiScenario3m',pineRange?`${price(pine.close3m-pine.atr3m*.5)} – ${price(pine.close3m+pine.atr3m*.5)}`:s.next3m?`${price(s.next3m.low)} – ${price(s.next3m.high)}`:'—');
     text('aiScenario15m',pineRange?`${price(pine.close3m-pine.atr3m*1.5)} – ${price(pine.close3m+pine.atr3m*1.5)}`:s.next15m?`${price(s.next15m.low)} – ${price(s.next15m.high)}`:'—');
