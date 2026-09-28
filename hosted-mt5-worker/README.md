@@ -1,6 +1,6 @@
 # ZenCore Managed MT5 Worker — staged security boundary
 
-This directory contains the staged hosted MT5 Demo worker source, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.6-gcp-multiuser-multipair` accepts configured canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, a reviewed connector artifact, an assigned worker slot and runtime checks. The 2.2.6 Windows binary has not been built or verified on the VM.
+This directory contains the staged hosted MT5 Demo worker source, the Windows release pipeline, and the multi-client Worker Manager. Connector `2.2.6-gcp-multiuser-multipair` accepts configured canonical markets and supports 1–10 layers. Its default connection-only preflight validates an isolated MT5 slot without polling commands; broker execution still requires matching server, manager-config and local DEMO gates, a reviewed connector artifact, an assigned worker slot and runtime checks. CI has built a Windows binary, but it has not been installed or verified on the VM.
 
 ## Implemented now
 

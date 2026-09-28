@@ -75,10 +75,11 @@ try {
     Copy-Item -Force -LiteralPath (Join-Path $source "Install-ZenCoreHostedWorker.ps1") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "Install-ZenCoreWorkerManager.ps1") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "Upgrade-ZenCore-2.2.6.ps1") -Destination $release
+    Copy-Item -Force -LiteralPath (Join-Path $source "Test-ZenCore-2.2.6-Preflight.ps1") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "README.md") -Destination $release
     Copy-Item -Force -LiteralPath (Join-Path $source "VERSION") -Destination $release
 
-    $files = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe", "README.md", "VERSION", "Install-ZenCoreHostedWorker.ps1", "Install-ZenCoreWorkerManager.ps1", "Upgrade-ZenCore-2.2.6.ps1") | ForEach-Object {
+    $files = @("ZenCoreHostedWorker.exe", "ZenCoreHostedWorkerManager.exe", "README.md", "VERSION", "Install-ZenCoreHostedWorker.ps1", "Install-ZenCoreWorkerManager.ps1", "Upgrade-ZenCore-2.2.6.ps1", "Test-ZenCore-2.2.6-Preflight.ps1") | ForEach-Object {
         $itemPath = Join-Path $release $_
         [ordered]@{
             path = $_

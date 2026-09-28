@@ -29,14 +29,21 @@ positions in the same pair.
 
 The source now identifies as **2.2.6**, whereas the installed VM was reported
 as **2.2.5**. The 2.2.5 executable sources were not present in this repository;
-the new source includes its documented portable slot behavior but a Windows
-binary has not been built or compared with the installed release. Do not deploy
-the server change on its own or turn on execution. Build the pinned 2.2.6
-artifact on Windows with Python 3.12, review the binary and upgrade script,
+the new source includes its documented portable slot behavior. GitHub Actions
+built a Windows 2.2.6 artifact, but it has not been installed or compared with
+the broker on the VM. Do not deploy the server change on its own or turn on
+execution. Verify the pinned artifact checksum and upgrade script,
 upgrade the Windows slots in connection-only mode, and verify exact
 ticket/volume/SL behavior on two Demo accounts and all offered broker symbols.
 Keep `ZENCORE_AUTOTRADE_EXECUTION_ENABLED=false` and the manager/slot execution
 gates locked until that validation passes.
+
+Run `Test-ZenCore-2.2.6-Preflight.ps1` from the extracted release after the
+connection-only upgrade. Its process and slot checks report only sanitized
+status. A successful local preflight does not establish broker connectivity:
+verify each account's fresh `CONNECTED_LOCKED` heartbeat and broker symbols in
+ZenCore separately. The script defaults to three expected slots; set
+`-ExpectedSlots` to the number of assigned accounts on the VM.
 
 The source remains Demo-only. `ENVELOPE` server mode accepts the server in the
 user's encrypted credential and verifies the connected account's server and
