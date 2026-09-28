@@ -84,6 +84,35 @@ function setupVerdict(scenario,sop,external){
   return {...info,label:'SETUP PERLU SEMAKAN',entryNow:'DALAM ZON · NILAI RISIKO',profitView:reward>room?'TP1 DI LUAR JULAT 15M':'POTENSI BELUM JELAS',
     reason:'Salah satu syarat kekuatan, kestabilan, readiness, R:R atau ruang ke TP1 belum memadai.'};
 }
+
+function pineScalpAnalysis(sop,now=Date.now()){
+  const base={status:'NO_FEED',action:'TUNGGU FEED PINE 3M',reason:'Data SOP Pine 3M belum tersedia atau telah lewat.',timeframe:'3M',checks:[],levels:null};
+  if(!sop||!Number.isFinite(sop.dataAt)||now-sop.dataAt>90000||sop.dataAt>now+5000)return base;
+  const i=sop.indicator||{},side=['BUY','SELL'].includes(sop.side)?sop.side:'WAIT',sign=side==='BUY'?1:side==='SELL'?-1:0;
+  const e9=num(i.ema9),e20=num(i.ema20),e50=num(i.ema50),h20=num(i.hema20),h40=num(i.hema40);
+  const close=num(i.close),atr=num(i.atr),rsi=num(i.rsi),power=num(i.power),green=num(i.green);
+  const checks=[
+    {label:'SOP Normal 3M',value:green===null?'—':green+'/5',state:green===null?'UNKNOWN':green>=4?'SUPPORT':'CAUTION'},
+    {label:'EMA 9 / 20 / 50',value:[e9,e20,e50].every(v=>v!==null)?(e9>e20&&e20>e50?'BULLISH':e9<e20&&e20<e50?'BEARISH':'MIXED'):'DATA TIADA',state:sign&&[e9,e20,e50].every(v=>v!==null)?((e9-e20)*sign>0&&(e20-e50)*sign>0?'SUPPORT':'CAUTION'):'UNKNOWN'},
+    {label:'HEMA 20 / 40',value:h20===null||h40===null?'DATA TIADA':h20>h40?'BULLISH':h20<h40?'BEARISH':'FLAT',state:sign&&h20!==null&&h40!==null?((h20-h40)*sign>0?'SUPPORT':'CAUTION'):'UNKNOWN'},
+    {label:'Forecast + market power',value:String(i.forecast||'—')+' · '+(power===null?'—':Math.round(power)+'%'),state:sign&&power!==null?(
+      (side==='BUY'&&((i.forecast==='BULLISH'&&power>50)||(i.forecast==='NEUTRAL'&&power>50)))||
+      (side==='SELL'&&((i.forecast==='BEARISH'&&power>50)||(i.forecast==='NEUTRAL'&&power<50)))?'SUPPORT':'CAUTION'):'UNKNOWN'},
+    {label:'RSI / WaveTrend',value:'RSI '+(rsi===null?'—':rsi.toFixed(1))+' · WT '+(num(i.waveTrend1)===null?'—':Number(i.waveTrend1).toFixed(1))+'/'+(num(i.waveTrend2)===null?'—':Number(i.waveTrend2).toFixed(1)),state:'INFO'},
+    {label:'ATR 3M / relative volume',value:(atr===null?'—':atr.toFixed(5))+' · '+(num(i.relativeVolume)===null?'—':Number(i.relativeVolume).toFixed(2)+'x'),state:'INFO'}
+  ];
+  const ready=sop.state==='READY'&&sign!==0&&sop.plan&&
+    ['entry','sl','tp1','tp2','tp3'].every(k=>num(sop.plan[k])!==null);
+  const conflicting=checks.filter(x=>x.state==='CAUTION').map(x=>x.label);
+  const levels=ready?Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,num(sop.plan[k])])):null;
+  const action=ready?'SOP ENTRY READY · SEMAK HARGA BROKER':sop.state==='WATCH'?'WATCH · TUNGGU TRIGGER':sop.state==='WAIT_PULLBACK'?'TUNGGU PULLBACK':'TUNGGU SOP 3M';
+  const reason=ready?'Trigger SOP disahkan pada candle 3M. Semak harga semasa, spread dan SL sebelum keputusan.':
+    String(sop.reason||'Belum ada trigger entry yang lengkap.');
+  return {status:'AVAILABLE',side,state:sop.state,action,reason,checks,conflicting,
+    levels,close3m:close,atr3m:atr,sourceBarTime:sop.sourceBarTime,dataAt:sop.dataAt,
+    note:'Bacaan Pine pada candle ditutup. Skor dan penapis membantu semakan; tiada jaminan harga atau profit.'};
+}
+
 class AnalysisAIService {
   constructor({env=process.env,fetchImpl=fetch,now=Date.now,liveSopProvider=null}={}){this.env=env;this.fetch=fetchImpl;this.now=now;this.liveSopProvider=liveSopProvider;this.contexts=new Map();this.tracker=new PositionTracker();this.cache=new Map();this.pending=new Map();this.users=new Map();}
   ingest(body){
@@ -147,16 +176,17 @@ class AnalysisAIService {
       const safeSop=liveSop&&liveSop.symbol===symbol&&Number.isFinite(liveSop.dataAt)&&
         now-liveSop.dataAt<=90000&&liveSop.dataAt<=now+5000&&Number.isFinite(liveSop.sourceBarTime)&&
         now-liveSop.sourceBarTime<=240000&&liveSop.sourceBarTime<=now?liveSop:null;
+      const pineScalp=pineScalpAnalysis(safeSop,now);
       const scenario=scalpScenario({snapshot,external,liveSop:safeSop,now});
       const verdict=setupVerdict(scenario,safeSop,external);
       const gpt=await this.gpt(snapshot,external,safeSop,scenario);
       const reference=safeSop||(snapshot.dataAt&&now-snapshot.dataAt<=90000&&snapshot.status!=='WAIT'?snapshot:null);
       const comparable=reference&&external.status==='AVAILABLE'&&Math.abs(reference.dataAt-external.dataAt)<=180000;
       const comparison=!comparable?'TIDAK CUKUP DATA':external.bias==='WAIT'?'LUARAN NEUTRAL':external.bias===reference.side?'SELARAS':'BERCANGGAH';
-      const value={symbol,generatedAt:now,zencore:snapshot,liveSop:safeSop,sopInModel:!!safeSop,external,scenario,verdict,gpt,comparison,
+      const value={symbol,generatedAt:now,zencore:snapshot,liveSop:safeSop,pineScalp,sopInModel:!!safeSop,external,scenario,verdict,gpt,comparison,
         nativeExternal:{status:'NOT_CONNECTED',reason:'Tiada penyedia signal 3M asli yang disahkan. Panel luaran mengira indikator daripada data harga apabila disambungkan.'}};
       this.cache.set(symbol,{key,at:now,value});return {code:200,...value};
     })();this.pending.set(symbol,work);try{return await work;}finally{this.pending.delete(symbol);}
   }
 }
-module.exports={AnalysisAIService,aggregate3m,externalTechnical,scalpScenario,setupVerdict};
+module.exports={AnalysisAIService,aggregate3m,externalTechnical,scalpScenario,setupVerdict,pineScalpAnalysis};
