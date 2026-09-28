@@ -84,9 +84,10 @@ test('post-signal verdict uses existing grade and plan without claiming win prob
  const solid=setupVerdict(near,sop,external);
  assert.equal(solid.label,'SETUP SOLID · BERSYARAT');assert.equal(solid.profitView,'TP1 DALAM JULAT 15M');
  assert.equal(solid.rrTp1,1.25);
+ assert.equal(solid.entryNow,'DALAM ZON · SEMAK TICK BROKER');
  assert.equal(setupVerdict(near,{...sop,stability:40},external).label,'SETUP PERLU SEMAKAN');
  assert.equal(setupVerdict(near,{...sop,grade:'C'},external).label,'SETUP PERLU SEMAKAN');
- assert.equal(setupVerdict({...near,status:'CHASE',reason:'Harga terkejar'},sop,external).label,'TUNGGU / ELAK');
+ assert.equal(setupVerdict({...near,status:'CHASE',reason:'Harga terkejar'},sop,external).entryNow,'TUNGGU PULLBACK');
  assert.equal(setupVerdict(near,{...sop,plan:{...sop.plan,tp1:105}},external).profitView,'TP1 DI LUAR JULAT 15M');
  assert.equal(setupVerdict(near,{...sop,score:null},external).label,'DATA BELUM CUKUP');
 });
