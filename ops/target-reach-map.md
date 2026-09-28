@@ -5,3 +5,4 @@ The signed-in Analysis page reads the fresh V17 Normal SOP plan without calling 
 The optional external 1M close and completed 3M ATR show whether the remaining distance to each target is inside a 1.5 ATR reference range for fifteen minutes. This is a simple volatility comparison, not a probability, a guaranteed move, or a calibrated forecast. Stale input leaves that comparison unavailable. The source SOP, entry gates, Telegram and MT5 execution are not changed.
 
 Historical target achievement uses persisted resolved Normal validation records for the same pair and direction, excludes ambiguous cases and appears only at 30 or more samples. The percentages are descriptive historical frequencies, not live win probabilities or broker P/L. Archive collection began after launch, may miss periods when the service was offline, and excludes spread/slippage. A wider or narrower empirical interval will require a larger forward sample and broker-level bid/ask/fill data.
+
