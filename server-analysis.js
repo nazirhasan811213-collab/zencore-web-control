@@ -17,7 +17,9 @@ const {
 const { parseGcpWorkerFleet } = require('./gcp-worker-fleet');
 
 const { AnalysisAlerts } = require('./analysis-alert-service');
+const { SignalOutcomeStore } = require('./signal-outcome-store');
 let analysisAlerts = null;
+let signalOutcomes = null;
 require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
@@ -146,6 +148,11 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    if (store.pool) {
+      const collector = new SignalOutcomeStore({pool:store.pool,fetchSummary:fetchLocalValidation});
+      try { await collector.init();collector.start();signalOutcomes=collector; }
+      catch (_) { console.error('Persistent signal outcome storage unavailable'); }
+    }
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
 
@@ -1309,6 +1316,19 @@ function fetchLocalSop(symbol) {
     request.on('error', reject);
   });
 }
+function fetchLocalValidation(symbol) {
+  return new Promise((resolve,reject)=>{
+    const request=http.get({hostname:'127.0.0.1',port:V17_PORT,
+      path:`/api/strategy-performance/${encodeURIComponent(symbol)}/NORMAL`,timeout:3000},response=>{
+      let body='';response.setEncoding('utf8');response.on('data',chunk=>{
+        body+=chunk;if(body.length>256*1024)request.destroy(new Error('Validation response too large'));
+      });response.on('end',()=>{
+        if(response.statusCode!==200)return reject(new Error('Validation unavailable'));
+        try{resolve(JSON.parse(body));}catch{reject(new Error('Invalid validation JSON'));}
+      });
+    });request.on('timeout',()=>request.destroy(new Error('Validation timeout')));request.on('error',reject);
+  });
+}
 
 function startAutoTradeDispatcher() {
   if (autoTradeState.dispatchTimer || !autoTradeState.service) return;
@@ -1379,6 +1399,15 @@ const server = http.createServer(async (req, res) => {
       catch(_){return sendJson(res,503,{error:'Analisis tidak tersedia.'});}
     }
     return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
+  }
+  if (pathname === '/api/signal-outcomes') {
+    const session=await requireSession(req,res);if(!session)return;
+    if(req.method!=='GET')return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
+    if(!signalOutcomes)return sendJson(res,503,{error:'Rekod kekal belum tersedia.'});
+    const symbol=url.searchParams.get('symbol');
+    if(symbol && !require('./analysis-v33').PAIRS.includes(symbol))return sendJson(res,400,{error:'Pair tidak disokong.'});
+    try{return sendJson(res,200,await signalOutcomes.read(symbol));}
+    catch{return sendJson(res,503,{error:'Rekod hasil tidak tersedia.'});}
   }
 
   if (req.method === 'GET' && pathname === '/auth.css') return sendAuthAsset(res, 'auth.css', 'text/css; charset=utf-8');
