@@ -55,6 +55,8 @@
     text('aiScenarioNote',s.note||'Julat ialah rujukan volatiliti, bukan ramalan tepat atau arahan entry.');
     const v=r.verdict||{};
     text('aiVerdictLabel',v.label||'DATA BELUM CUKUP');text('aiVerdictProfit',v.profitView||'BELUM DAPAT DINILAI');
+    text('aiEntryNow',v.entryNow||'TUNGGU DATA');
+    text('aiEntryDistance',s.distanceFromEntry==null?'Jarak harga daripada entry: —':`Jarak searah daripada entry: ${price(s.distanceFromEntry)} · Zon rujukan ±${price(s.entryZone)} · Close 1M, bukan tick broker`);
     text('aiVerdictReason',v.reason||'Menunggu data semasa.');
     text('aiVerdictScore',v.score==null?'—':`${v.score}/100 · ${v.grade||'—'}`);
     text('aiVerdictStability',v.stability==null||v.readiness==null?'—':`${v.stability}/100 · ${v.readiness}/100`);
