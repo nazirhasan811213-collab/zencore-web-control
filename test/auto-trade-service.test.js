@@ -750,7 +750,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     allowDemoExecution: true,
     hostedWorkerEnabled: true,
     hostedWorkerAccountId: accountId,
-    requiredDemoConnectorVersion: '2.2.2-gcp-multiuser-multipair',
+    requiredDemoConnectorVersion: '2.2.6-gcp-multiuser-multipair',
     allowedDemoSymbols: ['XAUUSD']
   });
   await service.saveSettings(userId, {
@@ -775,7 +775,7 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
     connectionStatus: 'CONNECTED', terminalTradeAllowed: true,
     accountTradeAllowed: true, expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: '2.2.2-gcp-multiuser-multipair', terminalBuild: '6204',
+    connectorVersion: '2.2.6-gcp-multiuser-multipair', terminalBuild: '6204',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
       volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01
@@ -812,6 +812,32 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
   assert.equal(next.command.type, 'PLACE_SETUP');
   assert.equal(next.command.payload.symbol, 'XAUUSD');
   assert.equal(next.command.payload.totalLot, 0.03);
+  await service.acknowledgeHostedCommand(identity, next.command.id, {
+    accountId, leaseId: lease.lease.id, status: 'EXECUTED', code: 'DEMO_SETUP_EXECUTED'
+  });
+  currentTime += 1000;
+  await service.hostedHeartbeat(identity, {
+    accountId, leaseId: lease.lease.id,
+    accountMask: '****123456', serverMask: '****ncial-Demo',
+    brokerMask: '****ellarFinancial', tradeMode: 'DEMO', connectionStatus: 'CONNECTED',
+    terminalTradeAllowed: true, accountTradeAllowed: true, expertTradeAllowed: true,
+    demoExecutionUnlocked: true, connectorVersion: '2.2.6-gcp-multiuser-multipair',
+    terminalBuild: '6204', symbolSpecs: [{symbol:'XAUUSD',tickSize:0.01,tickValue:1,
+      volumeMin:0.01,volumeMax:100,volumeStep:0.01}],
+    positions: [{ticket:'70001',symbol:'XAUUSD',side:'BUY',volume:0.01,
+      entry:2500,currentPrice:2505,initialSl:2495,activeSl:2495},
+      {ticket:'70002',symbol:'XAUUSD',side:'BUY',volume:0.01,
+      entry:2500,currentPrice:2505,initialSl:2495,activeSl:2495}]
+  });
+  const managed = await service.dispatchMarkets([{
+    symbol:'XAUUSD',receivedAt:currentTime,
+    positionManagement:{action:'CLOSE_50_NOW',slMoveTriggered:false}
+  }]);
+  assert.equal(managed.queued, 1);
+  next = await service.nextHostedCommand(identity, {accountId, leaseId: lease.lease.id});
+  assert.equal(next.command.type, 'MANAGE_POSITION');
+  assert.deepEqual(next.command.payload.positionTickets, ['70001','70002']);
+  assert.equal(next.command.payload.actions[0].percent, 50);
 });
 
 

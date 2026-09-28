@@ -37,7 +37,7 @@ from security_boundary import (
 )
 
 
-CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
+CONNECTOR_VERSION = "2.2.6-gcp-multiuser-multipair"
 MAGIC = 3233001
 INTERSTELLAR_DEMO_SERVER_ID = "INTERSTELLARFINANCIALDEMO"
 _UUID_RE = re.compile(
@@ -159,7 +159,7 @@ class WorkerConfig:
             or not KEY_ALIAS_PATTERN.fullmatch(key_alias)
             or not KEY_VERSION_PATTERN.fullmatch(key_resource)
             or not re.fullmatch(r"[A-Za-z]:\\[^\r\n]{3,240}", terminal_path)
-            or _normalise_server(approved_server) != INTERSTELLAR_DEMO_SERVER_ID
+            or approved_server not in {"ENVELOPE", "InterStellarFinancial-Demo"}
             or not 5 <= heartbeat <= 30
             or not _CONNECTOR_RE.fullmatch(connector_version)
             or connector_version != CONNECTOR_VERSION
@@ -192,20 +192,37 @@ class MetaTraderConnection:
         self._allowed_symbols: tuple[str, ...] = ()
         self._connector_version = CONNECTOR_VERSION
         self._execution_enabled = False
+        self._connected_server = ""
+        self._symbol_map: dict[str, str] = {}
+
+    @property
+    def connected_server(self) -> str:
+        return self._connected_server
+
+    @property
+    def symbol_map(self) -> dict[str, str]:
+        return dict(self._symbol_map)
 
     def connect(self, config: WorkerConfig, credential: Mt5Credential) -> None:
         login, password, server = credential.text()
-        if _normalise_server(server) != _normalise_server(config.approved_demo_server):
+        if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._ -]{2,79}", server) or
+            (config.approved_demo_server != "ENVELOPE" and
+             _normalise_server(server) != _normalise_server(config.approved_demo_server))):
             login = password = server = ""
             raise WorkerFailure("MT5_SERVER_NOT_APPROVED")
         try:
+            isolated_slot = bool(re.search(
+                r"[\\/]slots[\\/][a-z0-9-]+[\\/]mt5[\\/]terminal64\.exe$",
+                config.mt5_terminal_path,
+                re.IGNORECASE,
+            ))
             connected = self._mt5.initialize(
                 config.mt5_terminal_path,
                 login=int(login),
                 password=password,
                 server=server,
                 timeout=30_000,
-                portable=False,
+                portable=isolated_slot,
             )
         except Exception as exc:
             raise WorkerFailure("MT5_INITIALIZE_FAILED") from exc
@@ -217,6 +234,8 @@ class MetaTraderConnection:
         self._identity_digest = hashlib.sha256(
             f"{login}\n{_normalise_server(server)}".encode("utf-8")
         ).hexdigest()
+        self._connected_server = server
+        self._symbol_map = {}
         login = server = ""
         self._allowed_symbols = config.allowed_demo_symbols
         self._connector_version = config.connector_version
@@ -239,20 +258,41 @@ class MetaTraderConnection:
         demo_mode = getattr(self._mt5, "ACCOUNT_TRADE_MODE_DEMO", 0)
         if getattr(account, "trade_mode", None) != demo_mode:
             raise WorkerFailure("MT5_REAL_ACCOUNT_BLOCKED")
+        if _normalise_server(getattr(account, "server", "")) != _normalise_server(self._connected_server):
+            raise WorkerFailure("MT5_SERVER_CHANGED")
         return account, terminal
 
     def _symbol_specs(self) -> list[dict[str, Any]]:
         specs: list[dict[str, Any]] = []
         for symbol in self._allowed_symbols:
             try:
-                info = self._mt5.symbol_info(symbol)
+                broker_symbol = self._symbol_map.get(symbol, symbol)
+                info = self._mt5.symbol_info(broker_symbol)
+                if info is None and hasattr(self._mt5, "symbols_get"):
+                    candidates = []
+                    for item in self._mt5.symbols_get() or ():
+                        name = str(getattr(item, "name", ""))
+                        if re.fullmatch(re.escape(symbol) + r"(?:[._-]?[A-Z0-9]{1,8})", name.upper()):
+                            candidates.append(name)
+                    if len(set(candidates)) > 1:
+                        raise WorkerFailure("MT5_SYMBOL_MAPPING_REQUIRED")
+                    if candidates:
+                        broker_symbol = candidates[0]
+                        info = self._mt5.symbol_info(broker_symbol)
                 if info is None and hasattr(self._mt5, "symbol_select"):
-                    self._mt5.symbol_select(symbol, True)
-                    info = self._mt5.symbol_info(symbol)
+                    self._mt5.symbol_select(broker_symbol, True)
+                    info = self._mt5.symbol_info(broker_symbol)
             except Exception as exc:
+                if isinstance(exc, WorkerFailure):
+                    raise
                 raise WorkerFailure("MT5_SYMBOL_DISCOVERY_FAILED") from exc
-            if info is None or str(getattr(info, "name", symbol)).upper() != symbol:
+            if info is None:
+                continue
+            if str(getattr(info, "name", broker_symbol)) != broker_symbol:
                 raise WorkerFailure("MT5_SYMBOL_MAPPING_REQUIRED")
+            if broker_symbol in self._symbol_map.values() and self._symbol_map.get(symbol) != broker_symbol:
+                raise WorkerFailure("MT5_SYMBOL_MAPPING_AMBIGUOUS")
+            self._symbol_map[symbol] = broker_symbol
             tick_value = max(
                 float(getattr(info, "trade_tick_value", 0) or 0),
                 float(getattr(info, "trade_tick_value_profit", 0) or 0),
@@ -260,6 +300,7 @@ class MetaTraderConnection:
             )
             values = {
                 "symbol": symbol,
+                "brokerSymbol": broker_symbol,
                 "tickSize": float(getattr(info, "trade_tick_size", 0) or 0),
                 "tickValue": tick_value,
                 "volumeMin": float(getattr(info, "volume_min", 0) or 0),
@@ -271,6 +312,8 @@ class MetaTraderConnection:
             )):
                 raise WorkerFailure("MT5_SYMBOL_SPEC_INVALID")
             specs.append(values)
+        if not specs:
+            raise WorkerFailure("MT5_NO_SUPPORTED_SYMBOLS")
         return specs
 
     def _positions(self) -> list[dict[str, Any]]:
@@ -282,10 +325,11 @@ class MetaTraderConnection:
             raise WorkerFailure("MT5_POSITION_READ_FAILED")
         result: list[dict[str, Any]] = []
         buy_type = int(getattr(self._mt5, "POSITION_TYPE_BUY", 0))
+        inverse = {broker.upper(): canonical for canonical, broker in self._symbol_map.items()}
         for position in rows:
             if int(getattr(position, "magic", 0) or 0) != MAGIC:
                 continue
-            symbol = str(getattr(position, "symbol", "")).upper()
+            symbol = inverse.get(str(getattr(position, "symbol", "")).upper())
             if symbol not in self._allowed_symbols:
                 raise WorkerFailure("UNEXPECTED_ZENCORE_POSITION")
             result.append({
@@ -416,6 +460,8 @@ class HostedConnectionWorker:
                 lease["credentialEnvelope"], self.config.key_alias, self.unwrapper
             )
             self.terminal.connect(self.config, credential)
+            if self.config.execution_enabled and isinstance(self.executor, DemoExecutor):
+                self.executor.bind_account(self.terminal.connected_server, self.terminal.symbol_map)
         except WorkerFailure:
             raise
         except Exception as exc:
@@ -564,6 +610,9 @@ class HostedConnectionWorker:
             finally:
                 self.terminal.shutdown()
                 self.lease = None
+                self.entries_enabled = False
+                if isinstance(self.executor, DemoExecutor):
+                    self.executor.unbind_account()
             print(f"ZenCore hosted worker state: {failure}", file=sys.stderr, flush=True)
             self.sleeper(max(10.0, self.config.heartbeat_seconds))
 
@@ -609,6 +658,7 @@ def main(argv: list[str] | None = None) -> int:
                 approved_server=config.approved_demo_server,
                 allowed_symbols=config.allowed_demo_symbols,
                 execution_enabled=config.execution_enabled,
+                ledger_path=Path(args.config).resolve().parent / "exit-ledger.json",
             ),
             execution_gate_path=Path(args.execution_gate),
         )

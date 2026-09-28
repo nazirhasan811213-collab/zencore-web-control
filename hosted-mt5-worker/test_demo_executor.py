@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 from demo_executor import DemoExecutionError, DemoExecutor, MAGIC
@@ -84,6 +86,14 @@ class FakeMt5:
 
     def order_send(self, request):
         self.sent.append(request.copy())
+        if "position" in request:
+            position = next(p for p in self.positions if p.ticket == request["position"])
+            if request["action"] == self.TRADE_ACTION_SLTP:
+                position.sl = request["sl"]
+            else:
+                position.volume = round(position.volume - request["volume"], 8)
+                if position.volume < 1e-8:
+                    self.positions.remove(position)
         return SimpleNamespace(retcode=10009, order=100000 + len(self.sent), deal=0)
 
 
@@ -212,6 +222,7 @@ class DemoExecutorTests(unittest.TestCase):
             "strategy": boundary.STRATEGY,
             "schemaVersion": boundary.SCHEMA_VERSION,
             "symbol": "XAUUSD",
+            "positionTickets": ["70001"],
             "actions": snapshot["actions"],
             "reason": snapshot["reason"],
             "signalReceivedAt": now,
@@ -224,6 +235,111 @@ class DemoExecutorTests(unittest.TestCase):
         self.assertEqual(closed.code, "DEMO_EMERGENCY_CLOSE_EXECUTED")
         self.assertEqual(len(self.mt5.sent), 1)
         self.assertEqual(self.mt5.sent[0]["position"], 70001)
+
+    def test_three_minimum_lot_layers_close_half_once_across_worker_restart(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "exit-ledger.json"
+            self.mt5.positions = [SimpleNamespace(
+                magic=MAGIC, ticket=70001 + i, symbol="XAUUSD", type=0,
+                volume=0.01, sl=2990.0, tp=3030.0,
+            ) for i in range(3)]
+            command = self._management([{"type": "CLOSE_PERCENT", "percent": 50}],
+                                       ["70001", "70002", "70003"])
+            first = DemoExecutor(self.mt5, approved_server=self.mt5.server,
+                                 allowed_symbols=("XAUUSD",), execution_enabled=True,
+                                 ledger_path=path, clock_ms=lambda: 1_790_000_000_000)
+            first.execute_management(command)
+            self.assertEqual(sum(p.volume for p in self.mt5.positions), 0.02)
+            restarted = DemoExecutor(self.mt5, approved_server=self.mt5.server,
+                                     allowed_symbols=("XAUUSD",), execution_enabled=True,
+                                     ledger_path=path, clock_ms=lambda: 1_790_000_000_000)
+            restarted.execute_management(command)
+            self.assertEqual(len(self.mt5.sent), 1)
+            self.assertEqual(sum(p.volume for p in self.mt5.positions), 0.02)
+
+    def test_exit_campaigns_are_isolated_by_slot_and_broker_position(self):
+        with tempfile.TemporaryDirectory() as folder:
+            command = self._management([{"type": "CLOSE_PERCENT", "percent": 50}],
+                                       ["90001", "90002"])
+            for slot in ("alice", "bob"):
+                mt5 = FakeMt5()
+                mt5.positions = [SimpleNamespace(magic=MAGIC, ticket=90001+i,
+                    symbol="XAUUSD", type=0, volume=0.01, sl=2990.0, tp=3030.0)
+                    for i in range(2)]
+                worker = DemoExecutor(mt5, approved_server=mt5.server,
+                    allowed_symbols=("XAUUSD",), execution_enabled=True,
+                    ledger_path=Path(folder) / slot / "exit-ledger.json",
+                    clock_ms=lambda: 1_790_000_000_000)
+                worker.execute_management(command)
+                self.assertEqual(sum(p.volume for p in mt5.positions), 0.01)
+
+    def test_stop_loss_cannot_move_backwards_after_step_lock(self):
+        self.mt5.positions = [SimpleNamespace(magic=MAGIC, ticket=70001,
+            symbol="XAUUSD", type=0, volume=0.01, sl=3010.0, tp=3030.0)]
+        self.executor.execute_management(self._management([
+            {"type": "MOVE_SL_ENTRY", "activeSl": 3000.0}]))
+        self.assertEqual(self.mt5.sent, [])
+        self.executor.execute_management(self._management([
+            {"type": "MOVE_SL_TP2", "activeSl": 3020.0}]))
+        self.assertEqual(self.mt5.positions[0].sl, 3020.0)
+
+    def test_uncertain_partial_never_retries_against_broker(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "exit-ledger.json"
+            self.mt5.positions = [SimpleNamespace(magic=MAGIC, ticket=70001,
+                symbol="XAUUSD", type=0, volume=0.02, sl=2990.0, tp=3030.0)]
+            worker = DemoExecutor(self.mt5, approved_server=self.mt5.server,
+                allowed_symbols=("XAUUSD",), execution_enabled=True,
+                ledger_path=path, clock_ms=lambda: 1_790_000_000_000)
+            self.mt5.order_send = lambda _request: SimpleNamespace(retcode=10004)
+            command = self._management([{"type": "CLOSE_PERCENT", "percent": 50}])
+            with self.assertRaisesRegex(DemoExecutionError, "CLOSE_SEND_REJECTED"):
+                worker.execute_management(command)
+            restarted = DemoExecutor(self.mt5, approved_server=self.mt5.server,
+                allowed_symbols=("XAUUSD",), execution_enabled=True,
+                ledger_path=path, clock_ms=lambda: 1_790_000_000_000)
+            with self.assertRaisesRegex(DemoExecutionError, "PARTIAL_CLOSE_RECONCILIATION_REQUIRED"):
+                restarted.execute_management(command)
+
+    def test_stale_exit_cannot_close_new_ticket_in_same_pair(self):
+        self.mt5.positions = [SimpleNamespace(magic=MAGIC, ticket=70003,
+            symbol="XAUUSD", type=0, volume=0.01, sl=2990.0, tp=3030.0)]
+        result = self.executor.execute_management(self._management([
+            {"type": "CLOSE_PERCENT", "percent": 100}], ["70001", "70002"]))
+        self.assertEqual(result.code, "NO_ZENCORE_POSITION")
+        self.assertEqual(self.mt5.sent, [])
+        self.assertEqual(self.mt5.positions[0].ticket, 70003)
+
+    def test_encrypted_demo_server_and_suffix_symbol_bound_to_one_account(self):
+        self.mt5.server = "ExampleBroker-Demo"
+        self.mt5.positions = [SimpleNamespace(magic=MAGIC, ticket=70001,
+            symbol="XAUUSDm", type=0, volume=0.02, sl=2990.0, tp=3030.0)]
+        executor = DemoExecutor(self.mt5, approved_server="ENVELOPE",
+            allowed_symbols=("XAUUSD",), execution_enabled=True,
+            clock_ms=lambda: 1_790_000_000_000)
+        with self.assertRaisesRegex(DemoExecutionError, "ACCOUNT_NOT_BOUND"):
+            executor.execute_management(self._management([{"type": "CLOSE_PERCENT", "percent": 100}]))
+        executor.bind_account("ExampleBroker-Demo", {"XAUUSD": "XAUUSDm"})
+        result = executor.execute_management(self._management([{"type": "CLOSE_PERCENT", "percent": 100}]))
+        self.assertEqual(result.code, "DEMO_MANAGEMENT_EXECUTED")
+        self.assertEqual(self.mt5.sent[0]["symbol"], "XAUUSDm")
+        self.assertEqual(self.mt5.positions, [])
+        executor.unbind_account()
+        with self.assertRaisesRegex(DemoExecutionError, "ACCOUNT_NOT_BOUND"):
+            executor.execute_place_setup(payload())
+
+    @staticmethod
+    def _management(actions, tickets=None):
+        now = 1_790_000_000_000
+        snapshot = {"contractVersion": boundary.CONTRACT_VERSION,
+                    "decision": "POSITION_ACTION_AUTHORIZED", "decisionOwner": "ZENCORE_ANALYSIS",
+                    "strategy": boundary.STRATEGY, "schemaVersion": boundary.SCHEMA_VERSION,
+                    "symbol": "XAUUSD", "actions": actions, "sourceReceivedAt": now}
+        return {"analysisContractVersion": boundary.CONTRACT_VERSION,
+                "analysisSnapshot": snapshot, "strategy": boundary.STRATEGY,
+                "schemaVersion": boundary.SCHEMA_VERSION, "symbol": "XAUUSD",
+                "actions": actions, "signalReceivedAt": now,
+                "positionTickets": tickets or ["70001"]}
 
 
 if __name__ == "__main__":
