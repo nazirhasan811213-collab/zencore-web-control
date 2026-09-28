@@ -18,6 +18,7 @@ const { parseGcpWorkerFleet } = require('./gcp-worker-fleet');
 
 const { AnalysisAlerts } = require('./analysis-alert-service');
 const { SignalOutcomeStore } = require('./signal-outcome-store');
+const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let signalOutcomes = null;
 require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(market));
@@ -1395,10 +1396,28 @@ const server = http.createServer(async (req, res) => {
     if(pathname==='/api/analysis-ai' && req.method==='POST'){
       if(!requestOriginAllowed(req))return sendJson(res,403,{error:'Origin tidak dibenarkan.'});
       if(session.user.role==='viewer')return sendJson(res,403,{error:'Jana AI tersedia untuk akaun berdaftar.'});
-      try { const body=await readJson(req);const result=await aiAnalysis.generate(body.symbol,session.user.id);return sendJson(res,result.code,result); }
+      try { const body=await readJson(req);const result=await aiAnalysis.generate(body.symbol,session.user.id);
+        if(result.code===200){
+          let stats=null;
+          if(signalOutcomes&&result.liveSop?.state==='READY')try{stats=await signalOutcomes.targetStats(body.symbol,result.liveSop.side);}catch{}
+          result.targetMap=targetReachMap({symbol:body.symbol,sop:result.liveSop,external:result.external,scenario:result.scenario,stats});
+        }
+        return sendJson(res,result.code,result); }
       catch(_){return sendJson(res,503,{error:'Analisis tidak tersedia.'});}
     }
     return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
+  }
+  if (pathname === '/api/target-map') {
+    const session=await requireSession(req,res);if(!session)return;
+    if(req.method!=='GET')return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
+    const symbol=url.searchParams.get('symbol');
+    if(!require('./analysis-v33').PAIRS.includes(symbol))return sendJson(res,400,{error:'Pair tidak disokong.'});
+    try { const sop=await fetchLocalSop(symbol),now=Date.now();
+      const safe=sop&&now-sop.dataAt<=90000&&sop.dataAt<=now+5000&&Number.isFinite(sop.sourceBarTime)&&
+        now-sop.sourceBarTime<=240000&&sop.sourceBarTime<=now?sop:null;
+      let stats=null;if(safe?.state==='READY'&&signalOutcomes)try{stats=await signalOutcomes.targetStats(symbol,safe.side);}catch{}
+      return sendJson(res,200,{symbol,generatedAt:now,targetMap:targetReachMap({symbol,sop:safe,stats})});
+    }catch{return sendJson(res,503,{error:'Peta sasaran tidak tersedia.'});}
   }
   if (pathname === '/api/signal-outcomes') {
     const session=await requireSession(req,res);if(!session)return;
