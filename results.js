@@ -207,6 +207,7 @@
       const payloads = settled.filter(item => item.status === 'fulfilled').map(item => item.value);
       aggregate = Results.aggregatePerformance(payloads);
       renderAll();
+      refreshDurable();
       if (payloads.length === Results.SUPPORTED_MARKETS.length) connectionState('live', 'DATA TERKINI');
       else if (payloads.length) connectionState('partial', `${payloads.length}/11 PAIR`);
       else connectionState('error', 'DATA GAGAL');
@@ -219,6 +220,19 @@
         refreshButton.textContent = 'REFRESH';
       }
     }
+  }
+
+  async function refreshDurable(){
+    const body=document.getElementById('durableRows'),status=document.getElementById('durableStatus');if(!body)return;
+    try{const response=await fetch('/api/signal-outcomes',{cache:'no-store',credentials:'same-origin'});
+      if(!response.ok)throw Error('Arkib belum tersedia');const data=await response.json();
+      const rows=Array.isArray(data.records)?data.records:[],total=(data.totals||[]).reduce((n,x)=>n+Number(x.sample||0),0);
+      status.textContent=`${total} REKOD DISIMPAN${data.lastError?' · SYNC SEPARA':''}`;
+      body.replaceChildren();if(!rows.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=6;td.textContent='Belum ada keputusan yang disimpan sejak pengaktifan.';tr.append(td);body.append(tr);return;}
+      for(const row of rows){const tr=document.createElement('tr');const values=[Results.formatDateTime(row.resolvedAt),row.symbol,row.side,
+        Results.formatPrice(row.entry,row.symbol),row.outcome,`${row.score??'—'}/100`];
+        for(const value of values){const td=document.createElement('td');td.textContent=value;tr.append(td);}body.append(tr);}
+    }catch{status.textContent='ARKIB BELUM TERSEDIA';}
   }
 
   function exportCsv() {
