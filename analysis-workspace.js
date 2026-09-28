@@ -7,7 +7,7 @@
   let requestId=0,controller=null,lastResult=null,snapshot=null;
   function renderSnapshot(s){
     snapshot=s;
-    if(s.integrations){const i=s.integrations;text('aiConnections',`Feed 3M/1M: ${i.feedConfigured?'dikonfigurasi':'belum disambungkan'} · GPT: ${i.gptConfigured?'dikonfigurasi':'belum disambungkan'} · Data luar: ${i.externalConfigured?'dikonfigurasi':'belum disambungkan'}`);}
+    if(s.integrations){const i=s.integrations;text('aiConnections',`Pine SOP 3M: dibaca daripada feed semasa · V33: ${i.feedConfigured?'aktif':'pratonton belum aktif'} · GPT: ${i.gptConfigured?'aktif':'pilihan'} · Data luar: ${i.externalConfigured?'aktif':'pilihan'}`);}
     text('v33Pair',s.symbol);text('v33Status',s.status.replaceAll('_',' '));text('v33Reason',s.reason);
     text('v33Direction',s.side);text('v33Quality',s.entryQuality==null?'—':s.entryQuality+'/100');
     text('v33Forecast',s.forecast||'—');text('v33Data',time(s.dataAt));
@@ -32,32 +32,46 @@
     }catch{return null;}
   }
   function renderResult(r){
+    const pine=r.pineScalp||{};
+    text('aiPineAction',pine.action||'TUNGGU FEED PINE 3M');
+    text('aiPineSide',pine.side||'WAIT');text('aiPineReason',pine.reason||'Menunggu SOP 3M yang segar.');
+    text('aiPineClose',price(pine.close3m));
+    text('aiPineEntry',pine.levels?`${price(pine.levels.entry)} / ${price(pine.levels.sl)}`:'Tiada pelan entry baharu');
+    text('aiPineTargets',pine.levels?`${price(pine.levels.tp1)} / ${price(pine.levels.tp2)} / ${price(pine.levels.tp3)}`:'—');
+    text('aiPineTime',pine.dataAt?`Candle Pine: ${time(pine.sourceBarTime||pine.dataAt)} · Snapshot feed: ${time(pine.dataAt)}`:'Tiada feed Pine segar.');
+    text('aiPineCaution',pine.conflicting?.length?`Semak percanggahan: ${pine.conflicting.join(', ')}. Skor penapis bukan peluang menang.`:pine.note||'');
+    const checks=$('aiPineChecks');checks.replaceChildren();
+    for(const item of pine.checks||[]){const row=document.createElement('div');row.className='pine-check '+String(item.state||'INFO').toLowerCase();
+      const label=document.createElement('span'),value=document.createElement('b');label.textContent=item.label;value.textContent=item.value;row.append(label,value);checks.append(row);}
+
     lastResult=r;$('aiResults').hidden=false;text('aiStamp',`${r.symbol} • Snapshot ${time(r.generatedAt)} • TF 3M / 15 minit`);
     if(!r.zencore.dataAt&&r.liveSop){
       text('aiZTitle','Analisis SOP ZenCore semasa');text('aiZDirection',r.liveSop.side+' · '+r.liveSop.state);
       text('aiZReason',r.liveSop.reason);text('aiZData',time(r.liveSop.sourceBarTime||r.liveSop.dataAt));
       text('aiGptStatus',r.gpt.status==='AVAILABLE'?(r.sopInModel?'ULASAN GPT · SOP SEMASA':'ULASAN GPT · DATA LUARAN'):'DATA SOP PINE · BUKAN V33');
-      text('aiNarrative',r.gpt.status==='AVAILABLE'?r.gpt.text:'Feed V33 belum disambungkan. '+r.gpt.text+' Lihat analisis SOP semasa di bawah.');
+      text('aiNarrative',r.gpt.status==='AVAILABLE'?r.gpt.text:'Ulasan GPT pilihan belum tersedia. Ringkasan Pine 3M di atas tetap menggunakan indikator dan SOP semasa.');
     }else{
       text('aiZTitle','AI Analysis ZenCore');text('aiZDirection',r.zencore.side);text('aiZReason',r.zencore.reason);text('aiZData',time(r.zencore.dataAt));
       text('aiNarrative',r.gpt.text);text('aiGptStatus',r.gpt.status==='AVAILABLE'?'ULASAN GPT':'ULASAN GPT BELUM TERSEDIA');
     }
     text('aiExternalStatus',r.external.status);text('aiExternalReason',r.external.reason);text('aiExternalMethod',r.external.method||r.nativeExternal.reason);
     text('aiExternalData',time(r.external.dataAt));text('aiExternalPrice',price(r.external.currentPrice));text('aiExternalPriceAt',time(r.external.priceAt));
-    text('aiComparison',r.comparison);
+    text('aiComparison',r.external.status==='NOT_CONFIGURED'?(pine.status==='AVAILABLE'?'PINE 3M TERSEDIA · SEMAKAN LUARAN PILIHAN':'TUNGGU FEED PINE 3M'):r.comparison);
     text('aiExternalSource',r.external.source);text('aiExternalBias',r.external.bias||'—');
     const s=r.scenario||{};
-    text('aiScenarioStatus',String(s.status||'WAIT_DATA').replaceAll('_',' '));
-    text('aiScenarioReason',s.reason||'Menunggu data lengkap.');
-    text('aiScenarioPrice',price(s.price));
-    text('aiScenario3m',s.next3m?`${price(s.next3m.low)} – ${price(s.next3m.high)}`:'—');
-    text('aiScenario15m',s.next15m?`${price(s.next15m.low)} – ${price(s.next15m.high)}`:'—');
-    text('aiScenarioNote',s.note||'Julat ialah rujukan volatiliti, bukan ramalan tepat atau arahan entry.');
+    const pineRange=s.status==='WAIT_DATA'&&pine.status==='AVAILABLE'&&pine.close3m!=null&&pine.atr3m>0;
+    text('aiScenarioStatus',pineRange?'JULAT ATR PINE':String(s.status||'WAIT_DATA').replaceAll('_',' '));
+    text('aiScenarioReason',pineRange?'Rujukan volatiliti daripada close dan ATR Pine 3M. Bukan harga tick semasa atau cadangan entry.':s.reason||'Menunggu data lengkap.');
+    text('aiScenarioPrice',price(pineRange?pine.close3m:s.price));
+    text('aiScenario3m',pineRange?`${price(pine.close3m-pine.atr3m*.5)} – ${price(pine.close3m+pine.atr3m*.5)}`:s.next3m?`${price(s.next3m.low)} – ${price(s.next3m.high)}`:'—');
+    text('aiScenario15m',pineRange?`${price(pine.close3m-pine.atr3m*1.5)} – ${price(pine.close3m+pine.atr3m*1.5)}`:s.next15m?`${price(s.next15m.low)} – ${price(s.next15m.high)}`:'—');
+    text('aiScenarioNote',pineRange?'ATR Pine 3M × 0.5 dan × 1.5 ialah anggaran julat dua arah; tidak menunjukkan sasaran atau peluang harga sampai.':s.note||'Julat ialah rujukan volatiliti, bukan ramalan tepat atau arahan entry.');
     const v=r.verdict||{};
-    text('aiVerdictLabel',v.label||'DATA BELUM CUKUP');text('aiVerdictProfit',v.profitView||'BELUM DAPAT DINILAI');
-    text('aiEntryNow',v.entryNow||'TUNGGU DATA');
+    const pineOnly=pine.status==='AVAILABLE'&&r.external.status!=='AVAILABLE';
+    text('aiVerdictLabel',pineOnly?(pine.state==='READY'?'SOP READY · BERSYARAT':'TUNGGU TRIGGER SOP'):v.label||'DATA BELUM CUKUP');text('aiVerdictProfit',pineOnly?'POTENSI BELUM DISAHKAN':v.profitView||'BELUM DAPAT DINILAI');
+    text('aiEntryNow',pineOnly?(pine.state==='READY'?'SEMAK HARGA & SPREAD BROKER':'TUNGGU SETUP 3M'):v.entryNow||'TUNGGU DATA');
     text('aiEntryDistance',s.distanceFromEntry==null?'Jarak harga daripada entry: —':`Jarak searah daripada entry: ${price(s.distanceFromEntry)} · Zon rujukan ±${price(s.entryZone)} · Close 1M, bukan tick broker`);
-    text('aiVerdictReason',v.reason||'Menunggu data semasa.');
+    text('aiVerdictReason',pineOnly?pine.reason:v.reason||'Menunggu data semasa.');
     text('aiVerdictScore',v.score==null?'—':`${v.score}/100 · ${v.grade||'—'}`);
     text('aiVerdictStability',v.stability==null||v.readiness==null?'—':`${v.stability}/100 · ${v.readiness}/100`);
     text('aiVerdictRr',v.rrTp1==null?'—':`${v.rrTp1}R`);text('aiVerdictNote',v.note||'Skor bukan peluang menang.');
