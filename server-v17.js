@@ -1,6 +1,7 @@
 const http=require('http');
 const fs=require('fs');
 const path=require('path');
+const {acceptsSnapshot,effectiveReceivedAt}=require('./market-feed-sync');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
 const V16_PORT=PUBLIC_PORT===10001?10002:10001;
@@ -52,6 +53,7 @@ function freshness(ts,tf='3'){
   const staleMs=Math.max(360000,mins*60000+300000);
   return age<liveMs?'LIVE':age<staleMs?'STALE':'OFFLINE';
 }
+function feedFreshness(d){return freshness(effectiveReceivedAt(d),d?.timeframe);}
 function zoneInfo(d){
   const e=N(d?.entry),a=N(d?.atr),c=N(d?.close);
   if(e==null||a==null||a<=0||c==null)return{state:'NO DATA',near:false,inZone:false,dist:null};
@@ -109,7 +111,7 @@ function predictionEngine(d,symbol){
   const totalWeight=buy+sell||1; const agreeWeight=Math.max(buy,sell)/totalWeight; const consensus=leaderEvidence.length;
   const chop=N(d.chopIndex); const chopPenalty=chop!=null?(chop>=65?22:chop>=58?12:chop<=38?-4:0):0;
   const conflict=(f3!=='WAIT'&&p10!=='WAIT'&&f3!==p10) || agreeWeight<.61;
-  const freshPenalty=freshness(d.receivedAt)==='LIVE'?0:freshness(d.receivedAt)==='STALE'?18:40;
+  const freshPenalty=feedFreshness(d)==='LIVE'?0:feedFreshness(d)==='STALE'?18:40;
   const rvol=N(d.relativeVolume); const volumeBoost=rvol!=null&&rvol>=1.2?4:0;
   let confidence=50+lead*.28+(agreeWeight-.5)*42+Math.min(10,consensus*1.5)+volumeBoost-chopPenalty-freshPenalty-(conflict?10:0);
   confidence=clamp(Math.round(confidence));
@@ -120,7 +122,7 @@ function predictionEngine(d,symbol){
 
   const strength=direction==='WAIT'?(confidence>=70?'CONFLICT':'LOW'):confidence>=86?'STRONG':confidence>=76?'GOOD':'EARLY';
   const reasons=leaderEvidence.slice(0,4).map(x=>x.label);
-  return{direction,confidence,consensus,totalEvidence:ev.length,strength,horizon:'NEXT 1–3 BARS',reasons,conflict,bullScore:buy,bearScore:sell,agreement:Math.round(agreeWeight*100),currentAction:U(d.action||'WAIT'),freshness:freshness(d.receivedAt,d.timeframe)};
+  return{direction,confidence,consensus,totalEvidence:ev.length,strength,horizon:'NEXT 1–3 BARS',reasons,conflict,bullScore:buy,bearScore:sell,agreement:Math.round(agreeWeight*100),currentAction:U(d.action||'WAIT'),freshness:feedFreshness(d)};
 }
 
 
@@ -562,7 +564,7 @@ function marketSummary(symbol){
   const core=signalCoreBySymbol.get(symbol)||updateSignalCore(symbol,d),opp=opportunityBySymbol.get(symbol)||updateOpportunity(symbol,d);
   const strategyFast=fastTradeStrategy(symbol,d),strategyNormal=normalScalpStrategy(symbol,d);
   const signal=core.side||'WAIT',signalConf=signalConfidenceForSide(p,signal);
-  return{symbol,online:true,freshness:freshness(d.receivedAt),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),tradeActive:d.tradeActive===true&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE',positionManagement:{stage:U(d.positionExitStage||'IDLE'),action:U(d.positionExitAction||'IDLE'),partialArmed:d.exitPartialArmed===true,oppositeYellow:d.exitOppositeYellow===true,remainingPct:N(d.exitRemainingPct),yellowType:U(d.exitYellowType||'NONE'),reason:String(d.exitReason||''),initialSl:N(d.initialSl??d.sl),activeSl:N(d.activeSl??d.sl),slLockStage:N(d.slLockStage)||0,slLockLabel:U(d.slLockLabel||'INITIAL'),slMoveAction:U(d.slMoveAction||'NONE'),slMoveTriggered:d.slMoveTriggered===true,exitCloseType:U(d.exitCloseType||'NONE')}};
+  return{symbol,online:true,freshness:feedFreshness(d),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),sourceBarTime:N(d.time),tradeActive:d.tradeActive===true&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE',positionManagement:{stage:U(d.positionExitStage||'IDLE'),action:U(d.positionExitAction||'IDLE'),partialArmed:d.exitPartialArmed===true,oppositeYellow:d.exitOppositeYellow===true,remainingPct:N(d.exitRemainingPct),yellowType:U(d.exitYellowType||'NONE'),reason:String(d.exitReason||''),initialSl:N(d.initialSl??d.sl),activeSl:N(d.activeSl??d.sl),slLockStage:N(d.slLockStage)||0,slLockLabel:U(d.slLockLabel||'INITIAL'),slMoveAction:U(d.slMoveAction||'NONE'),slMoveTriggered:d.slMoveTriggered===true,exitCloseType:U(d.exitCloseType||'NONE')}};
 }
 function priority(m){return m.status==='TRADE ACTIVE'?700:m.status==='HOT PREDICTION'?600:m.status==='PREDICTION READY'?500:m.status==='WATCH'?400:m.status==='NEAR ENTRY'?300:m.status==='WAIT'?200:m.status==='STALE'?80:0;}
 function marketsPayload(){
@@ -591,7 +593,7 @@ function chartPayload(symbol,limit=180){
 }
 
 function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(const res of marketClients){try{res.write(`event: markets\ndata: ${payload}\n\n`)}catch(_){marketClients.delete(res)}}}
-function broadcastPrediction(symbol){require('./analysis-alert-bus').emit('market',{...marketSummary(symbol),sourceBarTime:N(latestBySymbol.get(symbol)?.time)});const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(marketSummary(symbol));for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
+function broadcastPrediction(symbol){const summary=marketSummary(symbol);require('./analysis-alert-bus').emit('market',summary);const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(summary);for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
 function expandCompactMarket(row,batch){
   if(!Array.isArray(row)||row.length<61)return null;
   const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action]=row;
@@ -614,6 +616,7 @@ function storeSnapshot(parsed){
   if(!parsed||parsed.source!=='ZenCore AI Dashboard Pro + Alerts')return null;
   const symbol=normSymbol(parsed.symbol||parsed.tickerid);
   if(!symbol||N(parsed.close)==null)return null;
+  if(!acceptsSnapshot(latestBySymbol.get(symbol),parsed))return null;
   const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'};
   latestBySymbol.set(symbol,d);
   const arr=historyBySymbol.get(symbol)||[];
