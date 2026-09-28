@@ -1309,7 +1309,12 @@ function fetchLocalSop(symbol) {
             score: sop.score != null && Number.isFinite(Number(sop.score)) ? Math.max(0, Math.min(100, Number(sop.score))) : null,
             grade: String(data.grade || '').slice(0, 8),
             stability: data.stability != null && Number.isFinite(Number(data.stability)) ? Math.max(0, Math.min(100, Number(data.stability))) : null,
-            readiness: data.readiness != null && Number.isFinite(Number(data.readiness)) ? Math.max(0, Math.min(100, Number(data.readiness))) : null});
+            readiness: data.readiness != null && Number.isFinite(Number(data.readiness)) ? Math.max(0, Math.min(100, Number(data.readiness))) : null,
+            indicator: sop.sop ? {
+              close: sop.sop.close3, atr: sop.sop.atr3, forecast: sop.sop.forecast,
+              power: sop.sop.marketPower, green: sop.sop.sopGreen,
+              ...Object.fromEntries(['ema9','ema20','ema50','hema20','hema40','waveTrend1','waveTrend2','rsi','chop','relativeVolume','globalTrend','basis']
+                .map(k=>[k,sop.sop.indicatorContext?.[k]]))} : null});
         } catch (_) { reject(new Error('SOP response invalid')); }
       });
     });
@@ -1398,9 +1403,7 @@ const server = http.createServer(async (req, res) => {
       if(session.user.role==='viewer')return sendJson(res,403,{error:'Jana AI tersedia untuk akaun berdaftar.'});
       try { const body=await readJson(req);const result=await aiAnalysis.generate(body.symbol,session.user.id);
         if(result.code===200){
-          let stats=null;
-          if(signalOutcomes&&result.liveSop?.state==='READY')try{stats=await signalOutcomes.targetStats(body.symbol,result.liveSop.side);}catch{}
-          result.targetMap=targetReachMap({symbol:body.symbol,sop:result.liveSop,external:result.external,scenario:result.scenario,stats});
+          result.targetMap=targetReachMap({symbol:body.symbol,sop:result.liveSop});
         }
         return sendJson(res,result.code,result); }
       catch(_){return sendJson(res,503,{error:'Analisis tidak tersedia.'});}
@@ -1415,8 +1418,7 @@ const server = http.createServer(async (req, res) => {
     try { const sop=await fetchLocalSop(symbol),now=Date.now();
       const safe=sop&&now-sop.dataAt<=90000&&sop.dataAt<=now+5000&&Number.isFinite(sop.sourceBarTime)&&
         now-sop.sourceBarTime<=240000&&sop.sourceBarTime<=now?sop:null;
-      let stats=null;if(safe?.state==='READY'&&signalOutcomes)try{stats=await signalOutcomes.targetStats(symbol,safe.side);}catch{}
-      return sendJson(res,200,{symbol,generatedAt:now,targetMap:targetReachMap({symbol,sop:safe,stats})});
+      return sendJson(res,200,{symbol,generatedAt:now,targetMap:targetReachMap({symbol,sop:safe})});
     }catch{return sendJson(res,503,{error:'Peta sasaran tidak tersedia.'});}
   }
   if (pathname === '/api/signal-outcomes') {

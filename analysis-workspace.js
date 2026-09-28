@@ -69,16 +69,16 @@
     if(!$('aiTargetMap').hidden){
       text('aiTargetSide',map.side);text('aiTargetReason',map.reason);
       text('aiTargetEntry',price(map.entry));text('aiTargetRisk',`${map.riskDistance} ${map.unit} · SL ${price(map.sl)}`);
-      text('aiTargetRoom',map.room15m==null?'Data belum cukup':`${map.room15m} ${map.unit}`);
+      text('aiTargetRoom',map.room15m==null?'Input Pine belum lengkap':`${map.room15m} ${map.unit} · ${map.indicator.support}/${map.indicator.total} penapis`);
       text('aiTargetNote',map.note);
       const rows=$('aiTargetRows');rows.replaceChildren();
       for(const target of map.targets){
         const tr=document.createElement('tr');
         const cells=[target.name,price(target.price),`${target.distance} ${target.unit} · ${target.rr}R`,
           `${target.reach}${target.remaining==null?'':` · baki ${target.remaining} ${target.unit}`}`,
-          target.historical?`${target.historical.rate}% · ${target.historical.hit}/${target.historical.sample} rekod`:'Belum cukup 30 rekod'];
+          map.indicator?.forecast?`${map.indicator.forecast} · ${map.indicator.power}/100`:'Input belum lengkap'];
         cells.forEach((value,index)=>{const td=document.createElement('td');td.textContent=value;
-          if(index===3)td.className='reach '+(target.reach==='DI LUAR JULAT 15M'?'far':target.reach==='SUDAH DILEPASI'?'passed':'');tr.append(td);});
+          if(index===3)td.className='reach '+(target.reach.startsWith('TERHALANG')||target.reach.startsWith('DI LUAR')?'far':target.reach==='PARAS TELAH DILEPASI'?'passed':'');tr.append(td);});
         rows.append(tr);
       }
     }
@@ -104,7 +104,7 @@
     if(lastResult&&Date.now()-lastResult.generatedAt>180000){
       text('aiFreshness','Snapshot melebihi satu candle 3M. Jana semula untuk perbandingan terkini.');
       if(!$('aiTargetMap').hidden){text('aiTargetRoom','DATA LEWAT · JANA SEMULA');
-        text('aiTargetReason','Harga dan ruang 15M pada snapshot ini sudah lewat. Jana semula sebelum menilai sasaran.');}
+        text('aiTargetReason','Snapshot Pine dan bacaan indikator sudah lewat. Jana semula sebelum menilai sasaran.');}
     }},1000);
   document.querySelector('.legacy-analysis')?.addEventListener('toggle',()=>window.dispatchEvent(new Event('resize')));
   refresh();refreshTargetMap();setInterval(refresh,15000);setInterval(()=>{if(!lastResult)refreshTargetMap();},45000);
