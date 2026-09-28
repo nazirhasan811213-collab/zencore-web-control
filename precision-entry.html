@@ -208,14 +208,21 @@
   </section>
 
   <section class="ws-panel" aria-labelledby="aiHeading">
-    <div class="ws-title"><div><span class="ws-kicker">AI ANALYSIS · TF 3M / 15 MINIT</span><h3 id="aiHeading">Bandingkan analisis AI</h3><p class="ws-muted">Apabila feed V33 belum tersedia, analisis SOP semasa dipaparkan dengan label dan masa data. Signal sistem tidak menunggu jawapan AI.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
+    <div class="ws-title"><div><span class="ws-kicker">MARKET ANALYSIS · SCALPING 3M</span><h3 id="aiHeading">Keputusan entry berdasarkan Pine semasa</h3><p class="ws-muted">SOP dan indikator ZenCore 3M ialah sumber utama. Data harga luaran dan ulasan GPT ialah semakan tambahan apabila tersedia; signal entry kekal mengikut SOP Pine.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
     <p id="aiConnections" class="ws-muted" role="status">Menyemak sambungan analisis…</p>
     <p id="aiStatus" class="ws-muted" role="status" aria-live="polite">Klik untuk analisis pair yang dipilih.</p>
     <div id="aiResults" hidden>
-      <p id="aiStamp" class="ws-muted"></p><div class="ws-ai-grid">
-        <article class="ws-ai-card"><span class="ws-kicker">01 · SISTEM ZENCORE</span><h4 id="aiZTitle">AI Analysis ZenCore</h4><strong id="aiZDirection">—</strong><p id="aiZReason"></p><span id="aiGptStatus" class="ws-kicker"></span><p id="aiNarrative"></p><div class="ws-note ws-muted">Masa data: <span id="aiZData"></span></div></article>
-        <article class="ws-ai-card"><span class="ws-kicker">02 · SUMBER LUARAN</span><h4>Analisis harga luaran 3M</h4><strong id="aiExternalStatus">—</strong><p id="aiExternalReason"></p><p id="aiExternalMethod" class="ws-muted"></p><div class="ws-note ws-muted">Harga 1M terkini: <b id="aiExternalPrice">—</b> · Candle: <span id="aiExternalPriceAt">Belum tersedia</span><br>Masa 3M lengkap: <span id="aiExternalData"></span></div></article>
-      </div><div class="ws-compare"><span class="ws-kicker">RUMUSAN PERBANDINGAN</span><p><b id="aiComparison">—</b></p><div class="ws-scroll"><table class="ws-table"><thead><tr><th>Sumber</th><th>TF</th><th>Bias</th><th>Jenis</th></tr></thead><tbody><tr><td>ZenCore</td><td>3M + trigger 1M</td><td>Rujuk panel 01</td><td>Aturan ZenCore V33</td></tr><tr><td id="aiExternalSource">—</td><td>1M → 3M</td><td id="aiExternalBias">—</td><td>Dikira daripada OHLC luaran</td></tr></tbody></table></div><p id="aiFreshness" class="ws-muted"></p></div>
+      <p id="aiStamp" class="ws-muted"></p>
+      <article class="ws-scenario pine-scalp" aria-label="Ringkasan analisis Pine 3 minit">
+        <div class="ws-title"><div><span class="ws-kicker">KEPUTUSAN SEMASA · PINE 3M</span><h4 id="aiPineAction">MENUNGGU FEED</h4></div><strong id="aiPineSide">—</strong></div>
+        <p id="aiPineReason">Menunggu data SOP 3M terkini.</p>
+        <div class="ws-scenario-grid"><div><span>CLOSE 3M</span><b id="aiPineClose">—</b></div><div><span>ENTRY / SL</span><b id="aiPineEntry">—</b></div><div><span>TP1 / TP2 / TP3</span><b id="aiPineTargets">—</b></div></div>
+        <div id="aiPineChecks" class="pine-checks"></div>
+        <p id="aiPineCaution" class="ws-muted"></p><p id="aiPineTime" class="ws-muted"></p>
+      </article><div class="ws-ai-grid">
+        <article class="ws-ai-card"><span class="ws-kicker">01 · SOP PINE ZENCORE</span><h4 id="aiZTitle">Analisis SOP ZenCore</h4><strong id="aiZDirection">—</strong><p id="aiZReason"></p><span id="aiGptStatus" class="ws-kicker"></span><p id="aiNarrative"></p><div class="ws-note ws-muted">Masa data: <span id="aiZData"></span></div></article>
+        <article class="ws-ai-card"><span class="ws-kicker">02 · SEMAKAN LUARAN (PILIHAN)</span><h4>Harga bebas 1M → 3M</h4><strong id="aiExternalStatus">—</strong><p id="aiExternalReason"></p><p id="aiExternalMethod" class="ws-muted"></p><div class="ws-note ws-muted">Harga 1M terkini: <b id="aiExternalPrice">—</b> · Candle: <span id="aiExternalPriceAt">Belum tersedia</span><br>Masa 3M lengkap: <span id="aiExternalData"></span></div></article>
+      </div><div class="ws-compare"><span class="ws-kicker">RUMUSAN PERBANDINGAN</span><p><b id="aiComparison">—</b></p><div class="ws-scroll"><table class="ws-table"><thead><tr><th>Sumber</th><th>TF</th><th>Bias</th><th>Jenis</th></tr></thead><tbody><tr><td>ZenCore</td><td>3M + trigger 1M</td><td>Rujuk panel 01</td><td>SOP Pine Normal 3M</td></tr><tr><td id="aiExternalSource">—</td><td>1M → 3M</td><td id="aiExternalBias">—</td><td>Dikira daripada OHLC luaran</td></tr></tbody></table></div><p id="aiFreshness" class="ws-muted"></p></div>
       <article class="ws-scenario" aria-label="Senario scalping bersyarat">
         <div class="ws-title"><div><span class="ws-kicker">SENARIO PERGERAKAN · TF 3M</span><h4>Harga selepas setup</h4></div><strong id="aiScenarioStatus">MENUNGGU DATA</strong></div>
         <p id="aiScenarioReason">Julat muncul apabila close 1M segar dan candle 3M lengkap.</p>
