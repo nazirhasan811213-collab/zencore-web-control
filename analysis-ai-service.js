@@ -97,7 +97,7 @@ function pineScalpAnalysis(sop,now=Date.now()){
   const wave=w1!==null&&w2!==null?w1>w2?'bullish':w1<w2?'bearish':'mendatar':'belum lengkap';
   const mtf=str(d.mtfOverall)||(str(i.m5Position)?'Harga 5M '+i.m5Position:'belum tersedia');
   const forecast=str(d.forecast3Bars)||str(i.forecast)||'belum tersedia';
-  const dashboardFields=[['Struktur',d.marketStructure],['Momentum',d.momentum],['Tekanan',d.demand],['Volume',d.volumeState],['HEMA',d.hemaTrend],['MTF',d.mtfOverall],['Ramalan 3 bar',d.forecast3Bars],['DXY',d.dxyStatus],['Supply/Demand',d.sdClearance],['Whales',d.whaleState],['Risiko',d.riskState],['Tip Pine',d.proTip]].filter(([,v])=>str(v));
+  const dashboardFields=[['Bar status',d.barStatus],['Struktur',d.marketStructure],['Momentum',d.momentum],['Tekanan',d.demand],['Volume',d.volumeState],['HEMA',d.hemaTrend],['MTF',d.mtfOverall],['Skor MTF',d.mtfTotal],['Trend global',d.globalTrend],['Ramalan 3 bar',d.forecast3Bars],['Setup probability',d.setupProbability],['Confluence',d.confluence],['Chop dashboard',d.chop],['Volume relatif dashboard',d.relativeVolume],['DXY',d.dxyStatus],['Supply/Demand',d.sdClearance],['Whales',d.whaleState],['Risiko',d.riskState],['Tip Pine',d.proTip]].filter(([,v])=>v!==null&&v!==undefined&&String(v).trim());
   const sections=[
     {title:'Arah dan struktur pasaran',body:`Struktur ${str(d.marketStructure)||'belum dihantar'}; momentum ${str(d.momentum)||'rujuk WaveTrend '+wave}; tekanan ${str(d.demand)||'belum dihantar'}. EMA 9/20/50 ${ema}, HEMA 20/40 ${hema}, WaveTrend ${wave}. MTF: ${mtf}.`},
     {title:'Kekuatan pergerakan 3 minit',body:`Chop ${chop===null?'tiada data':chop.toFixed(1)+'%'}${chop!==null&&chop>=58?' menunjukkan pasaran mudah berulang-alik':' sebagai konteks keadaan pasaran'}. Volume relatif ${rv===null?'tiada data':rv.toFixed(2)+'x'}; RSI ${rsi===null?'tiada data':rsi.toFixed(1)}; ATR ${fmt(atr)}. ${str(d.volumeState)?'Dashboard volume: '+d.volumeState+'. ':''}Bacaan ini ialah konteks, bukan trigger entry.`},
@@ -116,7 +116,7 @@ function pineScalpAnalysis(sop,now=Date.now()){
     'Pantau candle 3M berikutnya dan tunggu signal SOP yang baharu; bias BUY/SELL sahaja bukan arahan entry.'
   ];
   return {status:'AVAILABLE',action:ready?'ENTRY '+side+' DISAHKAN':'TUNGGU ENTRY SOP 3M',side,state:sop.state,reason:str(sop.reason)||steps[0],sections,steps,blockers,
-    readings:dashboardFields.map(([label,value])=>({label,value:String(value)})),levels,close3m:close,atr3m:atr,sourceBarTime:sop.sourceBarTime,dataAt:sop.dataAt,
+    readings:[...dashboardFields.map(([label,value])=>({label,value:String(value)})),...([['EMA9',e9],['EMA20',e20],['EMA50',e50],['HEMA20',h20],['HEMA40',h40],['WaveTrend 1',w1],['WaveTrend 2',w2],['RSI',rsi],['Chop 3M',chop],['Relative volume',rv],['ATR 3M',atr],['Forecast SOP',i.forecast],['Market power',i.power],['SOP hijau',i.green],['HEMA 5M position',i.m5Position]].filter(([,value])=>value!==null&&value!==undefined&&String(value).trim()).map(([label,value])=>({label,value:String(value)})))],levels,close3m:close,atr3m:atr,sourceBarTime:sop.sourceBarTime,dataAt:sop.dataAt,
     note:'Analisis berpandukan feed TradingView 3M. Data dashboard yang belum dihantar ditandakan jelas; tiada ramalan keuntungan atau kepastian entry.'};
 }
 
