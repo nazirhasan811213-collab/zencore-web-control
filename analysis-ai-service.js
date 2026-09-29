@@ -117,30 +117,53 @@ function pineScalpAnalysis(sop,now=Date.now()){
     why:marketSummary,
     next:blockers.length?'Tunggu syarat entry lengkap: '+blockers.slice(0,2).join(' dan ')+'.':'Tunggu signal SOP pada candle 3 minit seterusnya.'
   };
-  const trendUp=/UP|BULL|NAIK/i.test(structure),trendDown=/DOWN|BEAR|TURUN/i.test(structure);
-  const trend=trendUp?'Cenderung naik':trendDown?'Cenderung turun':'Arah belum jelas';
+  // Reconstruct market commentary from the supplied Pine dashboard; SOP alone authorizes entries.
+  const global=n(d.globalTrend),mtfTotal=n(d.mtfTotal),stars=n(d.confluence);
+  const pineSideways=/SIDEWAY|RANGE/i.test(structure)||(chop!==null&&chop>61.8);
+  const bias=global!==null&&global!==0?(global>0?'BUY':'SELL'):
+    /UP|BULL|NAIK/i.test(structure)?'BUY':/DOWN|BEAR|TURUN/i.test(structure)?'SELL':'WAIT';
+  const trend=bias==='BUY'?'Bias naik':bias==='SELL'?'Bias turun':'Arah belum jelas';
   const mtfText=str(d.mtfOverall);
-  const mtfMixed=mtfText&&(/MIX|MILD|NEUTRAL|WAIT/i.test(mtfText)||
-    side==='BUY'&&/BEAR|SELL|DOWN/i.test(mtfText)||side==='SELL'&&/BULL|BUY|UP/i.test(mtfText));
-  const mtfGuide=mtfText?(mtfMixed?'Timeframe lain belum sehaluan.':'Timeframe lain menyokong arah semasa.'):'Bacaan timeframe lain belum diterima.';
+  const mtfSupport=mtfTotal!==null&&(bias==='BUY'&&mtfTotal>=2||bias==='SELL'&&mtfTotal<=-2);
+  const mtfMixed=mtfTotal!==null?bias!=='WAIT'&&!mtfSupport:
+    !!mtfText&&(/MIX|MILD|NEUTRAL|WAIT|CHOP/i.test(mtfText)||
+      bias==='BUY'&&/BEAR|SELL|DOWN/i.test(mtfText)||bias==='SELL'&&/BULL|BUY|UP/i.test(mtfText));
+  const mtfGuide=mtfText||mtfTotal!==null?(mtfMixed?'Timeframe lain bercampur.':mtfSupport||/STRONG/i.test(mtfText||'')?'Timeframe lain menyokong.':'Timeframe lain belum sehaluan.'):'Bacaan timeframe lain belum diterima.';
   const momentumText=str(d.momentum);
-  const momentumGuide=momentumText?/BULL|BUY|UP|NAIK/i.test(momentumText)?'Dorongan belian kelihatan.':/BEAR|SELL|DOWN|TURUN/i.test(momentumText)?'Dorongan jualan kelihatan.':'Momentum belum jelas.':
-    wave==='bullish'?'Dorongan belian kelihatan.':wave==='bearish'?'Dorongan jualan kelihatan.':'Momentum belum jelas.';
-  const zone=str(d.sdClearance);
-  const zoneGuide=zone?/CLEAR/i.test(zone)?'Tiada halangan zon yang jelas dalam bacaan Pine.':'Ada zon yang perlu diperhatikan; jangan kejar harga.':'Maklumat halangan harga belum diterima.';
-  const whale=str(d.whaleState);
-  const whaleGuide=whale?/QUIET|NONE/i.test(whale)?'Aktiviti pemain besar tenang.':'Aktiviti pemain besar: '+whale+'.':'Aktiviti pemain besar belum tersedia.';
-  const caution=Boolean(choppy||weakVolume||mtfMixed||zone&&!/CLEAR/i.test(zone));
-  const headline=ready?
-    `Signal ${side} sah. ${caution?'Pasaran ada percanggahan; entry perlu lebih berhati-hati.':'Bacaan utama menyokong setup.'}`:
-    `${trend}. ${mtfMixed?'Timeframe bercampur. ':''}Belum ada entry yang sah.`;
+  const momentumDir=momentumText?(/BULL|BUY|UP|NAIK/i.test(momentumText)?'BUY':/BEAR|SELL|DOWN|TURUN/i.test(momentumText)?'SELL':'WAIT'):
+    wave==='bullish'?'BUY':wave==='bearish'?'SELL':'WAIT';
+  const momentumGuide=bias==='BUY'?(momentumDir==='BUY'?'Dorongan belian menyokong arah.':'Dorongan belian mula perlahan.'):
+    bias==='SELL'?(momentumDir==='SELL'?'Tekanan jualan menyokong arah.':'Tekanan jualan mula perlahan.'):'Momentum belum jelas.';
+  const rsiExtreme=(bias==='BUY'&&rsi!==null&&rsi>70)||(bias==='SELL'&&rsi!==null&&rsi<30);
+  const zone=str(d.sdClearance),zoneRisk=!!zone&&!/CLEAR/i.test(zone);
+  let zoneGuide='Maklumat zon halangan belum diterima.';
+  if(zone)zoneGuide=/TRAPPED/i.test(zone)?'Harga tersepit antara zon; tunggu laluan jelas.':
+    /RES/i.test(zone)?'Dekat rintangan; elakkan mengejar BUY.':
+    /SUP/i.test(zone)?'Dekat sokongan; elakkan mengejar SELL.':
+    /CLEAR/i.test(zone)?'Laluan zon kelihatan jelas.':'Zon halangan: '+zone+'.';
+  const whale=str(d.whaleState),absorption=!!whale&&/ABSORB/i.test(whale);
+  let whaleGuide='Aktiviti pemain besar belum tersedia.';
+  if(whale)whaleGuide=/QUIET/i.test(whale)?'Aktiviti pemain besar tenang.':
+    absorption?'Ada absorption; awas perubahan arah.':
+    /NO DATA/i.test(whale)?'Data whales tidak tersedia.':
+    /BULL/i.test(whale)?'Pemain besar menolak ke atas.':
+    /BEAR/i.test(whale)?'Pemain besar menekan ke bawah.':'Aktiviti pemain besar meningkat.';
+  const quality=stars!==null?(stars>=4?'Bacaan indikator kuat, tetapi masih perlu signal SOP.':'Bacaan indikator belum padu.'):'Kekuatan setup belum lengkap.';
+  const caution=Boolean(pineSideways||choppy||weakVolume||mtfMixed||zoneRisk||absorption||rsiExtreme);
+  const headline=pineSideways?'Pasaran sideways dan berisiko. Jaga modal; tunggu keadaan lebih jelas.':
+    ready?`Signal ${side} sah. ${caution?'Ada risiko tambahan; semak sebelum entry.':'Keadaan menyokong setup.'}`:
+    `${trend}. ${mtfMixed?'Timeframe bercampur. ':''}Belum ada signal entry yang sah.`;
+  const tip=str(d.proTip);
+  const adviceText=pineSideways?'Jangan paksa entry. Tunggu pasaran keluar daripada sideways dan SOP baharu.':
+    ready?(caution?'Signal sah, tetapi risiko meningkat. Semak spread, kurangkan saiz jika sesuai dan jangan kejar harga.':
+      'Semak harga broker dan risiko, kemudian ikut trade plan.'):
+    'Tunggu SOP lengkap pada candle berikutnya. '+quality+(tip&&/WAIT|TUNGGU|PULLBACK|REVERSAL/i.test(tip)?' '+tip:'');
   const coach={headline,rows:[
     {label:'Trend',text:trend+'. '+mtfGuide},
-    {label:'Momentum',text:momentumGuide+(weakVolume?' Sokongan volume lemah.':'')},
+    {label:'Momentum',text:momentumGuide+(weakVolume?' Volume kurang menyokong.':'')+(rsiExtreme?' Harga mungkin sudah terlalu jauh; tunggu reset.':'')},
     {label:'Halangan',text:zoneGuide},
     {label:'Whales',text:whaleGuide},
-    {label:'Nasihat',text:ready?(caution?'Semak spread dan risiko. Pertimbangkan saiz posisi lebih kecil; jangan kejar harga.':'Semak harga broker, tetapkan risiko, kemudian ikut trade plan.'):
-      'Tunggu SOP lengkap pada candle seterusnya. Jangan entry hanya kerana bias pasaran.'}
+    {label:'Nasihat',text:adviceText}
   ]};
   const steps=[advice.do,advice.next];
   return {status:'AVAILABLE',action:ready?'ENTRY '+side+' DISAHKAN':'TUNGGU ENTRY SOP 3M',side,state:sop.state,reason:advice.why,advice,coach,sections,steps,blockers,
