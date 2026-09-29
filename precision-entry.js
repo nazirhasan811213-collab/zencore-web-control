@@ -315,7 +315,7 @@ function renderMarket(m){
   setText('riskDistance',fmtPrice(p?.riskDistance));
   const planRr=rrFromPlan(p);
   setText('rrTp3',planRr==null?'—':planRr.toFixed(1)+'R');
-  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Hard gates passed. SOP signal valid; A+ Quality ialah lapisan execution berasingan.':'Pelan entry hanya muncul apabila SOP READY dan gred sekurang-kurangnya C+.');
+  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Paras Entry, SL dan TP mengikut '+(p.tpMode||'pelan')+' pada carta TradingView.':'Pelan entry hanya muncul apabila SOP READY dan gred sekurang-kurangnya C+.');
 
   setText('riskState',m?.sidewaysGuard?'HIGH / SIDEWAYS':state==='READY'?'CONTROLLED':'WAIT');
   setText('setupProbability',m?.setupProbability==null?'—':Math.round(num(m.setupProbability))+'%');

@@ -1,36 +1,19 @@
-# ZenCore Multi-Pair Feed 32.3
+# ZenCore Multi-Pair Feed 32.4
 
-This bridge feeds all 10 supported instruments to ZenCore Web Control from one TradingView alert. Request history is capped to the bars required by the SOP calculations to stay below TradingView memory limits.
+This Pine bridge sends the nine supported markets on a 3-minute chart. It sends the chart's Entry, initial SL, TP1, TP2, TP3 and selected TP mode to ZenCore. The server preserves those levels for signal and trade plan; it does not calculate replacement targets from the latest close.
 
 ## Markets
 
 XAUUSD, EURUSD, GBPUSD, USDJPY, USDCAD, USDCHF, EURJPY, GBPJPY, EURGBP.
 
-TradingView mappings use OANDA symbols. Indices are no longer supported.
+## TradingView setup
 
-## One-time TradingView setup
+1. Add `ZenCore_Multi_Pair_Feed_32_3.pine` to a 3-minute TradingView chart.
+2. Set **Mod Sasaran TP** to the same option used on the main ZenCore chart: **Fibonacci** or **Fixed R:R**. The default on both scripts is Fixed R:R.
+3. Create an alert with condition **Any alert() function call** and webhook `https://zencore-precision-entry.onrender.com/webhook`.
+4. Leave the alert message unchanged; the script produces the JSON payload.
+5. Confirm the status table reports 3M READY and BATCH ACTIVE.
 
-1. Open any TradingView chart and set the chart timeframe to 3 minutes.
-2. Add the Pine file ZenCore_Multi_Pair_Feed_32_3.pine to Pine Editor and save it.
-3. Add the script to the chart.
-4. Create one alert.
-5. Condition: ZenCore Multi-Pair Feed 32.3.
-6. Trigger: Any alert() function call.
-7. Webhook URL: https://zencore-precision-entry.onrender.com/webhook
-8. Leave the alert message box unchanged because the Pine script generates the batch JSON.
-9. Confirm that the script status table shows 3M READY and BATCH ACTIVE.
-10. Once the new feed is visible on the website, the previous single-pair webhook alert can be removed.
+For a symbol that also has an individual main-chart alert, its main-chart levels and TP mode take precedence on the same candle. The batch feed supplies the remaining symbols.
 
-After this one-time setup, traders can switch instruments from LIVE MARKET without changing the TradingView alert.
-
-## Behaviour preserved
-
-- Normal Scalping 3M hard-gate structure.
-- Five SOP checks and current 5M HEMA confirmation.
-- Close 50% advisory, followed by confirmed opposite yellow candle for the remaining 50%.
-- TP1 moves SL to entry.
-- TP2 moves SL to TP1.
-- TP3 moves SL to TP2.
-- Existing single-symbol webhook payloads remain accepted by the server.
-
-TradingView alerts are snapshots. Recreate the alert only when this Pine feed script or its inputs are changed.
+TradingView keeps a snapshot of the script and inputs in each alert. Delete and recreate an existing alert after updating this script or changing TP mode.

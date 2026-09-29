@@ -6,6 +6,7 @@ indicator("ZenCore Multi-Pair Feed 32.4", shorttitle="ZC MP 32.4", overlay=false
 grp="ZenCore Multi-Pair Web Feed"
 feedEnabled=input.bool(true,"Enable 9-Pair Batch Feed",group=grp)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
+tpModeStr=input.string("Fixed R:R","Mod Sasaran TP",options=["Fibonacci","Fixed R:R"],group=grp)
 
 f_hema(float src,int len)=>
     int half=int(math.max(1,math.round(len/2)))
@@ -152,9 +153,9 @@ f_scan3()=>
         entry:=zoneBuy?close+2*syminfo.mintick:close-2*syminfo.mintick
         initialSl:=zoneBuy?entry-a14:entry+a14
         activeSl:=initialSl
-        tp1:=zoneBuy?entry+a14:entry-a14
-        tp2:=zoneBuy?entry+2*a14:entry-2*a14
-        tp3:=zoneBuy?entry+3*a14:entry-3*a14
+        tp1:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*1.618:zoneBuy?entry+a14:entry-a14
+        tp2:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*2.618:zoneBuy?entry+2*a14:entry-2*a14
+        tp3:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*4.236:zoneBuy?entry+3*a14:entry-3*a14
         active:=true
         triggered:=false
         hit1:=false
@@ -258,9 +259,9 @@ f_scan3()=>
         entry:=close
         initialSl:=reBuyOnly?entry-a14:entry+a14
         activeSl:=initialSl
-        tp1:=reBuyOnly?entry+a14:entry-a14
-        tp2:=reBuyOnly?entry+2*a14:entry-2*a14
-        tp3:=reBuyOnly?entry+3*a14:entry-3*a14
+        tp1:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*1.618:reBuyOnly?entry+a14:entry-a14
+        tp2:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*2.618:reBuyOnly?entry+2*a14:entry-2*a14
+        tp3:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*4.236:reBuyOnly?entry+3*a14:entry-3*a14
         triggered:=true
         hit1:=false
         hit2:=false
@@ -320,7 +321,7 @@ if feedEnabled and correctTf and barstate.isconfirmed
         row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+","+f_bool(priceCross)+","+f_quote(reType)+","+f_quote(reSide)+","+f_bool(reHema)+"]"
         marketsJson+=(i>0?",":"")+row
 
-    string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"markets\":["+marketsJson+"]}"
+    string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
     alert(payload,alert.freq_once_per_bar_close)
 
 var table status=na
@@ -331,7 +332,7 @@ if showStatus
         table.cell(status,0,0,"ZENCORE MULTI-PAIR",text_color=color.aqua)
         table.cell(status,1,0,"32.4 ENTRY SOP",text_color=color.lime)
         table.cell(status,0,1,"Markets",text_color=color.gray)
-        table.cell(status,1,1,"10",text_color=color.white)
+        table.cell(status,1,1,"9",text_color=color.white)
         table.cell(status,0,2,"Chart TF",text_color=color.gray)
         table.cell(status,1,2,correctTf?"3M READY":"SET CHART TO 3M",text_color=correctTf?color.lime:color.red)
         table.cell(status,0,3,"Alert",text_color=color.gray)

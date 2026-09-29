@@ -1554,6 +1554,7 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"time\":" + str.tostring(time) + ","
     web_payload += "\"barIndex\":" + str.tostring(bar_index) + ","
     web_payload += "\"chartFeedVersion\":\"2.0\","
+    web_payload += "\"tpMode\":\"" + f_web_str(tpModeStr) + "\","
 
     web_payload += "\"open\":" + f_web_num(open) + ","
     web_payload += "\"high\":" + f_web_num(high) + ","

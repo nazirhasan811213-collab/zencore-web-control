@@ -3,6 +3,7 @@ const fs=require('fs');
 const path=require('path');
 const {acceptsSnapshot,effectiveReceivedAt}=require('./market-feed-sync');
 const {normalEntrySop}=require('./normal-entry-sop');
+const {chartTradePlan}=require('./chart-trade-plan');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
 const V16_PORT=PUBLIC_PORT===10001?10002:10001;
@@ -389,22 +390,17 @@ function normalScalpStrategy(symbol,d){
   const x=normalEntrySop(d);
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
-  const ready=reentry?x.reentryReady:x.standardReady;
+  const sopReady=reentry?x.reentryReady:x.standardReady;
+  const pinePlan=chartTradePlan(d,side);
+  const ready=sopReady&&!!pinePlan;
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
-  const state=ready?'READY':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
+  const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
   const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — SOP Normal 25/9 lulus.`):
+    sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal 3M'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  const entry=x.close,atr=x.atr;
-  let plan=null;
-  if(ready&&entry!=null&&atr!=null&&atr>0){
-    const direction=side==='BUY'?1:-1;
-    plan=makePlan(side,entry,entry-direction*atr,entry+direction*atr,entry+direction*atr*2,entry+direction*atr*3,{
-      riskDistance:atr,rr1:1,rr2:2,rr3:3,
-      condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:'PINE SOP NORMAL',
-      planType:reentry?`${x.reentryType} RE-ENTRY 3M`:'NORMAL SCALPING 3M — PINE SOP 32.4'
-    });
-  }
+  const plan=ready?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
+    planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
     mode:'NORMAL',tf:'3m',state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
     confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
@@ -569,7 +565,7 @@ function expandCompactMarket(row,batch){
   const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action,normal3PriceCrossEntry,normal3ReentrySignal,normal3ReentrySide,normal3ReentryHemaPass]=row;
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
-    source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:true,
+    source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:true,tpMode:batch.tpMode,
     symbol,timeframe:'3',time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
@@ -586,7 +582,11 @@ function storeSnapshot(parsed){
   if(!parsed||parsed.source!=='ZenCore AI Dashboard Pro + Alerts')return null;
   const symbol=normSymbol(parsed.symbol||parsed.tickerid);
   if(!DEFAULT_MARKETS.includes(symbol)||N(parsed.close)==null)return null;
-  if(!acceptsSnapshot(latestBySymbol.get(symbol),parsed))return null;
+  const previous=latestBySymbol.get(symbol);
+  if(!acceptsSnapshot(previous,parsed))return null;
+  // On the same candle, the main TradingView chart owns its plan settings.
+  if(previous&&N(previous.time)===N(parsed.time)&&previous.feedType!=='MULTI_PAIR_BATCH'&&
+     parsed.feedType==='MULTI_PAIR_BATCH')return null;
   const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'};
   latestBySymbol.set(symbol,d);
   const arr=historyBySymbol.get(symbol)||[];
