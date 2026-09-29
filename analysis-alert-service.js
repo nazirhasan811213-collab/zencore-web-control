@@ -101,9 +101,9 @@ class AnalysisAlerts {
       const prev=this.states.get(next.symbol);if(prev&&next.time<=prev.time)return;
       const events=notificationEvents(prev);
       next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
-        events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate)?.telegramPlan
-          ? {side:events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).side,entryType:events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).entryType,
-             openedAt:next.time,plan:events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).telegramPlan}
+        events.find(e=>e.kind==='ENTRY')?.telegramPlan
+          ? {side:events.find(e=>e.kind==='ENTRY').side,entryType:events.find(e=>e.kind==='ENTRY').entryType,
+             openedAt:next.time,plan:events.find(e=>e.kind==='ENTRY').telegramPlan}
           : prev?.activePlan||null;
       this.states.set(next.symbol,next);
       for(const e of events) this.events.push({...e,id:++this.sequence});
@@ -117,7 +117,7 @@ class AnalysisAlerts {
       const prev=(await c.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[next.symbol])).rows[0]?.data;
       if(!prev||next.time>prev.time){
         const events=notificationEvents(prev);
-        const opened=events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate);
+        const opened=events.find(e=>e.kind==='ENTRY');
         next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
           opened?.telegramPlan?{side:opened.side,entryType:opened.entryType,openedAt:next.time,plan:opened.telegramPlan}:prev?.activePlan||null;
         await c.query('INSERT INTO zencore_alert_states(symbol,data) VALUES($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=$2',[next.symbol,next]);
@@ -137,8 +137,8 @@ class AnalysisAlerts {
   async activePlan(symbol) {
     if (!/^[A-Z0-9._-]{2,20}$/.test(symbol)) throw fail('Pair tidak sah.');
     const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol])).rows[0]?.data:this.states.get(symbol);
+    if (state?.activePlan) return state.activePlan;
     if (!state?.telegramPosition || state.telegramPosition.closed) return null;
-    if (state.activePlan) return state.activePlan;
     // Recover signals issued before activePlan was added to the state.
     const rows=this.pool?(await this.pool.query(
       "SELECT data FROM zencore_analysis_alerts WHERE data->>'symbol'=$1 AND data->>'kind'='ENTRY' ORDER BY id DESC LIMIT 20",[symbol])).rows.map(r=>r.data):
