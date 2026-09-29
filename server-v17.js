@@ -395,7 +395,7 @@ function normalScalpStrategy(symbol,d){
   const state=ready?'READY':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
   const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — SOP Normal 25/9 lulus.`):
     `${side==='BUY'||side==='SELL'?side:'Normal 3M'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  const entry=reentry?x.close:x.entry,atr=x.atr;
+  const entry=x.close,atr=x.atr;
   let plan=null;
   if(ready&&entry!=null&&atr!=null&&atr>0){
     const direction=side==='BUY'?1:-1;
@@ -414,7 +414,7 @@ function normalScalpStrategy(symbol,d){
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
       m5Position:U(d?.normal5Position||'WAIT'),m5Pass:x.m5Pass,m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),
-      entry,close3:x.close,atr3:atr,
+      entry,entryLine:x.entry,close3:x.close,atr3:atr,
       indicatorContext:{ema9:N(d?.ema9),ema20:N(d?.ema20),ema50:N(d?.ema50),hema20:N(d?.hema20),hema40:N(d?.hema40),
         waveTrend1:N(d?.waveTrend1),waveTrend2:N(d?.waveTrend2),rsi:N(d?.rsi),chop:N(d?.chopIndex),
         relativeVolume:N(d?.relativeVolume),globalTrend:N(d?.globalTrend),basis:N(d?.basis)}}
