@@ -23,8 +23,12 @@
     const modelAvailable=result.gpt?.status==='AVAILABLE'&&p.status==='AVAILABLE';
     $('aiGuideModel').hidden=!modelAvailable;
     if(modelAvailable)set('aiGuideModelText',result.gpt.text);
-    set('aiAdviceDo',p.advice?.do||'Jangan buka entry baharu.');
-    set('aiAdviceNext',p.advice?.next||'Tunggu data 3 minit yang segar.');
+    set('aiCoachHeadline',p.coach?.headline||'Menunggu data market semasa.');
+    const coachRows=$('aiCoachRows');coachRows.replaceChildren();
+    for(const row of p.coach?.rows||[]){
+      const line=document.createElement('p'),label=document.createElement('b');
+      label.textContent=row.label+': ';line.append(label,document.createTextNode(row.text));coachRows.append(line);
+    }
     const readings=$('aiGuideReadings');readings.replaceChildren();
     for(const row of p.readings||[]){
       const item=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b');
