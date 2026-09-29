@@ -385,7 +385,7 @@ function fastTradeStrategy(symbol,d){
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
   if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
-  if(d?.normalSopVersion!=='32.4')return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — SOP 32.4 perlu event cross entry dan re-entry daripada Pine.',sop:{feedReady:false,passed:0,total:4},plan:null};
+  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — Normal SOP perlukan data Solid Entry, checklist dan HEMA 5M Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
   const x=normalEntrySop(d);
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
@@ -393,7 +393,7 @@ function normalScalpStrategy(symbol,d){
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
-  const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — SOP dan penapis 3M lulus.`):
+  const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — SOP Normal 25/9 lulus.`):
     `${side==='BUY'||side==='SELL'?side:'Normal 3M'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
   const entry=reentry?x.close:x.entry,atr=x.atr;
   let plan=null;
@@ -407,13 +407,13 @@ function normalScalpStrategy(symbol,d){
   }
   return{
     mode:'NORMAL',tf:'3m',state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
-    confirmations:{m3:ready?'PASS':'WAIT'},
+    confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
     sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
-      solid:d?.normal3Solid===true,priceCrossEntry:x.cross,sopGreen:x.green,
+      solid:d?.normal3Solid===true,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
       sop1:x.flags[0],sop2:x.flags[1],sop3:x.flags[2],sop4:x.flags[3],sop5:x.flags[4],
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
-      m5Position:U(d?.normal5Position||'WAIT'),m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),
+      m5Position:U(d?.normal5Position||'WAIT'),m5Pass:x.m5Pass,m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),
       entry,close3:x.close,atr3:atr,
       indicatorContext:{ema9:N(d?.ema9),ema20:N(d?.ema20),ema50:N(d?.ema50),hema20:N(d?.hema20),hema40:N(d?.hema40),
         waveTrend1:N(d?.waveTrend1),waveTrend2:N(d?.waveTrend2),rsi:N(d?.rsi),chop:N(d?.chopIndex),
