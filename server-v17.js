@@ -386,10 +386,10 @@ function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
   if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
   if(d?.normalSopVersion!=='32.4')return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — SOP 32.4 perlu event cross entry dan re-entry daripada Pine.',sop:{feedReady:false,passed:0,total:4},plan:null};
-  const x=normalEntrySop(d),reentry=x.reentryReady;
+  const x=normalEntrySop(d);
+  const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
-  const passed=x.gates.filter(g=>g.pass).length;
-  const ready=reentry||x.standardReady;
+  const ready=reentry?x.reentryReady:x.standardReady;
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
