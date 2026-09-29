@@ -2,7 +2,7 @@
 const {PAIRS,analyse,PositionTracker}=require('./analysis-v33');
 const crypto=require('node:crypto');
 const num=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Number(v):null;
-const DEFAULT_EXTERNAL_SYMBOLS=Object.freeze({XAUUSD:'XAU/USD',EURUSD:'EUR/USD',GBPUSD:'GBP/USD',USDJPY:'USD/JPY',USDCAD:'USD/CAD',USDCHF:'USD/CHF',EURJPY:'EUR/JPY',GBPJPY:'GBP/JPY',EURGBP:'EUR/GBP',BTCUSD:'BTC/USD'});
+const DEFAULT_EXTERNAL_SYMBOLS=Object.freeze({XAUUSD:'XAU/USD',EURUSD:'EUR/USD',GBPUSD:'GBP/USD',USDJPY:'USD/JPY',USDCAD:'USD/CAD',USDCHF:'USD/CHF',EURJPY:'EUR/JPY',GBPJPY:'GBP/JPY',EURGBP:'EUR/GBP'});
 function aggregate3m(rows,now=Date.now()){
   const buckets=new Map(),seen=new Set();
   for(const r of rows){

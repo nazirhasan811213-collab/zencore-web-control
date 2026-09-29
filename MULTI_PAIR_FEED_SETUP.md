@@ -4,7 +4,7 @@ This bridge feeds all 10 supported instruments to ZenCore Web Control from one T
 
 ## Markets
 
-XAUUSD, EURUSD, GBPUSD, USDJPY, USDCAD, USDCHF, EURJPY, GBPJPY, EURGBP, BTCUSD.
+XAUUSD, EURUSD, GBPUSD, USDJPY, USDCAD, USDCHF, EURJPY, GBPJPY, EURGBP.
 
 TradingView mappings use OANDA symbols. Indices are no longer supported.
 

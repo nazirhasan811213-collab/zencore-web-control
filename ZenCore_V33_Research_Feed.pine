@@ -12,7 +12,6 @@ s6=input.symbol("OANDA:USDCHF","USDCHF")
 s7=input.symbol("OANDA:EURJPY","EURJPY")
 s8=input.symbol("OANDA:GBPJPY","GBPJPY")
 s9=input.symbol("OANDA:EURGBP","EURGBP")
-s10=input.symbol("BITSTAMP:BTCUSD","BTCUSD")
 // Broker/source differences must be verified. Zero means unknown: no candidate entry.
 sp1=input.float(0,"XAUUSD spread in PRICE units",minval=0)
 sp2=input.float(0,"EURUSD spread in PRICE units",minval=0)
@@ -23,7 +22,6 @@ sp6=input.float(0,"USDCHF spread in PRICE units",minval=0)
 sp7=input.float(0,"EURJPY spread in PRICE units",minval=0)
 sp8=input.float(0,"GBPJPY spread in PRICE units",minval=0)
 sp9=input.float(0,"EURGBP spread in PRICE units",minval=0)
-sp10=input.float(0,"BTCUSD spread in PRICE units",minval=0)
 f_hema(float s,int n)=>
     ta.ema(2*ta.ema(s,int(math.round(n/2)))-ta.ema(s,n),int(math.round(math.sqrt(n))))
 f_gd(float s,int n)=>ta.ema(s,n)*1.5-ta.ema(ta.ema(s,n),n)*.5
@@ -82,9 +80,9 @@ f_minute()=>
     bool sell=high>=e and close<e and close<open and w1<w2
     // Use the prior complete minute for every requested symbol; never label a forming cross-symbol bar confirmed.
     Minute.new(time_close[1],time[1],close[1],high[1],low[1],syminfo.mintick,f_side(buy[1],sell[1]))
-var symbols=array.from(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
-var names=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP","BTCUSD")
-var spreads=array.from(sp1,sp2,sp3,sp4,sp5,sp6,sp7,sp8,sp9,sp10)
+var symbols=array.from(s1,s2,s3,s4,s5,s6,s7,s8,s9)
+var names=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP")
+var spreads=array.from(sp1,sp2,sp3,sp4,sp5,sp6,sp7,sp8,sp9)
 string batch=""
 for i=0 to array.size(symbols)-1
     string ticker=array.get(symbols,i)
@@ -104,4 +102,4 @@ if timeframe.period=="1" and barstate.isconfirmed and str.length(secret)>=24 and
 var table status=table.new(position.top_right,1,2)
 if barstate.islast
     table.cell(status,0,0,"V33 RESEARCH · STAGING ONLY",text_color=color.aqua)
-    table.cell(status,0,1,timeframe.period!="1"?"Gunakan carta 1 MINIT":str.length(secret)<24?"Token diperlukan":"3M setup / 1M trigger · 10 pair",text_color=color.white)
+    table.cell(status,0,1,timeframe.period!="1"?"Gunakan carta 1 MINIT":str.length(secret)<24?"Token diperlukan":"3M setup / 1M trigger · 9 pair",text_color=color.white)

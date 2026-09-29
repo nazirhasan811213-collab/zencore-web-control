@@ -1,6 +1,6 @@
 'use strict';
 // Candidate analysis. No broker orders and no writes to legacy signal state.
-const PAIRS = Object.freeze(['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD']);
+const PAIRS = Object.freeze(['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP']);
 const num = v => v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 function forecastGate(momentum, forecast, strength, dominance) {
@@ -92,7 +92,7 @@ class PositionTracker {
         }
       }
       if(p.status==='ACTIVE'&&dataAt>=p.expiresAt){p.status='CLOSED';p.exitReason='TIME_REVIEW_15M';p.exitPrice=price;}
-      if(p.status==='CLOSED'){p.closedAt=dataAt;this.history.push(structuredClone(p));if(this.history.length>1000)this.history.shift();this.positions.delete(c.symbol);return structuredClone(p);}
+      if(p.status==='CLOSED'){p.closedAt=dataAt;this.history.push(structuredClone(p));if(this.history.length>900)this.history.shift();this.positions.delete(c.symbol);return structuredClone(p);}
     }
     if(!p&&decision.status==='ENTRY_READY'&&!this.seen.has(decision.setupId)){
       p={id:decision.setupId,symbol:c.symbol,status:'ACTIVE',plan:structuredClone(decision.plan),enteredAt:dataAt,lastDataAt:dataAt,expiresAt:dataAt+900000,activeSl:decision.plan.sl,targetStage:0,mae:0,mfe:0};

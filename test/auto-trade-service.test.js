@@ -323,7 +323,7 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
       capitalUsd: 1000,
       lotPerLayer: user.lotPerLayer,
       layers: user.layers,
-      symbols: ['BTCUSD'],
+      symbols: ['US30'],
       riskAcknowledged: true
     });
     assert.deepEqual(saved.settings.symbols, ['XAUUSD', 'EURUSD']);

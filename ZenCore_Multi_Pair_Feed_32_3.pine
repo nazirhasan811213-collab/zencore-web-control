@@ -4,7 +4,7 @@ indicator("ZenCore Multi-Pair Feed 32.4", shorttitle="ZC MP 32.4", overlay=false
 // One permanent alert feeds all supported markets to ZenCore Web Control.
 // Run this bridge on a 3-minute chart. It does not draw or alter the original indicator.
 grp="ZenCore Multi-Pair Web Feed"
-feedEnabled=input.bool(true,"Enable 10-Pair Batch Feed",group=grp)
+feedEnabled=input.bool(true,"Enable 9-Pair Batch Feed",group=grp)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
 
 f_hema(float src,int len)=>
@@ -292,8 +292,8 @@ f_scan3()=>
 
     [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema]
 
-var string[] symbols=array.from("OANDA:XAUUSD","OANDA:EURUSD","OANDA:GBPUSD","OANDA:USDJPY","OANDA:USDCAD","OANDA:USDCHF","OANDA:EURJPY","OANDA:GBPJPY","OANDA:EURGBP","OANDA:BTCUSD")
-var string[] aliases=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP","BTCUSD")
+var string[] symbols=array.from("OANDA:XAUUSD","OANDA:EURUSD","OANDA:GBPUSD","OANDA:USDJPY","OANDA:USDCAD","OANDA:USDCHF","OANDA:EURJPY","OANDA:GBPJPY","OANDA:EURGBP")
+var string[] aliases=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP")
 
 bool correctTf=timeframe.period=="3"
 string marketsJson=""

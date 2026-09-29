@@ -45,7 +45,7 @@ Both profiles write only a non-secret config, create a pinned Python environment
 }
 ```
 
-The installer creates a full 10-market map. The shortened map above only illustrates the field shape. Broker login, password and full server are not valid config fields. Subsequent starts load the DPAPI-protected pod identity from `%PROGRAMDATA%\ZenCoreSecurePod\machine-credentials.dpapi`.
+The installer creates a full 9-market map. The shortened map above only illustrates the field shape. Broker login, password and full server are not valid config fields. Subsequent starts load the DPAPI-protected pod identity from `%PROGRAMDATA%\ZenCoreSecurePod\machine-credentials.dpapi`.
 
 `demoExecutionEnabled` remains `false` unless the installer is run with `-EnableDemoExecution`. Even when it is true, the worker only accepts XAUUSD on `InterStellarFinancial-Demo`; the website ON button also remains disabled until the independent server gate is enabled.
 

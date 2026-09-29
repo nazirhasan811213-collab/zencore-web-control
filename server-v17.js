@@ -10,7 +10,7 @@ process.env.PORT=String(V16_PORT);
 require('./server-v16.js');
 process.env.PORT=String(PUBLIC_PORT);
 
-const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'];
+const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'];
 const latestBySymbol=new Map();
 const historyBySymbol=new Map();
 const marketClients=new Set();
@@ -492,7 +492,7 @@ function resolveValidation(symbol,d){
 
     if(done){
       r.state='CLOSED';r.outcome=outcome;r.resolvedAt=Date.now();r.resolvedTime=N(d?.time);r.resolvedBar=N(d?.barIndex);
-      validationClosed.push({...r});if(validationClosed.length>1000)validationClosed.splice(0,validationClosed.length-1000);
+      validationClosed.push({...r});if(validationClosed.length>900)validationClosed.splice(0,validationClosed.length-1000);
       validationOpenByKey.delete(key);
     }
   }

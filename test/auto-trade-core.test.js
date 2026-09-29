@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Core = require('../auto-trade-core');
 
-test('settings support 10 markets and calculate total layered lot', () => {
+test('settings support 9 markets and calculate total layered lot', () => {
   const result = Core.validateSettings({
     capitalUsd: 100,
     lotPerLayer: 0.01,

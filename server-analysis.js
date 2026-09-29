@@ -1390,7 +1390,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const body=await readJson(req);
       if(Array.isArray(body.contexts)){
-        if(body.contexts.length>10)return sendJson(res,400,{error:'Maksimum 10 pair.'});
+        if(body.contexts.length>9)return sendJson(res,400,{error:'Maksimum 9 pair.'});
         const results=body.contexts.map(context=>aiAnalysis.ingest({token:body.token,context}));
         return sendJson(res,results.some(r=>r.code===403)?403:results.some(r=>r.code===503)?503:200,{results});
       }

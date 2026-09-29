@@ -12,8 +12,7 @@
     "USDCHF": "USDCHF",
     "EURJPY": "EURJPY",
     "GBPJPY": "GBPJPY",
-    "EURGBP": "EURGBP",
-    "BTCUSD": "BTCUSD"
+    "EURGBP": "EURGBP"
   },
   "pollSeconds": 2,
   "demoExecutionEnabled": false,

@@ -11,7 +11,7 @@ const setText=(id,v)=>{const el=$(id);if(el)el.textContent=v};
 let lastMarket=null;
 let lastPerformance=null;
 
-const DEFAULT_PAIRS=['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'];
+const DEFAULT_PAIRS=['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'];
 const normalisePair=v=>String(v||'').toUpperCase().replace(/^.*:/,'').replace(/[^A-Z0-9._-]/g,'');
 const queryPair=normalisePair(new URLSearchParams(location.search).get('pair'));
 let storedPair='';
@@ -19,7 +19,7 @@ try{storedPair=normalisePair(localStorage.getItem('zencorePair'))}catch(_){}
 let activePair=queryPair||storedPair||'XAUUSD';
 let predictionStream=null;
 let pairSwitchToken=0;
-const priceDigits=symbol=>{const s=normalisePair(symbol||activePair);return s==='BTCUSD'?2:s.includes('JPY')?3:s.startsWith('XAU')||s.startsWith('XAG')?3:5};
+const priceDigits=symbol=>{const s=normalisePair(symbol||activePair);return s.includes('JPY')?3:s.startsWith('XAU')||s.startsWith('XAG')?3:5};
 const fmtPrice=(v,symbol)=>fmt(v,priceDigits(symbol||activePair));
 
 function ensurePairOption(pair){

@@ -51,10 +51,10 @@ const EUR_PAYLOAD = {
   }
 };
 
-test('result core uses the exact 10 ZenCore markets', () => {
+test('result core uses the exact 9 ZenCore markets', () => {
   assert.deepEqual(Results.SUPPORTED_MARKETS, [
     'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
   ]);
 });
 
@@ -83,10 +83,10 @@ test('aggregation preserves server totals and separates visible history', () => 
     available: 2,
     winRate: 66.7,
     visibleResolved: 7,
-    expected: 10
+    expected: 9
   });
   assert.equal(data.generatedAt, EUR_PAYLOAD.generatedAt);
-  assert.equal(data.pairSummaries.length, 10);
+  assert.equal(data.pairSummaries.length, 9);
   assert.equal(data.pairSummaries.find(row => row.symbol === 'GBPUSD').available, false);
   assert.deepEqual(data.resolvedRows.map(row => row.id), ['e2', 'e1', 'x5', 'x4', 'x3', 'x2', 'x1']);
   assert.deepEqual(data.openRows.map(row => row.id), ['xo']);
@@ -106,7 +106,6 @@ test('filters combine pair, side and result category', () => {
 
 test('price helpers are pair-aware and CSV export is spreadsheet-safe', () => {
   assert.equal(Results.formatPrice(150.12345, 'USDJPY'), '150.123');
-  assert.equal(Results.formatPrice(65000.5, 'BTCUSD'), '65,000.50');
   const row = Results.normaliseRow({
     id: 'csv', symbol: 'EURUSD', mode: 'NORMAL', side: 'BUY', state: 'CLOSED', outcome: 'TP1',
     entry: 1.1, openedAt: 1000, resolvedAt: 2000, reason: '=HYPERLINK("bad")'

@@ -10,7 +10,7 @@
   const STRATEGY = 'NORMAL_3M_SOP_V32';
   const SUPPORTED_MARKETS = Object.freeze([
     'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
   ]);
 
   const number = value => {

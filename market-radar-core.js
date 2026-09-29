@@ -7,7 +7,7 @@
 
   const SUPPORTED_MARKETS = [
     'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
   ];
 
   const upper = value => String(value || '').trim().toUpperCase();
@@ -26,7 +26,6 @@
 
   function priceDigits(symbol) {
     const value = normaliseSymbol(symbol);
-    if (value === 'BTCUSD') return 2;
     if (value.includes('JPY') || value.startsWith('XAU') || value.startsWith('XAG')) return 3;
     return 5;
   }

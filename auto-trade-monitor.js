@@ -31,7 +31,7 @@
 
   function price(value, symbol) {
     if (!Number.isFinite(Number(value))) return '—';
-    const digits = symbol.includes('JPY') ? 3 : symbol === 'BTCUSD' ? 2 : symbol === 'XAUUSD' ? 3 : 5;
+    const digits = symbol.includes('JPY') ? 3 : symbol === 'XAUUSD' ? 3 : 5;
     return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
   }
 

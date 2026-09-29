@@ -37,7 +37,7 @@ except ImportError as exc:  # pragma: no cover - only available on Windows worke
 
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY",  "USDCAD",
-    "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
+    "USDCHF", "EURJPY", "GBPJPY", "EURGBP",
 )
 MAGIC = 3233001
 CONNECTOR_VERSION = "1.4.0-demo-execution"

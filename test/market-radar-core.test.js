@@ -24,17 +24,16 @@ function market(symbol, state, side, score, extra = {}) {
   };
 }
 
-test('radar has the exact 10 supported ZenCore markets', () => {
+test('radar has the exact 9 supported ZenCore markets', () => {
   assert.deepEqual(Radar.SUPPORTED_MARKETS, [
     'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
   ]);
 });
 
 test('radar text and price helpers are safe and pair-aware', () => {
   assert.equal(Radar.escapeHtml('<script>"x"</script>'), '&lt;script&gt;&quot;x&quot;&lt;/script&gt;');
   assert.equal(Radar.formatPrice(150.12345, 'USDJPY'), '150.123');
-  assert.equal(Radar.formatPrice(65000.5, 'BTCUSD'), '65,000.50');
   assert.equal(Radar.normaliseSymbol('OANDA:XAUUSD'), 'XAUUSD');
 });
 
@@ -60,7 +59,7 @@ test('market sorting prioritizes active, ready, watch, wait and offline', () => 
     market('US30', 'READY', 'BUY', 100, { tradeActive: true }),
     market('BTCUSD', 'READY', 'BUY', 100, { freshness: 'OFFLINE' })
   ], NOW);
-  assert.deepEqual(sorted.map(row => row.symbol), ['USDCAD', 'USDJPY', 'GBPUSD', 'EURUSD', 'BTCUSD']);
+  assert.deepEqual(sorted.map(row => row.symbol), ['USDCAD', 'USDJPY', 'GBPUSD', 'EURUSD']);
 });
 
 test('filters and search use Normal state and symbol', () => {
@@ -87,7 +86,7 @@ test('summary counts live, ready, watch and active markets', () => {
     market('XAUUSD', 'READY', 'BUY', 100),
     market('EURUSD', 'WATCH', 'SELL', 60),
     market('GBPUSD', 'WAIT', 'BUY', 50, { tradeActive: true }),
-    market('BTCUSD', 'WAIT', 'WAIT', 0, { freshness: 'OFFLINE' })
+    market('USDCHF', 'WAIT', 'WAIT', 0, { freshness: 'OFFLINE' })
   ], NOW);
   assert.deepEqual(Radar.marketSummary(views), {
     total: 4,

@@ -22,7 +22,7 @@ const requirements = fs.readFileSync(path.join(root, 'mt5-secure-pod', 'requirem
 
 const markets = [
   'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-  'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+  'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
 ];
 
 function resource(type) {
@@ -72,7 +72,7 @@ test('deployment contract accepts no broker credentials or pairing material', ()
   assert.equal(JSON.stringify(template).includes('customData'), false);
 });
 
-test('local config covers all 10 markets and starts with execution locked', () => {
+test('local config covers all 9 markets and starts with execution locked', () => {
   assert.equal(podConfig.schemaVersion, 1);
   assert.equal(podConfig.controlUrl.startsWith('https://'), true);
   assert.equal(podConfig.hostProfile, 'WINDOWS_PC');

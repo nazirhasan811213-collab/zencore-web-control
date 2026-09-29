@@ -8,8 +8,8 @@ test('forecast direction rules distinguish dominance from strength',()=>{
  assert(forecastGate('SELL','NEUTRAL',90,49));assert(!forecastGate('SELL','NEUTRAL',20,70));
  assert(!forecastGate('BUY','CHOPPY',99,99));assert(!forecastGate('BUY','NEUTRAL',99,50));assert(!forecastGate('BUY','NEUTRAL',99,null));
 });
-test('all eleven pairs produce ordered tick-aligned BUY/SELL plans',()=>{
- PAIRS.forEach((symbol,i)=>{const c=context(symbol,symbol.endsWith('JPY')?1:symbol==='BTCUSD'?600:symbol==='XAUUSD'?20:.01);
+test('all nine pairs produce ordered tick-aligned BUY/SELL plans',()=>{
+ PAIRS.forEach((symbol,i)=>{const c=context(symbol,symbol.endsWith('JPY')?1:symbol==='XAUUSD'?20:.01);
  for(const side of ['BUY','SELL']){Object.assign(c,{momentum:side,hema:side,basisSide:side,candleSide:side,trigger1:side,forecast:side==='BUY'?'BULLISH':'BEARISH'});
  const d=analyse(c,now);assert.equal(d.status,'ENTRY_READY',symbol);const p=d.plan,sign=side==='BUY'?1:-1;
  assert((p.entry-p.sl)*sign>0);assert((p.tp1-p.entry)*sign>0);assert((p.tp2-p.tp1)*sign>0);assert((p.tp3-p.tp2)*sign>0);

@@ -7,7 +7,7 @@
 
   const SUPPORTED_MARKETS = [
     'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
   ];
 
   const WIN_OUTCOMES = new Set([
@@ -40,7 +40,6 @@
     const pair = normaliseSymbol(symbol);
     if (pair.endsWith('JPY')) return 3;
     if (pair === 'XAUUSD') return 3;
-    if (pair === 'BTCUSD') return 2;
     return 5;
   }
 

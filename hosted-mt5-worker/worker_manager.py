@@ -29,7 +29,7 @@ CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
     "XAUUSD", "EURUSD", "GBPUSD", "USDJPY",  "USDCAD",
-    "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
+    "USDCHF", "EURJPY", "GBPJPY", "EURGBP",
 )
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",

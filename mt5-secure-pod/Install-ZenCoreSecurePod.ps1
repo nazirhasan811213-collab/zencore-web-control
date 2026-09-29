@@ -20,7 +20,7 @@ param(
 
     [switch]$EnableDemoExecution,
 
-    [string]$SymbolMapJson = '{"XAUUSD":"XAUUSD","EURUSD":"EURUSD","GBPUSD":"GBPUSD","USDJPY":"USDJPY":"USDCAD":"USDCAD","USDCHF":"USDCHF","EURJPY":"EURJPY","GBPJPY":"GBPJPY","EURGBP":"EURGBP","BTCUSD":"BTCUSD"}'
+    [string]$SymbolMapJson = '{"XAUUSD":"XAUUSD","EURUSD":"EURUSD","GBPUSD":"GBPUSD","USDJPY":"USDJPY":"USDCAD":"USDCAD","USDCHF":"USDCHF","EURJPY":"EURJPY","GBPJPY":"GBPJPY","EURGBP":"EURGBP"}'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,7 +28,7 @@ Set-StrictMode -Version Latest
 
 $SupportedMarkets = @(
     'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
-    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
+    'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'
 )
 
 function Set-ZenCoreDataAcl {
