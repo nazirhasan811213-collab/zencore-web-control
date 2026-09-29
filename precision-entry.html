@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0">
 <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
 <link rel="stylesheet" href="/analysis-alerts.css?v=35.0">
-<link rel="stylesheet" href="/analysis-workspace.css?v=36.0">
+<link rel="stylesheet" href="/analysis-workspace.css?v=37.0">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
 </head>
@@ -207,51 +207,21 @@
     <div class="chart-note">ZenCore Live Chart meniru paparan indikator: candle, HEMA ribbon, Solid Entry, Entry/SL/TP dan SOP state daripada webhook Pine. TradingView standard kekal sebagai rujukan kedua.</div>
   </section>
 
-  <section class="ws-panel" aria-labelledby="aiHeading">
-    <div class="ws-title"><div><span class="ws-kicker">MARKET ANALYSIS · SCALPING 3M</span><h3 id="aiHeading">Keputusan entry berdasarkan Pine semasa</h3><p class="ws-muted">SOP dan indikator ZenCore 3M ialah sumber utama. Data harga luaran dan ulasan GPT ialah semakan tambahan apabila tersedia; signal entry kekal mengikut SOP Pine.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">JANA & BANDING AI ANALYSIS</button></div>
-    <p id="aiConnections" class="ws-muted" role="status">Menyemak sambungan analisis…</p>
-    <p id="aiStatus" class="ws-muted" role="status" aria-live="polite">Klik untuk analisis pair yang dipilih.</p>
-    <div id="aiResults" hidden>
-      <p id="aiStamp" class="ws-muted"></p>
-      <article class="ws-scenario pine-scalp" aria-label="Ringkasan analisis Pine 3 minit">
-        <div class="ws-title"><div><span class="ws-kicker">KEPUTUSAN SEMASA · PINE 3M</span><h4 id="aiPineAction">MENUNGGU FEED</h4></div><strong id="aiPineSide">—</strong></div>
-        <p id="aiPineReason">Menunggu data SOP 3M terkini.</p>
-        <div class="ws-scenario-grid"><div><span>CLOSE 3M</span><b id="aiPineClose">—</b></div><div><span>ENTRY / SL</span><b id="aiPineEntry">—</b></div><div><span>TP1 / TP2 / TP3</span><b id="aiPineTargets">—</b></div></div>
-        <div id="aiPineOverview" class="pine-overview"></div>
-        <div id="aiPineSummary" class="pine-narrative"></div>
-        <p id="aiPineContext" class="ws-muted"></p><p id="aiPineCaution" class="ws-muted"></p>
-        <details class="pine-details"><summary>Lihat bacaan indikator penuh</summary><div id="aiPineChecks" class="pine-checks"></div></details>
-        <p id="aiPineTime" class="ws-muted"></p>
-      </article><details class="ai-detail"><summary>Semakan sumber, GPT dan data luar</summary><div class="ws-ai-grid">
-        <article class="ws-ai-card"><span class="ws-kicker">01 · SOP PINE ZENCORE</span><h4 id="aiZTitle">Analisis SOP ZenCore</h4><strong id="aiZDirection">—</strong><p id="aiZReason"></p><span id="aiGptStatus" class="ws-kicker"></span><p id="aiNarrative"></p><div class="ws-note ws-muted">Masa data: <span id="aiZData"></span></div></article>
-        <article class="ws-ai-card"><span class="ws-kicker">02 · SEMAKAN LUARAN (PILIHAN)</span><h4>Harga luaran 3M</h4><strong id="aiExternalStatus">—</strong><p id="aiExternalReason"></p><p id="aiExternalMethod" class="ws-muted"></p><div class="ws-note ws-muted">Close 3M luaran: <b id="aiExternalPrice">—</b> · Candle: <span id="aiExternalPriceAt">Belum tersedia</span><br>Masa 3M lengkap: <span id="aiExternalData"></span></div></article>
-      </div><div class="ws-compare"><span class="ws-kicker">RUMUSAN PERBANDINGAN</span><p><b id="aiComparison">—</b></p><p class="ws-muted">ZenCore: SOP Pine 3M. Sumber luar: <span id="aiExternalSource">—</span> · bias <b id="aiExternalBias">—</b> (candle 3M lengkap).</p><p id="aiFreshness" class="ws-muted"></p></div></details>
-      <article class="ws-scenario" aria-label="Senario scalping bersyarat">
-        <div class="ws-title"><div><span class="ws-kicker">SENARIO PERGERAKAN · TF 3M</span><h4>Harga selepas setup</h4></div><strong id="aiScenarioStatus">MENUNGGU DATA</strong></div>
-        <p id="aiScenarioReason">Julat muncul apabila candle 3M lengkap dan segar.</p>
-        <div class="ws-scenario-grid"><div><span id="aiScenarioRefLabel">RUJUKAN HARGA</span><b id="aiScenarioPrice">—</b></div><div><span>JULAT 3 MINIT</span><b id="aiScenario3m">—</b></div><div><span>JULAT 15 MINIT</span><b id="aiScenario15m">—</b></div></div>
-        <p id="aiScenarioNote" class="ws-muted">Julat ialah rujukan volatiliti, bukan ramalan tepat atau arahan entry.</p>
-      </article>
-      <article class="ws-scenario" aria-label="Penilaian kekuatan setup selepas signal">
-        <div class="ws-title"><div><span class="ws-kicker">SELEPAS SIGNAL · PENILAIAN SETUP</span><h4 id="aiVerdictLabel">DATA BELUM CUKUP</h4></div><strong id="aiVerdictProfit">BELUM DAPAT DINILAI</strong></div>
-        <p><b>ENTRY PADA HARGA SEKARANG: <span id="aiEntryNow">TUNGGU DATA</span></b></p>
-        <p id="aiVerdictReason">Menunggu skor SOP, kestabilan dan harga segar.</p>
-        <div class="ws-scenario-grid"><div><span>SKOR SOP / GRED</span><b id="aiVerdictScore">—</b></div><div><span>KESTABILAN / READY</span><b id="aiVerdictStability">—</b></div><div><span>R:R KE TP1</span><b id="aiVerdictRr">—</b></div></div>
-        <p id="aiEntryDistance" class="ws-muted">Jarak harga daripada entry: —</p><p id="aiVerdictNote" class="ws-muted">Skor bukan peluang menang. Semak kos broker, spread dan candle semasa.</p>
-      </article>
-    </div>
-      <article id="aiTargetMap" class="ws-scenario target-map" aria-label="Peta sasaran harga selepas entry" hidden>
-        <div class="ws-title"><div><span class="ws-kicker">PETA SASARAN · NORMAL 3M</span><h4>Berapa jauh harga perlu bergerak?</h4></div><strong id="aiTargetSide">—</strong></div>
-        <p id="aiTargetReason">Menunggu pelan SOP semasa.</p>
-        <div class="ws-scenario-grid"><div><span>ENTRY</span><b id="aiTargetEntry">—</b></div><div><span>RISIKO KE SL</span><b id="aiTargetRisk">—</b></div><div><span>JULAT INDIKATOR 3M</span><b id="aiTargetRoom">—</b></div></div>
-        <div class="ws-scroll"><table class="ws-table target-map-table"><thead><tr><th>SASARAN</th><th>HARGA TP</th><th>JARAK DARI ENTRY</th><th>LALUAN DARI CLOSE 3M</th><th>FORECAST · POWER PINE</th></tr></thead><tbody id="aiTargetRows"></tbody></table></div>
-        <p id="aiTargetNote" class="ws-muted">Jarak sasaran bukan keuntungan yang dijamin.</p>
-      </article>
+  <section class="ws-panel ai-guide" aria-labelledby="aiHeading">
+    <div class="ws-title"><div><span class="ws-kicker">ZENCORE AI ANALYSIS · SCALPING 3M</span><h3 id="aiHeading">Panduan keputusan untuk pair semasa</h3><p class="ws-muted">Rumusan daripada SOP, indikator dan maklumat dashboard TradingView. Signal entry hanya sah apabila SOP 3M disahkan.</p></div><button id="generateAnalysis" class="ws-ai-button" type="button">ANALISIS SEMULA</button></div>
+    <p id="aiStatus" class="ws-muted" role="status" aria-live="polite">Membaca data 3 minit terkini…</p>
+    <article id="aiResults" class="ai-guide-body" hidden aria-live="polite">
+      <div class="ai-guide-verdict"><div><span class="ws-kicker">KEPUTUSAN SEKARANG</span><h4 id="aiGuideAction">MENUNGGU DATA</h4><p id="aiGuideReason"></p></div><strong id="aiGuideSide">WAIT</strong></div>
+      <p id="aiGuideStamp" class="ws-muted"></p>
+      <div class="ai-guide-price"><span>HARGA TUTUP 3M <b id="aiGuideClose">—</b></span><span>ENTRY SIGNAL <b id="aiGuideEntry">—</b></span><span>SL / TP1 / TP2 / TP3 <b id="aiGuideLevels">—</b></span></div>
+      <div id="aiGuideSections" class="ai-guide-sections"></div>
+      <div id="aiGuideModel" class="ai-guide-model" hidden><h5>Ulasan AI tambahan</h5><p id="aiGuideModelText"></p></div>
+      <div class="ai-guide-actions"><h5>Langkah untuk trader</h5><ol id="aiGuideSteps"></ol></div>
+      <details class="pine-details"><summary>Lihat semua bacaan dashboard yang diterima</summary><div id="aiGuideReadings" class="pine-checks"></div></details>
+      <p id="aiGuideNote" class="ws-muted"></p>
+    </article>
   </section>
 
-
-
-  <p class="workspace-foot">Versi penyelidikan: paras V33 dan ulasan AI belum mengawal Telegram atau MT5. Jangkaan 15 minit ialah senario bersyarat. Analisis SOP sedia ada boleh dibuka di bawah.</p>
   <details class="legacy-analysis" open><summary>Posisi & butiran analisis</summary><div class="legacy-body">
   <section class="position-management panel">
     <div class="panel-head">
@@ -400,7 +370,7 @@
 </div>
 <script src="/analysis-alerts.js?v=35.0" defer></script>
 <script src="/precision-entry.js?v=5.2"></script>
-<script src="/analysis-workspace.js?v=36.0" defer></script>
+<script src="/analysis-workspace.js?v=37.0" defer></script>
 <script src="/analysis-execution-contract.js?v=1.0"></script>
 <script src="/auto-trade-core.js?v=1.2"></script>
 <script src="/auto-trade-monitor.js?v=1.0"></script>
