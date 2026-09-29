@@ -1310,6 +1310,9 @@ function fetchLocalSop(symbol) {
             grade: String(data.grade || '').slice(0, 8),
             stability: data.stability != null && Number.isFinite(Number(data.stability)) ? Math.max(0, Math.min(100, Number(data.stability))) : null,
             readiness: data.readiness != null && Number.isFinite(Number(data.readiness)) ? Math.max(0, Math.min(100, Number(data.readiness))) : null,
+            dashboard: data.dashboard ? Object.fromEntries(
+              ['barStatus','marketStructure','momentum','demand','volumeState','hemaTrend','dxyStatus','sdClearance','whaleState','riskState','mtfOverall','forecast3Bars','proTip','mtfTotal','globalTrend','setupProbability','confluence','relativeVolume','chop']
+                .map(k=>[k,data.dashboard[k]])) : null,
             indicator: sop.sop ? {
               close: sop.sop.close3, atr: sop.sop.atr3, forecast: sop.sop.forecast,
               power: sop.sop.marketPower, green: sop.sop.sopGreen,
