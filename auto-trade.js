@@ -39,9 +39,9 @@
         ...(options.headers || {})
       }
     });
-    if (response.status === 401 && !path.includes('emergency-close') && !path.includes('hosted-account')) return goToLogin();
     let body = {};
     try { body = await response.json(); } catch (_) {}
+    if (response.status === 401 && !path.includes('emergency-close') && body.code !== 'STEP_UP_REQUIRED') return goToLogin();
     if (!response.ok) {
       const error = new Error(body.error || `HTTP ${response.status}`);
       error.status = response.status;
