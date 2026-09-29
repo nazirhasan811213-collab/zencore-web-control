@@ -40,6 +40,17 @@
     text('aiPineTargets',pine.levels?`${price(pine.levels.tp1)} / ${price(pine.levels.tp2)} / ${price(pine.levels.tp3)}`:'—');
     text('aiPineTime',pine.dataAt?`Candle Pine: ${time(pine.sourceBarTime||pine.dataAt)} · Snapshot feed: ${time(pine.dataAt)}`:'Tiada feed Pine segar.');
     text('aiPineCaution',pine.conflicting?.length?`Semak percanggahan: ${pine.conflicting.join(', ')}. Skor penapis bukan peluang menang.`:pine.note||'');
+    const overview=$('aiPineOverview');overview.replaceChildren();
+    for(const item of pine.overview||[]){const box=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b'),detail=document.createElement('small');
+      label.textContent=item.label;value.textContent=item.value;detail.textContent=item.detail;box.append(label,value,detail);overview.append(box);}
+    const summary=$('aiPineSummary');summary.replaceChildren();
+    for(const line of pine.summary||[]){const p=document.createElement('p');p.textContent=line;summary.append(p);}
+    const d=pine.dashboard||{};
+    text('aiPineContext',[
+      d.dxy?'DXY: '+d.dxy:null,d.whales?'Whales: '+d.whales:null,
+      d.supplyDemand?'S&D: '+d.supplyDemand:null,d.risk?'Risiko: '+d.risk:null,
+      d.tip?'Tip Pine: '+d.tip:null
+    ].filter(Boolean).join(' · ')||'Medan dashboard tambahan muncul selepas webhook Pine dikemas kini.');
     const checks=$('aiPineChecks');checks.replaceChildren();
     for(const item of pine.checks||[]){const row=document.createElement('div');row.className='pine-check '+String(item.state||'INFO').toLowerCase();
       const label=document.createElement('span'),value=document.createElement('b');label.textContent=item.label;value.textContent=item.value;row.append(label,value);checks.append(row);}
