@@ -6,6 +6,7 @@
   const price=v=>v==null?'—':new Intl.NumberFormat('en-US',{maximumFractionDigits:8}).format(v);
   let requestId=0,controller=null,lastResult=null;
   function renderResult(r){
+    text('aiConnections',`Pine 3M: ${r.liveSop?'segar':'menunggu feed'} · GPT: ${r.gpt?.status==='AVAILABLE'?'aktif':'pilihan'} · Semakan luaran: ${r.external?.status==='AVAILABLE'?'aktif':'pilihan'}`);
     const pine=r.pineScalp||{};
     text('aiPineAction',pine.action||'TUNGGU FEED PINE 3M');
     text('aiPineSide',pine.side||'WAIT');text('aiPineReason',pine.reason||'Menunggu SOP 3M yang segar.');
