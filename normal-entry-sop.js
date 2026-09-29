@@ -9,9 +9,10 @@ function normalEntrySop(d={}){
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
   const green=flags.filter(Boolean).length;
   const forecast=upper(d.normal3Forecast),power=num(d.normal3MarketPower);
-  const forecastPass=power!==null&&(side==='BUY'
+  const forecastFor=direction=>power!==null&&(direction==='BUY'
     ? (forecast==='NEUTRAL'||forecast==='BULLISH')&&power>50
-    : side==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>50));
+    : direction==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>50));
+  const forecastPass=forecastFor(side);
   const cross=d.normal3PriceCrossEntry===true;
   const directionalGates=direction=>{
     const sign=direction==='BUY'?1:direction==='SELL'?-1:0;
@@ -37,6 +38,8 @@ function normalEntrySop(d={}){
   const reentryGates=[
     {key:'reentry',label:'Normal / High Re-Entry',pass:['NORMAL','HIGH'].includes(reentryType)&&['BUY','SELL'].includes(reentrySide)},
     {key:'hema',label:'Candle sepenuhnya di luar HEMA',pass:d.normal3ReentryHemaPass===true},
+    {key:'sop',label:'SOP Dashboard ≥4/5 Green',pass:green>=4,detail:`${green}/5`},
+    {key:'forecast',label:'Forecast mengikut arah re-entry',pass:forecastFor(reentrySide)},
     ...directionalGates(reentrySide)
   ];
   const reentryReady=reentryGates.every(g=>g.pass)&&close!==null&&atr!==null&&atr>0;
