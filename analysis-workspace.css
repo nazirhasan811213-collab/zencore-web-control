@@ -93,3 +93,10 @@
 .ai-advice h5{margin:8px 0;color:#e8fff4;font-size:1.2rem;line-height:1.4}
 .ai-advice p{margin:0;color:#b9e5de;line-height:1.55}
 .ai-guide-body>.pine-details .ai-guide-price,.ai-guide-body>.pine-details .ai-guide-sections,.ai-guide-body>.pine-details .ai-guide-model,.ai-guide-body>.pine-details .pine-checks{margin-top:12px}
+
+.ai-coach{padding:18px 20px;border-left:3px solid #f3a23e;border-radius:8px;background:linear-gradient(135deg,rgba(104,54,22,.26),rgba(7,25,38,.82))}
+.ai-coach .ws-kicker{color:#ffc180}
+.ai-coach>p{margin:8px 0 13px;font-weight:700;color:#ffe3a5;line-height:1.55}
+.ai-coach #aiCoachRows{display:grid;gap:5px}
+.ai-coach #aiCoachRows p{margin:0;line-height:1.55;color:#e2eef0}
+.ai-coach #aiCoachRows b{color:#b2f0e3;text-transform:uppercase}
