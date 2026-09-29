@@ -47,7 +47,7 @@ function scalpScenario({snapshot,external,liveSop,now=Date.now()}={}){
   const reference={price:round(price),priceAt,atr3m:round(atr),
     next3m:{low:round(price-atr*.5),high:round(price+atr*.5)},
     next15m:{low:round(price-atr*1.5),high:round(price+atr*1.5)}};
-  const sop=liveSop&&now-liveSop.dataAt<=90000&&liveSop.dataAt<=now+5000?liveSop:null;
+  const sop=liveSop&&now-liveSop.dataAt<=240000&&liveSop.dataAt<=now+5000?liveSop:null;
   if(!sop)return {...base,...reference,status:'NO_SOP',reason:'Julat rujukan tersedia, tetapi SOP ZenCore semasa belum dapat disahkan. Tiada cadangan entry.'};
   if(!['BUY','SELL'].includes(sop.side)||sop.state!=='READY'||!sop.plan)
     return {...base,...reference,status:'WAIT_SETUP',reason:`SOP ${sop.state}: tunggu setup READY dan pelan Entry/SL/TP lengkap.`};
@@ -86,69 +86,38 @@ function setupVerdict(scenario,sop,external){
 }
 
 function pineScalpAnalysis(sop,now=Date.now()){
-  const base={status:'NO_FEED',action:'TUNGGU FEED PINE 3M',reason:'Data SOP Pine 3M belum tersedia atau telah lewat.',timeframe:'3M',checks:[],levels:null};
-  if(!sop||!Number.isFinite(sop.dataAt)||now-sop.dataAt>90000||sop.dataAt>now+5000)return base;
-  const i=sop.indicator||{},d=sop.dashboard||{},side=['BUY','SELL'].includes(sop.side)?sop.side:'WAIT',sign=side==='BUY'?1:side==='SELL'?-1:0;
-  const e9=num(i.ema9),e20=num(i.ema20),e50=num(i.ema50),h20=num(i.hema20),h40=num(i.hema40);
-  const close=num(i.close),atr=num(i.atr),rsi=num(i.rsi),power=num(i.power),green=num(i.green);
-  const checks=[
-    {label:'SOP Normal 3M',value:green===null?'—':green+'/5',state:green===null?'UNKNOWN':green>=4?'SUPPORT':'CAUTION'},
-    {label:'EMA 9 / 20 / 50',value:[e9,e20,e50].every(v=>v!==null)?(e9>e20&&e20>e50?'BULLISH':e9<e20&&e20<e50?'BEARISH':'MIXED'):'DATA TIADA',state:sign&&[e9,e20,e50].every(v=>v!==null)?((e9-e20)*sign>0&&(e20-e50)*sign>0?'SUPPORT':'CAUTION'):'UNKNOWN'},
-    {label:'HEMA 20 / 40',value:h20===null||h40===null?'DATA TIADA':h20>h40?'BULLISH':h20<h40?'BEARISH':'FLAT',state:sign&&h20!==null&&h40!==null?((h20-h40)*sign>0?'SUPPORT':'CAUTION'):'UNKNOWN'},
-    {label:'Forecast + market power',value:String(i.forecast||'—')+' · '+(power===null?'—':Math.round(power)+'%'),state:sign&&power!==null?(
-      (side==='BUY'&&((i.forecast==='BULLISH'&&power>50)||(i.forecast==='NEUTRAL'&&power>50)))||
-      (side==='SELL'&&((i.forecast==='BEARISH'&&power>50)||(i.forecast==='NEUTRAL'&&power<50)))?'SUPPORT':'CAUTION'):'UNKNOWN'},
-    {label:'RSI / WaveTrend',value:'RSI '+(rsi===null?'—':rsi.toFixed(1))+' · WT '+(num(i.waveTrend1)===null?'—':Number(i.waveTrend1).toFixed(1))+'/'+(num(i.waveTrend2)===null?'—':Number(i.waveTrend2).toFixed(1)),state:'INFO'},
-    {label:'Chop / global trend / basis',value:(num(i.chop)===null?'—':Number(i.chop).toFixed(1))+' · '+(num(i.globalTrend)===null?'—':Number(i.globalTrend).toFixed(2))+' / '+(num(i.basis)===null?'—':Number(i.basis).toFixed(2)),state:'INFO'},
-    {label:'ATR 3M / relative volume',value:(atr===null?'—':atr.toFixed(5))+' · '+(num(i.relativeVolume)===null?'—':Number(i.relativeVolume).toFixed(2)+'x'),state:'INFO'}
+  const unavailable={status:'NO_FEED',action:'TUNGGU DATA 3M',side:'WAIT',reason:'Feed Pine 3M belum tersedia atau sudah lewat. Jangan guna harga atau signal lama untuk entry.',sections:[],steps:['Semak alert webhook TradingView pada carta 3 minit.','Tunggu candle 3M lengkap dan data baharu diterima.'],levels:null};
+  if(!sop||!Number.isFinite(sop.dataAt)||now-sop.dataAt>240000||sop.dataAt>now+5000)return unavailable;
+  const i=sop.indicator||{},d=sop.dashboard||{},side=['BUY','SELL'].includes(sop.side)?sop.side:'WAIT';
+  const n=v=>num(v),fmt=v=>n(v)===null?'—':String(Number(n(v).toFixed(5))),str=v=>typeof v==='string'&&v.trim()?v.trim():null;
+  const close=n(i.close),atr=n(i.atr),rsi=n(i.rsi),chop=n(d.chop)??n(i.chop),rv=n(d.relativeVolume)??n(i.relativeVolume);
+  const e9=n(i.ema9),e20=n(i.ema20),e50=n(i.ema50),h20=n(i.hema20),h40=n(i.hema40),w1=n(i.waveTrend1),w2=n(i.waveTrend2);
+  const ema=[e9,e20,e50].every(v=>v!==null)?e9>e20&&e20>e50?'bullish':e9<e20&&e20<e50?'bearish':'bercampur':'belum lengkap';
+  const hema=h20!==null&&h40!==null?h20>h40?'bullish':h20<h40?'bearish':'mendatar':'belum lengkap';
+  const wave=w1!==null&&w2!==null?w1>w2?'bullish':w1<w2?'bearish':'mendatar':'belum lengkap';
+  const mtf=str(d.mtfOverall)||(str(i.m5Position)?'Harga 5M '+i.m5Position:'belum tersedia');
+  const forecast=str(d.forecast3Bars)||str(i.forecast)||'belum tersedia';
+  const dashboardFields=[['Struktur',d.marketStructure],['Momentum',d.momentum],['Tekanan',d.demand],['Volume',d.volumeState],['HEMA',d.hemaTrend],['MTF',d.mtfOverall],['Ramalan 3 bar',d.forecast3Bars],['DXY',d.dxyStatus],['Supply/Demand',d.sdClearance],['Whales',d.whaleState],['Risiko',d.riskState],['Tip Pine',d.proTip]].filter(([,v])=>str(v));
+  const sections=[
+    {title:'Arah dan struktur pasaran',body:`Struktur ${str(d.marketStructure)||'belum dihantar'}; momentum ${str(d.momentum)||'rujuk WaveTrend '+wave}; tekanan ${str(d.demand)||'belum dihantar'}. EMA 9/20/50 ${ema}, HEMA 20/40 ${hema}, WaveTrend ${wave}. MTF: ${mtf}.`},
+    {title:'Kekuatan pergerakan 3 minit',body:`Chop ${chop===null?'tiada data':chop.toFixed(1)+'%'}${chop!==null&&chop>=58?' menunjukkan pasaran mudah berulang-alik':' sebagai konteks keadaan pasaran'}. Volume relatif ${rv===null?'tiada data':rv.toFixed(2)+'x'}; RSI ${rsi===null?'tiada data':rsi.toFixed(1)}; ATR ${fmt(atr)}. ${str(d.volumeState)?'Dashboard volume: '+d.volumeState+'. ':''}Bacaan ini ialah konteks, bukan trigger entry.`},
+    {title:'Ramalan dan konteks dashboard',body:`Ramalan ${forecast}; forecast SOP ${str(i.forecast)||'tiada data'} dengan market power ${n(i.power)===null?'tiada data':Math.round(n(i.power))+'%'}. ${dashboardFields.filter(([k])=>['DXY','Supply/Demand','Whales','Risiko','Tip Pine'].includes(k)).map(([k,v])=>k+': '+v).join('; ')||'Medan tambahan dashboard belum tiba melalui webhook.'}`}
   ];
-  const ready=sop.state==='READY'&&sign!==0&&sop.plan&&
-    ['entry','sl','tp1','tp2','tp3'].every(k=>num(sop.plan[k])!==null);
-  const conflicting=checks.filter(x=>x.state==='CAUTION').map(x=>x.label);
-  const usable=v=>typeof v==='string'&&v.trim()?v.trim():null;
-  const structure=usable(d.marketStructure)||(num(i.chop)>=58?'Sideways menurut Chop Pine':null);
-  const w1=num(i.waveTrend1),w2=num(i.waveTrend2);
-  const movement=usable(d.momentum)||(w1!==null&&w2!==null?(w1>w2?'Bullish WaveTrend':w1<w2?'Bearish WaveTrend':'Flat WaveTrend'):null);
-  const demand=usable(d.demand);
-  const mtf=usable(d.mtfOverall)||(usable(i.m5Position)?'5M '+i.m5Position:null);
-  const forecast=usable(d.forecast3Bars)||(usable(i.forecast)?'SOP '+i.forecast:null);
-  const hema=usable(d.hemaTrend)||(h20!==null&&h40!==null?(h20>h40?'Bullish':h20<h40?'Bearish':'Flat'):null);
-  const chop=num(d.chop)??num(i.chop),relVol=num(d.relativeVolume)??num(i.relativeVolume);
-  const context=[
-    structure?'Struktur '+structure: null,
-    movement?'momentum '+movement:null,
-    demand?'tekanan '+demand:null
-  ].filter(Boolean).join(' · ');
-  const context2=[
-    hema?'HEMA '+hema:null,mtf?'MTF '+mtf:null,forecast?'3 bar '+forecast:null
-  ].filter(Boolean).join(' · ');
-  const friction=[
-    structure&&/sideways/i.test(structure)?'Struktur sideways':null,
-    chop!==null&&chop>=58?'chop tinggi '+chop.toFixed(1):null,
-    hema&&sign&&((side==='SELL'&&/bull/i.test(hema))||(side==='BUY'&&/bear/i.test(hema)))?'HEMA berlawanan dengan arah SOP':null,
-    usable(d.sdClearance)&&!/clear/i.test(d.sdClearance)?'zon S&D '+d.sdClearance:null
-  ].filter(Boolean);
-  const overview=[
-    {label:'STRUKTUR / MOMENTUM',value:structure||'—',detail:movement||'Data belum dihantar'},
-    {label:'HEMA / MTF',value:hema||'—',detail:mtf||'Data belum dihantar'},
-    {label:'CHOP / VOLUME',value:chop===null?'—':chop.toFixed(1),detail:relVol===null?'Vol —':'Rel Vol '+relVol.toFixed(2)+'x'},
-    {label:'FORECAST / KUASA',value:forecast||String(i.forecast||'—'),detail:power===null?'Power —':'Power '+Math.round(power)+'%'}
+  const gates=Array.isArray(sop.gates)?sop.gates:[];
+  const blockers=gates.filter(g=>!g.pass).map(g=>g.label);
+  const ready=sop.state==='READY'&&sop.plan&&['entry','sl','tp1','tp2','tp3'].every(k=>n(sop.plan[k])!==null);
+  const levels=ready?Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,n(sop.plan[k])])):null;
+  const steps=ready?[
+    `Signal ${side} disahkan pada candle 3M. Harga entry rujukan ${fmt(levels.entry)}; bandingkan harga broker dan spread sebelum membuat keputusan.`,
+    `Paras risiko: SL ${fmt(levels.sl)}. Sasaran TP1 ${fmt(levels.tp1)}, TP2 ${fmt(levels.tp2)}, TP3 ${fmt(levels.tp3)}. Ikut signal pengurusan posisi semasa.`,
+    'Jika harga broker sudah jauh daripada harga signal, nilai semula risiko; jangan kejar harga.'
+  ]:[
+    `Tiada entry baharu disahkan. ${blockers.length?'Syarat belum lulus: '+blockers.join(', ')+'.':str(sop.reason)||'Tunggu trigger SOP.'}`,
+    'Pantau candle 3M berikutnya dan tunggu signal SOP yang baharu; bias BUY/SELL sahaja bukan arahan entry.'
   ];
-  const summary=[
-    context||'Struktur dan momentum teks daripada dashboard Pine belum dihantar; semak indikator yang tersedia di bawah.',
-    context2||'HEMA, MTF dan forecast dashboard belum lengkap pada feed ini.',
-    'SOP '+String(sop.state||'WAIT')+' '+side+'. '+(friction.length?'Perhatian: '+friction.join(', ')+'. ':'')+
-      (sop.state==='READY'?'Semak harga broker dan spread sebelum entry.':'Tunggu trigger SOP; bias pasaran sahaja bukan signal entry.')
-  ];
-
-  const levels=ready?Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,num(sop.plan[k])])):null;
-  const action=ready?'SOP ENTRY READY · SEMAK HARGA BROKER':sop.state==='WATCH'?'WATCH · TUNGGU TRIGGER':sop.state==='WAIT_PULLBACK'?'TUNGGU PULLBACK':'TUNGGU SOP 3M';
-  const reason=ready?'Trigger SOP disahkan pada candle 3M. Semak harga semasa, spread dan SL sebelum keputusan.':
-    String(sop.reason||'Belum ada trigger entry yang lengkap.');
-  return {status:'AVAILABLE',side,state:sop.state,action,reason,checks,conflicting,overview,summary,friction,
-    dashboard:{dxy:usable(d.dxyStatus),whales:usable(d.whaleState),supplyDemand:usable(d.sdClearance),risk:usable(d.riskState),tip:usable(d.proTip),demand},
-    levels,close3m:close,atr3m:atr,sourceBarTime:sop.sourceBarTime,dataAt:sop.dataAt,
-    note:'Bacaan Pine pada candle ditutup. Skor dan penapis membantu semakan; tiada jaminan harga atau profit.'};
+  return {status:'AVAILABLE',action:ready?'ENTRY '+side+' DISAHKAN':'TUNGGU ENTRY SOP 3M',side,state:sop.state,reason:str(sop.reason)||steps[0],sections,steps,blockers,
+    readings:dashboardFields.map(([label,value])=>({label,value:String(value)})),levels,close3m:close,atr3m:atr,sourceBarTime:sop.sourceBarTime,dataAt:sop.dataAt,
+    note:'Analisis berpandukan feed TradingView 3M. Data dashboard yang belum dihantar ditandakan jelas; tiada ramalan keuntungan atau kepastian entry.'};
 }
 
 class AnalysisAIService {
@@ -210,8 +179,8 @@ class AnalysisAIService {
     const work=(async()=>{
       const [external,liveSop]=await Promise.all([this.external(symbol),this.liveSopProvider?.(symbol).catch(()=>null)??null]);
       const safeSop=liveSop&&liveSop.symbol===symbol&&Number.isFinite(liveSop.dataAt)&&
-        now-liveSop.dataAt<=90000&&liveSop.dataAt<=now+5000&&Number.isFinite(liveSop.sourceBarTime)&&
-        now-liveSop.sourceBarTime<=240000&&liveSop.sourceBarTime<=now?liveSop:null;
+        now-liveSop.dataAt<=240000&&liveSop.dataAt<=now+5000&&Number.isFinite(liveSop.sourceBarTime)&&
+        now-liveSop.sourceBarTime<=420000&&liveSop.sourceBarTime<=now?liveSop:null;
       const pineScalp=pineScalpAnalysis(safeSop,now);
       const scenario=scalpScenario({snapshot,external,liveSop:safeSop,now});
       const verdict=setupVerdict(scenario,safeSop,external);
