@@ -88,7 +88,7 @@ function setupVerdict(scenario,sop,external){
 function pineScalpAnalysis(sop,now=Date.now()){
   const base={status:'NO_FEED',action:'TUNGGU FEED PINE 3M',reason:'Data SOP Pine 3M belum tersedia atau telah lewat.',timeframe:'3M',checks:[],levels:null};
   if(!sop||!Number.isFinite(sop.dataAt)||now-sop.dataAt>90000||sop.dataAt>now+5000)return base;
-  const i=sop.indicator||{},side=['BUY','SELL'].includes(sop.side)?sop.side:'WAIT',sign=side==='BUY'?1:side==='SELL'?-1:0;
+  const i=sop.indicator||{},d=sop.dashboard||{},side=['BUY','SELL'].includes(sop.side)?sop.side:'WAIT',sign=side==='BUY'?1:side==='SELL'?-1:0;
   const e9=num(i.ema9),e20=num(i.ema20),e50=num(i.ema50),h20=num(i.hema20),h40=num(i.hema40);
   const close=num(i.close),atr=num(i.atr),rsi=num(i.rsi),power=num(i.power),green=num(i.green);
   const checks=[
@@ -105,11 +105,43 @@ function pineScalpAnalysis(sop,now=Date.now()){
   const ready=sop.state==='READY'&&sign!==0&&sop.plan&&
     ['entry','sl','tp1','tp2','tp3'].every(k=>num(sop.plan[k])!==null);
   const conflicting=checks.filter(x=>x.state==='CAUTION').map(x=>x.label);
+  const usable=v=>typeof v==='string'&&v.trim()?v.trim():null;
+  const structure=usable(d.marketStructure),movement=usable(d.momentum),demand=usable(d.demand);
+  const mtf=usable(d.mtfOverall),forecast=usable(d.forecast3Bars),hema=usable(d.hemaTrend);
+  const chop=num(d.chop)??num(i.chop),relVol=num(d.relativeVolume)??num(i.relativeVolume);
+  const context=[
+    structure?'Struktur '+structure: null,
+    movement?'momentum '+movement:null,
+    demand?'tekanan '+demand:null
+  ].filter(Boolean).join(' · ');
+  const context2=[
+    hema?'HEMA '+hema:null,mtf?'MTF '+mtf:null,forecast?'3 bar '+forecast:null
+  ].filter(Boolean).join(' · ');
+  const friction=[
+    structure&&/sideways/i.test(structure)?'Struktur sideways':null,
+    chop!==null&&chop>=58?'chop tinggi '+chop.toFixed(1):null,
+    hema&&sign&&((side==='SELL'&&/bull/i.test(hema))||(side==='BUY'&&/bear/i.test(hema)))?'HEMA berlawanan dengan arah SOP':null,
+    usable(d.sdClearance)&&!/clear/i.test(d.sdClearance)?'zon S&D '+d.sdClearance:null
+  ].filter(Boolean);
+  const overview=[
+    {label:'STRUKTUR / MOMENTUM',value:structure||'—',detail:movement||'Data belum dihantar'},
+    {label:'HEMA / MTF',value:hema||'—',detail:mtf||'Data belum dihantar'},
+    {label:'CHOP / VOLUME',value:chop===null?'—':chop.toFixed(1),detail:relVol===null?'Vol —':'Rel Vol '+relVol.toFixed(2)+'x'},
+    {label:'FORECAST / KUASA',value:forecast||String(i.forecast||'—'),detail:power===null?'Power —':'Power '+Math.round(power)+'%'}
+  ];
+  const summary=[
+    context||'Struktur dan momentum teks daripada dashboard Pine belum dihantar; semak indikator yang tersedia di bawah.',
+    context2||'HEMA, MTF dan forecast dashboard belum lengkap pada feed ini.',
+    'SOP '+String(sop.state||'WAIT')+' '+side+'. '+(friction.length?'Perhatian: '+friction.join(', ')+'. ':'')+
+      (sop.state==='READY'?'Semak harga broker dan spread sebelum entry.':'Tunggu trigger SOP; bias pasaran sahaja bukan signal entry.')
+  ];
+
   const levels=ready?Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,num(sop.plan[k])])):null;
   const action=ready?'SOP ENTRY READY · SEMAK HARGA BROKER':sop.state==='WATCH'?'WATCH · TUNGGU TRIGGER':sop.state==='WAIT_PULLBACK'?'TUNGGU PULLBACK':'TUNGGU SOP 3M';
   const reason=ready?'Trigger SOP disahkan pada candle 3M. Semak harga semasa, spread dan SL sebelum keputusan.':
     String(sop.reason||'Belum ada trigger entry yang lengkap.');
-  return {status:'AVAILABLE',side,state:sop.state,action,reason,checks,conflicting,
+  return {status:'AVAILABLE',side,state:sop.state,action,reason,checks,conflicting,overview,summary,friction,
+    dashboard:{dxy:usable(d.dxyStatus),whales:usable(d.whaleState),supplyDemand:usable(d.sdClearance),risk:usable(d.riskState),tip:usable(d.proTip),demand},
     levels,close3m:close,atr3m:atr,sourceBarTime:sop.sourceBarTime,dataAt:sop.dataAt,
     note:'Bacaan Pine pada candle ditutup. Skor dan penapis membantu semakan; tiada jaminan harga atau profit.'};
 }
