@@ -142,6 +142,7 @@ function qualityLayer(m){
   else if(score>=80)grade='A';
   else if(score>=70)grade='B+';
   else if(score>=60)grade='B';
+  else if(score>=50)grade='C+';
 
   const sopReady=String(n.state||'').toUpperCase()==='READY';
   const aPlusExecution=sopReady&&score>=80&&!m?.sidewaysGuard;
@@ -231,9 +232,11 @@ function renderMarket(m){
   if(responsePair&&responsePair!==activePair)return;
   lastMarket=m;
   const n=m?.strategyNormal||{},s=n?.sop||{};
-  const active=m?.activeTradePlan||null,p=active?.plan||n?.plan||null;
+  const active=m?.activeTradePlan||null;
   const planSide=active?.side||n.side||'WAIT';
   const q=qualityLayer(m);
+  const qualityAllowed=['C+','B','B+','A','A+'].includes(q.grade);
+  const p=active?.plan||(qualityAllowed?n?.plan:null)||null;
   window.__lastReceived=m?.receivedAt||null;
 
   const fresh=String(m?.freshness||'OFFLINE').toUpperCase();
@@ -245,11 +248,11 @@ function renderMarket(m){
 
   const state=String(n.state||'WARMING').toUpperCase();
   const side=String(n.side||'WAIT').toUpperCase();
-  setText('entryState',state);
+  setText('entryState',state==='READY'&&!qualityAllowed?'GRED C • TUNGGU':state);
   setText('entrySide','SIDE: '+side);
   if($('entryState'))$('entryState').className=state==='READY'?'good':state==='WATCH'?'warn':'';
 
-  setText('heroSignal',state==='READY'?('PRECISION '+side+' READY'):state==='WATCH'?('WATCH '+side+' SETUP'):'WAIT FOR VALID SETUP');
+  setText('heroSignal',state==='READY'&&!qualityAllowed?'TUNGGU GRED C+':state==='READY'?('PRECISION '+side+' READY'):state==='WATCH'?('WATCH '+side+' SETUP'):'WAIT FOR VALID SETUP');
   setText('heroReason',n.reason||'Menunggu Pine V32 feed.');
 
   setText('lastPrice',fmtPrice(m?.price));
@@ -287,7 +290,8 @@ function renderMarket(m){
   const newPlan=n.plan;
   const triggerReady=String(m?.freshness||'').toUpperCase()==='LIVE' &&
     String(n.state||'').toUpperCase()==='READY' &&
-    ['BUY','SELL'].includes(side) && newPlan && Number.isFinite(Number(newPlan.entry));
+    ['BUY','SELL'].includes(side) && newPlan && Number.isFinite(Number(newPlan.entry)) &&
+    ['C+','B','B+','A','A+'].includes(q.grade);
   const sameActive=active && active.side===side &&
     Number(active.plan?.entry)===Number(newPlan?.entry) &&
     String(active.entryType||'SOLID_ENTRY')===String(n.entryType||'SOLID_ENTRY');
@@ -311,7 +315,7 @@ function renderMarket(m){
   setText('riskDistance',fmtPrice(p?.riskDistance));
   const planRr=rrFromPlan(p);
   setText('rrTp3',planRr==null?'—':planRr.toFixed(1)+'R');
-  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Hard gates passed. SOP signal valid; A+ Quality ialah lapisan execution berasingan.':'Plan hanya muncul apabila semua syarat SOP entry lulus.');
+  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Hard gates passed. SOP signal valid; A+ Quality ialah lapisan execution berasingan.':'Pelan entry hanya muncul apabila SOP READY dan gred sekurang-kurangnya C+.');
 
   setText('riskState',m?.sidewaysGuard?'HIGH / SIDEWAYS':state==='READY'?'CONTROLLED':'WAIT');
   setText('setupProbability',m?.setupProbability==null?'—':Math.round(num(m.setupProbability))+'%');

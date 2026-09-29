@@ -10,6 +10,7 @@ function readyMarket(overrides = {}) {
     strategyNormal: {
       state: 'READY',
       side: 'BUY',
+      sop:{sopGreen:4,forecast:'BULLISH',marketPower:70,gates:[{pass:true},{pass:true}]},
       plan: { entry: 1.1, sl: 1.099, tp1: 1.101, tp2: 1.102, tp3: 1.103 },
       ...overrides
     }
@@ -40,6 +41,18 @@ test('execution contract never promotes WATCH or incomplete plans into an entry'
   assert.equal(Contract.createEntryDecision(readyMarket({
     plan: { entry: 1.1, sl: 1.099, tp1: 1.101, tp2: 1.102 }
   })), null);
+});
+
+test('entry requires C+ or higher while position close stays available', () => {
+  const base=readyMarket();
+  const low={...base,strategyNormal:{...base.strategyNormal,sop:{...base.strategyNormal.sop,sopGreen:0,forecast:'WAIT',marketPower:0}}};
+  assert.equal(Contract.entryQuality(low).grade,'C');
+  assert.equal(Contract.createEntryDecision(low),null);
+  const cPlus={...base,strategyNormal:{...base.strategyNormal,sop:{...base.strategyNormal.sop,forecast:'WAIT',marketPower:0}}};
+  assert.equal(Contract.entryQuality(cPlus).grade,'C+');
+  assert.ok(Contract.createEntryDecision(cPlus));
+  assert.ok(Contract.createEntryDecision(base));
+  assert.ok(Contract.createManagementDecision({...low,positionManagement:{action:'EXIT_ALL'}}));
 });
 
 test('active position permits only explicit same-side Normal or High re-entry',()=>{

@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {signals,transitions}=require('../analysis-alert-core');
 const {AnalysisAlerts}=require('../analysis-alert-service');
-const market=(time=Date.now())=>({symbol:'XAUUSD',receivedAt:time,strategyNormal:{state:'READY',side:'BUY',plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}},positionManagement:{action:'HOLD'}});
+const market=(time=Date.now())=>({symbol:'XAUUSD',receivedAt:time,strategyNormal:{state:'READY',side:'BUY',sop:{sopGreen:4,forecast:'BULLISH',marketPower:70,gates:[{pass:true},{pass:true}]},plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}},positionManagement:{action:'HOLD'}});
 test('fresh entry and close transitions suppress repeated frames, permit next setup and reject stale data',()=>{
  const m=market();const a=signals(m);assert.equal(transitions(null,a)[0].kind,'ENTRY');
  const b=signals({...m,receivedAt:m.receivedAt+1});assert.deepEqual(transitions(a,b),[]);

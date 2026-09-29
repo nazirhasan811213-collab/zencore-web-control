@@ -27,27 +27,9 @@ const price=v=>numeric(v)===null?'—':new Intl.NumberFormat('en-US',{minimumFra
 
 // Mirrors the existing displayed qualityLayer in precision-entry.js. This is
 // a message label only: both high and ordinary READY entries are delivered.
-function messageQuality(m){
-  const numeric=v=>Number.isFinite(+v)?+v:null; // Same conversion as the displayed quality layer.
-  const n=m.strategyNormal||{}, s=n.sop||{}, p=n.plan||{};
-  const side=String(n.side||'WAIT').toUpperCase(), forecast=String(s.forecast||'WAIT').toUpperCase();
-  const power=numeric(s.marketPower), green=numeric(s.sopGreen)||0;
-  const conf=numeric(m.predictionConfidence)||0, stability=numeric(m.stability)||0;
-  const stars=numeric(m.confluence)||0, probability=numeric(m.setupProbability)||0;
-  const gateList=Array.isArray(s.gates)?s.gates:[];
-  const gates=gateList.filter(g=>g.pass).length;
-  const entry=numeric(p.entry), sl=numeric(p.sl), tp=numeric(p.tp3);
-  const risk=entry!==null&&sl!==null?Math.abs(entry-sl):0;
-  const rr=entry!==null&&tp!==null&&risk>0?Math.abs(tp-entry)/risk:numeric(m.rr);
-  const directional=((side==='BUY'&&forecast==='BULLISH')||(side==='SELL'&&forecast==='BEARISH'))&&power!==null&&power>=65;
-  const neutral=forecast==='NEUTRAL'&&power!==null&&((side==='BUY'&&power>50)||(side==='SELL'&&power<50));
-  const score=(gateList.length>=2&&gates===gateList.length?25:0)+(green>=5?15:green>=4?10:0)+(directional?15:neutral?6:0)+
-    (m.sidewaysGuard?0:10)+(conf>=80?10:conf>=70?6:0)+(stability>=75?10:stability>=65?5:0)+
-    (stars>=4?5:stars>=3?3:0)+(probability>=70?5:probability>=60?3:0)+(rr!==null&&rr>=2?5:0);
-  return {score,high:String(n.state||'').toUpperCase()==='READY'&&score>=80&&!m.sidewaysGuard};
-}
-
-function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':score>=60?'B':'C';}
+const {entryQuality}=require('./analysis-execution-contract');
+function messageQuality(m){return entryQuality(m);}
+function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':score>=60?'B':score>=50?'C+':'C';}
 
 // Current bridge supplies confirmed candle OPEN time in milliseconds.
 // Entry transport expires 30 seconds after both reception and candle close.

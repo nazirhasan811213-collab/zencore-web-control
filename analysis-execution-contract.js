@@ -35,8 +35,38 @@
     return receivedAt > 0 ? receivedAt : null;
   }
 
-  // This boundary does not calculate indicators, scores, candle gates, Entry Line
-  // touch, TP or SL. READY is an authorization already made by ZenCore Analysis.
+  // The same quality points shown on Analysis and Telegram. Only C+ and above may open a signal.
+  function entryQuality(market = {}) {
+    const n = market.strategyNormal || {}, s = n.sop || {}, p = n.plan || {};
+    const side = String(n.side || 'WAIT').toUpperCase();
+    const forecast = String(s.forecast || 'WAIT').toUpperCase();
+    const qualityNumber = v => Number.isFinite(+v) ? +v : null;
+    const power = qualityNumber(s.marketPower), green = qualityNumber(s.sopGreen) || 0;
+    const confidence = qualityNumber(market.predictionConfidence) || 0;
+    const stability = qualityNumber(market.stability) || 0;
+    const stars = qualityNumber(market.confluence) || 0;
+    const probability = qualityNumber(market.setupProbability) || 0;
+    const gates = Array.isArray(s.gates) ? s.gates : [];
+    const passed = gates.filter(g => g.pass).length;
+    const entry = number(p.entry), sl = number(p.sl), tp3 = number(p.tp3);
+    const risk = entry !== null && sl !== null ? Math.abs(entry - sl) : 0;
+    const rr = entry !== null && tp3 !== null && risk > 0 ? Math.abs(tp3 - entry) / risk : number(market.rr);
+    const directional = ((side === 'BUY' && forecast === 'BULLISH') ||
+      (side === 'SELL' && forecast === 'BEARISH')) && power !== null && power >= 65;
+    const neutral = forecast === 'NEUTRAL' && power !== null &&
+      ((side === 'BUY' && power > 50) || (side === 'SELL' && power < 50));
+    const score = (gates.length >= 2 && passed === gates.length ? 25 : 0) +
+      (green >= 5 ? 15 : green >= 4 ? 10 : 0) + (directional ? 15 : neutral ? 6 : 0) +
+      (market.sidewaysGuard ? 0 : 10) + (confidence >= 80 ? 10 : confidence >= 70 ? 6 : 0) +
+      (stability >= 75 ? 10 : stability >= 65 ? 5 : 0) +
+      (stars >= 4 ? 5 : stars >= 3 ? 3 : 0) +
+      (probability >= 70 ? 5 : probability >= 60 ? 3 : 0) + (rr !== null && rr >= 2 ? 5 : 0);
+    const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B+' :
+      score >= 60 ? 'B' : score >= 50 ? 'C+' : 'C';
+    return { score, grade, high: String(n.state || '').toUpperCase() === 'READY' && score >= 80 && !market.sidewaysGuard };
+  }
+
+  // READY remains the Pine SOP decision; entry quality is an additional filter.
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
@@ -51,6 +81,7 @@
       tp3: number(plan.tp3)
     };
     if (!SUPPORTED_MARKETS.includes(symbol) || String(normal.state || '').toUpperCase() !== 'READY' ||
+        !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade) ||
         !['BUY', 'SELL'].includes(side) || !receivedAt || Object.values(prices).some(value => value === null)) {
       return null;
     }
@@ -128,6 +159,7 @@
     SUPPORTED_MARKETS,
     number,
     normaliseSymbol,
+    entryQuality,
     createEntryDecision,
     createManagementDecision
   };
