@@ -1315,7 +1315,7 @@ function fetchLocalSop(symbol) {
                 .map(k=>[k,data.dashboard[k]])) : null,
             indicator: sop.sop ? {
               close: sop.sop.close3, atr: sop.sop.atr3, forecast: sop.sop.forecast,
-              power: sop.sop.marketPower, green: sop.sop.sopGreen,
+              power: sop.sop.marketPower, green: sop.sop.sopGreen, m5Position:sop.sop.m5Position,
               ...Object.fromEntries(['ema9','ema20','ema50','hema20','hema40','waveTrend1','waveTrend2','rsi','chop','relativeVolume','globalTrend','basis']
                 .map(k=>[k,sop.sop.indicatorContext?.[k]]))} : null});
         } catch (_) { reject(new Error('SOP response invalid')); }
