@@ -1359,6 +1359,9 @@ function startAutoTradeDispatcher() {
       running = false;
     }
   };
+  // A confirmed market snapshot dispatches immediately; periodic checks recover missed events.
+  const onMarket = () => { const timer = setTimeout(tick, 0); timer.unref?.(); };
+  require('./analysis-alert-bus').on('market', onMarket);
   autoTradeState.dispatchTimer = setInterval(tick, 3000);
   autoTradeState.dispatchTimer.unref?.();
   setTimeout(tick, 1000).unref?.();

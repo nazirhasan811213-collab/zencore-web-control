@@ -52,7 +52,7 @@ function connectPredictionStream(){
     predictionStream=new EventSource('/prediction-events/'+encodeURIComponent(pair));
     predictionStream.addEventListener('prediction',e=>{
       if(pair!==activePair)return;
-      try{const payload=JSON.parse(e.data);if(normalisePair(payload?.symbol)===activePair){payload.activeTradePlan=lastMarket?.activeTradePlan||null;renderMarket(payload);loadActivePlan(pair,pairSwitchToken)}}catch(_){}
+      try{const payload=JSON.parse(e.data);if(normalisePair(payload?.symbol)===activePair){applyMarketPayload(payload,pair,pairSwitchToken);refreshNativeChart();refreshPerformance();}}catch(_){}
     });
   }catch(_){}
 }
@@ -364,13 +364,23 @@ function renderPerformance(payload){
   }).join(''):'<div class="performance-message">Belum ada trade Normal 3M yang selesai untuk dipaparkan.</div>';
 }
 
+function applyMarketPayload(payload,pair,token){
+  if(pair!==activePair||token!==pairSwitchToken)return;
+  const incoming=Number(payload?.receivedAt)||0;
+  const displayed=Number(lastMarket?.receivedAt)||0;
+  if(incoming&&displayed&&incoming<displayed)return;
+  payload.activeTradePlan=lastMarket?.activeTradePlan||null;
+  renderMarket(payload);
+  loadActivePlan(pair,token);
+}
+
 async function refreshMarket(){
   const pair=activePair,token=pairSwitchToken;
   try{
     const r=await fetch('/api/prediction/'+encodeURIComponent(pair),{cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const payload=await r.json();
-    if(pair===activePair&&token===pairSwitchToken){payload.activeTradePlan=lastMarket?.activeTradePlan||null;renderMarket(payload);loadActivePlan(pair,token);}
+    applyMarketPayload(payload,pair,token);
   }catch(e){
     if(pair!==activePair||token!==pairSwitchToken)return;
     setText('feedState','OFFLINE');
@@ -616,9 +626,11 @@ refreshPairOptions();
 refreshMarket();
 refreshPerformance();
 refreshNativeChart();
-setInterval(refreshMarket,10000);
+setInterval(()=>{if(!predictionStream||predictionStream.readyState!==EventSource.OPEN)refreshMarket()},3000);
+setInterval(refreshMarket,15000);
 setInterval(refreshPerformance,30000);
-setInterval(refreshNativeChart,5000);
+setInterval(()=>{if(!predictionStream||predictionStream.readyState!==EventSource.OPEN)refreshNativeChart()},3000);
+setInterval(refreshNativeChart,15000);
 setInterval(refreshPairOptions,30000);
 setInterval(()=>{if(window.__lastReceived)setText('feedAge',age(window.__lastReceived))},1000);
 
