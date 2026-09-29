@@ -23,8 +23,8 @@
     const modelAvailable=result.gpt?.status==='AVAILABLE'&&p.status==='AVAILABLE';
     $('aiGuideModel').hidden=!modelAvailable;
     if(modelAvailable)set('aiGuideModelText',result.gpt.text);
-    const steps=$('aiGuideSteps');steps.replaceChildren();
-    for(const step of p.steps||[]){const item=document.createElement('li');item.textContent=step;steps.append(item);}
+    set('aiAdviceDo',p.advice?.do||'Jangan buka entry baharu.');
+    set('aiAdviceNext',p.advice?.next||'Tunggu data 3 minit yang segar.');
     const readings=$('aiGuideReadings');readings.replaceChildren();
     for(const row of p.readings||[]){
       const item=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b');
