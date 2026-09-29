@@ -134,7 +134,7 @@
     const pairedHost = ownershipDescription(pod?.ownershipMode);
     const waitingHost = ownershipDescription(state.pairing?.ownershipMode);
     setText('podNotice', hosted
-      ? `${state.hostedMt5?.message || 'Encrypted account envelope saved.'} Status: ${String(hosted.status || 'PENDING').replaceAll('_', ' ')}. Execution kekal dikunci sehingga worker Demo mengesahkan akaun.`
+      ? `${state.hostedMt5?.message || 'Encrypted account envelope saved.'} Status: ${String(hosted.status || 'PENDING').replaceAll('_', ' ')}. Slot: ${hosted.workerSlotCode || 'BELUM DITETAPKAN'}. Execution kekal dikunci sehingga worker Demo mengesahkan akaun.`
       : pod
       ? `${connection.label}. ${pairedHost} • connector ${pod.connectorVersion || '—'} • terminal build ${pod.terminalBuild || '—'}.${pod.demoExecutionUnlocked ? '' : ' Build execution masih dikunci; pairing dan monitoring sahaja.'}`
       : waitingPair
