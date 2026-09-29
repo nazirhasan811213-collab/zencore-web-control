@@ -1306,6 +1306,7 @@ function fetchLocalSop(symbol) {
           resolve({symbol,side: ['BUY','SELL'].includes(sop.side) ? sop.side : 'WAIT',
             state: String(sop.state || 'WAIT').slice(0, 24),
             reason: String(sop.reason || '').slice(0, 200), dataAt, sourceBarTime, plan,
+            gates: Array.isArray(sop.sop?.gates) ? sop.sop.gates.map(g=>({label:String(g.label||'').slice(0,90),pass:g.pass===true})) : [],
             score: sop.score != null && Number.isFinite(Number(sop.score)) ? Math.max(0, Math.min(100, Number(sop.score))) : null,
             grade: String(data.grade || '').slice(0, 8),
             stability: data.stability != null && Number.isFinite(Number(data.stability)) ? Math.max(0, Math.min(100, Number(data.stability))) : null,
@@ -1419,8 +1420,8 @@ const server = http.createServer(async (req, res) => {
     const symbol=url.searchParams.get('symbol');
     if(!require('./analysis-v33').PAIRS.includes(symbol))return sendJson(res,400,{error:'Pair tidak disokong.'});
     try { const sop=await fetchLocalSop(symbol),now=Date.now();
-      const safe=sop&&now-sop.dataAt<=90000&&sop.dataAt<=now+5000&&Number.isFinite(sop.sourceBarTime)&&
-        now-sop.sourceBarTime<=240000&&sop.sourceBarTime<=now?sop:null;
+      const safe=sop&&now-sop.dataAt<=240000&&sop.dataAt<=now+5000&&Number.isFinite(sop.sourceBarTime)&&
+        now-sop.sourceBarTime<=420000&&sop.sourceBarTime<=now?sop:null;
       return sendJson(res,200,{symbol,generatedAt:now,targetMap:targetReachMap({symbol,sop:safe})});
     }catch{return sendJson(res,503,{error:'Peta sasaran tidak tersedia.'});}
   }
