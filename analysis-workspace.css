@@ -88,3 +88,8 @@
 
 .ai-guide-model{padding:15px;border:1px solid rgba(103,167,227,.35);border-radius:10px;background:rgba(15,38,62,.45)}
 .ai-guide-model h5{margin:0 0 7px;color:#a9dbff}.ai-guide-model p{margin:0;line-height:1.65}
+
+.ai-advice{padding:19px 20px;border:1px solid rgba(80,228,183,.55);border-radius:12px;background:linear-gradient(135deg,rgba(15,100,79,.23),rgba(6,26,39,.62))}
+.ai-advice h5{margin:8px 0;color:#e8fff4;font-size:1.2rem;line-height:1.4}
+.ai-advice p{margin:0;color:#b9e5de;line-height:1.55}
+.ai-guide-body>.pine-details .ai-guide-price,.ai-guide-body>.pine-details .ai-guide-sections,.ai-guide-body>.pine-details .ai-guide-model,.ai-guide-body>.pine-details .pine-checks{margin-top:12px}
