@@ -33,10 +33,14 @@ test('re-entry is a single explicit NORMAL or HIGH event with HEMA gate',()=>{
   for(const side of ['BUY','SELL'])for(const strength of ['NORMAL','HIGH']){
     const sign=side==='BUY'?1:-1;
     const re={timeframe:'3',confirmed:true,chopIndex:40,hema20:100+sign,hema40:100,waveTrend1:sign*10,waveTrend2:0,globalTrend:sign,
+      normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Sop5:false,
+      normal3Forecast:side==='BUY'?'BULLISH':'BEARISH',normal3MarketPower:65,
       normal3ReentrySignal:strength,normal3ReentrySide:side,normal3ReentryHemaPass:true,normal3Close:100,normal3Atr:1};
     assert.equal(normalEntrySop(re).reentryReady,true);
     assert.equal(normalEntrySop({...re,normal3ReentryHemaPass:false}).reentryReady,false);
     assert.equal(normalEntrySop({...re,normal3ReentrySignal:'WEAK'}).reentryReady,false);
+    assert.equal(normalEntrySop({...re,chopIndex:62}).reentryReady,false);
+    assert.equal(normalEntrySop({...re,normal3Sop4:false}).reentryReady,false);
   }
   assert.equal(normalEntrySop({normal3ReentrySignal:'HIGH',normal3ReentrySide:'SELL',normal3ReentryHemaPass:true}).reentryReady,false);
 });
