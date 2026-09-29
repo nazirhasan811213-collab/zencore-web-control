@@ -4,7 +4,6 @@ const n=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Numbe
 function unit(symbol){
   if(FX.has(symbol))return {name:'pip',size:symbol.endsWith('JPY')?.01:.0001};
   if(symbol==='XAUUSD')return {name:'USD/oz',size:1};
-  if(symbol==='US30')return {name:'mata indeks',size:1};
   if(symbol==='BTCUSD')return {name:'USD',size:1};
   return null;
 }

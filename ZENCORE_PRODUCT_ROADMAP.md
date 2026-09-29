@@ -16,8 +16,8 @@ Login failure stays on the Login Page with a generic error. Register is a delibe
 |---|---|---|
 | 0 | Analysis Page | Complete and protected from unrelated changes |
 | 1 | Login, Register, secure session and basic Page Utama shell | Implemented on `codex/auth-foundation-v1`; not deployed |
-| 2 | Full Page Utama / 11-market radar navigation | Implemented on `codex/market-radar-home-v1`; not deployed |
-| 3 | Result Page and 11-market signal validation history | Implemented on `codex/result-page-v1`; not deployed |
+| 2 | Full Page Utama / 10-market radar navigation | Implemented on `codex/market-radar-home-v1`; not deployed |
+| 3 | Result Page and 10-market signal validation history | Implemented on `codex/result-page-v1`; not deployed |
 | 4 | End-to-end validation and operational controls | In progress; Auto Trade contract tests added |
 | 5 | MT5 Total Trade System | DEMO control plane + Secure Pod worker foundation implemented; not deployed |
 
@@ -25,7 +25,7 @@ Login failure stays on the Login Page with a generic error. Register is a delibe
 
 - Normal 3M SOP V32 remains the entry engine.
 - EXIT 32.3 StepLock remains unchanged.
-- The 11-market Pine feed and pair selector remain unchanged.
+- The 10-market Pine feed and pair selector remain unchanged.
 - Auto Trade is feature-flagged OFF by default. It does not change the Analysis entry or exit engine.
 - ZenCore quality scores are not presented as guaranteed win rates.
 - Market Radar ranks and filters the existing `strategyNormal` state; it does not generate a new signal.

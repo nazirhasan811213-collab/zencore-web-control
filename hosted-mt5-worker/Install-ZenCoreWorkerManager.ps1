@@ -97,7 +97,7 @@ if (-not (Test-Path -LiteralPath $LegacyConfigPath -PathType Leaf)) {
     throw "Existing hosted worker config is required to seed non-secret manager settings."
 }
 $legacy = Get-Content -Raw -LiteralPath $LegacyConfigPath | ConvertFrom-Json
-$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
+$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY",  "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
 $configuredSymbols = @($legacy.allowedDemoSymbols | ForEach-Object { [string]$_ })
 $invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
 if ($legacy.demoOnly -ne $true -or

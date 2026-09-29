@@ -1,7 +1,7 @@
 # ZenCore Phase 1 — Login and Register
 
 Phase 1 adds a PostgreSQL-backed account layer in front of the existing Precision Entry analysis stack.
-The Analysis Page, Pine payload, Normal 3M SOP V32, EXIT 32.3 StepLock and 11-market feed are unchanged.
+The Analysis Page, Pine payload, Normal 3M SOP V32, EXIT 32.3 StepLock and 10-market feed are unchanged.
 
 ## Safe rollout
 
@@ -29,9 +29,9 @@ When authentication is enabled:
 
 - `/` sends a signed-in user to `/app` and everyone else to `/login`.
 - `/login` and `/register` are public account pages.
-- `/app` is the Page Utama Market Radar for all 11 supported markets.
+- `/app` is the Page Utama Market Radar for all 10 supported markets.
 - `/analysis` is the protected existing Analysis Page.
-- `/results` is the protected 11-market signal-validation Result Page.
+- `/results` is the protected 10-market signal-validation Result Page.
 - `/auto-trade` is the protected DEMO Total Trade control page when its feature flag is enabled.
 - Analysis APIs and live event streams require a valid user session.
 - `/webhook` remains public at the network layer because TradingView must reach it; the existing webhook secret validation remains inside the analysis stack.

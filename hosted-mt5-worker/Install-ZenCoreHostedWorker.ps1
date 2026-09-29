@@ -54,7 +54,7 @@ if (Test-Path -LiteralPath "C:\ProgramData\ZenCore\HostedWorker\EXECUTION_LOCKED
     throw "Legacy execution lock is still present. DEMO execution release will not install."
 }
 $config = Get-Content -Raw -LiteralPath $ConfigPath | ConvertFrom-Json
-$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
+$canonicalSymbols = @("XAUUSD", "EURUSD", "GBPUSD", "USDJPY",  "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD")
 $configuredSymbols = @($config.allowedDemoSymbols | ForEach-Object { [string]$_ })
 $invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
 if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $true -or

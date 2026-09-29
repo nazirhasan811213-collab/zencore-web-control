@@ -6,7 +6,7 @@
   'use strict';
 
   const SUPPORTED_MARKETS = [
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
     'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
   ];
 
@@ -26,7 +26,7 @@
 
   function priceDigits(symbol) {
     const value = normaliseSymbol(symbol);
-    if (value === 'US30' || value === 'BTCUSD') return 2;
+    if (value === 'BTCUSD') return 2;
     if (value.includes('JPY') || value.startsWith('XAU') || value.startsWith('XAG')) return 3;
     return 5;
   }
@@ -123,6 +123,7 @@
 
   function sortMarkets(markets, now = Date.now()) {
     return (Array.isArray(markets) ? markets : [])
+      .filter(market => SUPPORTED_MARKETS.includes(normaliseSymbol(market?.symbol)))
       .map(market => marketView(market, now))
       .sort((a, b) => b.priority - a.priority || a.symbol.localeCompare(b.symbol));
   }

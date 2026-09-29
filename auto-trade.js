@@ -9,7 +9,7 @@
     ? `USD ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
   const price = (value, symbol = '') => {
     if (!Number.isFinite(Number(value))) return '—';
-    const digits = symbol.includes('JPY') ? 3 : symbol === 'US30' || symbol === 'BTCUSD' ? 2 : symbol === 'XAUUSD' ? 3 : 5;
+    const digits = symbol.includes('JPY') ? 3 : symbol === 'BTCUSD' ? 2 : symbol === 'XAUUSD' ? 3 : 5;
     return Number(value).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   };
   const timeText = value => Number.isFinite(Number(value))

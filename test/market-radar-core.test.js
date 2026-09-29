@@ -24,9 +24,9 @@ function market(symbol, state, side, score, extra = {}) {
   };
 }
 
-test('radar has the exact 11 supported ZenCore markets', () => {
+test('radar has the exact 10 supported ZenCore markets', () => {
   assert.deepEqual(Radar.SUPPORTED_MARKETS, [
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
     'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
   ]);
 });
@@ -56,10 +56,11 @@ test('market sorting prioritizes active, ready, watch, wait and offline', () => 
     market('EURUSD', 'WAIT', 'WAIT', 20),
     market('GBPUSD', 'WATCH', 'BUY', 60),
     market('USDJPY', 'READY', 'SELL', 100),
-    market('US30', 'WAIT', 'BUY', 50, { tradeActive: true }),
+    market('USDCAD', 'WAIT', 'BUY', 50, { tradeActive: true }),
+    market('US30', 'READY', 'BUY', 100, { tradeActive: true }),
     market('BTCUSD', 'READY', 'BUY', 100, { freshness: 'OFFLINE' })
   ], NOW);
-  assert.deepEqual(sorted.map(row => row.symbol), ['US30', 'USDJPY', 'GBPUSD', 'EURUSD', 'BTCUSD']);
+  assert.deepEqual(sorted.map(row => row.symbol), ['USDCAD', 'USDJPY', 'GBPUSD', 'EURUSD', 'BTCUSD']);
 });
 
 test('filters and search use Normal state and symbol', () => {

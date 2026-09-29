@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const {AnalysisAlerts}=require('../analysis-alert-service');
 const {messageQuality,telegramMessage,qualityGrade,entryFresh}=require('../analysis-telegram');
-const market=(t=Date.now())=>({symbol:'US30',receivedAt:t,strategyNormal:{state:'READY',side:'BUY',plan:{entry:51522.4,sl:51503.139,tp1:51541.661,tp2:51560.922,tp3:51580.183000000005}},positionManagement:{action:'HOLD'}});
+const market=(t=Date.now())=>({symbol:'XAUUSD',receivedAt:t,strategyNormal:{state:'READY',side:'BUY',plan:{entry:51522.4,sl:51503.139,tp1:51541.661,tp2:51560.922,tp3:51580.183000000005}},positionManagement:{action:'HOLD'}});
 test('Telegram entry remains once per pair/direction/position without changing popup transitions or filtering ordinary entries',async()=>{
  const s=new AnalysisAlerts();await s.init();const m=market();let n=0;
  const frame=async edit=>s.record({...m,receivedAt:m.receivedAt+n++,...edit});

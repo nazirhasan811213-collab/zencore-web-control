@@ -5,7 +5,7 @@
 - All signed-in roles land on Market Radar (prior staging commit).
 - Responsive Analysis workspace: context, decision checks, Entry/SL/TP1–3, then two AI comparison cards. Existing SOP views remain in an open disclosure panel, automatically promoted above the preview when the V33 feed is absent.
 - One explicit generate button; no automatic paid model calls. Pair changes abort and clear the previous result. Data timestamps and expiry are visible.
-- Eleven supported pairs. Closed 3M setup plus closed 1M trigger, extension gate and adaptive structure/ATR/spread/tick targets.
+- Ten supported pairs. Closed 3M setup plus closed 1M trigger, extension gate and adaptive structure/ATR/spread/tick targets.
 - Forecast strength and directional dominance are separate. Neutral >50 supports BUY; neutral <50 supports SELL; exactly 50 and CHOPPY do not enter.
 - Research tracker locks a setup plan, ignores pre-entry bar extremes, handles stop-first ambiguous bars, and records a 15-minute expiry. It does not execute orders.
 - Protected feed and authenticated, same-origin AI endpoint; provider failures produce explicit unavailable states.
@@ -25,9 +25,7 @@ Use an isolated staging service and database, never the live webhook. Configure 
 The external panel uses Twelve Data 1-minute OHLC (UTC) to compute closed
 3-minute EMA9/20 and RSI. It also shows the latest 1-minute candle close and
 that candle's timestamp; this is not an MT5 broker tick. Built-in mappings cover
-XAU/USD, BTC/USD and the eight listed forex pairs. US30 deliberately requires
-an instrument mapping in `ZENCORE_EXTERNAL_SYMBOLS_JSON`, for example only after
-verifying the exact provider instrument and access rights. Configure the API key
+XAU/USD, BTC/USD and the eight listed forex pairs. Unsupported indices have no instrument mapping. Configure the API key
 as a server-side Render secret. Provider credits and data licensing must be
 checked for the intended display and request volume. The current integration
 does not scrape other websites or claim that its calculated indicator is a
@@ -49,7 +47,7 @@ Compile `ZenCore_V33_Research_Feed.pine` in TradingView first. It has not been c
 - GPT explains supplied snapshots; it cannot manufacture missing data or override entry levels.
 - External adapter computes EMA9/20 and simple RSI from licensed 1M OHLC aggregated to complete 3M bars. This is independent-data computation, **not** native 3M analysis published by other trading systems. Native third-party analysis is explicitly NOT_CONNECTED; its provider and access agreement are still required.
 - Research contexts and tracker records are in memory and reset on process restart. This tracker must not be promoted to production deduplication or execution without durable storage. Existing production alert persistence is unchanged.
-- Static spread inputs are estimates, not live broker spreads. Broker/CFD instrument mapping, especially US30, needs verification.
+- Static spread inputs are estimates, not live broker spreads. Broker/CFD instrument mapping, especially needs verification.
 - No staging URL has been provisioned for this change. Live publication is now authorized by the user; verify Render deployment status before claiming success. UI browser rendering still requires visual acceptance on a staging deployment; source and server tests do not substitute for it.
 
 ## Verification

@@ -10,7 +10,7 @@ process.env.PORT=String(V16_PORT);
 require('./server-v16.js');
 process.env.PORT=String(PUBLIC_PORT);
 
-const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','US30','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'];
+const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'];
 const latestBySymbol=new Map();
 const historyBySymbol=new Map();
 const marketClients=new Set();
@@ -585,7 +585,7 @@ function expandCompactMarket(row,batch){
 function storeSnapshot(parsed){
   if(!parsed||parsed.source!=='ZenCore AI Dashboard Pro + Alerts')return null;
   const symbol=normSymbol(parsed.symbol||parsed.tickerid);
-  if(!symbol||N(parsed.close)==null)return null;
+  if(!DEFAULT_MARKETS.includes(symbol)||N(parsed.close)==null)return null;
   if(!acceptsSnapshot(latestBySymbol.get(symbol),parsed))return null;
   const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'};
   latestBySymbol.set(symbol,d);

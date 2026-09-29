@@ -209,7 +209,7 @@
       renderAll();
       refreshDurable();
       if (payloads.length === Results.SUPPORTED_MARKETS.length) connectionState('live', 'DATA TERKINI');
-      else if (payloads.length) connectionState('partial', `${payloads.length}/11 PAIR`);
+      else if (payloads.length) connectionState('partial', `${payloads.length}/10 PAIR`);
       else connectionState('error', 'DATA GAGAL');
     } catch (_) {
       connectionState('error', 'CUBA SEMULA');

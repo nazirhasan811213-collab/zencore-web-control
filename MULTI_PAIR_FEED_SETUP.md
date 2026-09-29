@@ -1,12 +1,12 @@
 # ZenCore Multi-Pair Feed 32.3
 
-This bridge feeds all 11 supported instruments to ZenCore Web Control from one TradingView alert. Request history is capped to the bars required by the SOP calculations to stay below TradingView memory limits.
+This bridge feeds all 10 supported instruments to ZenCore Web Control from one TradingView alert. Request history is capped to the bars required by the SOP calculations to stay below TradingView memory limits.
 
 ## Markets
 
-XAUUSD, EURUSD, GBPUSD, USDJPY, US30, USDCAD, USDCHF, EURJPY, GBPJPY, EURGBP, BTCUSD.
+XAUUSD, EURUSD, GBPUSD, USDJPY, USDCAD, USDCHF, EURJPY, GBPJPY, EURGBP, BTCUSD.
 
-TradingView mappings use OANDA symbols. US30 is mapped to OANDA:US30USD.
+TradingView mappings use OANDA symbols. Indices are no longer supported.
 
 ## One-time TradingView setup
 

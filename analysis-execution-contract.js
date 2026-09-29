@@ -9,7 +9,7 @@
   const SCHEMA_VERSION = '32.3-EXIT-STEPLOCK';
   const STRATEGY = 'NORMAL_3M_SOP_V32';
   const SUPPORTED_MARKETS = Object.freeze([
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
     'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
   ]);
 

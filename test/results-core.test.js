@@ -51,9 +51,9 @@ const EUR_PAYLOAD = {
   }
 };
 
-test('result core uses the exact 11 ZenCore markets', () => {
+test('result core uses the exact 10 ZenCore markets', () => {
   assert.deepEqual(Results.SUPPORTED_MARKETS, [
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
     'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
   ]);
 });
@@ -83,10 +83,10 @@ test('aggregation preserves server totals and separates visible history', () => 
     available: 2,
     winRate: 66.7,
     visibleResolved: 7,
-    expected: 11
+    expected: 10
   });
   assert.equal(data.generatedAt, EUR_PAYLOAD.generatedAt);
-  assert.equal(data.pairSummaries.length, 11);
+  assert.equal(data.pairSummaries.length, 10);
   assert.equal(data.pairSummaries.find(row => row.symbol === 'GBPUSD').available, false);
   assert.deepEqual(data.resolvedRows.map(row => row.id), ['e2', 'e1', 'x5', 'x4', 'x3', 'x2', 'x1']);
   assert.deepEqual(data.openRows.map(row => row.id), ['xo']);

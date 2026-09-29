@@ -6,7 +6,7 @@
   'use strict';
 
   const SUPPORTED_MARKETS = [
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
     'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
   ];
 
@@ -38,7 +38,7 @@
 
   function priceDigits(symbol) {
     const pair = normaliseSymbol(symbol);
-    if (pair === 'US30' || pair.endsWith('JPY')) return pair === 'US30' ? 1 : 3;
+    if (pair.endsWith('JPY')) return 3;
     if (pair === 'XAUUSD') return 3;
     if (pair === 'BTCUSD') return 2;
     return 5;

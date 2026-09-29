@@ -1,6 +1,6 @@
 'use strict';
 // Candidate analysis. No broker orders and no writes to legacy signal state.
-const PAIRS = Object.freeze(['XAUUSD','EURUSD','GBPUSD','USDJPY','US30','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD']);
+const PAIRS = Object.freeze(['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD']);
 const num = v => v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null;
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 function forecastGate(momentum, forecast, strength, dominance) {

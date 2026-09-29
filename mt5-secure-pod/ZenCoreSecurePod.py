@@ -36,7 +36,7 @@ except ImportError as exc:  # pragma: no cover - only available on Windows worke
 
 
 SUPPORTED_MARKETS = (
-    "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
+    "XAUUSD", "EURUSD", "GBPUSD", "USDJPY",  "USDCAD",
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
 )
 MAGIC = 3233001

@@ -20,14 +20,14 @@ param(
 
     [switch]$EnableDemoExecution,
 
-    [string]$SymbolMapJson = '{"XAUUSD":"XAUUSD","EURUSD":"EURUSD","GBPUSD":"GBPUSD","USDJPY":"USDJPY","US30":"US30","USDCAD":"USDCAD","USDCHF":"USDCHF","EURJPY":"EURJPY","GBPJPY":"GBPJPY","EURGBP":"EURGBP","BTCUSD":"BTCUSD"}'
+    [string]$SymbolMapJson = '{"XAUUSD":"XAUUSD","EURUSD":"EURUSD","GBPUSD":"GBPUSD","USDJPY":"USDJPY":"USDCAD":"USDCAD","USDCHF":"USDCHF","EURJPY":"EURJPY","GBPJPY":"GBPJPY","EURGBP":"EURGBP","BTCUSD":"BTCUSD"}'
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $SupportedMarkets = @(
-    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'US30', 'USDCAD',
+    'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY',  'USDCAD',
     'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSD'
 )
 

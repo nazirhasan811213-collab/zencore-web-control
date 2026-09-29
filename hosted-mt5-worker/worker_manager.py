@@ -28,7 +28,7 @@ from process_guard import ProcessGuardError, install_process_lifetime_guard
 CONNECTOR_VERSION = "2.2.2-gcp-multiuser-multipair"
 INTERSTELLAR_DEMO_SERVER = "InterStellarFinancial-Demo"
 SUPPORTED_MARKETS = (
-    "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "US30", "USDCAD",
+    "XAUUSD", "EURUSD", "GBPUSD", "USDJPY",  "USDCAD",
     "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "BTCUSD",
 )
 _UUID_RE = re.compile(
