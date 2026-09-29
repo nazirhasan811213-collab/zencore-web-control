@@ -1627,6 +1627,10 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'results.html', 'text/html; charset=utf-8');
   }
 
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade.html') {
+    return redirect(res, '/auto-trade');
+  }
+
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
