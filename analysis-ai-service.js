@@ -106,8 +106,13 @@ function pineScalpAnalysis(sop,now=Date.now()){
     ['entry','sl','tp1','tp2','tp3'].every(k=>num(sop.plan[k])!==null);
   const conflicting=checks.filter(x=>x.state==='CAUTION').map(x=>x.label);
   const usable=v=>typeof v==='string'&&v.trim()?v.trim():null;
-  const structure=usable(d.marketStructure),movement=usable(d.momentum),demand=usable(d.demand);
-  const mtf=usable(d.mtfOverall),forecast=usable(d.forecast3Bars),hema=usable(d.hemaTrend);
+  const structure=usable(d.marketStructure)||(num(i.chop)>=58?'Sideways menurut Chop Pine':null);
+  const w1=num(i.waveTrend1),w2=num(i.waveTrend2);
+  const movement=usable(d.momentum)||(w1!==null&&w2!==null?(w1>w2?'Bullish WaveTrend':w1<w2?'Bearish WaveTrend':'Flat WaveTrend'):null);
+  const demand=usable(d.demand);
+  const mtf=usable(d.mtfOverall)||(usable(i.m5Position)?'5M '+i.m5Position:null);
+  const forecast=usable(d.forecast3Bars)||(usable(i.forecast)?'SOP '+i.forecast:null);
+  const hema=usable(d.hemaTrend)||(h20!==null&&h40!==null?(h20>h40?'Bullish':h20<h40?'Bearish':'Flat'):null);
   const chop=num(d.chop)??num(i.chop),relVol=num(d.relativeVolume)??num(i.relativeVolume);
   const context=[
     structure?'Struktur '+structure: null,
