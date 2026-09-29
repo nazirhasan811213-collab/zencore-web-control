@@ -410,7 +410,7 @@ function normalScalpStrategy(symbol,d){
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
       m5Position:U(d?.normal5Position||'WAIT'),m5Pass:x.m5Pass,m5Close:N(d?.normal5Close),m5Hema20:N(d?.normal5Hema20),m5Hema40:N(d?.normal5Hema40),
-      entry,entryLine:x.entry,close3:x.close,atr3:atr,
+      entry:plan?.entry??N(d?.entry),entryLine:x.entry,close3:x.close,atr3:x.atr,
       indicatorContext:{ema9:N(d?.ema9),ema20:N(d?.ema20),ema50:N(d?.ema50),hema20:N(d?.hema20),hema40:N(d?.hema40),
         waveTrend1:N(d?.waveTrend1),waveTrend2:N(d?.waveTrend2),rsi:N(d?.rsi),chop:N(d?.chopIndex),
         relativeVolume:N(d?.relativeVolume),globalTrend:N(d?.globalTrend),basis:N(d?.basis)}}
@@ -632,7 +632,11 @@ function proxyPairHtml(req,res,symbol){
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
-  if(req.method==='POST'&&pathname==='/webhook'){const body=await readBody(req);captureBody(body);return proxy(req,res,body);}
+  if(req.method==='POST'&&pathname==='/webhook'){
+    const body=await readBody(req);
+    try{captureBody(body)}catch(error){console.error('ZenCore webhook snapshot failed:',error);return send(res,500,JSON.stringify({ok:false,error:'Snapshot processing failed'}));}
+    return proxy(req,res,body);
+  }
   if(req.method==='GET'&&(pathname==='/'||pathname==='/index.html'))return serveFile(res,'market-radar-v17.html','text/html; charset=utf-8');
   if(req.method==='GET'&&pathname==='/radar-v17.js')return serveFile(res,'radar-v17.js','application/javascript; charset=utf-8');
   if(req.method==='GET'&&pathname==='/prediction-ui-v17.js')return serveFile(res,'prediction-ui-v17.js','application/javascript; charset=utf-8');
