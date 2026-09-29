@@ -1303,10 +1303,10 @@ bool sop5_pass = is_sop_buy ? htf_hema_bull : htf_hema_bear
 
 // --- TRIGGER ALERTS: BASE ZONE CROSSOVERS ---
 if is_zone_turn_green and en_alert_primary
-    alert("🟢 [ZENCORE SIGNAL] PRIMARY BUY ENTRY CONFIRMED | Entry Price: " + str.tostring(saved_entry_price, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
+    alert("🟢 [ZENCORE SIGNAL] PRIMARY BUY ENTRY CONFIRMED | Entry Price (3M close): " + str.tostring(close, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
 
 if is_zone_turn_red and en_alert_primary
-    alert("🔴 [ZENCORE SIGNAL] PRIMARY SELL ENTRY CONFIRMED | Entry Price: " + str.tostring(saved_entry_price, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
+    alert("🔴 [ZENCORE SIGNAL] PRIMARY SELL ENTRY CONFIRMED | Entry Price (3M close): " + str.tostring(close, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
 
 // ------------------------------------------
 // Render Table (SOP Dashboard)
