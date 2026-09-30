@@ -166,6 +166,15 @@ if (AUTH_ENABLED) {
         allowMemory: AUTOTRADE_MEMORY && process.env.NODE_ENV !== 'production'
       });
       await autoStore.init();
+      if (process.env.ZENCORE_DEMO_SLOT_TRANSFER_JSON) {
+        const { transferDemoSlot } = require('./demo-slot-transfer');
+        try {
+          const result = await transferDemoSlot(autoStore.pool, JSON.parse(process.env.ZENCORE_DEMO_SLOT_TRANSFER_JSON));
+          console.log('ZenCore DEMO slot transfer:', JSON.stringify(result));
+        } catch (error) {
+          console.error('ZenCore DEMO slot transfer failed:', error.message);
+        }
+      }
       let workerFleet = [];
       if (GCP_HOSTED_WORKER_ENABLED) {
         workerFleet = parseGcpWorkerFleet(GCP_HOSTED_WORKER_FLEET_JSON, {
