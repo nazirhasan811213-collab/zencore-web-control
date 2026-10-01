@@ -250,6 +250,18 @@ class App:
 
 if __name__=='__main__':
     if sys.platform!='win32':raise SystemExit('Windows desktop diperlukan.')
+    if '--self-test' in sys.argv:
+        # Packaging smoke test: no network, registry mutation, broker or pairing.
+        try:
+            assert (RESOURCE/'ZenCoreExecutor.mq5').is_file()
+            sample=b'ZenCore packaging test'
+            assert dpapi(dpapi(sample),True)==sample
+            gui=tk.Tk();gui.withdraw();gui.update();gui.destroy()
+            output=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--output=')),None)
+            if output:Path(output).write_text(json.dumps({'ok':True,'version':VERSION,'eaResource':True,'dpapi':True,'tkGui':True}))
+        except Exception:
+            raise SystemExit(1)
+        raise SystemExit(0)
     INSTALL.mkdir(parents=True,exist_ok=True)
     # One connector per Windows user; no DLL permission needed in MT5.
     import msvcrt

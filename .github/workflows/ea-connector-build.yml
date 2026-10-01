@@ -27,6 +27,13 @@ jobs:
           Copy-Item ea-local-connector/README.md dist/README.md
           Copy-Item ea-local-connector/ZenCoreExecutor.mq5 dist/ZenCoreExecutor.mq5
           Get-FileHash dist/ZenCoreConnector.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreConnector.exe" } | Set-Content dist/SHA256.txt
+      - name: Validate packaged EXE without connecting to broker
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath .\dist\ZenCoreConnector.exe -ArgumentList '--self-test', '--output=dist/validation.json' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Packaged EXE smoke test failed.' }
+          $result = Get-Content dist/validation.json -Raw | ConvertFrom-Json
+          if (-not $result.ok -or -not $result.eaResource -or -not $result.dpapi -or -not $result.tkGui) { throw 'Packaged EXE validation incomplete.' }
       - uses: actions/upload-artifact@v4
         with:
           name: ZenCore-EA-Connector-Windows-DEMO
