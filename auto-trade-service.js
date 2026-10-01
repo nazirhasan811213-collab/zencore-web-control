@@ -1020,7 +1020,7 @@ function createAutoTradeService(options = {}) {
         desiredState: 'ON', effectiveState: 'ON', pendingCommandId: null, lastError: null
       } : {
         desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
-        lastError: result.message || 'Secure Pod menolak arahan ON.'
+        lastError: result.message || result.code || 'Secure Pod menolak arahan ON.'
       });
     } else if (command.type === 'SYSTEM_STOP' || command.type === 'EMERGENCY_CLOSE_ALL') {
       await store.setControl(pod.userId, status === 'EXECUTED' ? {

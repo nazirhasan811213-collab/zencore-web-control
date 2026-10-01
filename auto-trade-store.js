@@ -1158,12 +1158,12 @@ class PostgresAutoTradeStore {
     try {
       const result = await this.pool.query(
         `INSERT INTO zencore_autotrade_commands
-          (id, user_id, pod_id, command_type, payload, signature, signed_envelope, dedupe_key, expires_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+          (id, user_id, pod_id, command_type, payload, signature, signed_envelope, dedupe_key, expires_at, created_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)
          RETURNING *`,
         [command.id, command.userId, command.podId, command.type,
           JSON.stringify(command.payload || {}), command.signature, command.signedEnvelope,
-          command.dedupeKey || null, new Date(command.expiresAt)]
+          command.dedupeKey || null, new Date(command.expiresAt), new Date(command.createdAt)]
       );
       return { created: true, command: publicCommand(result.rows[0]) };
     } catch (error) {
