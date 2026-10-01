@@ -126,6 +126,7 @@ function createAutoTradeService(options = {}) {
   )];
   if (!allowedDemoOwnershipModes.length) throw new Error('At least one DEMO execution host mode is required.');
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
+  const dispatchDiagnosticAt = new Map();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
   const hostedLeaseTtlMs = Math.max(30_000, Math.min(5 * 60 * 1000,
     Number(options.hostedLeaseTtlMs) || 2 * 60 * 1000));
@@ -1124,6 +1125,32 @@ function createAutoTradeService(options = {}) {
       ]);
       if (!executionAllowed(profile.userId, pod)) continue;
       const hostedConnection = hostedAccount ? hostedConnectionState(hostedAccount) : null;
+      if (typeof options.onDispatchDiagnostic === 'function' &&
+          now() - (dispatchDiagnosticAt.get(profile.userId) || 0) >= 60_000) {
+        dispatchDiagnosticAt.set(profile.userId, now());
+        const connection = hostedConnection || connectionState(pod);
+        const specs = hostedAccount ? hostedAccount.symbolSpecs : pod?.symbolSpecs;
+        const report = {
+          connection: connection.state,
+          enabledSymbols: profile.symbols,
+          brokerSymbols: Object.keys(specs || {}),
+          pairs: allowedDemoSymbols.map(symbol => {
+            const market = markets.find(item => Core.normaliseSymbol(item?.symbol) === symbol);
+            return {
+              symbol,
+              freshness: market?.freshness || 'OFFLINE',
+              ageSeconds: market?.receivedAt ? Math.round((now() - market.receivedAt) / 1000) : null,
+              state: market?.strategyNormal?.state || 'WAIT',
+              side: market?.strategyNormal?.side || 'WAIT',
+              enabled: profile.symbols.includes(symbol),
+              analysisEligible: !!(market && Core.buildSetupCommand(market, profile, specs?.[symbol])),
+              positionAllowsEntry: !!(market && Core.permitsPositionEntry(market, positions))
+            };
+          })
+        };
+        // Diagnostics never change the execution decision or expose account identity.
+        try { options.onDispatchDiagnostic(report); } catch (_) {}
+      }
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);

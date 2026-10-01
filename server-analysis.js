@@ -221,6 +221,7 @@ if (AUTH_ENABLED) {
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         localEaExecutionUserIds,
+        onDispatchDiagnostic: report => console.log('ZenCore pair dispatch:', JSON.stringify(report)),
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
         requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
         hostedMt5Enabled: HOSTED_MT5_ENABLED,
