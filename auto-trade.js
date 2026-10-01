@@ -92,6 +92,7 @@
 
   function ownershipLabel(mode) {
     if (mode === 'TRADER_OWNED_AZURE') return 'AZURE TRADER';
+    if (mode === 'TRADER_OWNED_EA_LOCAL') return 'EA + CONNECTOR';
     if (mode === 'TRADER_OWNED_WINDOWS_PC') return 'WINDOWS PC';
     return mode ? 'INTERNAL DEMO' : 'ZENCORE MANAGED';
   }
@@ -201,15 +202,20 @@
     const allowed = Array.isArray(state.control?.executionSymbols)
       ? state.control.executionSymbols : Core.SUPPORTED_MARKETS;
     const options = byId('symbolOptions');
-    if (options) {
+    const localEa = state.pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL';
+    const selected = new Set(state.settings?.symbols || allowed);
+    const scopeKey = JSON.stringify([localEa, allowed, state.settings?.symbols]);
+    if (options && options.dataset.scopeKey !== scopeKey) {
+      options.dataset.scopeKey = scopeKey;
       options.innerHTML = allowed.length
-        ? allowed.map(symbol => `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
+        ? allowed.map(symbol => localEa
+          ? `<label class="symbol-option"><input type="checkbox" name="executionPair" value="${escape(symbol)}" ${selected.has(symbol) ? 'checked' : ''}> ${escape(symbol)}</label>`
+          : `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
         : '<span class="symbol-scope-empty">Menunggu pair yang disahkan.</span>';
     }
-    setText(
-      'executionSymbolNotice',
-      `Skop automatik control plane: ${allowed.join(', ') || 'belum tersedia'}. Semua user aktif menerima skop pair yang sama.`
-    );
+    setText('executionSymbolNotice', localEa
+      ? 'Pilih pair untuk EA daripada skop broker yang disahkan. Simpan untuk menghantar setting kepada EA.'
+      : `Skop automatik control plane: ${allowed.join(', ') || 'belum tersedia'}.`);
   }
 
   function renderSummary(state) {
@@ -322,7 +328,9 @@
   }
 
   function selectedSettings() {
-    const symbols = Array.isArray(currentState?.control?.executionSymbols) && currentState.control.executionSymbols.length
+    const symbols = currentState?.pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL'
+      ? [...document.querySelectorAll('[name="executionPair"]:checked')].map(input => input.value)
+      : Array.isArray(currentState?.control?.executionSymbols) && currentState.control.executionSymbols.length
       ? currentState.control.executionSymbols
       : ['XAUUSD'];
     return {

@@ -586,7 +586,9 @@ class PostgresAutoTradeStore {
        FROM zencore_mt5_worker_slots s
        JOIN zencore_mt5_worker_hosts h ON h.id = s.host_id
        JOIN zencore_mt5_hosted_accounts a ON a.id = s.account_id
-       WHERE h.enabled = TRUE
+       LEFT JOIN zencore_mt5_secure_pods p ON p.user_id = a.user_id
+       WHERE COALESCE(p.ownership_mode, '') <> 'TRADER_OWNED_EA_LOCAL'
+         AND h.enabled = TRUE
          AND h.provider = $1
          AND h.project_id = $2
          AND h.zone = $3
@@ -1187,6 +1189,20 @@ class PostgresAutoTradeStore {
     return result.rowCount > 0;
   }
 
+  async isHostedTransportReplaced(accountId) {
+    const result = await this.pool.query(`SELECT p.ownership_mode
+      FROM zencore_mt5_hosted_accounts a JOIN zencore_mt5_secure_pods p ON p.user_id = a.user_id
+      WHERE a.id = $1`, [accountId]);
+    return result.rows[0]?.ownership_mode === 'TRADER_OWNED_EA_LOCAL';
+  }
+
+  async retireExecutionCommands(userId) {
+    await this.pool.query(`UPDATE zencore_autotrade_commands SET status = 'CANCELLED', acknowledged_at = NOW()
+      WHERE user_id = $1 AND status IN ('PENDING','DELIVERED')`, [userId]);
+    await this.pool.query(`UPDATE zencore_hosted_autotrade_commands SET status = 'CANCELLED', acknowledged_at = NOW()
+      WHERE user_id = $1 AND status IN ('PENDING','DELIVERED')`, [userId]);
+  }
+
   async cancelPendingEntryCommands(userId, reason) {
     const safeReason = String(reason || 'CANCELLED').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40);
     const result = await this.pool.query(
@@ -1550,6 +1566,10 @@ class MemoryAutoTradeStore {
     return [...this.workerSlots.values()]
       .filter(slot => slot.hostId === host.id && slot.slotNo <= host.capacity && !!slot.accountId)
       .sort((a, b) => a.slotNo - b.slotNo)
+      .filter(slot => {
+        const account = [...this.hostedAccounts.values()].find(item => item.id === slot.accountId);
+        return this.podsByUser.get(account?.userId)?.ownershipMode !== 'TRADER_OWNED_EA_LOCAL';
+      })
       .map(slot => {
         const account = [...this.hostedAccounts.values()].find(item => item.id === slot.accountId);
         return {
@@ -1928,6 +1948,19 @@ class MemoryAutoTradeStore {
       if (existing) return true;
     }
     return false;
+  }
+
+  async isHostedTransportReplaced(accountId) {
+    const account = [...this.hostedAccounts.values()].find(item => item.id === accountId);
+    return this.podsByUser.get(account?.userId)?.ownershipMode === 'TRADER_OWNED_EA_LOCAL';
+  }
+
+  async retireExecutionCommands(userId) {
+    for (const collection of [this.commands, this.hostedCommands]) {
+      for (const rows of collection.values()) for (const command of rows) {
+        if (command.userId === userId && ['PENDING','DELIVERED'].includes(command.status)) command.status = 'CANCELLED';
+      }
+    }
   }
 
   async cancelPendingEntryCommands(userId, reason) {

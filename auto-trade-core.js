@@ -19,7 +19,7 @@
     'SYSTEM_ON', 'SYSTEM_STOP', 'EMERGENCY_CLOSE_ALL', 'PLACE_SETUP', 'MANAGE_POSITION'
   ];
   const POD_OWNERSHIP_MODES = [
-    'TRADER_OWNED_WINDOWS_PC', 'TRADER_OWNED_AZURE'
+    'TRADER_OWNED_WINDOWS_PC', 'TRADER_OWNED_AZURE', 'TRADER_OWNED_EA_LOCAL'
   ];
   const FORBIDDEN_CREDENTIAL_KEYS = new Set([
     'password', 'pass', 'passwd', 'login', 'accountid', 'account_id',

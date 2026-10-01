@@ -1109,6 +1109,13 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
     if (req.method === 'GET' && pathname === '/api/auto-trade/state') {
       return sendJson(res, 200, await autoTradeState.service.state(userId));
     }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/ea-connect') {
+      if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
+      const key = attemptKey(req, pathname, userId);
+      const limit = consumeAttempt(key);
+      if (!limit.allowed) return sendJson(res, 429, { ok: false, error: 'Cuba semula sebentar lagi.' });
+      return sendJson(res, 201, await autoTradeState.service.connectLocalEa(userId));
+    }
     if (req.method === 'GET' && pathname === '/api/auto-trade/credential-key') {
       return sendJson(res, 200, autoTradeState.service.credentialEncryptionConfig());
     }
