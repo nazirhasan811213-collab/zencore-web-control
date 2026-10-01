@@ -15,7 +15,7 @@ function tokenHash(token) {
 
 function ownershipMode(input, fallback = 'TRADER_OWNED_WINDOWS_PC') {
   const value = String(input || fallback).trim().toUpperCase();
-  if (!Core.POD_OWNERSHIP_MODES.includes(value)) {
+  if (!Core.POD_OWNERSHIP_MODES.includes(value) || value === 'TRADER_OWNED_EA_LOCAL') {
     throw serviceError(
       'INVALID_OWNERSHIP_MODE',
       'Pilih Secure Pod PC Windows sendiri atau Azure milik trader.',
@@ -139,10 +139,45 @@ function createAutoTradeService(options = {}) {
       .update(canonicalCommand(command)).digest('hex');
   }
 
+  const LOCAL_EA_VERSION = '1.0.0-ea-local';
+  function isLocalEa(pod) { return pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL'; }
+  async function activeHostedAccount(userId) {
+    if (isLocalEa(await store.getPodForUser(userId))) return null;
+    return typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null;
+  }
+  async function requireHostedTransport(userId) {
+    if (isLocalEa(await store.getPodForUser(userId))) {
+      throw serviceError('TRANSPORT_REPLACED', 'Akaun ini menggunakan EA tempatan.', 409);
+    }
+  }
+  async function connectLocalEa(userId) {
+    const [profile, positions, oldPod, hosted] = await Promise.all([
+      store.getProfile(userId), store.listPositions(userId), store.getPodForUser(userId),
+      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+    ]);
+    if (positions.length || (profile && (profile.desiredState !== 'STOPPED' ||
+        !['STOPPED', 'ERROR', 'UNPROVISIONED'].includes(profile.effectiveState)))) {
+      throw serviceError('STOP_BEFORE_PAIRING', 'Tekan OFF dan selesaikan posisi ZenCore sebelum pautkan EA.', 409);
+    }
+    // Never rotate credentials or switch execution engines while an old engine can still trade.
+    if ((oldPod?.lastSeenAt && now() - oldPod.lastSeenAt < 120000) ||
+        (hosted?.lastSeenAt && now() - hosted.lastSeenAt < 120000)) {
+      throw serviceError('OLD_CONNECTOR_ACTIVE', 'Tutup Connector/worker lama dan tunggu 2 minit sebelum pautkan EA.', 409);
+    }
+    await store.retireExecutionCommands(userId);
+    const token = `zcpod_${crypto.randomBytes(32).toString('base64url')}`;
+    const pod = await store.provisionPod({ id: crypto.randomUUID(), userId,
+      label: 'ZenCore EA + Local Connector', ownershipMode: 'TRADER_OWNED_EA_LOCAL', tokenHash: tokenHash(token) });
+    await store.setControl(userId, { desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null });
+    await store.appendAudit(userId, 'EA_LOCAL_CONNECTED', { podId: pod.id, mode: 'DEMO' });
+    return { ok: true, podToken: token, commandSigningKey: commandSigningKeyForPod(pod.id),
+      podId: pod.id, connectorVersion: LOCAL_EA_VERSION, executionEnabled: allowDemoExecution };
+  }
+
   function connectionState(pod) {
     return Core.podConnectionState(pod, now(), allowDemoExecution ? {
-      connectorVersion: requiredDemoConnectorVersion,
-      ownershipModes: allowedDemoOwnershipModes
+      connectorVersion: isLocalEa(pod) ? LOCAL_EA_VERSION : requiredDemoConnectorVersion,
+      ownershipModes: isLocalEa(pod) ? ['TRADER_OWNED_EA_LOCAL'] : allowedDemoOwnershipModes
     } : {});
   }
 
@@ -203,6 +238,31 @@ function createAutoTradeService(options = {}) {
   }
 
 
+  async function connectionMonitor(userId) {
+    const [profile, pod, hosted, events] = await Promise.all([
+      store.getProfile(userId), store.getPodForUser(userId), activeHostedAccount(userId), store.listAudit(userId, 30)
+    ]);
+    const endpoint = hosted || pod;
+    const connection = hosted ? hostedConnectionState(hosted) : connectionState(pod);
+    return {
+      activity: events.filter(event => ['EA_LOCAL_CONNECTED', 'SECURE_POD_PAIRED', 'HOSTED_WORKER_ERROR', 'SYSTEM_ON_REQUESTED', 'SYSTEM_STOP_REQUESTED', 'HOSTED_SYSTEM_ON_REQUESTED', 'HOSTED_SYSTEM_STOP_REQUESTED', 'SYSTEM_STOPPED'].includes(event.type)).slice(0, 5).map(event => ({ type: event.type, createdAt: event.createdAt })),
+      transport: hosted ? 'HOSTED' : isLocalEa(pod) ? 'EA_LOCAL' : pod ? 'SECURE_POD' : 'NOT_LINKED',
+      accountMask: endpoint?.accountMask || null,
+      serverMask: endpoint?.serverMask || null,
+      lastSeenAt: endpoint?.lastSeenAt || null,
+      connection,
+      permissions: {
+        terminal: endpoint?.terminalTradeAllowed === true,
+        account: endpoint?.accountTradeAllowed === true,
+        expert: endpoint?.expertTradeAllowed === true
+      },
+      control: {
+        desiredState: profile?.desiredState || 'STOPPED',
+        effectiveState: profile?.effectiveState || 'STOPPED'
+      }
+    };
+  }
+
   async function state(userId) {
     const [profile, pod, positions, audit, pairing, hostedAccount] = await Promise.all([
       store.getProfile(userId),
@@ -211,7 +271,7 @@ function createAutoTradeService(options = {}) {
       store.listAudit(userId, 30),
       typeof store.getActivePairingForUser === 'function'
         ? store.getActivePairingForUser(userId, now()) : null,
-      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+      activeHostedAccount(userId)
     ]);
     const podConnection = connectionState(pod);
     const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
@@ -235,7 +295,7 @@ function createAutoTradeService(options = {}) {
         effectiveState,
         executionRolloutUnlocked: allowDemoExecution,
         executionSymbols: allowedDemoSymbols,
-        requiredConnectorVersion: allowDemoExecution ? requiredDemoConnectorVersion : null,
+        requiredConnectorVersion: allowDemoExecution ? (isLocalEa(pod) ? LOCAL_EA_VERSION : requiredDemoConnectorVersion) : null,
         stateVersion: profile?.stateVersion || 0,
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
@@ -299,7 +359,7 @@ function createAutoTradeService(options = {}) {
         controlPlaneExecutionUnlocked: allowDemoExecution,
         demoOnly: true,
         allowedDemoSymbols,
-        requiredConnectorVersion: allowDemoExecution ? requiredDemoConnectorVersion : null,
+        requiredConnectorVersion: allowDemoExecution ? (isLocalEa(pod) ? LOCAL_EA_VERSION : requiredDemoConnectorVersion) : null,
         podCommandKeyIsPerPod: true,
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
@@ -457,6 +517,9 @@ function createAutoTradeService(options = {}) {
       throw serviceError('INVALID_HOSTED_LEASE', 'Hosted account atau worker slot tidak sah.', 400);
     }
 
+    if (await store.isHostedTransportReplaced(accountId)) {
+      throw serviceError('TRANSPORT_REPLACED', 'Akaun ini menggunakan EA tempatan.', 409);
+    }
     const issuedAt = now();
     const lease = await store.leaseHostedAccount(
       accountId,
@@ -469,6 +532,7 @@ function createAutoTradeService(options = {}) {
     if (!lease) {
       throw serviceError('HOSTED_ACCOUNT_NOT_AVAILABLE', 'Hosted account tidak tersedia untuk worker ini.', 409);
     }
+    await requireHostedTransport(lease.userId);
     if (lease.keyId !== credentialEncryption.keyId) {
       throw serviceError('HOSTED_KEY_MISMATCH', 'Hosted account menggunakan encryption key yang berbeza.', 409);
     }
@@ -550,6 +614,9 @@ function createAutoTradeService(options = {}) {
       heartbeatValidation.value.accountTradeAllowed &&
       heartbeatValidation.value.expertTradeAllowed;
     const status = reportedStatus === 'ERROR' ? 'ERROR' : (connected ? 'CONNECTED_LOCKED' : 'LEASED');
+    const leaseUserId = await store.validateHostedLease(accountId, workerIdentity, leaseId, now());
+    if (!leaseUserId) throw serviceError('HOSTED_LEASE_NOT_FOUND', 'Lease tidak tersedia.', 404);
+    await requireHostedTransport(leaseUserId);
     const seenAt = now();
     const updated = await store.updateHostedHeartbeat(
       accountId, workerIdentity, leaseId, heartbeatValidation.value,
@@ -669,12 +736,14 @@ function createAutoTradeService(options = {}) {
     if (Core.containsForbiddenCredentialKey(input)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Jangan masukkan ID, password atau server MT5 pada halaman ini.', 400);
     }
-    // Pair scope is owned by the reviewed ZenCore rollout, not by individual
-    // traders. Users configure only capital, lot and layer; every currently
-    // broker-validated Analysis market is applied consistently server-side.
+    const localEa = isLocalEa(await store.getPodForUser(userId));
+    if (localEa && (!Array.isArray(input.symbols) || !input.symbols.length ||
+        input.symbols.some(symbol => !allowedDemoSymbols.includes(Core.normaliseSymbol(symbol))))) {
+      throw serviceError('DEMO_SYMBOL_NOT_VALIDATED', 'Pilih pair daripada skop broker yang disahkan.', 400);
+    }
     const validation = Core.validateSettings({
       ...input,
-      symbols: allowedDemoSymbols
+      symbols: localEa ? input.symbols : allowedDemoSymbols
     });
     if (!validation.ok) throw serviceError('VALIDATION_ERROR', 'Semak konfigurasi Auto Trade.', 400, validation.errors);
     if (input.riskAcknowledged !== true) {
@@ -691,9 +760,15 @@ function createAutoTradeService(options = {}) {
       lotPerLayer: saved.lotPerLayer,
       layers: saved.layers,
       symbols: saved.symbols,
-      symbolScope: 'ZENCORE_MANAGED',
+      symbolScope: localEa ? 'USER_SELECTED' : 'ZENCORE_MANAGED',
       totalLot: validation.value.totalLot
     });
+    if (localEa && saved.desiredState === 'ON') {
+      const pod = await store.getPodForUser(userId);
+      const issued = await issueCommand({ userId, podId: pod.id, type: 'SYSTEM_ON',
+        payload: { mode: 'DEMO', strategy: 'NORMAL_3M_SOP_V32', exitSchema: '32.3-EXIT-STEPLOCK', settings: validation.value } });
+      await store.setControl(userId, { desiredState: 'ON', effectiveState: 'ARMING', pendingCommandId: issued.command.id, lastError: null });
+    }
     return state(userId);
   }
 
@@ -711,7 +786,7 @@ function createAutoTradeService(options = {}) {
     const [profile, pod, hostedAccount] = await Promise.all([
       store.getProfile(userId),
       store.getPodForUser(userId),
-      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+      activeHostedAccount(userId)
     ]);
     if (hostedAccount) {
       const hostedConnection = hostedConnectionState(hostedAccount);
@@ -780,7 +855,7 @@ function createAutoTradeService(options = {}) {
   async function stop(userId) {
     const [pod, hostedAccount] = await Promise.all([
       store.getPodForUser(userId),
-      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+      activeHostedAccount(userId)
     ]);
     if (typeof store.cancelPendingEntryCommands === 'function') {
       await store.cancelPendingEntryCommands(userId, 'SYSTEM_STOP_REQUESTED');
@@ -828,7 +903,7 @@ function createAutoTradeService(options = {}) {
     }
     const [pod, hostedAccount] = await Promise.all([
       store.getPodForUser(userId),
-      typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
+      activeHostedAccount(userId)
     ]);
     if (!pod && !hostedAccount) throw serviceError('POD_NOT_READY', 'Execution host belum disediakan.', 409);
     if (typeof store.cancelPendingEntryCommands === 'function') {
@@ -967,6 +1042,7 @@ function createAutoTradeService(options = {}) {
     }
     const userId = await store.validateHostedLease(accountId, workerIdentity, leaseId, now());
     if (!userId) throw serviceError('HOSTED_LEASE_NOT_FOUND', 'Hosted worker lease tidak dijumpai.', 404);
+    await requireHostedTransport(userId);
     const command = await store.nextHostedCommand(accountId, now());
     if (!command) return { ok: true, command: null, serverTime: now() };
     return {
@@ -997,6 +1073,7 @@ function createAutoTradeService(options = {}) {
     const leaseId = String(input.leaseId || '');
     const userId = await store.validateHostedLease(accountId, workerIdentity, leaseId, now());
     if (!userId) throw serviceError('HOSTED_LEASE_NOT_FOUND', 'Hosted worker lease tidak dijumpai.', 404);
+    await requireHostedTransport(userId);
     const status = String(input.status || '').toUpperCase();
     if (!['EXECUTED','FAILED','REJECTED'].includes(status)) {
       throw serviceError('INVALID_ACK', 'Status acknowledgement tidak sah.', 400);
@@ -1036,7 +1113,7 @@ function createAutoTradeService(options = {}) {
       const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
         store.listPositions(profile.userId),
-        typeof store.getHostedAccount === 'function' ? store.getHostedAccount(profile.userId) : null
+        activeHostedAccount(profile.userId)
       ]);
       const hostedConnection = hostedAccount ? hostedConnectionState(hostedAccount) : null;
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
@@ -1081,7 +1158,7 @@ function createAutoTradeService(options = {}) {
       const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
         store.listPositions(profile.userId),
-        typeof store.getHostedAccount === 'function' ? store.getHostedAccount(profile.userId) : null
+        activeHostedAccount(profile.userId)
       ]);
       if (!hostedAccount && !pod) continue;
       const positionSymbols = new Set(positions.map(position => position.symbol));
@@ -1116,9 +1193,11 @@ function createAutoTradeService(options = {}) {
 
   return {
     state,
+    connectionMonitor,
     credentialEncryptionConfig,
     connectHostedAccount,
     listHostedAssignments,
+    connectLocalEa,
     leaseHostedAccount,
     hostedHeartbeat,
     nextHostedCommand,

@@ -476,7 +476,7 @@ class PostgresAuthStore {
     return result.rows.map(row => publicReferrer(row));
   }
 
-  async listClientsForAdmin({ ibCode = '', limit = 200 } = {}) {
+  async listClientsForAdmin({ ibCode = '', limit = 200, offset = 0 } = {}) {
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     const values = [];
     let filter = '';
@@ -486,6 +486,7 @@ class PostgresAuthStore {
     }
     values.push(safeLimit);
     const limitIndex = values.length;
+    values.push(Math.max(0, Math.floor(Number(offset) || 0)));
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
               u.created_at, u.last_login_at,
@@ -493,8 +494,8 @@ class PostgresAuthStore {
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE u.role = 'client' ${filter}
-       ORDER BY u.created_at DESC
-       LIMIT $${limitIndex}`,
+       ORDER BY u.created_at DESC, u.id
+       LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
       values
     );
     return result.rows.map(publicClient);
@@ -529,7 +530,7 @@ class PostgresAuthStore {
     };
   }
 
-  async listClientsForIb(userId, { limit = 200 } = {}) {
+  async listClientsForIb(userId, { limit = 200, offset = 0 } = {}) {
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
@@ -539,9 +540,9 @@ class PostgresAuthStore {
        JOIN zencore_users u
          ON u.ib_referrer_id = ref.id AND u.role = 'client'
        WHERE ref.user_id = $1
-       ORDER BY u.created_at DESC
-       LIMIT $2`,
-      [userId, safeLimit]
+       ORDER BY u.created_at DESC, u.id
+       LIMIT $2 OFFSET $3`,
+      [userId, safeLimit, Math.max(0, Math.floor(Number(offset) || 0))]
     );
     return result.rows.map(publicClient);
   }
@@ -1121,12 +1122,12 @@ class MemoryAuthStore {
       });
   }
 
-  async listClientsForAdmin({ ibCode = '', limit = 200 } = {}) {
+  async listClientsForAdmin({ ibCode = '', limit = 200, offset = 0 } = {}) {
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     return [...this.usersById.values()]
       .filter(row => row.role === 'client' && (!ibCode || row.ib_code === ibCode))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, safeLimit)
+      .slice(Math.max(0, Math.floor(Number(offset) || 0)), Math.max(0, Math.floor(Number(offset) || 0)) + safeLimit)
       .map(publicClient);
   }
 
@@ -1147,14 +1148,14 @@ class MemoryAuthStore {
     };
   }
 
-  async listClientsForIb(userId, { limit = 200 } = {}) {
+  async listClientsForIb(userId, { limit = 200, offset = 0 } = {}) {
     const referrer = [...this.referrersByCode.values()].find(item => item.user_id === userId);
     if (!referrer) return [];
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     return [...this.usersById.values()]
       .filter(row => row.role === 'client' && row.ib_referrer_id === referrer.id)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, safeLimit)
+      .slice(Math.max(0, Math.floor(Number(offset) || 0)), Math.max(0, Math.floor(Number(offset) || 0)) + safeLimit)
       .map(publicClient);
   }
 

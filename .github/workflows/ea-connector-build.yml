@@ -1,0 +1,42 @@
+name: ZenCore EA Connector Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/ea-local-connector']
+    paths: ['ea-local-connector/**', '.github/workflows/ea-connector-build.yml']
+  pull_request:
+    paths: ['ea-local-connector/**', '.github/workflows/ea-connector-build.yml']
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test transport and connector
+        run: python -m unittest discover -s ea-local-connector -p 'test_*.py'
+      - name: Build desktop installer and connector
+        shell: pwsh
+        run: |
+          python -m pip install pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name ZenCoreConnector --add-data "ea-local-connector/ZenCoreExecutor.mq5;." --paths ea-local-connector ea-local-connector/connector.py
+          Copy-Item ea-local-connector/README.md dist/README.md
+          Copy-Item ea-local-connector/ZenCoreExecutor.mq5 dist/ZenCoreExecutor.mq5
+          Get-FileHash dist/ZenCoreConnector.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreConnector.exe" } | Set-Content dist/SHA256.txt
+      - name: Validate packaged EXE without connecting to broker
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath .\dist\ZenCoreConnector.exe -ArgumentList '--self-test', '--output=dist/validation.json' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Packaged EXE smoke test failed.' }
+          $result = Get-Content dist/validation.json -Raw | ConvertFrom-Json
+          if (-not $result.ok -or -not $result.eaResource -or -not $result.dpapi -or -not $result.tkGui) { throw 'Packaged EXE validation incomplete.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZenCore-EA-Connector-Windows-DEMO
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

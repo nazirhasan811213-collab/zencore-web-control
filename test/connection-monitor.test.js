@@ -1,0 +1,40 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { listConnectionMonitor } = require('../connection-monitor');
+const { MemoryAutoTradeStore } = require('../auto-trade-store');
+const { createAutoTradeService } = require('../auto-trade-service');
+const { MemoryAuthStore } = require('../auth-store');
+const { createAuthService } = require('../auth-service');
+test('IB monitoring never queries another IB client and clients are forbidden', async () => {
+  const store = new MemoryAuthStore(); const auth = createAuthService({ store, secureCookies: false });
+  const admin = (await auth.register({displayName:'Admin',email:'admin@demo.test',icNumber:'900101011111',phone:'0123456781',ibCode:'nazir',password:'TestPass2026!'})).user;
+  await store.setUserRole(admin.id, 'admin'); admin.role='admin';
+  for (const code of ['alpha','beta']) await auth.createIb(admin,{displayName:code,code,email:code+'@demo.test',phone:'0123456782',password:'TestPass2026!'});
+  const clients=[];
+  for (const [i,code] of ['alpha','beta'].entries()) clients.push((await auth.register({displayName:code,email:'client'+i+'@demo.test',icNumber:'90010101222'+i,phone:'012345678'+i,ibCode:code,password:'TestPass2026!'})).user);
+  const ib=(await auth.login({email:'alpha@demo.test',password:'TestPass2026!'})).user;
+  const queried=[]; const trading={connectionMonitor:async id => {queried.push(id);return {connection:{ready:false}};}};
+  const result=await listConnectionMonitor(ib,auth,trading);
+  assert.deepEqual(queried,[clients[0].id]); assert.equal(result.accounts.length,1);
+  assert.equal(JSON.stringify(result).includes(clients[1].email),false);
+  await assert.rejects(listConnectionMonitor(clients[0],auth,trading),{code:'FORBIDDEN'});
+});
+test('monitor uses active EA instead of stale hosted credentials, expires heartbeat and exposes no secrets', async () => {
+  let time=1790000000000;
+  const store=new MemoryAutoTradeStore();
+  const service=createAutoTradeService({store,commandSigningKey:'a-long-test-signing-key-over-thirty-two-bytes',allowDemoExecution:true,now:()=>time});
+  store.podsByUser.set('u',{id:'pod',userId:'u',ownershipMode:'TRADER_OWNED_EA_LOCAL',tradeMode:'DEMO',accountMask:'***1234',lastSeenAt:time,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.0.0-ea-local',tokenHash:'secret-token'});
+  store.hostedAccounts.set('u',{userId:'u',status:'ERROR',credentialEnvelope:{ciphertext:'secret-password'}});
+  let result=await service.connectionMonitor('u');
+  assert.equal(result.transport,'EA_LOCAL');assert.equal(result.connection.ready,true);
+  assert.equal(JSON.stringify(result).includes('secret'),false);
+  time+=31000;result=await service.connectionMonitor('u'); assert.equal(result.connection.online,false);assert.equal(result.connection.ready,false);
+  store.podsByUser.get('u').lastSeenAt=time;store.podsByUser.get('u').expertTradeAllowed=false;
+  result=await service.connectionMonitor('u'); assert.equal(result.connection.state,'CHECK_MT5');assert.equal(result.connection.ready,false);
+});
+test('monitor paginates ownership directory beyond the first 500 clients', async () => {
+  const offsets=[];
+  const auth={ibClients:async (_, options) => { offsets.push(options.offset); return Array.from({length:options.offset===0?500:1},(_,i)=>({id:String(options.offset+i),displayName:'Client',email:'demo@test'})); }};
+  const result=await listConnectionMonitor({role:'ib'},auth,{connectionMonitor:async()=>({connection:{ready:false}})});
+  assert.deepEqual(offsets,[0,500]);assert.equal(result.accounts.length,501);
+});

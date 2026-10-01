@@ -73,16 +73,16 @@
   }
 
   function mt5Derived(row) {
-    const endpoint = row.hosted || row.pod || null;
+    const endpoint = row.monitor ? { ...row.monitor, status: row.monitor.connection.state } : row.hosted || row.pod || null;
     const lastSeenAt = endpoint?.lastSeenAt || null;
     const recent = !!lastSeenAt && (Date.now() - Number(lastSeenAt)) <= 45000;
     const hasConnection = !!endpoint;
-    const connected = hasConnection && recent;
+    const connected = row.monitor ? row.monitor.connection.connected === true : hasConnection && recent;
     const desiredOn = row.control?.desiredState === 'ON';
     const effectiveOn = row.control?.effectiveState === 'ON';
     const systemOn = desiredOn || effectiveOn;
     const hasError = !!(row.hosted?.lastError || row.control?.lastError);
-    const attention = hasError || (hasConnection && !recent);
+    const attention = row.monitor ? row.monitor.transport !== 'NOT_LINKED' && !row.monitor.connection.ready : hasError || (hasConnection && !recent);
     return { endpoint, lastSeenAt, connected, hasConnection, systemOn, attention };
   }
 
