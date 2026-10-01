@@ -208,10 +208,19 @@ if (AUTH_ENABLED) {
         });
         autoTradeState.workerReplayGuard = createGcpRequestReplayGuard();
       }
+      const localEaExecutionEmails = String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS || '')
+        .split(',').map(email => email.trim().toLowerCase()).filter(Boolean);
+      const localEaExecutionUserIds = [];
+      for (const email of localEaExecutionEmails) {
+        const user = await store.findUserForLogin(email);
+        if (user && user.role !== 'viewer' && user.status === 'active') localEaExecutionUserIds.push(user.id);
+      }
+      console.log(`ZenCore local EA scoped DEMO gate: ${localEaExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
+        localEaExecutionUserIds,
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
         requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
         hostedMt5Enabled: HOSTED_MT5_ENABLED,

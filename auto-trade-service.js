@@ -93,6 +93,10 @@ function createAutoTradeService(options = {}) {
   const signingKey = String(options.commandSigningKey || '');
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const allowDemoExecution = options.allowDemoExecution === true;
+  const localEaExecutionUserIds = new Set(Array.isArray(options.localEaExecutionUserIds) ? options.localEaExecutionUserIds : []);
+  function executionAllowed(userId, pod) {
+    return allowDemoExecution || (localEaExecutionUserIds.has(userId) && isLocalEa(pod));
+  }
   const hostedMt5Enabled = options.hostedMt5Enabled === true;
   const hostedWorkerEnabled = hostedMt5Enabled && options.hostedWorkerEnabled === true;
   const hostedWorkerAccountId = String(options.hostedWorkerAccountId || '');
@@ -171,11 +175,12 @@ function createAutoTradeService(options = {}) {
     await store.setControl(userId, { desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null });
     await store.appendAudit(userId, 'EA_LOCAL_CONNECTED', { podId: pod.id, mode: 'DEMO' });
     return { ok: true, podToken: token, commandSigningKey: commandSigningKeyForPod(pod.id),
-      podId: pod.id, connectorVersion: LOCAL_EA_VERSION, executionEnabled: allowDemoExecution };
+      podId: pod.id, connectorVersion: LOCAL_EA_VERSION, executionEnabled: executionAllowed(userId, pod) };
   }
 
   function connectionState(pod) {
-    return Core.podConnectionState(pod, now(), allowDemoExecution ? {
+    if (pod && !executionAllowed(pod.userId, pod)) pod = { ...pod, demoExecutionUnlocked: false };
+    return Core.podConnectionState(pod, now(), executionAllowed(pod?.userId, pod) ? {
       connectorVersion: isLocalEa(pod) ? LOCAL_EA_VERSION : requiredDemoConnectorVersion,
       ownershipModes: isLocalEa(pod) ? ['TRADER_OWNED_EA_LOCAL'] : allowedDemoOwnershipModes
     } : {});
@@ -273,6 +278,7 @@ function createAutoTradeService(options = {}) {
         ? store.getActivePairingForUser(userId, now()) : null,
       activeHostedAccount(userId)
     ]);
+    const allowDemoExecution = executionAllowed(userId, pod);
     const podConnection = connectionState(pod);
     const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
     const settings = profile ? {
@@ -773,6 +779,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function turnOn(userId, input = {}) {
+    const allowDemoExecution = executionAllowed(userId, await store.getPodForUser(userId));
     if (!allowDemoExecution) {
       throw serviceError(
         'EXECUTION_ROLLOUT_LOCKED',
@@ -1107,7 +1114,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function dispatchMarkets(markets = []) {
-    const profiles = allowDemoExecution ? await store.listOnProfiles() : [];
+    const profiles = (allowDemoExecution || localEaExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
       const [pod, positions, hostedAccount] = await Promise.all([
@@ -1115,6 +1122,7 @@ function createAutoTradeService(options = {}) {
         store.listPositions(profile.userId),
         activeHostedAccount(profile.userId)
       ]);
+      if (!executionAllowed(profile.userId, pod)) continue;
       const hostedConnection = hostedAccount ? hostedConnectionState(hostedAccount) : null;
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
       for (const market of Array.isArray(markets) ? markets : []) {
