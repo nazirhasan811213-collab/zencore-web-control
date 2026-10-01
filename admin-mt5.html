@@ -63,10 +63,18 @@
           </table>
         </div>
       </section>
+
+      <section id="connectionMonitor" class="mg-panel" data-connection-scope="admin">
+        <div class="mg-panel-head"><div><span class="mg-kicker">CLIENT → CONNECTOR → MT5</span><h2>Status sambungan client</h2><p>Semakan setiap 10 saat. Heartbeat terkini tidak semestinya MT5 sedia berdagang.</p></div></div>
+        <div class="ops-filters"><input id="connectionSearch" type="search" aria-label="Cari client" placeholder="Cari nama, email atau akaun"><select id="connectionFilter" aria-label="Filter sambungan"><option value="all">Semua</option><option value="ready">Ready</option><option value="offline">Offline</option><option value="attention">Perlu perhatian</option><option value="unlinked">Belum paut</option></select><button id="connectionRefresh" type="button" class="mg-ghost">Refresh</button></div>
+        <p id="connectionMessage" role="status">Memuatkan status…</p>
+        <div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Client</th><th>Akaun / Server</th><th>Connector</th><th>MT5</th><th>Algo / Account / EA</th><th>Auto trade</th><th>Heartbeat terakhir</th></tr></thead><tbody id="connectionRows"></tbody></table></div>
+      </section>
       <footer class="mg-foot">ZenCore Admin • Credentials are never displayed in this view</footer>
     </main>
   </div>
   <script src="/admin-ops.js?v=1.0" defer></script>
 <script src="/workspace-shell.js?v=35.0" defer></script>
+  <script src="/client-connections.js?v=1.0" defer></script>
 </body>
 </html>

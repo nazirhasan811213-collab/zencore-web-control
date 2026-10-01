@@ -238,6 +238,31 @@ function createAutoTradeService(options = {}) {
   }
 
 
+  async function connectionMonitor(userId) {
+    const [profile, pod, hosted, events] = await Promise.all([
+      store.getProfile(userId), store.getPodForUser(userId), activeHostedAccount(userId), store.listAudit(userId, 30)
+    ]);
+    const endpoint = hosted || pod;
+    const connection = hosted ? hostedConnectionState(hosted) : connectionState(pod);
+    return {
+      activity: events.filter(event => ['EA_LOCAL_CONNECTED', 'SECURE_POD_PAIRED', 'HOSTED_WORKER_ERROR', 'SYSTEM_ON_REQUESTED', 'SYSTEM_STOP_REQUESTED', 'HOSTED_SYSTEM_ON_REQUESTED', 'HOSTED_SYSTEM_STOP_REQUESTED', 'SYSTEM_STOPPED'].includes(event.type)).slice(0, 5).map(event => ({ type: event.type, createdAt: event.createdAt })),
+      transport: hosted ? 'HOSTED' : isLocalEa(pod) ? 'EA_LOCAL' : pod ? 'SECURE_POD' : 'NOT_LINKED',
+      accountMask: endpoint?.accountMask || null,
+      serverMask: endpoint?.serverMask || null,
+      lastSeenAt: endpoint?.lastSeenAt || null,
+      connection,
+      permissions: {
+        terminal: endpoint?.terminalTradeAllowed === true,
+        account: endpoint?.accountTradeAllowed === true,
+        expert: endpoint?.expertTradeAllowed === true
+      },
+      control: {
+        desiredState: profile?.desiredState || 'STOPPED',
+        effectiveState: profile?.effectiveState || 'STOPPED'
+      }
+    };
+  }
+
   async function state(userId) {
     const [profile, pod, positions, audit, pairing, hostedAccount] = await Promise.all([
       store.getProfile(userId),
@@ -1168,6 +1193,7 @@ function createAutoTradeService(options = {}) {
 
   return {
     state,
+    connectionMonitor,
     credentialEncryptionConfig,
     connectHostedAccount,
     listHostedAssignments,

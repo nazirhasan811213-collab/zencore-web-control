@@ -462,9 +462,9 @@ function createAuthService(options = {}) {
     return overview;
   }
 
-  async function ibClients(user) {
+  async function ibClients(user, options = {}) {
     assertRole(user, ROLE_IB);
-    return store.listClientsForIb(user.id);
+    return store.listClientsForIb(user.id, options);
   }
 
   async function login(input = {}) {

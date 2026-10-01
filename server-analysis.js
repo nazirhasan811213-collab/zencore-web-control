@@ -1,4 +1,5 @@
 const http = require('http');
+const { listConnectionMonitor } = require('./connection-monitor');
 const {AnalysisAIService}=require('./analysis-ai-service');
 const aiAnalysis=new AnalysisAIService({liveSopProvider:fetchLocalSop});
 const fs = require('fs');
@@ -518,6 +519,13 @@ async function effectiveRegistrationSetting() {
 async function handleManagementApi(req, res, pathname, session) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
   try {
+    if (req.method === 'GET' && ['/api/admin/connections', '/api/ib/connections'].includes(pathname)) {
+      const expectedRole = pathname.startsWith('/api/admin/') ? 'admin' : 'ib';
+      if (session.user.role !== expectedRole) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
+      res.setHeader('Cache-Control', 'no-store');
+      if (!autoTradeState.ready || !autoTradeState.service) return sendJson(res, 503, { ok: false, error: 'Connection monitor unavailable.' });
+      return sendJson(res, 200, await listConnectionMonitor(session.user, authState.service, autoTradeState.service));
+    }
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
@@ -545,7 +553,9 @@ async function handleManagementApi(req, res, pathname, session) {
           executionUnlocked: AUTOTRADE_EXECUTION_ENABLED,
           requiredConnectorVersion: AUTOTRADE_EXECUTION_ENABLED ? AUTOTRADE_DEMO_CONNECTOR_VERSION : null,
           workerPool,
-          accounts
+          accounts: await Promise.all(accounts.map(async row => ({
+            ...row, monitor: await autoTradeState.service.connectionMonitor(row.userId)
+          })))
         });
       }
       if (req.method === 'GET' && pathname === '/api/admin/activity') {
@@ -1459,6 +1469,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/management.js') return sendAuthAsset(res, 'management.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/detail.js') return sendAuthAsset(res, 'detail.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/client-connections.js') return sendAuthAsset(res, 'client-connections.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/admin-ops.js') return sendAuthAsset(res, 'admin-ops.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
