@@ -7,6 +7,7 @@ grp="ZenCore Multi-Pair Web Feed"
 feedEnabled=input.bool(true,"Enable 9-Pair Batch Feed",group=grp)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
 tpModeStr=input.string("Fixed R:R","Mod Sasaran TP",options=["Fibonacci","Fixed R:R"],group=grp)
+goldAtrMultiplier=input.float(0.65,"Gold 3M ATR multiplier — DEMO test",minval=0.10,maxval=2.0,step=0.05,group=grp)
 
 f_hema(float src,int len)=>
     int half=int(math.max(1,math.round(len/2)))
@@ -45,6 +46,8 @@ f_scan3()=>
     float e20=ta.ema(close,20)
     float e50=ta.ema(close,50)
     float a14=ta.atr(14)
+    // Keep ATR itself unchanged for analysis. Only the gold trade plan is narrowed.
+    float planRange=a14*(str.contains(syminfo.ticker,"XAUUSD")?goldAtrMultiplier:1.0)
     float r14=ta.rsi(close,14)
     float b20=ta.sma(close,20)
     float h20=f_hema(close,20)
@@ -151,11 +154,11 @@ f_scan3()=>
         isBuy:=zoneBuy
         lastSide:=zoneBuy?"BUY":"SELL"
         entry:=zoneBuy?close+2*syminfo.mintick:close-2*syminfo.mintick
-        initialSl:=zoneBuy?entry-a14:entry+a14
+        initialSl:=zoneBuy?entry-planRange:entry+planRange
         activeSl:=initialSl
-        tp1:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*1.618:zoneBuy?entry+a14:entry-a14
-        tp2:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*2.618:zoneBuy?entry+2*a14:entry-2*a14
-        tp3:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*4.236:zoneBuy?entry+3*a14:entry-3*a14
+        tp1:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*1.618:zoneBuy?entry+planRange:entry-planRange
+        tp2:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*2.618:zoneBuy?entry+2*planRange:entry-2*planRange
+        tp3:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*4.236:zoneBuy?entry+3*planRange:entry-3*planRange
         active:=true
         triggered:=false
         hit1:=false
@@ -257,11 +260,11 @@ f_scan3()=>
         isBuy:=reBuyOnly
         lastSide:=reSide
         entry:=close
-        initialSl:=reBuyOnly?entry-a14:entry+a14
+        initialSl:=reBuyOnly?entry-planRange:entry+planRange
         activeSl:=initialSl
-        tp1:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*1.618:reBuyOnly?entry+a14:entry-a14
-        tp2:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*2.618:reBuyOnly?entry+2*a14:entry-2*a14
-        tp3:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*4.236:reBuyOnly?entry+3*a14:entry-3*a14
+        tp1:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*1.618:reBuyOnly?entry+planRange:entry-planRange
+        tp2:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*2.618:reBuyOnly?entry+2*planRange:entry-2*planRange
+        tp3:=tpModeStr=="Fibonacci"?initialSl+(entry-initialSl)*4.236:reBuyOnly?entry+3*planRange:entry-3*planRange
         triggered:=true
         hit1:=false
         hit2:=false
@@ -321,7 +324,7 @@ if feedEnabled and correctTf and barstate.isconfirmed
         row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+","+f_bool(priceCross)+","+f_quote(reType)+","+f_quote(reSide)+","+f_bool(reHema)+"]"
         marketsJson+=(i>0?",":"")+row
 
-    string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
+    string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
     alert(payload,alert.freq_once_per_bar_close)
 
 var table status=na

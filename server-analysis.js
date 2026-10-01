@@ -1489,6 +1489,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/results-core.js') return sendAuthAsset(res, 'results-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/results.js') return sendAuthAsset(res, 'results.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade.css') return sendAuthAsset(res, 'auto-trade.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_Gold_065_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_Gold_065_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_Multi_Pair_Feed_32_3.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-execution-contract.js') return sendAuthAsset(res, 'analysis-execution-contract.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade-core.js') return sendAuthAsset(res, 'auto-trade-core.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade.js') return sendAuthAsset(res, 'auto-trade.js', 'application/javascript; charset=utf-8');

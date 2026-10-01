@@ -27,6 +27,7 @@ extendBars = 20
 
 grpColors = "Warna & Pengurusan Risiko"
 tpModeStr = input.string("Fixed R:R", "Mod Sasaran TP", options=["Fibonacci", "Fixed R:R"], group=grpColors)
+goldAtrMultiplier = input.float(0.65, "Gold 3M ATR multiplier — DEMO test", minval=0.10, maxval=2.0, step=0.05, group=grpColors)
 // --- HIDDEN SECURE SETTINGS ---
 rrTP1     = 1.0 
 rrTP2     = 2.0 
@@ -171,6 +172,8 @@ ema9    = ta.ema(close, 9)
 ema20   = ta.ema(close, 20)
 ema50   = ta.ema(close, 50)
 atr     = ta.atr(14)
+// Entry/re-entry, chart levels and EXIT-STEPLOCK share this range.
+planRange = atr * (str.contains(syminfo.ticker, "XAUUSD") and timeframe.period == "3" and tradeMode == "Scalping" ? goldAtrMultiplier : 1.0)
 rsi_val = ta.rsi(close, 14)
 basis   = ta.sma(close, 20)
 
@@ -300,7 +303,7 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
     bool isBuy = is_zone_turn_green
     
     float ENTRY = saved_entry_price
-    float SL = isBuy ? ENTRY - atr : ENTRY + atr
+    float SL = isBuy ? ENTRY - planRange : ENTRY + planRange
 
     if ENTRY != SL
         int x1 = bar_index
@@ -941,11 +944,11 @@ if trigger_reentry
     curr_triggered   := true
     max_alert_level  := 1
     curr_entry       := close
-    curr_sl          := reentry_is_buy ? close - atr : close + atr
+    curr_sl          := reentry_is_buy ? close - planRange : close + planRange
     curr_initial_sl  := curr_sl
-    curr_tp1         := reentry_is_buy ? close + atr : close - atr
-    curr_tp2         := reentry_is_buy ? close + 2 * atr : close - 2 * atr
-    curr_tp3         := reentry_is_buy ? close + 3 * atr : close - 3 * atr
+    curr_tp1         := reentry_is_buy ? close + planRange : close - planRange
+    curr_tp2         := reentry_is_buy ? close + 2 * planRange : close - 2 * planRange
+    curr_tp3         := reentry_is_buy ? close + 3 * planRange : close - 3 * planRange
     curr_tp1_hit     := false
     curr_tp2_hit     := false
     curr_tp3_hit     := false
@@ -1547,6 +1550,7 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     // Every numeric value uses f_web_num() so na never becomes invalid JSON NaN.
     string web_payload = "{"
     web_payload += "\"schemaVersion\":\"32.3-EXIT-STEPLOCK\","
+    web_payload += "\"goldAtrMultiplier\":" + str.tostring(goldAtrMultiplier) + ","
     web_payload += "\"source\":\"ZenCore AI Dashboard Pro + Alerts\","
     web_payload += "\"symbol\":\"" + f_web_str(syminfo.ticker) + "\","
     web_payload += "\"tickerid\":\"" + f_web_str(syminfo.tickerid) + "\","
