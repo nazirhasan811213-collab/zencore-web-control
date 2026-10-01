@@ -205,11 +205,14 @@
     const localEa = state.pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL';
     const selected = new Set(state.settings?.symbols || allowed);
     const scopeKey = JSON.stringify([localEa, allowed, state.settings?.symbols]);
-    if (options && options.dataset.scopeKey !== scopeKey) {
+    const scopeDomain = JSON.stringify([localEa, allowed]);
+    if (options && options.dataset.scopeKey !== scopeKey &&
+        !(settingsDirty && options.dataset.scopeDomain === scopeDomain)) {
       options.dataset.scopeKey = scopeKey;
+      options.dataset.scopeDomain = scopeDomain;
       options.innerHTML = allowed.length
         ? allowed.map(symbol => localEa
-          ? `<label class="symbol-option"><input type="checkbox" name="executionPair" value="${escape(symbol)}" ${selected.has(symbol) ? 'checked' : ''}> ${escape(symbol)}</label>`
+          ? `<label class="symbol-option"><input type="checkbox" name="executionPair" value="${escape(symbol)}" ${selected.has(symbol) ? 'checked' : ''}><span>${escape(symbol)}</span></label>`
           : `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
         : '<span class="symbol-scope-empty">Menunggu pair yang disahkan.</span>';
     }
@@ -466,10 +469,11 @@
     const riskSelect = byId('riskSymbol');
     if (!Core || !riskSelect) return;
     riskSelect.innerHTML = Core.SUPPORTED_MARKETS.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
-    document.querySelectorAll('#settingsForm input').forEach(input => input.addEventListener('input', () => {
+    byId('settingsForm')?.addEventListener('input', event => {
+      if (!event.target.matches('input')) return;
       settingsDirty = true;
       updateRiskPreview();
-    }));
+    });
     riskSelect.addEventListener('change', updateRiskPreview);
   }
 
