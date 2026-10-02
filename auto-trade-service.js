@@ -160,8 +160,14 @@ function createAutoTradeService(options = {}) {
       store.getProfile(userId), store.listPositions(userId), store.getPodForUser(userId),
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
     ]);
+    // A lost local Connector cannot acknowledge STOP. Recover only after its
+    // lease has long expired, with no recorded positions and STOP still requested.
+    const recoverOfflineStop = isLocalEa(oldPod) && profile?.desiredState === 'STOPPED' &&
+      profile.effectiveState === 'STOPPING' && oldPod.lastSeenAt &&
+      now() - oldPod.lastSeenAt >= 120000 &&
+      (!hosted?.lastSeenAt || now() - hosted.lastSeenAt >= 120000);
     if (positions.length || (profile && (profile.desiredState !== 'STOPPED' ||
-        !['STOPPED', 'ERROR', 'UNPROVISIONED'].includes(profile.effectiveState)))) {
+        (!['STOPPED', 'ERROR', 'UNPROVISIONED'].includes(profile.effectiveState) && !recoverOfflineStop)))) {
       throw serviceError('STOP_BEFORE_PAIRING', 'Tekan OFF dan selesaikan posisi ZenCore sebelum pautkan EA.', 409);
     }
     // Never rotate credentials or switch execution engines while an old engine can still trade.
