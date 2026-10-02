@@ -1144,6 +1144,7 @@ function createAutoTradeService(options = {}) {
             const market = markets.find(item => Core.normaliseSymbol(item?.symbol) === symbol);
             return {
               symbol,
+              timeframe: market?.timeframe || null,
               freshness: market?.freshness || 'OFFLINE',
               ageSeconds: market?.receivedAt ? Math.round((now() - market.receivedAt) / 1000) : null,
               state: market?.strategyNormal?.state || 'WAIT',
@@ -1160,6 +1161,7 @@ function createAutoTradeService(options = {}) {
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
+        if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
         if (!allowedDemoSymbols.includes(symbol) || !Core.permitsPositionEntry(market,positions)) continue;
         if (hostedAccount) {
           if (typeof store.hasRecentHostedEntryCommand === 'function' &&
@@ -1173,12 +1175,12 @@ function createAutoTradeService(options = {}) {
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 5 * 60 * 1000
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000
             })
           : await issueCommand({
               userId: profile.userId, podId: pod.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 5 * 60 * 1000
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000
             });
         if (issued.created) {
           queued += 1;

@@ -27,7 +27,7 @@ extendBars = 20
 
 grpColors = "Warna & Pengurusan Risiko"
 tpModeStr = input.string("Fixed R:R", "Mod Sasaran TP", options=["Fibonacci", "Fixed R:R"], group=grpColors)
-goldAtrMultiplier = input.float(0.65, "Gold 3M ATR multiplier — DEMO test", minval=0.10, maxval=2.0, step=0.05, group=grpColors)
+goldAtrMultiplier = input.float(0.65, "Gold 2M ATR multiplier — DEMO test", minval=0.10, maxval=2.0, step=0.05, group=grpColors)
 // --- HIDDEN SECURE SETTINGS ---
 rrTP1     = 1.0 
 rrTP2     = 2.0 
@@ -173,7 +173,7 @@ ema20   = ta.ema(close, 20)
 ema50   = ta.ema(close, 50)
 atr     = ta.atr(14)
 // Entry/re-entry, chart levels and EXIT-STEPLOCK share this range.
-planRange = atr * (str.contains(syminfo.ticker, "XAUUSD") and timeframe.period == "3" and tradeMode == "Scalping" ? goldAtrMultiplier : 1.0)
+planRange = atr * (str.contains(syminfo.ticker, "XAUUSD") and timeframe.period == "2" and tradeMode == "Scalping" ? goldAtrMultiplier : 1.0)
 rsi_val = ta.rsi(close, 14)
 basis   = ta.sma(close, 20)
 
@@ -1264,7 +1264,7 @@ if exit_opposite_yellow
 grp_sop = "SOP Dashboard Settings"
 show_sop = input.bool(true, "Buka SOP Dashboard (Bottom Right)", group=grp_sop)
 
-string htf_sop = timeframe.period == "1" ? "3" : timeframe.period == "3" ? "5" : timeframe.period == "5" ? "15" : timeframe.period == "15" ? "30" : timeframe.period == "30" ? "60" : timeframe.period == "60" ? "240" : timeframe.period == "240" ? "D" : "W"
+string htf_sop = timeframe.period == "1" ? "3" : (timeframe.period == "2" or timeframe.period == "3") ? "5" : timeframe.period == "5" ? "15" : timeframe.period == "15" ? "30" : timeframe.period == "30" ? "60" : timeframe.period == "60" ? "240" : timeframe.period == "240" ? "D" : "W"
 
 f_htf_ribbon_state() =>
     h1 = f_hema(close, 20)
@@ -1306,10 +1306,10 @@ bool sop5_pass = is_sop_buy ? htf_hema_bull : htf_hema_bear
 
 // --- TRIGGER ALERTS: BASE ZONE CROSSOVERS ---
 if is_zone_turn_green and en_alert_primary
-    alert("🟢 [ZENCORE SIGNAL] PRIMARY BUY ENTRY CONFIRMED | Entry Price (3M close): " + str.tostring(close, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
+    alert("🟢 [ZENCORE SIGNAL] PRIMARY BUY ENTRY CONFIRMED | Entry Price (2M close): " + str.tostring(close, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
 
 if is_zone_turn_red and en_alert_primary
-    alert("🔴 [ZENCORE SIGNAL] PRIMARY SELL ENTRY CONFIRMED | Entry Price (3M close): " + str.tostring(close, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
+    alert("🔴 [ZENCORE SIGNAL] PRIMARY SELL ENTRY CONFIRMED | Entry Price (2M close): " + str.tostring(close, format.mintick) + " | 🔮 10-Candle Forecast: " + power_txt, alert.freq_once_per_bar_close)
 
 // ------------------------------------------
 // Render Table (SOP Dashboard)
@@ -1479,8 +1479,8 @@ f_web_str(string _v) =>
 // V32 NORMAL SCALPING TF3M - PINE HARD-GATE FEED
 // FAST TRADE 1M is untouched.
 // ==========================================
-normal_tf3_ok = timeframe.period == "3"
-normal_sop_version = normal_tf3_ok ? "32.4" : "TF3_REQUIRED"
+normal_tf3_ok = timeframe.period == "2"
+normal_sop_version = normal_tf3_ok ? "32.4" : "TF2_REQUIRED"
 normal_3m_close = close
 
 var string normal_last_side = "WAIT"

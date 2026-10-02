@@ -392,17 +392,21 @@ function normalScalpStrategy(symbol,d){
   const side=reentry?x.reentrySide:x.side;
   const sopReady=reentry?x.reentryReady:x.standardReady;
   const pinePlan=chartTradePlan(d,side);
-  const ready=sopReady&&!!pinePlan;
+  const entryWindowOpen=!!pinePlan && (side==='BUY'
+    ? N(d.close)>pinePlan.sl && N(d.close)<pinePlan.tp1
+    : N(d.close)<pinePlan.sl && N(d.close)>pinePlan.tp1);
+  const ready=sopReady&&!!pinePlan&&entryWindowOpen;
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
   const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — SOP Normal 25/9 lulus.`):
+    sopReady&&pinePlan&&!entryWindowOpen?'SKIP ENTRY — harga sudah melepasi TP1 atau SL.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal 3M'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
   const plan=ready?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
-    mode:'NORMAL',tf:'3m',state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
+    mode:'NORMAL',tf:`${d.timeframe||'3'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
     confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
     sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
       solid:d?.normal3Solid===true,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
@@ -566,7 +570,7 @@ function expandCompactMarket(row,batch){
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
     source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:true,tpMode:batch.tpMode,
-    symbol,timeframe:'3',time,barIndex,open,high,low,close,ema9,ema20,ema50,
+    symbol,timeframe:String(batch.timeframe||'3'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
     entry,sl:initialSl,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,

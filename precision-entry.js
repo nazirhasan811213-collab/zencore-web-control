@@ -241,7 +241,9 @@ function renderMarket(m){
 
   const fresh=String(m?.freshness||'OFFLINE').toUpperCase();
   syncPairLabels();
-  setText('feedState',fresh==='LIVE'?'LIVE • 3M BAR':fresh);
+  const executionTf=String(m?.timeframe||'3');
+  setText('feedState',fresh==='LIVE'?`LIVE • ${executionTf}M BAR`:fresh);
+  setText('chartPairTitle',`TradingView • ${activePair} • ${executionTf} Minute`);
   setText('feedAge',age(m?.receivedAt));
   setText('marketSession',fresh==='LIVE'?'OPEN / BAR-CLOSE':fresh==='STALE'?'STALE':'CLOSED / OFFLINE');
   $('feedDot')?.classList.toggle('live',fresh==='LIVE');

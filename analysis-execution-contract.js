@@ -80,6 +80,10 @@
       tp2: number(plan.tp2),
       tp3: number(plan.tp3)
     };
+    const livePrice = number(market.price);
+    if (livePrice !== null && (side === 'BUY'
+        ? livePrice >= prices.tp1 || livePrice <= prices.sl
+        : side === 'SELL' && (livePrice <= prices.tp1 || livePrice >= prices.sl))) return null;
     if (!SUPPORTED_MARKETS.includes(symbol) || String(normal.state || '').toUpperCase() !== 'READY' ||
         !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade) ||
         !['BUY', 'SELL'].includes(side) || !receivedAt || Object.values(prices).some(value => value === null)) {
@@ -93,6 +97,7 @@
       schemaVersion: SCHEMA_VERSION,
       symbol,
       side,
+      executionTimeframe: String(market.timeframe || normal.tf || '3'),
       ...prices,
       sourceReceivedAt: receivedAt
     };

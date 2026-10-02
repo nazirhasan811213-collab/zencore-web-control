@@ -177,10 +177,13 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  }
  trade.SetTypeFillingBySymbol(symbol);sl=Price(symbol,sl);
  MqlTick tick;if(!SymbolInfoTick(symbol,tick) || tick.bid<=0 || tick.ask<=0)return false;
+ // Refuse a late market entry, even if the quote moved after Analysis dispatched it.
+ if(buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl)return false;
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)return false;
  for(int i=0;i<layers;i++){
   if(!Permissions() || !FreshLease())return false;
+  if(!SymbolInfoTick(symbol,tick) || (buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl))return false;
   // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
   bool sent=buy?trade.Buy(lot,symbol,0,sl,0,"ZC:"+StringSubstr(id,0,20)):trade.Sell(lot,symbol,0,sl,0,"ZC:"+StringSubstr(id,0,20));
   if(!sent || !BrokerDone() || MathAbs(trade.ResultVolume()-lot)>1e-8)return false;

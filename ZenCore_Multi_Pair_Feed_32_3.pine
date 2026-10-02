@@ -1,13 +1,13 @@
 //@version=6
-indicator("ZenCore Multi-Pair Feed 32.4", shorttitle="ZC MP 32.4", overlay=false, dynamic_requests=true, max_bars_back=650)
+indicator("ZenCore Multi-Pair Feed 32.5 2M", shorttitle="ZC MP 2M", overlay=false, dynamic_requests=true, max_bars_back=650)
 
 // One permanent alert feeds all supported markets to ZenCore Web Control.
-// Run this bridge on a 3-minute chart. It does not draw or alter the original indicator.
+// Run this bridge on a 2-minute chart. It does not draw or alter the original indicator.
 grp="ZenCore Multi-Pair Web Feed"
 feedEnabled=input.bool(true,"Enable 9-Pair Batch Feed",group=grp)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
 tpModeStr=input.string("Fixed R:R","Mod Sasaran TP",options=["Fibonacci","Fixed R:R"],group=grp)
-goldAtrMultiplier=input.float(0.65,"Gold 3M ATR multiplier — DEMO test",minval=0.10,maxval=2.0,step=0.05,group=grp)
+goldAtrMultiplier=input.float(0.65,"Gold 2M ATR multiplier — DEMO test",minval=0.10,maxval=2.0,step=0.05,group=grp)
 
 f_hema(float src,int len)=>
     int half=int(math.max(1,math.round(len/2)))
@@ -38,7 +38,7 @@ f_quote(string value)=>
     safe:=str.replace_all(safe,"\"","\\\"")
     "\"" + safe + "\""
 
-// Executes independently inside each requested 3-minute symbol context.
+// Executes independently inside each requested 2-minute symbol context.
 // Higher-timeframe EMA states are updated only when their candles close,
 // matching lookahead_off confirmed-bar behaviour while keeping requests at 22.
 f_scan3()=>
@@ -237,7 +237,7 @@ f_scan3()=>
             closeType:="OPPOSITE_YELLOW"
             closeReason:="Confirmed opposite yellow candle"
 
-    // Re-entry is an event on this confirmed 3M bar, never a carried position label.
+    // Re-entry is an event on this confirmed 2M bar, never a carried position label.
     var int lastReentryBar=0
     bool crossE9Up=ta.crossover(close,e9)
     bool crossE9Down=ta.crossunder(close,e9)
@@ -299,14 +299,14 @@ f_scan3()=>
 var string[] symbols=array.from("OANDA:XAUUSD","OANDA:EURUSD","OANDA:GBPUSD","OANDA:USDJPY","OANDA:USDCAD","OANDA:USDCHF","OANDA:EURJPY","OANDA:GBPJPY","OANDA:EURGBP")
 var string[] aliases=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP")
 
-bool correctTf=timeframe.period=="3"
+bool correctTf=timeframe.period=="2"
 string marketsJson=""
 
 if feedEnabled and correctTf and barstate.isconfirmed
     for i=0 to array.size(symbols)-1
         string ticker=array.get(symbols,i)
         string alias=array.get(aliases,i)
-        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema]=request.security(ticker,"3",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
+        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema]=request.security(ticker,"2",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
         [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
         string m5pos=na(m5close)?"WAIT":m5close>math.max(m5h20,m5h40)?"ABOVE":m5close<math.min(m5h20,m5h40)?"BELOW":"INSIDE"
         bool sop5=side=="BUY"?m5h20>m5h40:side=="SELL"?m5h20<m5h40:false
@@ -324,7 +324,7 @@ if feedEnabled and correctTf and barstate.isconfirmed
         row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+","+f_bool(priceCross)+","+f_quote(reType)+","+f_quote(reSide)+","+f_bool(reHema)+"]"
         marketsJson+=(i>0?",":"")+row
 
-    string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
+    string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"2\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
     alert(payload,alert.freq_once_per_bar_close)
 
 var table status=na
@@ -333,11 +333,11 @@ if showStatus
         status:=table.new(position.top_right,2,4,bgcolor=color.new(#07131d,5),border_width=1)
     if barstate.islast
         table.cell(status,0,0,"ZENCORE MULTI-PAIR",text_color=color.aqua)
-        table.cell(status,1,0,"32.4 ENTRY SOP",text_color=color.lime)
+        table.cell(status,1,0,"32.5 • 2M SOP",text_color=color.lime)
         table.cell(status,0,1,"Markets",text_color=color.gray)
         table.cell(status,1,1,"9",text_color=color.white)
         table.cell(status,0,2,"Chart TF",text_color=color.gray)
-        table.cell(status,1,2,correctTf?"3M READY":"SET CHART TO 3M",text_color=correctTf?color.lime:color.red)
+        table.cell(status,1,2,correctTf?"2M READY":"SET CHART TO 2M",text_color=correctTf?color.lime:color.red)
         table.cell(status,0,3,"Alert",text_color=color.gray)
         table.cell(status,1,3,feedEnabled?"BATCH ACTIVE":"OFF",text_color=feedEnabled?color.lime:color.orange)
 

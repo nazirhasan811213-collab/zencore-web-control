@@ -11,6 +11,6 @@ function chartTradePlan(snapshot={},side=''){
   const mode=snapshot.tpMode==='Fibonacci'?'Fibonacci':'Fixed R:R';
   return{side,entry,sl,tp1,tp2,tp3,riskDistance:risk,
     rr1:Math.abs(tp1-entry)/risk,rr2:Math.abs(tp2-entry)/risk,rr3:Math.abs(tp3-entry)/risk,tpMode:mode,
-    condition:'PINE SOP NORMAL',planType:'NORMAL SCALPING 3M — PINE '+mode};
+    condition:'PINE SOP NORMAL',planType:`NORMAL SCALPING ${snapshot.timeframe||'3'}M — PINE `+mode};
 }
 module.exports={chartTradePlan};
