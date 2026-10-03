@@ -16,7 +16,7 @@ function hemaStrength(r={},side,requireConfirmed=false){
     gapState:gap>previousGap?'EXPANDING':gap<previousGap?'CONTRACTING':'FLAT'};
 }
 
-function normalEntrySop(d={}){
+function evaluateEntrySop(d={},timeframe='2',version='SOLID_TF2_3GREEN_HEMA23_V2'){
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
@@ -33,7 +33,7 @@ function normalEntrySop(d={}){
   const hema2=hemaStrength(d.hemaConfirmation?.tf2,side);
   const hema3=hemaStrength(d.hemaConfirmation?.tf3,side,true);
   const gates=[
-    {key:'timeframe',label:'Chart TF2',pass:String(d.timeframe)==='2'},
+    {key:'timeframe',label:'Chart TF'+timeframe,pass:String(d.timeframe)===String(timeframe)},
     {key:'solid',label:'Solid Entry Signal',pass:d.normal3Solid===true},
     {key:'sop',label:'SOP Dashboard ≥3/5 Green',pass:green>=3,detail:`${green}/5`},
     {key:'forecast',label:'10-Candle Forecast',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
@@ -43,8 +43,9 @@ function normalEntrySop(d={}){
   // Friday 25 Sep Normal entry has no separate re-entry route.
   const reentryType='NONE',reentrySide='WAIT',reentryGates=[],reentryReady=false;
   const standardReady=['BUY','SELL'].includes(side)&&gates.every(g=>g.pass)&&entry!==null&&close!==null&&atr!==null&&atr>0;
-  return {version:'SOLID_TF2_3GREEN_HEMA23_V2',hema2,hema3,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
+  return {version,hema2,hema3,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
     standardReady,reentryType,reentrySide,reentryGates,reentryReady};
 }
 
-module.exports={normalEntrySop,hemaStrength};
+function normalEntrySop(d={}){return evaluateEntrySop(d,'2','SOLID_TF2_3GREEN_HEMA23_V2');}
+module.exports={normalEntrySop,hemaStrength,evaluateEntrySop};

@@ -68,6 +68,19 @@
     return round(units * step, digits);
   }
 
+  const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF10_LONG']);
+
+  function effectiveSettings(input = {}, symbol = 'XAUUSD') {
+    const mode = input.strategyMode || 'TF2_SCALPING';
+    const group = normaliseSymbol(symbol) === 'XAUUSD' ? 'gold' : 'fx';
+    const asset = input.modeSettings?.[mode]?.[group] || {};
+    const lotPerLayer = number(asset.lotPerLayer ?? input.lotPerLayer);
+    const layers = mode === 'TF10_LONG' ? 2 : Number(asset.layers ?? input.layers);
+    return { ...input, lotPerLayer, layers,
+      totalLot: lotPerLayer === null ? null : round(lotPerLayer * layers, 5),
+      assetGroup: group, strategyMode: mode };
+  }
+
   function validateSettings(input = {}) {
     const capitalUsd = number(input.capitalUsd);
     const lotPerLayer = number(input.lotPerLayer);
@@ -75,6 +88,21 @@
     const symbols = [...new Set((Array.isArray(input.symbols) ? input.symbols : ['XAUUSD'])
       .map(normaliseSymbol).filter(symbol => SUPPORTED_MARKETS.includes(symbol)))];
     const errors = {};
+    const strategyMode = input.strategyMode || 'TF2_SCALPING';
+    if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping atau TF10 Long.';
+    const modeSettings = {};
+    for (const mode of STRATEGY_MODES) {
+      modeSettings[mode] = {};
+      for (const group of ['gold', 'fx']) {
+        const raw = input.modeSettings?.[mode]?.[group] || {};
+        const lot = number(raw.lotPerLayer ?? input.lotPerLayer);
+        const count = mode === 'TF10_LONG' ? 2 : Number(raw.layers ?? input.layers);
+        if (lot === null || lot <= 0 || lot > 100) errors[mode + '.' + group + '.lotPerLayer'] = 'Lot Gold dan currency mesti lebih 0 hingga 100.';
+        if (!Number.isInteger(count) || count < 1 || count > 10) errors[mode + '.' + group + '.layers'] = 'Layer mesti antara 1 hingga 10.';
+        if (mode === 'TF10_LONG' && raw.layers != null && Number(raw.layers) !== 2) errors[mode + '.' + group + '.layers'] = 'TF10 Long menggunakan tepat 2 layer.';
+        modeSettings[mode][group] = {lotPerLayer: lot === null ? null : round(lot, 5), layers: count};
+      }
+    }
 
     if (capitalUsd === null || capitalUsd < 10 || capitalUsd > 100_000_000) {
       errors.capitalUsd = 'Modal mesti antara USD10 hingga USD100,000,000.';
@@ -91,6 +119,7 @@
       ok: Object.keys(errors).length === 0,
       errors,
       value: {
+        strategyMode, modeSettings,
         capitalUsd: capitalUsd === null ? null : round(capitalUsd),
         lotPerLayer: lotPerLayer === null ? null : round(lotPerLayer, 5),
         layers,
@@ -359,13 +388,18 @@
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null) {
     const validation = validateSettings(settings);
+    const mode = validation.value.strategyMode;
+    const tf = String(market.timeframe || market.strategyNormal?.tf || '').replace(/m$/, '');
+    // Never reuse a TF2/legacy signal for a TF10 account.
+    if (mode === 'TF10_LONG' || (settings.strategyMode && tf !== '2')) return null;
     const decision = Contract.createEntryDecision(market);
     if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
     const symbol = snapshot.symbol;
     if (!validation.value.symbols.includes(symbol)) return null;
+    const execution = effectiveSettings(validation.value, symbol);
     const risk = calculateRisk({
-      ...validation.value,
+      ...execution,
       entry: snapshot.entry,
       sl: snapshot.sl,
       tickSize: symbolSpec?.tickSize,
@@ -385,9 +419,11 @@
         tp1: snapshot.tp1,
         tp2: snapshot.tp2,
         tp3: snapshot.tp3,
-        lotPerLayer: validation.value.lotPerLayer,
-        layers: validation.value.layers,
-        totalLot: validation.value.totalLot,
+        lotPerLayer: execution.lotPerLayer,
+        layers: execution.layers,
+        totalLot: execution.totalLot,
+        strategyMode: execution.strategyMode,
+        assetGroup: execution.assetGroup,
         risk,
         signalReceivedAt: snapshot.sourceReceivedAt
       }
@@ -415,6 +451,8 @@
 
   return {
     SUPPORTED_MARKETS,
+    STRATEGY_MODES,
+    effectiveSettings,
     CONTROL_STATES,
     COMMAND_TYPES,
     POD_OWNERSHIP_MODES,

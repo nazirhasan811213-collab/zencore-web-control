@@ -289,6 +289,8 @@ function createAutoTradeService(options = {}) {
     const podConnection = connectionState(pod);
     const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
     const settings = profile ? {
+      strategyMode: profile.strategyMode,
+      modeSettings: profile.modeSettings,
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
       layers: profile.layers,
@@ -312,8 +314,10 @@ function createAutoTradeService(options = {}) {
         stateVersion: profile?.stateVersion || 0,
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
-        canEnter: allowDemoExecution && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: allowDemoExecution && settingsReady && connection.ready
+        strategyReady: profile?.strategyMode !== 'TF10_LONG',
+        strategyReason: profile?.strategyMode === 'TF10_LONG' ? 'TF10 menunggu feed Analysis dan adapter MT5.' : null,
+        canEnter: profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && settingsReady && connection.ready
       },
       connection,
       pod: pod ? {
@@ -764,11 +768,17 @@ function createAutoTradeService(options = {}) {
         riskAcknowledged: 'Tandakan pengesahan risiko untuk menyimpan.'
       });
     }
+    const previous = await store.getProfile(userId);
+    const modeChanged = previous && (previous.strategyMode || 'TF2_SCALPING') !== validation.value.strategyMode;
+    if (modeChanged && (previous.desiredState === 'ON' || (await store.listPositions(userId)).length > 0)) {
+      throw serviceError('STOP_BEFORE_STRATEGY_CHANGE', 'STOP ENTRY dan tunggu posisi sedia ada selesai sebelum menukar strategi.', 409);
+    }
     const saved = await store.saveSettings(userId, {
       ...validation.value,
       riskAcknowledgedAt: now()
     });
     await store.appendAudit(userId, 'SETTINGS_SAVED', {
+      strategyMode: saved.strategyMode, modeSettings: saved.modeSettings,
       capitalUsd: saved.capitalUsd,
       lotPerLayer: saved.lotPerLayer,
       layers: saved.layers,
@@ -802,6 +812,9 @@ function createAutoTradeService(options = {}) {
       store.getPodForUser(userId),
       activeHostedAccount(userId)
     ]);
+    if (profile?.strategyMode === 'TF10_LONG') {
+      throw serviceError('TF10_FEED_REQUIRED', 'Setting TF10 disimpan. Feed Analysis dan adapter TF10 belum disambungkan; entry TF2 tidak akan digunakan.', 409);
+    }
     if (hostedAccount) {
       const hostedConnection = hostedConnectionState(hostedAccount);
       const settingsValidation = Core.validateSettings(profile || {});

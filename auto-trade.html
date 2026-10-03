@@ -144,17 +144,24 @@
       <section class="auto-grid configuration-grid">
         <article class="auto-panel settings-panel">
           <div class="panel-heading">
-            <div><span class="eyebrow">Trade Configuration</span><h2>Modal, lot dan layer</h2></div>
+            <div><span class="eyebrow">Trade Configuration</span><h2>Strategi, Gold dan currency</h2></div>
             <span class="mini-status warning-only">WARNING ONLY</span>
           </div>
           <form id="settingsForm" novalidate>
+            <label class="risk-symbol"><span>STRATEGI ENTRY</span><select id="strategyMode"><option value="TF2_SCALPING">TF2 min — Scalping</option><option value="TF10_LONG">TF10 min — Long · 2 layer</option></select></label>
+            <p id="strategyNotice">TF2: SOP SOLID dan HEMA TF2/TF3.</p>
             <div class="settings-fields">
               <label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label>
-              <label><span>LOT SETIAP LAYER</span><input id="lotPerLayer" name="lotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
-              <label><span>JUMLAH LAYER</span><input id="layers" name="layers" type="number" min="1" max="10" step="1" value="3" required></label>
+              <label><span>GOLD — LOT / LAYER</span><input id="lotPerLayer" name="lotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
+              <label><span>GOLD — LAYER</span><input id="layers" name="layers" type="number" min="1" max="10" step="1" value="3" required></label>
               <div class="total-exposure"><span>TOTAL LOT / SETUP</span><b id="totalLotPreview">0.03</b></div>
             </div>
 
+            <div class="settings-fields">
+              <label><span>CURRENCY — LOT / LAYER</span><input id="fxLotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
+              <label><span>CURRENCY — LAYER</span><input id="fxLayers" type="number" min="1" max="10" step="1" value="3" required></label>
+              <div class="total-exposure"><span>CURRENCY TOTAL LOT / SETUP</span><b id="fxTotalLotPreview">0.03</b></div>
+            </div>
             <fieldset class="symbol-fieldset" aria-describedby="executionSymbolNotice">
               <legend>PAIR AUTO ZENCORE</legend>
               <div id="symbolOptions" class="symbol-options"></div>

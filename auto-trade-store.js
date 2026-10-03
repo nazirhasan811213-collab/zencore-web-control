@@ -12,6 +12,8 @@ function publicProfile(row) {
   const capital = row.capital_usd ?? row.capitalUsd;
   const lot = row.lot_per_layer ?? row.lotPerLayer;
   return {
+    strategyMode: (row.execution_settings ?? row).strategyMode || 'TF2_SCALPING',
+    modeSettings: (row.execution_settings ?? row).modeSettings || {},
     userId: row.user_id || row.userId,
     capitalUsd: capital == null ? null : Number(capital),
     lotPerLayer: lot == null ? null : Number(lot),
@@ -165,6 +167,8 @@ class PostgresAutoTradeStore {
         last_error VARCHAR(240),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE zencore_autotrade_profiles ADD COLUMN IF NOT EXISTS execution_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
 
       CREATE TABLE IF NOT EXISTS zencore_mt5_secure_pods (
         id UUID PRIMARY KEY,
@@ -377,9 +381,10 @@ class PostgresAutoTradeStore {
   async saveSettings(userId, settings) {
     const result = await this.pool.query(
       `INSERT INTO zencore_autotrade_profiles
-        (user_id, capital_usd, lot_per_layer, layers, symbols, risk_acknowledged_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+        (user_id, capital_usd, lot_per_layer, layers, symbols, risk_acknowledged_at, execution_settings)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb)
        ON CONFLICT (user_id) DO UPDATE SET
+         execution_settings = EXCLUDED.execution_settings,
          capital_usd = EXCLUDED.capital_usd,
          lot_per_layer = EXCLUDED.lot_per_layer,
          layers = EXCLUDED.layers,
@@ -389,7 +394,8 @@ class PostgresAutoTradeStore {
          updated_at = NOW()
        RETURNING *`,
       [userId, settings.capitalUsd, settings.lotPerLayer, settings.layers,
-        JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null]
+        JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null,
+        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings})]
     );
     return publicProfile(result.rows[0]);
   }
@@ -681,7 +687,7 @@ class PostgresAutoTradeStore {
          p.broker_mask AS pod_broker_mask, p.trade_mode AS pod_trade_mode,
          p.connector_version AS pod_connector_version, p.terminal_build AS pod_terminal_build,
          p.last_seen_at AS pod_last_seen_at, p.revoked_at AS pod_revoked_at,
-         a.capital_usd, a.lot_per_layer, a.layers, a.symbols,
+         a.capital_usd, a.lot_per_layer, a.layers, a.symbols, a.execution_settings,
          a.desired_state, a.effective_state, a.last_error AS control_last_error,
          COALESCE(pos.open_positions, 0)::int AS open_positions
        FROM zencore_users u
@@ -749,6 +755,8 @@ class PostgresAutoTradeStore {
         lastSeenAt: timestamp(row.pod_last_seen_at)
       } : null,
       settings: row.capital_usd == null ? null : {
+        strategyMode: row.execution_settings?.strategyMode || 'TF2_SCALPING',
+        modeSettings: row.execution_settings?.modeSettings || {},
         capitalUsd: Number(row.capital_usd),
         lotPerLayer: row.lot_per_layer == null ? null : Number(row.lot_per_layer),
         layers: row.layers == null ? null : Number(row.layers),
@@ -1660,6 +1668,8 @@ class MemoryAutoTradeStore {
         } : null,
         pod: publicPod(pod),
         settings: profile ? {
+          strategyMode: profile.strategyMode || 'TF2_SCALPING',
+          modeSettings: profile.modeSettings || {},
           capitalUsd: profile.capitalUsd ?? null,
           lotPerLayer: profile.lotPerLayer ?? null,
           layers: profile.layers ?? null,

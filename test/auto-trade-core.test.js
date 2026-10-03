@@ -105,11 +105,14 @@ test('heartbeat only retains masked identity and sanitised positions', () => {
   assert.equal(JSON.stringify(result.value).includes('must-not-enter'), false);
 });
 
-test('ready Normal 3M signal becomes a StepLock command without changing SOP', () => {
+test('ready SOLID TF2 signal becomes a StepLock command without changing prices', () => {
   const command = Core.buildSetupCommand({
     symbol: 'XAUUSD',
+    timeframe: '2',
     receivedAt: 1_790_000_000_000,
     strategyNormal: {
+      entrySopVersion: 'SOLID_TF2_3GREEN_HEMA23_V2', tf: '2m', solid: true,
+      sop: {gates: Array.from({length: 6}, () => ({pass: true}))},
       state: 'READY',
       side: 'BUY',
       plan: { entry: 2500, sl: 2495, tp1: 2505, tp2: 2510, tp3: 2515 }

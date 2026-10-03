@@ -168,7 +168,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', control.lastError || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', control.lastError || control.strategyReason || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));
@@ -187,12 +187,41 @@
       !(state.positions || []).length || effective === 'EMERGENCY_CLOSING';
   }
 
+  let modeDraft = null;
+  let displayedMode = 'TF2_SCALPING';
+  function hydrateModeDraft(settings) {
+    const normalized = Core.validateSettings(settings).value;
+    modeDraft = JSON.parse(JSON.stringify(normalized.modeSettings));
+    displayedMode = normalized.strategyMode;
+    byId('strategyMode').value = displayedMode;
+    displayModeFields();
+  }
+  function storeModeFields() {
+    if (!modeDraft) return;
+    modeDraft[displayedMode] = {
+      gold: {lotPerLayer: byId('lotPerLayer').value, layers: displayedMode === 'TF10_LONG' ? 2 : byId('layers').value},
+      fx: {lotPerLayer: byId('fxLotPerLayer').value, layers: displayedMode === 'TF10_LONG' ? 2 : byId('fxLayers').value}
+    };
+  }
+  function displayModeFields() {
+    const config = modeDraft[displayedMode];
+    byId('lotPerLayer').value = config.gold.lotPerLayer;
+    byId('layers').value = config.gold.layers;
+    byId('fxLotPerLayer').value = config.fx.lotPerLayer;
+    byId('fxLayers').value = config.fx.layers;
+    const tf10 = displayedMode === 'TF10_LONG';
+    byId('layers').disabled = tf10;
+    byId('fxLayers').disabled = tf10;
+    setText('strategyNotice', tf10
+      ? 'TF10: tepat 2 layer. Setting boleh disimpan; ON menunggu sambungan feed Analysis dan adapter TF10. BUY dan SELL mengikut SOP.'
+      : 'TF2: SOP SOLID, checklist, forecast dan HEMA TF2/TF3. Setting Gold dan currency berasingan.');
+  }
+
   function renderSettings(state) {
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
+    hydrateModeDraft(settings);
     byId('capitalUsd').value = settings.capitalUsd ?? 100;
-    byId('lotPerLayer').value = settings.lotPerLayer ?? 0.01;
-    byId('layers').value = settings.layers ?? 3;
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
     settingsHydrated = true;
     updateRiskPreview();
@@ -232,7 +261,7 @@
     }
     const settings = state.settings;
     setText('summaryExposure', settings?.totalLot == null ? '—' : Number(settings.totalLot).toFixed(3));
-    setText('summaryLayers', settings ? `${settings.layers} layer × ${settings.lotPerLayer} lot` : 'Belum dikonfigurasi');
+    setText('summaryLayers', settings ? `${settings.strategyMode === 'TF10_LONG' ? 'TF10' : 'TF2'} · Gold ${Core.effectiveSettings(settings, 'XAUUSD').totalLot} lot · FX ${Core.effectiveSettings(settings, 'EURUSD').totalLot} lot` : 'Belum dikonfigurasi');
   }
 
   function renderPositions(state) {
@@ -331,12 +360,15 @@
   }
 
   function selectedSettings() {
+    if (!modeDraft) hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD']});
+    storeModeFields();
     const symbols = currentState?.pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL'
       ? [...document.querySelectorAll('[name="executionPair"]:checked')].map(input => input.value)
       : Array.isArray(currentState?.control?.executionSymbols) && currentState.control.executionSymbols.length
       ? currentState.control.executionSymbols
       : ['XAUUSD'];
     return {
+      strategyMode: displayedMode, modeSettings: modeDraft,
       capitalUsd: byId('capitalUsd').value,
       lotPerLayer: byId('lotPerLayer').value,
       layers: byId('layers').value,
@@ -348,14 +380,19 @@
     if (!Core) return;
     const input = selectedSettings();
     const validation = Core.validateSettings(input);
+    const fxSettings = Core.effectiveSettings(validation.value, 'EURUSD');
+    setText('fxTotalLotPreview', fxSettings.totalLot == null ? '—' : fxSettings.totalLot.toFixed(3));
     setText('totalLotPreview', validation.value.totalLot == null ? '—' : validation.value.totalLot.toFixed(3));
     setText('riskTotalLot', validation.value.totalLot == null ? '—' : validation.value.totalLot.toFixed(3));
     const symbol = byId('riskSymbol')?.value || 'XAUUSD';
+    const effective = Core.effectiveSettings(validation.value, symbol);
+    setText('riskTotalLot', effective.totalLot == null ? '—' : effective.totalLot.toFixed(3));
     const market = markets.find(item => Core.normaliseSymbol(item.symbol) === symbol);
-    const plan = market?.strategyNormal?.plan;
-    const spec = currentState?.pod?.symbolSpecs?.[symbol];
+    const matchingTf = String(market?.timeframe || market?.strategyNormal?.tf || '').replace(/m$/, '') === (displayedMode === 'TF10_LONG' ? '10' : '2');
+    const plan = matchingTf ? market?.strategyNormal?.plan : null;
+    const spec = (currentState?.hostedAccount?.symbolSpecs || currentState?.pod?.symbolSpecs)?.[symbol];
     const risk = Core.calculateRisk({
-      ...input,
+      ...effective,
       symbols: input.symbols.length ? input.symbols : [symbol],
       entry: plan?.entry,
       sl: plan?.sl,
@@ -374,7 +411,7 @@
     setText('riskMessage', risk.message);
     const recommendation = Core.recommendPositionSizes({
       capitalUsd: input.capitalUsd,
-      preferredLayers: input.layers,
+      preferredLayers: effective.layers,
       entry: plan?.entry,
       sl: plan?.sl,
       tickSize: spec?.tickSize,
@@ -389,7 +426,7 @@
     if (currentRecommendation) {
       setText('recommendedSize', `${currentRecommendation.layers} LAYER × ${currentRecommendation.lotPerLayer} LOT`);
       setText('recommendationMessage', `${recommendation.message} Anggaran ${currentRecommendation.estimatedRiskPercent.toFixed(2)}% / ${money(currentRecommendation.estimatedRiskUsd)}.`);
-      if (apply) apply.disabled = false;
+      if (apply) apply.disabled = displayedMode === 'TF10_LONG' && currentRecommendation.layers !== 2;
     } else {
       setText('recommendedSize', 'BELUM TERSEDIA');
       setText('recommendationMessage', recommendation.message);
@@ -469,6 +506,11 @@
     const riskSelect = byId('riskSymbol');
     if (!Core || !riskSelect) return;
     riskSelect.innerHTML = Core.SUPPORTED_MARKETS.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
+    hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD']});
+    byId('strategyMode').addEventListener('change', () => {
+      storeModeFields(); displayedMode = byId('strategyMode').value;
+      displayModeFields(); settingsDirty = true; updateRiskPreview();
+    });
     byId('settingsForm')?.addEventListener('input', event => {
       if (!event.target.matches('input')) return;
       settingsDirty = true;
@@ -557,8 +599,9 @@
 
   byId('applyRecommendationButton')?.addEventListener('click', () => {
     if (!currentRecommendation) return;
-    byId('lotPerLayer').value = currentRecommendation.lotPerLayer;
-    byId('layers').value = currentRecommendation.layers;
+    const fx = byId('riskSymbol').value !== 'XAUUSD';
+    byId(fx ? 'fxLotPerLayer' : 'lotPerLayer').value = currentRecommendation.lotPerLayer;
+    byId(fx ? 'fxLayers' : 'layers').value = displayedMode === 'TF10_LONG' ? 2 : currentRecommendation.layers;
     settingsDirty = true;
     updateRiskPreview();
     toast('Cadangan lot dan layer digunakan. Simpan konfigurasi untuk confirm.');
