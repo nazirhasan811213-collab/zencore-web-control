@@ -385,8 +385,8 @@ function fastTradeStrategy(symbol,d){
 }
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
-  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',tf:'3m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
-  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',tf:'3m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — Normal SOP perlukan data Solid Entry, checklist dan HEMA 5M Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
+  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',entrySopVersion:'SOLID_TF2_3GREEN_HEMA23_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
+  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'SOLID_TF2_3GREEN_HEMA23_V2',tf:'2m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — SOP TF2 perlukan SOLID, checklist, forecast dan HEMA TF2/TF3 Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
   const x=normalEntrySop(d);
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
@@ -399,17 +399,17 @@ function normalScalpStrategy(symbol,d){
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
-  const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — SOP Normal 25/9 lulus.`):
+  const reason=ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — TF2 SOLID + 3/5 checklist + forecast + HEMA TF2/TF3 lulus.`):
     sopReady&&pinePlan&&!entryWindowOpen?'SKIP ENTRY — harga sudah melepasi TP1 atau SL.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
-    `${side==='BUY'||side==='SELL'?side:'Normal 3M'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
+    `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
   const plan=ready?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
-    mode:'NORMAL',tf:`${d.timeframe||'3'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
+    mode:'NORMAL',entrySopVersion:x.version,tf:`${d.timeframe||'2'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:d?.normal3Solid===true,plan,
     confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
     sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
-      solid:d?.normal3Solid===true,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
+      hema2:x.hema2,hema3:x.hema3,solid:d?.normal3Solid===true,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
       sop1:x.flags[0],sop2:x.flags[1],sop3:x.flags[2],sop4:x.flags[3],sop5:x.flags[4],
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
@@ -569,6 +569,7 @@ function expandCompactMarket(row,batch){
   const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action,normal3PriceCrossEntry,normal3ReentrySignal,normal3ReentrySide,normal3ReentryHemaPass]=row;
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
+    ...(row[65]?.version==='HEMA23_V1'?{hemaConfirmation:row[65]}:{}),
     source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:true,tpMode:batch.tpMode,
     symbol,timeframe:String(batch.timeframe||'3'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
@@ -636,6 +637,7 @@ function proxyPairHtml(req,res,symbol){
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
+  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'SOLID_TF2_3GREEN_HEMA23_V2',timeframe:'2',checklistMinimum:3,hemaTimeframes:['2','3'],telegramFollowsSop:true,requiresNewPineFeed:true}));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);
     try{captureBody(body)}catch(error){console.error('ZenCore webhook snapshot failed:',error);return send(res,500,JSON.stringify({ok:false,error:'Snapshot processing failed'}));}

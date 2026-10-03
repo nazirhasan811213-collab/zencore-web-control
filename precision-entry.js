@@ -57,7 +57,7 @@ function connectPredictionStream(){
   }catch(_){}
 }
 function clearPairView(){
-  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine 3M untuk '+activePair,plan:null}});
+  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine TF2 + HEMA23 untuk '+activePair,plan:null}});
   renderPerformance({summary:{resolved:0,wins:0,losses:0,winRate:null,maturity:'EARLY',recent:[]}});
   nativeChartPoints=[];drawZenCoreChart(nativeChartPoints);
 }
@@ -103,6 +103,14 @@ function gateMarkup(g){
 function qualityLayer(m){
   const n=m?.strategyNormal||{};
   const s=n?.sop||{};
+  if(n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'){
+    const gates=s.gates||[],passed=gates.filter(g=>g.pass).length;
+    return {score:Math.round(passed/Math.max(1,gates.length)*100),grade:n.state==='READY'?'SOP READY':'WAIT',
+      checks:gates.map(g=>({label:g.label,detail:g.detail||(g.pass?'PASS':'WAIT'),earned:g.pass?1:0,max:1})),
+      aPlusExecution:false,action:n.state==='READY'?'SEMAK QUOTE BROKER':'TUNGGU CONFIRMATION',
+      advice:'SOLID TF2 • checklist ≥3/5 • forecast • HEMA TF2 dan TF3 searah serta bergerak searah.',rr:rrFromPlan(n.plan)};
+  }
+
   const p=n?.plan||null;
   const side=String(n.side||'WAIT').toUpperCase();
   const power=num(s.marketPower);
@@ -235,7 +243,7 @@ function renderMarket(m){
   const active=m?.activeTradePlan||null;
   const planSide=active?.side||n.side||'WAIT';
   const q=qualityLayer(m);
-  const qualityAllowed=['C+','B','B+','A','A+'].includes(q.grade);
+  const qualityAllowed=n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'||['C+','B','B+','A','A+'].includes(q.grade);
   const p=active?.plan||(qualityAllowed?n?.plan:null)||null;
   window.__lastReceived=m?.receivedAt||null;
 
@@ -265,10 +273,10 @@ function renderMarket(m){
   setText('sopScore',(s.sopGreen??0)+'/5');
 
   setText('qualityGrade',q.grade);
-  setText('qualityScore','Quality: '+q.score+'/100');
+  setText('qualityScore',(n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'?'SOP lengkap: ':'Quality: ')+q.score+'/100');
   setText('qualityMeterLabel',q.score+'%');
   if($('qualityRail'))$('qualityRail').style.width=q.score+'%';
-  setText('qualityBadge',q.aPlusExecution?'A+ TAKE':'FILTER');
+  setText('qualityBadge',n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'?(state==='READY'?'SOP PASS':'WAIT'):q.aPlusExecution?'A+ TAKE':'FILTER');
   if($('qualityBadge'))$('qualityBadge').className='quality-badge '+(q.aPlusExecution?'good':q.score>=70?'warn':'bad');
   setText('executionTitle',q.action);
   setText('executionAdvice',q.advice);
@@ -293,7 +301,7 @@ function renderMarket(m){
   const triggerReady=String(m?.freshness||'').toUpperCase()==='LIVE' &&
     String(n.state||'').toUpperCase()==='READY' &&
     ['BUY','SELL'].includes(side) && newPlan && Number.isFinite(Number(newPlan.entry)) &&
-    ['C+','B','B+','A','A+'].includes(q.grade);
+    qualityAllowed;
   const sameActive=active && active.side===side &&
     Number(active.plan?.entry)===Number(newPlan?.entry) &&
     String(active.entryType||'SOLID_ENTRY')===String(n.entryType||'SOLID_ENTRY');
@@ -317,7 +325,7 @@ function renderMarket(m){
   setText('riskDistance',fmtPrice(p?.riskDistance));
   const planRr=rrFromPlan(p);
   setText('rrTp3',planRr==null?'—':planRr.toFixed(1)+'R');
-  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Paras Entry, SL dan TP mengikut '+(p.tpMode||'pelan')+' pada carta TradingView.':'Pelan entry hanya muncul apabila SOP READY dan gred sekurang-kurangnya C+.');
+  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Paras Entry, SL dan TP mengikut '+(p.tpMode||'pelan')+' pada carta TradingView.':'Pelan entry memerlukan SOLID TF2, 3/5 checklist, forecast dan HEMA TF2/TF3.');
 
   setText('riskState',m?.sidewaysGuard?'HIGH / SIDEWAYS':state==='READY'?'CONTROLLED':'WAIT');
   setText('setupProbability',m?.setupProbability==null?'—':Math.round(num(m.setupProbability))+'%');

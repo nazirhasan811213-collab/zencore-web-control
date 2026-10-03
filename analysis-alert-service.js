@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const {signals,transitions,defaults} = require('./analysis-alert-core');
-const {prepareTelegram,messageQuality,telegramMessage,entryFresh} = require('./analysis-telegram');
+const {prepareTelegram,messageQuality,telegramMessage,entryFresh,entrySopAllowed} = require('./analysis-telegram');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
   constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
@@ -95,7 +95,10 @@ class AnalysisAlerts {
   async record(m) {
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
-      ...e,telegramMarket:{sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
+      ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
+        green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
+        hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,gates:m.strategyNormal.sop?.gates},
+      telegramMarket:{sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
     }:e);
     if(!this.pool){
       const prev=this.states.get(next.symbol);if(prev&&next.time<=prev.time)return;
@@ -168,7 +171,7 @@ class AnalysisAlerts {
           const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e&&Date.now()-e.time<180000&&
-             (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&e.telegramQuality?.score>=50&&entryFresh(e)))){
+             (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
               await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)}));status='sent';

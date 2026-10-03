@@ -1511,6 +1511,18 @@ if normal_tf3_ok and curr_active and curr_triggered and not trigger_reentry
     else
         normal_solid_sell := normal_3m_close < curr_entry and normal_3m_close < basis and wt1 < wt2 and not buySig and rsi_val > 25
 
+f_hema23_closed()=>
+    float fast=f_hema(close,20)
+    float slow=f_hema(close,40)
+    [fast[1],slow[1],fast[2],slow[2]]
+
+f_hema23_num(float value)=>
+    na(value)?"null":str.tostring(value,"#.########")
+
+f_hema23_json(float f2,float s2,float pf2,float ps2,float f3,float s3,float pf3,float ps3)=>
+    "{\"version\":\"HEMA23_V1\",\"tf2\":{\"fast\":"+f_hema23_num(f2)+",\"slow\":"+f_hema23_num(s2)+",\"previousFast\":"+f_hema23_num(pf2)+",\"previousSlow\":"+f_hema23_num(ps2)+"},\"tf3\":{\"confirmed\":true,\"fast\":"+f_hema23_num(f3)+",\"slow\":"+f_hema23_num(s3)+",\"previousFast\":"+f_hema23_num(pf3)+",\"previousSlow\":"+f_hema23_num(ps3)+"}}"
+
+[hema3fast,hema3slow,hema3previousFast,hema3previousSlow]=request.security(syminfo.tickerid,"3",f_hema23_closed(),lookahead=barmerge.lookahead_on)
 normal_solid_entry = normal_solid_buy or normal_solid_sell
 normal_sop1 = normal_tf3_ok and sop1_pass
 normal_sop2 = normal_tf3_ok and sop2_pass
@@ -1622,6 +1634,7 @@ if web_enabled and barstate.isconfirmed and (web_every_bar or is_zone_turn_green
     web_payload += "\"sop4\":" + f_web_bool(sop4_pass) + ","
     web_payload += "\"sop5\":" + f_web_bool(sop5_pass) + ","
 
+    web_payload += "\"hemaConfirmation\":"+f_hema23_json(he1,he2,he1[1],he2[1],hema3fast,hema3slow,hema3previousFast,hema3previousSlow)+","
     web_payload += "\"normalSopVersion\":\"" + normal_sop_version + "\","
     web_payload += "\"normal3Side\":\"" + normal_side + "\","
     web_payload += "\"normal3Solid\":" + f_web_bool(normal_solid_entry) + ","

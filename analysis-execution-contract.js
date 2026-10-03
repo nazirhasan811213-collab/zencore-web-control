@@ -70,6 +70,8 @@
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
+    const solidTf2=normal.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2';
+    if(solidTf2 && (normal.tf!=='2m' || normal.solid!==true || !Array.isArray(normal.sop?.gates) || normal.sop.gates.length!==6 || !normal.sop.gates.every(g=>g.pass===true)))return null;
     const symbol = normaliseSymbol(market.symbol);
     const side = String(normal.side || plan.side || '').toUpperCase();
     const receivedAt = sourceTime(market);
@@ -85,7 +87,7 @@
         ? livePrice >= prices.tp1 || livePrice <= prices.sl
         : side === 'SELL' && (livePrice <= prices.tp1 || livePrice >= prices.sl))) return null;
     if (!SUPPORTED_MARKETS.includes(symbol) || String(normal.state || '').toUpperCase() !== 'READY' ||
-        !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade) ||
+        (!solidTf2 && !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade)) ||
         !['BUY', 'SELL'].includes(side) || !receivedAt || Object.values(prices).some(value => value === null)) {
       return null;
     }
@@ -99,7 +101,8 @@
       side,
       executionTimeframe: String(market.timeframe || normal.tf || '3'),
       ...prices,
-      sourceReceivedAt: receivedAt
+      sourceReceivedAt: receivedAt,
+      ...(solidTf2?{analysisSopVersion:normal.entrySopVersion}:{})
     };
     return deepFreeze({
       signalKey: [CONTRACT_VERSION, symbol, side, prices.entry, receivedAt].join('|'),

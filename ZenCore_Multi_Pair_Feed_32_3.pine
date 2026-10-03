@@ -38,9 +38,20 @@ f_quote(string value)=>
     safe:=str.replace_all(safe,"\"","\\\"")
     "\"" + safe + "\""
 
+f_hema23_closed()=>
+    float fast=f_hema(close,20)
+    float slow=f_hema(close,40)
+    [fast[1],slow[1],fast[2],slow[2]]
+
+f_hema23_num(float value)=>
+    na(value)?"null":str.tostring(value,"#.########")
+
+f_hema23_json(float f2,float s2,float pf2,float ps2,float f3,float s3,float pf3,float ps3)=>
+    "{\"version\":\"HEMA23_V1\",\"tf2\":{\"fast\":"+f_hema23_num(f2)+",\"slow\":"+f_hema23_num(s2)+",\"previousFast\":"+f_hema23_num(pf2)+",\"previousSlow\":"+f_hema23_num(ps2)+"},\"tf3\":{\"confirmed\":true,\"fast\":"+f_hema23_num(f3)+",\"slow\":"+f_hema23_num(s3)+",\"previousFast\":"+f_hema23_num(pf3)+",\"previousSlow\":"+f_hema23_num(ps3)+"}}"
+
 // Executes independently inside each requested 2-minute symbol context.
 // Higher-timeframe EMA states are updated only when their candles close,
-// matching lookahead_off confirmed-bar behaviour while keeping requests at 22.
+// matching lookahead_off confirmed-bar behaviour while using three requests per supported pair.
 f_scan3()=>
     float e9=ta.ema(close,9)
     float e20=ta.ema(close,20)
@@ -294,7 +305,7 @@ f_scan3()=>
     string slLabel=completed?"CLOSED":not active?"IDLE":lockStage==3?"TP2_LOCKED":lockStage==2?"TP1_LOCKED":lockStage==1?"BREAKEVEN":"INITIAL"
     string webAction=zoneBuy?"BUY":zoneSell?"SELL":globalTrend>0?"LONG_BIAS":globalTrend<0?"SHORT_BIAS":"WAIT"
 
-    [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema]
+    [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema,h20[1],h40[1]]
 
 var string[] symbols=array.from("OANDA:XAUUSD","OANDA:EURUSD","OANDA:GBPUSD","OANDA:USDJPY","OANDA:USDCAD","OANDA:USDCHF","OANDA:EURJPY","OANDA:GBPJPY","OANDA:EURGBP")
 var string[] aliases=array.from("XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP")
@@ -306,8 +317,10 @@ if feedEnabled and correctTf and barstate.isconfirmed
     for i=0 to array.size(symbols)-1
         string ticker=array.get(symbols,i)
         string alias=array.get(aliases,i)
-        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema]=request.security(ticker,"2",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
+        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema,previousH20,previousH40]=request.security(ticker,"2",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
         [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
+        [f3,s3,pf3,ps3]=request.security(ticker,"3",f_hema23_closed(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_on,ignore_invalid_symbol=true,calc_bars_count=180)
+        string hemaJson=f_hema23_json(h20,h40,previousH20,previousH40,f3,s3,pf3,ps3)
         string m5pos=na(m5close)?"WAIT":m5close>math.max(m5h20,m5h40)?"ABOVE":m5close<math.min(m5h20,m5h40)?"BELOW":"INSIDE"
         bool sop5=side=="BUY"?m5h20>m5h40:side=="SELL"?m5h20<m5h40:false
 
@@ -321,7 +334,7 @@ if feedEnabled and correctTf and barstate.isconfirmed
         row+=f_quote(side)+","+f_bool(solid)+","+f_bool(pricePast)+","+f_bool(sop1)+","+f_bool(sop2)+","+f_bool(sop3)+","+f_bool(sop4)+","+f_bool(sop5)+","
         row+=f_quote(forecast)+","+f_num(power)+","+f_quote(m5pos)+","+f_num(m5close)+","+f_num(m5h20)+","+f_num(m5h40)+","
         row+=f_quote(exitStage)+","+f_quote(exitAction)+","+f_bool(halfArmed)+","+f_bool(oppositeYellow)+","+f_int(remaining)+","+f_quote(yellowType)+","+f_quote(closeType)+","+f_quote(closeReason)+","
-        row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+","+f_bool(priceCross)+","+f_quote(reType)+","+f_quote(reSide)+","+f_bool(reHema)+"]"
+        row+=f_int(lockStage)+","+f_quote(slLabel)+","+f_quote(slMove)+","+f_bool(slMoved)+","+f_quote(webAction)+","+f_bool(priceCross)+","+f_quote(reType)+","+f_quote(reSide)+","+f_bool(reHema)+","+hemaJson+"]"
         marketsJson+=(i>0?",":"")+row
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"2\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
