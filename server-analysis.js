@@ -1416,7 +1416,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {
@@ -1674,6 +1674,13 @@ const server = http.createServer(async (req, res) => {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
+  }
+
+  if(req.method==='GET' && pathname==='/welcome')return sendAuthAsset(res,'welcome.html','text/html; charset=utf-8');
+  if(req.method==='GET' && pathname==='/api/trading-cockpit') {
+    if(AUTH_ENABLED && !await requireSession(req,res))return;
+    try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalMarkets()));}
+    catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia.'});}
   }
 
   if (req.method==='GET' && pathname==='/api/analysis/timeframes') {

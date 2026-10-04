@@ -1,0 +1,14 @@
+'use strict';
+const {dualAnalysis,SYMBOLS}=require('./analysis-dual-model');
+const {createEntryDecision}=require('./analysis-execution-contract');
+function cockpit(markets,now=Date.now()){
+ const pairs=SYMBOLS.map(symbol=>dualAnalysis(markets,symbol,now));
+ for(const pair of pairs)for(const view of pair.views){
+  const observed=Number(view.market?.signalObservedAt),normal=view.market?.strategyNormal;
+  const expected=view.timeframe===2?'SOLID_TF2_3GREEN_HEMA23_V2':'SOLID_TF15_3GREEN_HEMA1545_2L_V1';
+  view.entryReady=normal?.entrySopVersion===expected&&view.status==='LIVE'&&Number.isFinite(observed)&&observed<=now+5000&&now-observed<=30000&&!!createEntryDecision(view.market);
+  view.displayState=view.status!=='LIVE'?'WAITING':view.entryReady?'READY':normal?.state==='READY'?'WAIT_CONFIRMATION':normal?.state||'WATCH';
+ }
+ return {ok:true,serverTime:now,pairs,liveFeeds:pairs.flatMap(p=>p.views).filter(v=>v.status==='LIVE').length,readySetups:pairs.flatMap(p=>p.views).filter(v=>v.entryReady).length};
+}
+module.exports={cockpit};

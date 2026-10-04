@@ -1,114 +1,12 @@
-<!doctype html>
-<html lang="ms">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
-  <title>Market Radar — ZenCore Precision Entry</title>
-  <link rel="stylesheet" href="/auth.css?v=1.0">
-  <link rel="stylesheet" href="/home.css?v=2.0">
-  <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
-<link rel="stylesheet" href="/workspace-shell.css?v=36.0">
-<link rel="stylesheet" href="/zencore-motion.css?v=1.0">
-</head>
-<body>
-  <main class="portal-shell radar-shell">
-    <div class="portal-wrap radar-wrap">
-      <header class="portal-top radar-top">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-          <div><b>ZenCore Precision Entry</b><span>Market Radar • Normal 3M SOP V32</span></div>
-        </div>
-
-        <nav class="top-nav" aria-label="Navigasi utama">
-          <a class="active" href="/app">MARKET RADAR</a>
-          <a href="/analysis?pair=XAUUSD">ANALYSIS</a>
-          <a href="/results">RESULT</a>
-          <a href="/auto-trade">AUTO TRADE</a>
-          <a id="accountLink" href="/account">MY ACCOUNT</a>
-        </nav>
-
-        <div class="user-actions">
-          <span id="userPill" class="user-pill">Memuatkan akaun...</span>
-          <button id="logoutButton" class="ghost-btn" type="button">LOG KELUAR</button>
-        </div>
-      </header>
-
-      <section class="radar-hero">
-        <div class="radar-intro">
-          <div class="radar-holo" aria-hidden="true"><i class="radar-holo-ring ring-one"></i><i class="radar-holo-ring ring-two"></i><i class="radar-holo-ring ring-three"></i><i class="radar-holo-core"></i><i class="radar-holo-floor"></i></div>
-          <div class="hero-line">
-            <span class="eyebrow">ZenCore Command Center</span>
-            <span id="feedConnection" class="connection-pill connecting"><i></i> MENYAMBUNG</span>
-          </div>
-          <h1>Selamat datang, <span id="welcomeName">Trader</span>.</h1>
-          <p>Pilih market yang perlu diberi perhatian. Radar menyusun 9 pair mengikut state Normal 3M daripada feed ZenCore—bukan signal atau scoring baharu.</p>
-          <div class="hero-note"><strong>Fokus:</strong> ENTRY READY dahulu, WATCH kedua. Bila market serabut, ZenCore kekal WAIT.</div>
-        </div>
-
-        <a id="bestSetupLink" class="best-setup disabled" href="/analysis?pair=XAUUSD" aria-label="Buka setup terbaik">
-          <div class="best-head"><span>SETUP TERBAIK SEKARANG</span><i id="bestTone" class="best-dot wait"></i></div>
-          <div class="best-main"><b id="bestPair">MENUNGGU DATA</b><strong id="bestSide">WAIT</strong></div>
-          <p id="bestReason">Radar sedang membaca feed 9 market.</p>
-          <div class="best-meta">
-            <span>SOP <b id="bestSop">—</b></span>
-            <span>QUALITY <b id="bestScore">—</b></span>
-            <span>ZONE <b id="bestZone">—</b></span>
-          </div>
-          <small id="bestAction">Belum ada setup yang cukup lengkap.</small>
-        </a>
-      </section>
-
-      <nav class="command-dock" aria-label="Pusat ZenCore">
-        <a href="/analysis?pair=XAUUSD"><span>01 · ANALYSIS</span><b>Nilai entry semasa</b><small>SOP · harga · senario 3M <i aria-hidden="true">↗</i></small></a>
-        <a href="/results"><span>02 · RESULT</span><b>Semak rekod signal</b><small>Validasi · arkib keputusan <i aria-hidden="true">↗</i></small></a>
-        <a href="/auto-trade"><span>03 · AUTO TRADE</span><b>Urus sambungan MT5</b><small>Status akaun dan kawalan <i aria-hidden="true">↗</i></small></a>
-      </nav>
-
-      <section class="radar-summary" aria-label="Ringkasan market">
-        <article><span>MARKET</span><b id="summaryTotal">11</b><small>Dalam radar</small></article>
-        <article><span>LIVE</span><b id="summaryLive">0</b><small>Feed aktif</small></article>
-        <article class="ready"><span>ENTRY READY</span><b id="summaryReady">0</b><small>Setup lengkap</small></article>
-        <article class="watch"><span>WATCH</span><b id="summaryWatch">0</b><small>Tunggu confirm</small></article>
-        <article><span>ACTIVE</span><b id="summaryActive">0</b><small>Trade dipantau</small></article>
-        <article><span>LAST UPDATE</span><b id="summaryUpdated">—</b><small>3M bar-close</small></article>
-      </section>
-
-      <section class="radar-controls" aria-label="Kawalan radar">
-        <div class="filter-row" role="group" aria-label="Filter market">
-          <button class="radar-filter active" type="button" data-filter="all">SEMUA</button>
-          <button class="radar-filter" type="button" data-filter="ready">ENTRY READY</button>
-          <button class="radar-filter" type="button" data-filter="watch">WATCH</button>
-          <button class="radar-filter" type="button" data-filter="active">ACTIVE</button>
-          <button class="radar-filter" type="button" data-filter="buy">BUY</button>
-          <button class="radar-filter" type="button" data-filter="sell">SELL</button>
-          <button class="radar-filter" type="button" data-filter="live">LIVE SAHAJA</button>
-        </div>
-        <label class="radar-search" for="marketSearch">
-          <span>CARI PAIR</span>
-          <input id="marketSearch" type="search" inputmode="search" maxlength="12" placeholder="Contoh: XAUUSD" autocomplete="off">
-        </label>
-      </section>
-
-      <div class="radar-heading">
-        <div><span class="eyebrow">Live Market Overview</span><h2 id="gridTitle">Semua 9 market</h2></div>
-        <div class="radar-legend" aria-label="Petunjuk warna"><span><i class="buy"></i>BUY</span><span><i class="sell"></i>SELL</span><span><i class="wait"></i>WAIT</span></div>
-      </div>
-
-      <section id="marketGrid" class="market-grid" aria-live="polite" aria-busy="true">
-        <div class="radar-empty loading"><b>Memuatkan Market Radar...</b><span>Menunggu data daripada ZenCore.</span></div>
-      </section>
-
-      <footer class="portal-foot radar-foot">
-        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • Auto Trade DEMO</span>
-        <span>Quality score bukan jaminan profit. Gunakan risk management.</span>
-      </footer>
-    </div>
-  </main>
-  <script src="/market-radar-core.js?v=2.0" defer></script>
-  <script src="/portal.js?v=2.0" defer></script>
-  <script src="/viewer-mode.js?v=1.0" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
-<script src="/zencore-motion.js?v=1.0" defer></script>
-</body>
-</html>
+<!doctype html><html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Trading Cockpit &amp; Market Radar — ZenCore Precision Entry</title><link rel="stylesheet" href="/workspace-shell.css?v=36.0"><link rel="stylesheet" href="/trading-cockpit.css?v=1"><link rel="stylesheet" href="/viewer-mode.css?v=1.0"></head>
+<body><main class="cockpit">
+<header class="cockpit-top"><a class="wordmark" href="/app"><span class="brand-symbol">Z</span><span>ZenCore<small>TRADING COCKPIT</small></span></a><div class="account-actions"><span id="welcomeName">Trader</span><a href="/welcome">Halaman promosi ↗</a><button id="logoutButton" type="button">Log keluar</button></div></header>
+<section class="cockpit-hero"><div class="hero-copy"><span class="kicker"><i class="pulse-dot"></i> PRECISION ENTRY SYSTEM</span><h1>Baca arah.<br>Kenal pasti <em>entry.</em><br>Urus trade.</h1><p>TF2 Scalping &amp; TF15 Intra. Analysis, signal Telegram dan kawalan Auto Trade MT5 dalam satu workspace.</p><div class="hero-actions"><a class="primary" href="/analysis?pair=XAUUSD">Lihat Analysis <span>↗</span></a><a class="secondary" href="/auto-trade">Mulakan Setup →</a></div><div class="hero-foot"><span>3 PAIR PILIHAN</span><span>2 STRATEGI</span><span>1 WORKSPACE</span></div></div>
+<article class="featured glass"><div class="feature-top"><span class="kicker">SETUP SEMASA</span><span id="featuredBadge" class="pill">WAITING</span></div><div class="feature-pair"><h2 id="featuredPair">XAUUSD</h2><span id="featuredTf">TF2 · SCALPING</span></div><strong id="featuredSide" class="featured-side">TUNGGU SIGNAL</strong><p id="featuredReason">Menunggu feed Pine dan confirmation ZenCore.</p><div id="featuredChecks" class="check-chips"><span>SOP ≥3/5</span><span>FORECAST 10</span><span>HEMA 2 + 3</span></div><div class="plan-feature"><div><small>ENTRY</small><b id="featuredEntry">—</b></div><div><small>TP1</small><b id="featuredTp">—</b></div><div><small>SL</small><b id="featuredSl">—</b></div></div><a id="featuredLink" href="/analysis?pair=XAUUSD">Buka setup penuh <span>↗</span></a><p class="fine">Signal memerlukan semua gate lulus dan data segar.</p></article></section>
+<section class="connection-strip glass" aria-label="Status sambungan"><div><span class="status-dot" id="feedDot"></span><span>ANALYSIS FEED<b id="feedState">MENYAMBUNG</b></span></div><div><span class="status-dot" id="telegramDot"></span><span>TELEGRAM<b id="telegramState">MENYEMAK</b></span></div><div><span class="status-dot" id="mt5Dot"></span><span>MT5 CONNECTION<b id="mt5State">MENYEMAK</b></span></div><div><span class="status-dot" id="tradeDot"></span><span>AUTO TRADE<b id="tradeState">MENYEMAK</b></span></div></section>
+<section class="market-section"><div class="section-heading"><div><span class="kicker">MARKET RADAR</span><h2>Tiga pair. Dua perspektif.</h2></div><div class="tf-switch" aria-label="Filter timeframe"><button type="button" data-tf="both" aria-pressed="true">Kedua-dua</button><button type="button" data-tf="2" aria-pressed="false">TF2 Scalping</button><button type="button" data-tf="15" aria-pressed="false">TF15 Intra</button></div></div><p id="feedConnection" role="status" class="fine">Menyambung data market…</p><div id="marketGrid" class="market-grid" aria-live="polite"></div></section>
+<section class="plan-section glass"><div class="section-heading"><div><span class="kicker">TRADE PLAN</span><h2>Jelas sebelum entry.</h2></div><label>PAIR &amp; TF<select id="planSelector"><option value="XAUUSD|2">XAUUSD · TF2</option><option value="XAUUSD|15">XAUUSD · TF15</option><option value="GBPUSD|2">GBPUSD · TF2</option><option value="GBPUSD|15">GBPUSD · TF15</option><option value="GBPJPY|2">GBPJPY · TF2</option><option value="GBPJPY|15">GBPJPY · TF15</option></select></label></div><div id="planLevels" class="plan-levels"></div><p id="planReason" class="fine">Paras entry, SL dan TP muncul apabila feed mempunyai trade plan.</p><a id="planLink" href="/analysis?pair=XAUUSD&tf=2">Semak checklist &amp; HEMA →</a></section>
+<section class="workflow"><div class="section-heading"><div><span class="kicker">YOUR TRADING WORKSPACE</span><h2>Dari analysis ke execution.</h2></div></div><div class="workflow-grid"><a href="/analysis"><span class="step-number">01</span><h3>Baca setup</h3><p>Semak arah, SOLID, checklist, forecast dan confirmation HEMA.</p><b>Analysis ↗</b></a><a href="/analysis#alerts"><span class="step-number">02</span><h3>Terima signal</h3><p>Kenal pasti TF2 atau TF15 pada signal Telegram dan alert Analysis.</p><b>Signal &amp; alert ↗</b></a><a href="/auto-trade"><span class="step-number">03</span><h3>Kawal Auto Trade</h3><p>Semak sambungan MT5, lot, layer dan pilihan strategi pada akaun anda.</p><b>Trade Configuration ↗</b></a></div></section>
+<section class="records glass"><div><span class="kicker">REKOD &amp; VALIDASI</span><h2>Biar rekod bercakap.</h2><p>Semak hasil signal, jumlah sampel dan tempoh ujian pada halaman Result. Bezakan rekod signal daripada P/L sebenar akaun MT5.</p></div><a class="secondary" href="/results">Lihat rekod signal ↗</a></section>
+<footer class="cockpit-footer"><span>ZenCore Precision Entry · TF2 / TF15</span><span>Signal bukan jaminan profit. Urus risiko setiap trade.</span></footer></main>
+<script src="/trading-cockpit.js?v=1" defer></script><script src="/viewer-mode.js?v=1.0" defer></script><script src="/workspace-shell.js?v=36.0" defer></script></body></html>
