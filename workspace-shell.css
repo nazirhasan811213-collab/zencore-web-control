@@ -1,3 +1,4 @@
+@import url("/zencore-logo.css?v=1");
 /* Shared navigation and visual hierarchy. Trading state remains owned by its engine. */
 :root{--zc-nav-width:216px;--zc-surface:#0c1922;--zc-line:#233c49;--zc-muted:#a1b6c5;--zc-accent:#63dded}
 body.zc-workspace{padding-left:var(--zc-nav-width);background:#071118;color:#e7f0f6}

@@ -1,0 +1,20 @@
+/* ZenCore kinetic emblem. Motion is decorative; the wordmark stays readable. */
+.zc-logo{position:relative;display:inline-block;flex-shrink:0;width:1em;height:1em;font-size:52px;perspective:5em;isolation:isolate;vertical-align:middle;filter:drop-shadow(0 .04em .12em #0008)}
+.zc-logo i{position:absolute;display:block;inset:0;pointer-events:none;font-style:normal}
+.zc-logo-shield{inset:16%!important;clip-path:polygon(50% 0,94% 24%,94% 73%,50% 100%,6% 73%,6% 24%);background:linear-gradient(135deg,#80d3da 0%,#274b60 22%,#132837 47%,#6b919d 70%,#183747 100%);box-shadow:inset 0 0 .1em #adf8ff66;transform:rotateY(-12deg) rotateX(7deg);transform-style:preserve-3d}
+.zc-logo-shield:before{content:"";position:absolute;inset:4%;clip-path:inherit;background:linear-gradient(135deg,#163541,#071b26 53%,#153444)}
+.zc-logo-shield:after{content:"";position:absolute;inset:12%;clip-path:inherit;background:linear-gradient(145deg,#84f4df17,transparent 50%);border-top:1px solid #a4f6ec65}
+.zc-logo-z{inset:24% 20%!important;clip-path:polygon(24% 18%,91% 18%,86% 32%,42% 68%,77% 68%,69% 83%,8% 83%,14% 67%,58% 32%,17% 32%);background:linear-gradient(145deg,#ecffff 3%,#80ffe0 32%,#31bfa9 51%,#bdfff0 66%,#35b6ca 98%);filter:drop-shadow(0 .025em 0 #13645f);transform:translateZ(.1em) rotateY(-12deg);z-index:3}
+.zc-logo-ring{inset:5%!important;border-radius:50%;border:1px solid #63efce4d;background:conic-gradient(from 10deg,transparent 0deg,#82ffe2 30deg,transparent 67deg,transparent 175deg,#4eb8de 205deg,transparent 245deg);mask:radial-gradient(transparent 65%,#000 66%,#000 69%,transparent 70%);-webkit-mask:radial-gradient(transparent 65%,#000 66%,#000 69%,transparent 70%);transform-style:preserve-3d}
+.zc-logo-ring.ring-a{animation:zc-orbit-a 12s linear infinite;z-index:4}
+.zc-logo-ring.ring-b{inset:-3%!important;opacity:.65;animation:zc-orbit-b 17s linear infinite;z-index:1}
+.zc-logo-ring.ring-c{inset:10%!important;border:1px dashed #a5eaff50;background:none;mask:none;-webkit-mask:none;animation:zc-orbit-c 24s linear infinite;z-index:2}
+.zc-logo-flare{inset:44% -8%!important;height:1px;background:linear-gradient(90deg,transparent,#72ffe480,transparent);transform:rotate(-23deg);opacity:.55;box-shadow:0 0 .09em #51e4d73d;z-index:5}
+.zc-logo:before{content:"";position:absolute;inset:12%;border-radius:50%;background:radial-gradient(#52e6d423,transparent 70%);z-index:-1;animation:zc-core-glow 5s ease-in-out infinite}
+.brand-symbol.zc-logo{font-size:57px;line-height:1;font-style:normal}.wordmark{gap:12px}.zc-workspace-brand b .zc-logo{font-size:36px;width:1em;height:1em}.zc-workspace-brand b{gap:10px}.zc-logo-stage{display:grid;place-items:center;width:245px;height:245px;margin:24px 0 12px;perspective:800px;position:relative}.zc-logo-stage .zc-logo{font-size:210px;transform:rotateZ(-5deg);transition:transform .8s ease,filter .8s ease}.zc-logo-stage:hover .zc-logo{transform:rotateZ(0) rotateY(12deg);filter:drop-shadow(0 0 20px #43c5b233)}.zc-logo-stage:after{content:"";position:absolute;bottom:2px;width:62%;height:10px;border-radius:50%;background:#64efd21c;filter:blur(7px)}
+@keyframes zc-orbit-a{from{transform:rotateX(58deg) rotateY(-18deg) rotateZ(0)}to{transform:rotateX(58deg) rotateY(-18deg) rotateZ(360deg)}}
+@keyframes zc-orbit-b{from{transform:rotateX(-40deg) rotateY(42deg) rotateZ(360deg)}to{transform:rotateX(-40deg) rotateY(42deg) rotateZ(0)}}
+@keyframes zc-orbit-c{from{transform:rotateX(18deg) rotateY(-18deg) rotateZ(0)}to{transform:rotateX(18deg) rotateY(-18deg) rotateZ(360deg)}}
+@keyframes zc-core-glow{50%{opacity:.5;transform:scale(1.1)}}
+@media(max-width:500px){.brand-symbol.zc-logo{font-size:45px}.zc-logo-stage{width:215px;height:215px}.zc-logo-stage .zc-logo{font-size:190px}}
+@media(prefers-reduced-motion:reduce){.zc-logo i,.zc-logo:before{animation:none!important}.zc-logo-ring.ring-a{transform:rotateX(58deg) rotateY(-18deg) rotateZ(25deg)}.zc-logo-ring.ring-b{transform:rotateX(-40deg) rotateY(42deg) rotateZ(100deg)}.zc-logo-ring.ring-c{transform:rotateX(18deg) rotateY(-18deg)}.zc-logo-stage .zc-logo{transition:none}}
