@@ -2,7 +2,7 @@ name: ZenCore EA Connector Windows
 on:
   workflow_dispatch:
   push:
-    branches: ['feature/ea-local-connector']
+    branches: ['feature/ea-local-connector', 'main']
     paths: ['ea-local-connector/**', '.github/workflows/ea-connector-build.yml']
   pull_request:
     paths: ['ea-local-connector/**', '.github/workflows/ea-connector-build.yml']

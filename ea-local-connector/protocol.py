@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-VERSION = '1.0.0-ea-local'
+VERSION = '1.1.0-ea-local'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -106,6 +106,12 @@ def command_fields(command, identity):
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
             fields['lot'] = number(payload['lotPerLayer'])
             fields['layers'] = int(payload['layers'])
+            policy=payload.get('exitPolicy')
+            if policy is not None:
+                if (payload.get('strategyMode')!='TF2_SCALPING' or policy.get('version')!='TF2_TIGHT_SL_3C_V1' or
+                    policy.get('slDistanceFactor')!=.8 or policy.get('maxCompletedCandlesWithoutTp1')!=3 or policy.get('timeframeMinutes')!=2):
+                    raise ValueError('EXIT_POLICY_REJECTED')
+                fields['exitPolicyVersion']='TF2_TIGHT_SL_3C_V1' 
         else:
             actions = payload.get('actions')
             if actions != snap.get('actions') or not actions or len(actions)>4: raise ValueError('ACTIONS_REJECTED')
@@ -133,7 +139,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
     if fields['tradeMode'] != 'DEMO': raise ValueError('DEMO_ONLY')
     value = {
       'accountMask':'****'+fields['account'][-4:], 'serverMask':'****'+re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:],
-      'brokerMask':'****MT5', 'tradeMode':'DEMO', 'connectorVersion':VERSION,
+      'brokerMask':'****MT5', 'tradeMode':'DEMO', 'connectorVersion':VERSION if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local',
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'positions':[], 'symbolSpecs':[]

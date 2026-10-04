@@ -57,3 +57,8 @@ Deploy the branch's `auto-trade-service.js`, `auto-trade-core.js`, `server-analy
 - Full Node suite at base commit `024dc03`: 13 existing failures. The changed branch had the same 13 failure names, with no newly introduced failure names. The failing baseline covers existing Analysis/SOP fixtures and old 11-pair expectations. It is not a green production acceptance run.
 - EA has not yet been compiled by MetaEditor or tested against a broker in this workspace. Windows EXE has not yet been built.
 - Remote push/build was blocked by automatic approval review: publication to the GitHub remote requires explicit authorization. No branch was published, no production service was changed and no account was activated.
+
+
+## TF2 rule upgrade 1.1
+
+Package carries EA source 1.10. Stop new entries, update Connector, use Pasang EA to compile with MetaEditor, reload EA on one chart, then save TF2 web settings. Verify new EX5 and DEMO heartbeat 1.1. Hosted Python worker does not support this preset. Windows compilation and installation cannot be verified from this Linux workspace.

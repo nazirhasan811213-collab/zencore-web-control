@@ -14,6 +14,8 @@ function publicProfile(row) {
   return {
     strategyMode: (row.execution_settings ?? row).strategyMode || 'TF2_SCALPING',
     modeSettings: (row.execution_settings ?? row).modeSettings || {},
+    tradingSchedule: (row.execution_settings ?? row).tradingSchedule || {enabled:false},
+    strategyExitPolicies: (row.execution_settings ?? row).strategyExitPolicies || {},
     userId: row.user_id || row.userId,
     capitalUsd: capital == null ? null : Number(capital),
     lotPerLayer: lot == null ? null : Number(lot),
@@ -395,7 +397,7 @@ class PostgresAutoTradeStore {
        RETURNING *`,
       [userId, settings.capitalUsd, settings.lotPerLayer, settings.layers,
         JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null,
-        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings})]
+        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies})]
     );
     return publicProfile(result.rows[0]);
   }
@@ -757,6 +759,8 @@ class PostgresAutoTradeStore {
       settings: row.capital_usd == null ? null : {
         strategyMode: row.execution_settings?.strategyMode || 'TF2_SCALPING',
         modeSettings: row.execution_settings?.modeSettings || {},
+        tradingSchedule: row.execution_settings?.tradingSchedule || {enabled:false},
+        strategyExitPolicies: row.execution_settings?.strategyExitPolicies || {},
         capitalUsd: Number(row.capital_usd),
         lotPerLayer: row.lot_per_layer == null ? null : Number(row.lot_per_layer),
         layers: row.layers == null ? null : Number(row.layers),
@@ -1670,6 +1674,8 @@ class MemoryAutoTradeStore {
         settings: profile ? {
           strategyMode: profile.strategyMode || 'TF2_SCALPING',
           modeSettings: profile.modeSettings || {},
+          tradingSchedule: profile.tradingSchedule || {enabled:false},
+          strategyExitPolicies: profile.strategyExitPolicies || {},
           capitalUsd: profile.capitalUsd ?? null,
           lotPerLayer: profile.lotPerLayer ?? null,
           layers: profile.layers ?? null,

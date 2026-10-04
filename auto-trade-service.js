@@ -188,7 +188,7 @@ function createAutoTradeService(options = {}) {
   function connectionState(pod) {
     if (pod && !executionAllowed(pod.userId, pod)) pod = { ...pod, demoExecutionUnlocked: false };
     return Core.podConnectionState(pod, now(), executionAllowed(pod?.userId, pod) ? {
-      connectorVersion: isLocalEa(pod) ? LOCAL_EA_VERSION : requiredDemoConnectorVersion,
+      connectorVersion: isLocalEa(pod) ? (pod.connectorVersion==='1.1.0-ea-local'?'1.1.0-ea-local':LOCAL_EA_VERSION) : requiredDemoConnectorVersion,
       ownershipModes: isLocalEa(pod) ? ['TRADER_OWNED_EA_LOCAL'] : allowedDemoOwnershipModes
     } : {});
   }
@@ -218,7 +218,7 @@ function createAutoTradeService(options = {}) {
     };
   }
 
-  async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
+  async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs, notAfterMs = Infinity }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
     if (Core.containsForbiddenCredentialKey(payload)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Credential broker tidak dibenarkan dalam arahan ZenCore.', 400);
@@ -226,7 +226,7 @@ function createAutoTradeService(options = {}) {
     const createdAt = now();
     const unsigned = {
       id: crypto.randomUUID(), userId, podId, type, payload,
-      createdAt, expiresAt: createdAt + Math.max(15_000, ttlMs)
+      createdAt, expiresAt: Math.min(createdAt + Math.max(15_000, ttlMs), notAfterMs)
     };
     const command = {
       ...unsigned,
@@ -237,7 +237,7 @@ function createAutoTradeService(options = {}) {
     return store.createCommand(command);
   }
 
-  async function issueHostedCommand({ userId, accountId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs }) {
+  async function issueHostedCommand({ userId, accountId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs, notAfterMs = Infinity }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
     if (Core.containsForbiddenCredentialKey(payload)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Credential broker tidak dibenarkan dalam arahan ZenCore.', 400);
@@ -245,7 +245,7 @@ function createAutoTradeService(options = {}) {
     const createdAt = now();
     return store.createHostedCommand({
       id: crypto.randomUUID(), userId, accountId, type, payload,
-      createdAt, expiresAt: createdAt + Math.max(15_000, ttlMs), dedupeKey
+      createdAt, expiresAt: Math.min(createdAt + Math.max(15_000, ttlMs), notAfterMs), dedupeKey
     });
   }
 
@@ -291,6 +291,8 @@ function createAutoTradeService(options = {}) {
     const settings = profile ? {
       strategyMode: profile.strategyMode,
       modeSettings: profile.modeSettings,
+      tradingSchedule: profile.tradingSchedule,
+      strategyExitPolicies: profile.strategyExitPolicies,
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
       layers: profile.layers,
@@ -301,6 +303,8 @@ function createAutoTradeService(options = {}) {
     } : null;
     const effectiveState = !pod && !hostedAccount ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
     const desiredState = profile?.desiredState || 'STOPPED';
+    const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
+    const exitPolicyReady = !(profile?.strategyMode!=='TF10_LONG' && profile?.strategyExitPolicies?.TF2_SCALPING) || (!hostedAccount && isLocalEa(pod) && pod?.connectorVersion==='1.1.0-ea-local');
     const settingsReady = !!profile && Core.validateSettings(profile).ok && !!profile.riskAcknowledgedAt;
     return {
       ok: true,
@@ -314,10 +318,13 @@ function createAutoTradeService(options = {}) {
         stateVersion: profile?.stateVersion || 0,
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
+        tradingWindow: entryWindow,
         strategyReady: profile?.strategyMode !== 'TF10_LONG',
         strategyReason: profile?.strategyMode === 'TF10_LONG' ? 'TF10 menunggu feed Analysis dan adapter MT5.' : null,
-        canEnter: profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && settingsReady && connection.ready
+        exitPolicyReady,
+        exitPolicyReason: exitPolicyReady ? null : 'Rule TF2 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
+        canEnter: exitPolicyReady && entryWindow.allowed && profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: exitPolicyReady && profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && settingsReady && connection.ready
       },
       connection,
       pod: pod ? {
@@ -754,12 +761,15 @@ function createAutoTradeService(options = {}) {
       throw serviceError('CREDENTIAL_REJECTED', 'Jangan masukkan ID, password atau server MT5 pada halaman ini.', 400);
     }
     const localEa = isLocalEa(await store.getPodForUser(userId));
+    const previous = await store.getProfile(userId);
     if (localEa && (!Array.isArray(input.symbols) || !input.symbols.length ||
         input.symbols.some(symbol => !allowedDemoSymbols.includes(Core.normaliseSymbol(symbol))))) {
       throw serviceError('DEMO_SYMBOL_NOT_VALIDATED', 'Pilih pair daripada skop broker yang disahkan.', 400);
     }
     const validation = Core.validateSettings({
       ...input,
+      tradingSchedule: input.tradingSchedule ?? previous?.tradingSchedule,
+      strategyExitPolicies: previous?.strategyExitPolicies,
       symbols: localEa ? input.symbols : allowedDemoSymbols
     });
     if (!validation.ok) throw serviceError('VALIDATION_ERROR', 'Semak konfigurasi Auto Trade.', 400, validation.errors);
@@ -768,7 +778,6 @@ function createAutoTradeService(options = {}) {
         riskAcknowledged: 'Tandakan pengesahan risiko untuk menyimpan.'
       });
     }
-    const previous = await store.getProfile(userId);
     const modeChanged = previous && (previous.strategyMode || 'TF2_SCALPING') !== validation.value.strategyMode;
     if (modeChanged && (previous.desiredState === 'ON' || (await store.listPositions(userId)).length > 0)) {
       throw serviceError('STOP_BEFORE_STRATEGY_CHANGE', 'STOP ENTRY dan tunggu posisi sedia ada selesai sebelum menukar strategi.', 409);
@@ -778,7 +787,7 @@ function createAutoTradeService(options = {}) {
       riskAcknowledgedAt: now()
     });
     await store.appendAudit(userId, 'SETTINGS_SAVED', {
-      strategyMode: saved.strategyMode, modeSettings: saved.modeSettings,
+      strategyMode: saved.strategyMode, modeSettings: saved.modeSettings, tradingSchedule: saved.tradingSchedule,
       capitalUsd: saved.capitalUsd,
       lotPerLayer: saved.lotPerLayer,
       layers: saved.layers,
@@ -812,6 +821,10 @@ function createAutoTradeService(options = {}) {
       store.getPodForUser(userId),
       activeHostedAccount(userId)
     ]);
+    if(profile?.strategyMode!=='TF10_LONG' && profile?.strategyExitPolicies?.TF2_SCALPING &&
+      (hostedAccount || !isLocalEa(pod) || pod?.connectorVersion!=='1.1.0-ea-local')) {
+      throw serviceError('TF2_EA_UPGRADE_REQUIRED','Rule TF2 memerlukan EA/Connector 1.1 sebelum entry boleh dihidupkan.',409);
+    }
     if (profile?.strategyMode === 'TF10_LONG') {
       throw serviceError('TF10_FEED_REQUIRED', 'Setting TF10 disimpan. Feed Analysis dan adapter TF10 belum disambungkan; entry TF2 tidak akan digunakan.', 409);
     }
@@ -1137,6 +1150,8 @@ function createAutoTradeService(options = {}) {
     const profiles = (allowDemoExecution || localEaExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
+      const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
+      if (!entryWindow.allowed) continue;
       const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
         store.listPositions(profile.userId),
@@ -1163,7 +1178,7 @@ function createAutoTradeService(options = {}) {
               state: market?.strategyNormal?.state || 'WAIT',
               side: market?.strategyNormal?.side || 'WAIT',
               enabled: profile.symbols.includes(symbol),
-              analysisEligible: !!(market && Core.buildSetupCommand(market, profile, specs?.[symbol])),
+              analysisEligible: !!(market && Core.buildSetupCommand(market, profile, specs?.[symbol],now())),
               positionAllowsEntry: !!(market && Core.permitsPositionEntry(market, positions))
             };
           })
@@ -1172,6 +1187,9 @@ function createAutoTradeService(options = {}) {
         try { options.onDispatchDiagnostic(report); } catch (_) {}
       }
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
+      // Never dispatch new exit rules to a hosted worker or old EA that would silently ignore them.
+      if(profile.strategyMode!=='TF10_LONG' && profile.strategyExitPolicies?.TF2_SCALPING &&
+        (hostedAccount || !isLocalEa(pod) || pod.connectorVersion!=='1.1.0-ea-local'))continue;
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
@@ -1182,18 +1200,18 @@ function createAutoTradeService(options = {}) {
         } else if (typeof store.hasRecentEntryCommand === 'function' &&
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
-        const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol]);
+        const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup) continue;
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: entryWindow.validUntil ?? Infinity
             })
           : await issueCommand({
               userId: profile.userId, podId: pod.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: entryWindow.validUntil ?? Infinity
             });
         if (issued.created) {
           queued += 1;

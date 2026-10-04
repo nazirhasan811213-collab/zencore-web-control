@@ -1,5 +1,5 @@
 #property strict
-#property version "1.00"
+#property version "1.10"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. DEMO only."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -78,7 +78,7 @@ void Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO?"DEMO":"REAL";
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -164,7 +164,7 @@ bool MoveGroup(string symbol,string kind,double target){
  }
  return ok;
 }
-bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id){
+bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false){
  if(!armed || StringFind(","+enabledSymbols+",",","+c+",")<0 || !Permissions() || !FreshLease())return false;
  if(layers<1 || layers>10 || !VolumeValid(symbol,lot) || (side!="BUY" && side!="SELL"))return false;
  bool buy=side=="BUY";
@@ -175,12 +175,18 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
   ulong ticket=PositionGetTicket(i);if(IsOwn(ticket) && PositionGetString(POSITION_SYMBOL)==symbol &&
    (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)!=buy)return false;
  }
+ // A netting merge or second setup would lose setup-level metadata: refuse rather than close unrelated trades.
+ if(tightTf2){
+  for(int j=0;j<PositionsTotal();j++){ulong existing=PositionGetTicket(j);if(IsOwn(existing) && PositionGetString(POSITION_SYMBOL)==symbol)return false;}
+  sl=entry+(sl-entry)*0.8;
+ }
  trade.SetTypeFillingBySymbol(symbol);sl=Price(symbol,sl);
  MqlTick tick;if(!SymbolInfoTick(symbol,tick) || tick.bid<=0 || tick.ask<=0)return false;
  // Refuse a late market entry, even if the quote moved after Analysis dispatched it.
  if(buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl)return false;
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)return false;
+ if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return false;
  for(int i=0;i<layers;i++){
   if(!Permissions() || !FreshLease())return false;
   if(!SymbolInfoTick(symbol,tick) || (buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl))return false;
@@ -189,6 +195,35 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
   if(!sent || !BrokerDone() || MathAbs(trade.ResultVolume()-lot)>1e-8)return false;
  }
  return true;
+}
+// Persistent per-setup policy. Runs during entry pauses and SYSTEM_STOP as well.
+void ManageTf2Timeout(){
+ if(account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) || !Permissions())return;
+ string processed="|";
+ for(int i=PositionsTotal()-1;i>=0;i--){
+  ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket))continue;
+  string comment=PositionGetString(POSITION_COMMENT),symbol=PositionGetString(POSITION_SYMBOL);
+  if(StringFind(comment,"ZC:")!=0)continue;
+  string suffix=StringSubstr(comment,3),name="tf2-"+suffix+".tsv";
+  if(StringFind(processed,"|"+suffix+"|")>=0)continue;processed+=suffix+"|";
+  if(!ReadFields(name) || Get("symbol")!=symbol || Get("touched")=="1")continue;
+  datetime opened=(datetime)StringToInteger(Get("openedServerAt"));double target=Val("tp1");string side=Get("side");bool buy=side=="BUY";
+  if(opened<=0 || target<=0 || (side!="BUY" && side!="SELL"))continue;
+  MqlTick ticks[];
+  int n=CopyTicksRange(symbol,ticks,COPY_TICKS_INFO,(ulong)opened*1000,(ulong)TimeCurrent()*1000+999);
+  // Without tick history, do not assume TP1 was never touched. Retry after history sync.
+  if(n<=0)continue;
+  bool touched=false;
+  for(int j=0;j<n;j++){double px=buy?ticks[j].bid:ticks[j].ask;if(px>0 && (buy?px>=target:px<=target)){touched=true;break;}}
+  if(touched){WriteAtomic(name,Row("symbol",symbol)+Row("openedServerAt",(string)opened)+Row("tp1",Num(target))+Row("side",side)+Row("touched","1"));continue;}
+  MqlRates rates[];int count=CopyRates(symbol,PERIOD_M2,opened,TimeCurrent(),rates),complete=0;
+  for(int j=0;j<count;j++)if(rates[j].time>=opened && rates[j].time+120<=TimeCurrent())complete++;
+  if(complete<3)continue;
+  for(int j=PositionsTotal()-1;j>=0;j--){
+   ulong own=PositionGetTicket(j);if(!IsOwn(own) || PositionGetString(POSITION_SYMBOL)!=symbol || PositionGetString(POSITION_COMMENT)!=comment)continue;
+   if(!CloseTicket(own,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore TF2 timeout: close retry pending.");
+  }
+ }
 }
 void Result(string id,string status,string code){
  if(WriteAtomic(id+".result",Row("id",id)+Row("status",status)+Row("code",code)+Row("brokerOrderId",(string)trade.ResultOrder())))
@@ -209,6 +244,7 @@ void Process(){
  if(!ReadFields("command.tsv")){armed=false;return;}
  string id=Get("id"),type=Get("type"),c=Get("symbol"),symbol=Broker(c);
  string side=Get("side"),symbols=Get("symbols");
+ bool tightTf2=Get("exitPolicyVersion")=="TF2_TIGHT_SL_3C_V1";
  double lot=Val("lot"),entry=Val("entry"),sl=Val("sl"),tp1=Val("tp1"),tp2=Val("tp2"),tp3=Val("tp3");
  int layers=(int)StringToInteger(Get("layers")),actions=(int)StringToInteger(Get("actions"));
  string actionType[4];double actionValue[4];
@@ -233,7 +269,7 @@ void Process(){
   SaveState();
  }
  else if(type=="PLACE_SETUP"){
-  if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id);
+  if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2);
   code=ok?"SETUP_OPENED":"ENTRY_REJECTED_OR_PARTIAL";
  }
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
@@ -262,5 +298,5 @@ int OnInit(){
  if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");}
  Heartbeat();EventSetTimer(2);return INIT_SUCCEEDED;
 }
-void OnTimer(){Heartbeat();Process();Comment("ZenCore DEMO • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");}
+void OnTimer(){ManageTf2Timeout();Heartbeat();Process();Comment("ZenCore DEMO • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");}
 void OnDeinit(const int reason){armed=false;EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);Comment("");}

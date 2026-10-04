@@ -139,6 +139,8 @@ class Runner:
             try:
                 signed=verified_command(command,self.config['commandSigningKey'],self.config['podId'])
                 fields=command_fields(signed,self.config)
+                if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
+                    raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
             except (ValueError,KeyError,TypeError):
                 self.api.request('/api/execution/commands/'+command['id']+'/ack',
                   {'status':'REJECTED','code':'COMMAND_VALIDATION_FAILED'},self.config['podToken'])

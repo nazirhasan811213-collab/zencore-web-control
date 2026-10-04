@@ -99,3 +99,19 @@ class WindowsProtectionTests(unittest.TestCase):
         encrypted=dpapi(value)
         self.assertNotIn(value,encrypted)
         self.assertEqual(dpapi(encrypted,True),value)
+
+class ExitPolicyTests(unittest.TestCase):
+    def test_policy_transport_keeps_snapshot_prices_and_rejects_tf10_substitution(self):
+        snap={'contractVersion':CONTRACT,'decisionOwner':'ZENCORE_ANALYSIS','decision':'ENTRY_AUTHORIZED',
+          'symbol':'XAUUSD','side':'BUY','entry':2500,'sl':2490,'tp1':2505,'tp2':2510,'tp3':2520}
+        p={**{k:snap[k] for k in ('symbol','side','entry','sl','tp1','tp2','tp3')},
+          'analysisContractVersion':CONTRACT,'strategy':STRATEGY,'schemaVersion':SCHEMA,'analysisSnapshot':snap,'lotPerLayer':.01,'layers':3,
+          'strategyMode':'TF2_SCALPING','exitPolicy':{'version':'TF2_TIGHT_SL_3C_V1','timeframeMinutes':2,'slDistanceFactor':.8,'maxCompletedCandlesWithoutTp1':3}}
+        c=verified_command(signed('PLACE_SETUP',p),KEY,POD,NOW)
+        f=command_fields(c,IDENTITY);self.assertEqual(f['sl'],'2490');self.assertEqual(f['exitPolicyVersion'],'TF2_TIGHT_SL_3C_V1')
+        c['payload']['strategyMode']='TF10_LONG'
+        with self.assertRaisesRegex(ValueError,'EXIT_POLICY_REJECTED'):command_fields(c,IDENTITY)
+    def test_upgrade_is_advertised_only_with_matching_ea_heartbeat(self):
+        f=local_heartbeat();self.assertEqual(heartbeat(f,IDENTITY,NOW)['connectorVersion'],'1.0.0-ea-local')
+        f['exitPolicyVersion']='TF2_TIGHT_SL_3C_V1'
+        self.assertEqual(heartbeat(f,IDENTITY,NOW)['connectorVersion'],'1.1.0-ea-local')

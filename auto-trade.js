@@ -168,7 +168,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', control.lastError || control.strategyReason || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', control.lastError || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar sesi 7 pagi–3 pagi Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));
@@ -214,7 +214,7 @@
     byId('fxLayers').disabled = tf10;
     setText('strategyNotice', tf10
       ? 'TF10: tepat 2 layer. Setting boleh disimpan; ON menunggu sambungan feed Analysis dan adapter TF10. BUY dan SELL mengikut SOP.'
-      : 'TF2: SOP SOLID, checklist, forecast dan HEMA TF2/TF3. Setting Gold dan currency berasingan.');
+      : 'TF2: SOP SOLID, checklist, forecast dan HEMA TF2/TF3. Setting Gold dan currency berasingan. SL 20% lebih kecil dan exit 3 candle tanpa sentuhan TP1 memerlukan EA/Connector 1.1; simpan setting selepas kemas kini EA.');
   }
 
   function renderSettings(state) {
@@ -223,6 +223,7 @@
     hydrateModeDraft(settings);
     byId('capitalUsd').value = settings.capitalUsd ?? 100;
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
+    byId('tradingScheduleEnabled').checked = settings.tradingSchedule?.enabled === true;
     settingsHydrated = true;
     updateRiskPreview();
   }
@@ -369,6 +370,7 @@
       : ['XAUUSD'];
     return {
       strategyMode: displayedMode, modeSettings: modeDraft,
+      tradingSchedule: Core.malaysiaTradingSchedule(byId('tradingScheduleEnabled').checked),
       capitalUsd: byId('capitalUsd').value,
       lotPerLayer: byId('lotPerLayer').value,
       layers: byId('layers').value,

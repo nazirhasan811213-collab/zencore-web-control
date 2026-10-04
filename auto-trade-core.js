@@ -70,6 +70,27 @@
 
   const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF10_LONG']);
 
+  function malaysiaTradingSchedule(enabled = true) {
+    return {enabled: enabled === true, timeZone: 'Asia/Kuala_Lumpur',
+      start: '07:00', end: '03:00', newsPauseMinutes: 30,
+      newsTimes: ['20:30', '21:30', '22:00', '02:00']};
+  }
+
+  function tradingWindow(schedule, at = Date.now()) {
+    if (schedule?.enabled !== true) return {allowed:true, reason:'SCHEDULE_DISABLED', validUntil:null};
+    if (!Number.isFinite(at) || !Number.isFinite(new Date(at).getTime())) return {allowed:false, reason:'INVALID_CLOCK', validUntil:null};
+    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(at));
+    const part=type=>Number(parts.find(p=>p.type===type).value);
+    const minute=part('hour')*60+part('minute');
+    if (minute>=180 && minute<420) return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
+    const newsStarts=[1230,1290,1320,120];
+    if (newsStarts.some(start=>minute>=start && minute<start+30))
+      return {allowed:false,reason:'NEWS_PAUSE',validUntil:null};
+    const untilMinutes=Math.min(...[180,...newsStarts].map(stop=>(stop-minute+1440)%1440));
+    const validUntil=at+(untilMinutes*60-part('second'))*1000-new Date(at).getUTCMilliseconds();
+    return {allowed:true,reason:'SESSION_OPEN',validUntil};
+  }
+
   function effectiveSettings(input = {}, symbol = 'XAUUSD') {
     const mode = input.strategyMode || 'TF2_SCALPING';
     const group = normaliseSymbol(symbol) === 'XAUUSD' ? 'gold' : 'fx';
@@ -78,7 +99,8 @@
     const layers = mode === 'TF10_LONG' ? 2 : Number(asset.layers ?? input.layers);
     return { ...input, lotPerLayer, layers,
       totalLot: lotPerLayer === null ? null : round(lotPerLayer * layers, 5),
-      assetGroup: group, strategyMode: mode };
+      assetGroup: group, strategyMode: mode,
+      exitPolicy: input.strategyExitPolicies?.[mode] || null };
   }
 
   function validateSettings(input = {}) {
@@ -88,8 +110,17 @@
     const symbols = [...new Set((Array.isArray(input.symbols) ? input.symbols : ['XAUUSD'])
       .map(normaliseSymbol).filter(symbol => SUPPORTED_MARKETS.includes(symbol)))];
     const errors = {};
+    if (input.tradingSchedule != null && (typeof input.tradingSchedule !== 'object' || typeof input.tradingSchedule.enabled !== 'boolean')) errors.tradingSchedule = 'Status jadual trade mesti ON atau OFF.';
+    const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true);
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping atau TF10 Long.';
+    const strategyExitPolicies = {
+      ...(input.strategyExitPolicies || {}),
+      TF2_SCALPING: { version: 'TF2_TIGHT_SL_3C_V1', timeframeMinutes: 2,
+        slDistanceFactor: .8, maxCompletedCandlesWithoutTp1: 3,
+        tp1Rule: 'EVER_TOUCHED', closeScope: 'SETUP_ONLY',
+        executionStatus: 'REQUIRES_EA_1_1' }
+    };
     const modeSettings = {};
     for (const mode of STRATEGY_MODES) {
       modeSettings[mode] = {};
@@ -119,7 +150,7 @@
       ok: Object.keys(errors).length === 0,
       errors,
       value: {
-        strategyMode, modeSettings,
+        strategyMode, modeSettings, tradingSchedule, strategyExitPolicies,
         capitalUsd: capitalUsd === null ? null : round(capitalUsd),
         lotPerLayer: lotPerLayer === null ? null : round(lotPerLayer, 5),
         layers,
@@ -386,7 +417,8 @@
       open.every(position=>String(position.side||'').toUpperCase()===normal.side);
   }
 
-  function buildSetupCommand(market = {}, settings = {}, symbolSpec = null) {
+  function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
+    if (!tradingWindow(settings.tradingSchedule,at).allowed) return null;
     const validation = validateSettings(settings);
     const mode = validation.value.strategyMode;
     const tf = String(market.timeframe || market.strategyNormal?.tf || '').replace(/m$/, '');
@@ -423,6 +455,7 @@
         layers: execution.layers,
         totalLot: execution.totalLot,
         strategyMode: execution.strategyMode,
+        exitPolicy: settings.strategyExitPolicies?.TF2_SCALPING || null,
         assetGroup: execution.assetGroup,
         risk,
         signalReceivedAt: snapshot.sourceReceivedAt
@@ -452,6 +485,8 @@
   return {
     SUPPORTED_MARKETS,
     STRATEGY_MODES,
+    malaysiaTradingSchedule,
+    tradingWindow,
     effectiveSettings,
     CONTROL_STATES,
     COMMAND_TYPES,

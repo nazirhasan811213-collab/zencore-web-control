@@ -31,3 +31,17 @@ TF10 still requires dedicated Pine/Analysis feed, dispatcher and timeframe-speci
 ### Recorded validation
 
 Focused tests verify the settings and existing execution contract. The broader Auto Trade service suite has 21 passing and 3 failures involving old READY fixtures; the same 3 failures were reproduced unchanged on the deployed-base worktree. No real terminal, Pine compiler, database server, installer or broker execution was tested.
+
+
+## TF2 SL dan exit preset V1 (belum aktif dalam executor)
+
+Normalisasi setting menyimpan strategyExitPolicies.TF2_SCALPING: slDistanceFactor=0.8, maxCompletedCandlesWithoutTp1=3, timeframeMinutes=2. TP1 ialah sentuhan harga executable yang pernah berlaku; close scope hanya setup tersebut. Lot/layer Gold dan FX kekal. Polisi TF10 sedia ada dipelihara tanpa menggantikannya dengan polisi TF2.
+
+Status executionStatus=REQUIRES_EA_1_1. Simpanan konfigurasi dan polisi tulen diuji; PLACE_SETUP masih menggunakan snapshot analysis asal. Pengiraan SL baharu, state candle/TP1 persisten dan pelaksanaan close perlu disambung kepada feed serta executor DEMO sebelum status boleh dianggap aktif. Tiada deploy atau migrasi akaun production dilakukan oleh perubahan ini. Jangan tafsir konfigurasi tersimpan sebagai pengesahan order broker.
+
+
+### Sambungan executor DEMO
+
+Source EA 1.10 dan Connector 1.1 kini membawa polisi TF2 dalam command bertandatangan. Snapshot analysis tidak diubah; EA mengecilkan SL selepas validasi pelan asal dan sebelum broker stop-distance validation. Rule memantau 3 candle M2 lengkap serta sejarah tick BID/ASK; TP1 touch dipersist per setup. Jika tick history belum tersedia, timeout menunggu sync. Pengurusan masih berjalan selepas SYSTEM_STOP dan ketika rehat entry. Close hanya position dengan magic, symbol dan comment setup sama; setup tambahan pada pair berposisi ZenCore ditolak untuk mengelakkan gabungan netting.
+
+Source perlu compile/install pada terminal. CI membina EXE Connector dengan source MQ5; tidak menjalankan MetaEditor/MT5. Web deploy bukan bukti EA terpasang. Profil lama tanpa polisi tidak dimigrasi automatik; profil dengan polisi menunggu EA 1.1 dan tidak boleh menggunakan hosted worker lama.
