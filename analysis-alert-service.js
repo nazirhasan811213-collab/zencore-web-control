@@ -139,16 +139,17 @@ class AnalysisAlerts {
     }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
     if(queued && this.token)this.deliver().catch(()=>console.error('Telegram delivery unavailable'));
   }
-  async activePlan(symbol) {
+  async activePlan(symbol,timeframe=2) {
+    if(![2,15].includes(timeframe))throw fail('Timeframe tidak sah.');
     if (!/^[A-Z0-9._-]{2,20}$/.test(symbol)) throw fail('Pair tidak sah.');
-    const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol+'|2'])).rows[0]?.data:this.states.get(symbol+'|2');
+    const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol+'|'+timeframe])).rows[0]?.data:this.states.get(symbol+'|'+timeframe);
     if (state?.activePlan) return state.activePlan;
     if (!state?.telegramPosition || state.telegramPosition.closed) return null;
     // Recover signals issued before activePlan was added to the state.
     const rows=this.pool?(await this.pool.query(
       "SELECT data FROM zencore_analysis_alerts WHERE data->>'symbol'=$1 AND data->>'kind'='ENTRY' ORDER BY id DESC LIMIT 20",[symbol])).rows.map(r=>r.data):
       this.events.filter(e=>e.symbol===symbol&&e.kind==='ENTRY').reverse();
-    const entry=rows.find(e=>e.telegramPlan&&e.side===state.telegramPosition.side&&!e.telegramDuplicate);
+    const entry=rows.find(e=>Number(e.timeframe||2)===timeframe&&e.telegramPlan&&e.side===state.telegramPosition.side&&!e.telegramDuplicate);
     return entry?{side:entry.side,entryType:entry.entryType,openedAt:entry.time,plan:entry.telegramPlan}:null;
   }
   async feed(after) {

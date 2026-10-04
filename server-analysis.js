@@ -1416,7 +1416,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {
@@ -1676,6 +1676,14 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 
+  if (req.method==='GET' && pathname==='/api/analysis/timeframes') {
+    if(AUTH_ENABLED && !await requireSession(req,res))return;
+    const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();
+    if(!require('./analysis-dual-model').SYMBOLS.includes(symbol))return sendJson(res,400,{ok:false,error:'Pair tidak disokong.'});
+    try{return sendJson(res,200,require('./analysis-dual-model').dualAnalysis(await fetchLocalMarkets(),symbol));}
+    catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia. Cuba lagi.'});}
+  }
+
   if (pathname.startsWith('/api/analysis-alerts')) {
     if (!AUTH_ENABLED) return sendJson(res, 503, {ok:false,error:'Alert memerlukan login ZenCore.'});
     const session = await requireSession(req,res);
@@ -1691,7 +1699,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res,200,{ok:true,...await analysisAlerts.feed(new URL(req.url,'http://localhost').searchParams.get('after'))});
       if (req.method==='GET' && pathname==='/api/analysis-alerts/active-plan') {
         const symbol=String(new URL(req.url,'http://localhost').searchParams.get('symbol')||'').toUpperCase();
-        return sendJson(res,200,{ok:true,activePlan:await analysisAlerts.activePlan(symbol)});
+        return sendJson(res,200,{ok:true,activePlan:await analysisAlerts.activePlan(symbol,Number(url.searchParams.get('timeframe')||2))});
       }
       if(req.method==='POST') {
         const body=await readJson(req);
