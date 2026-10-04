@@ -12,8 +12,8 @@ function publicProfile(row) {
   const capital = row.capital_usd ?? row.capitalUsd;
   const lot = row.lot_per_layer ?? row.lotPerLayer;
   return {
-    strategyMode: (row.execution_settings ?? row).strategyMode || 'TF2_SCALPING',
-    modeSettings: (row.execution_settings ?? row).modeSettings || {},
+    strategyMode: (row.execution_settings ?? row).strategyMode==='TF10_LONG'?'TF15_INTRA':((row.execution_settings ?? row).strategyMode || 'TF2_SCALPING'),
+    modeSettings: {...((row.execution_settings ?? row).modeSettings||{}),TF15_INTRA:(row.execution_settings ?? row).modeSettings?.TF15_INTRA||(row.execution_settings ?? row).modeSettings?.TF10_LONG},
     tradingSchedule: (row.execution_settings ?? row).tradingSchedule || {enabled:false},
     strategyExitPolicies: (row.execution_settings ?? row).strategyExitPolicies || {},
     userId: row.user_id || row.userId,

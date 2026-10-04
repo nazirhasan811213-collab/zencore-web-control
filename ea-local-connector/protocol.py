@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-VERSION = '1.1.0-ea-local'
+VERSION = '1.2.0-ea-local'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -78,7 +78,11 @@ def number(value):
 def command_fields(command, identity):
     kind = command['type']
     payload = command['payload']
-    fields = {'protocol':1, 'id':command['id'], 'type':kind,
+    mode=payload.get('strategyMode','TF2_SCALPING')
+    if mode not in ('TF2_SCALPING','TF15_INTRA'):raise ValueError('STRATEGY_MODE_REJECTED')
+    if mode=='TF15_INTRA' and kind in ('PLACE_SETUP','MANAGE_POSITION'):
+        if str(payload.get('analysisSnapshot',{}).get('executionTimeframe','')).replace('m','')!='15':raise ValueError('TF15_SNAPSHOT_REQUIRED')
+    fields = {'strategyMode':mode,'protocol':1, 'id':command['id'], 'type':kind,
               'expiresAt':command['expiresAt'], 'account':identity['account'],
               'server':identity['server']}
     if kind == 'SYSTEM_ON':
@@ -139,7 +143,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
     if fields['tradeMode'] != 'DEMO': raise ValueError('DEMO_ONLY')
     value = {
       'accountMask':'****'+fields['account'][-4:], 'serverMask':'****'+re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:],
-      'brokerMask':'****MT5', 'tradeMode':'DEMO', 'connectorVersion':VERSION if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local',
+      'brokerMask':'****MT5', 'tradeMode':'DEMO', 'connectorVersion':VERSION if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'positions':[], 'symbolSpecs':[]
@@ -150,7 +154,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
           for key in ('symbol','tickSize','tickValue','volumeMin','volumeMax','volumeStep')})
     for i in range(min(int(fields.get('positionCount',0)),50)):
         prefix = f'p{i}'
-        position = {'ticket':fields[prefix+'ticket'], 'symbol':fields[prefix+'symbol'], 'side':fields[prefix+'side']}
+        position = {'strategyMode':fields.get(prefix+'strategyMode','TF2_SCALPING'),'ticket':fields[prefix+'ticket'], 'symbol':fields[prefix+'symbol'], 'side':fields[prefix+'side']}
         for key in ('volume','entry','currentPrice','activeSl','profitUsd','openedAt'):
             position[key] = float(fields[prefix+key])
         value['positions'].append(position)

@@ -17,7 +17,7 @@ test('Analysis records the same approved SOP and plan for Telegram without sendi
  const {AnalysisAlerts}=require('../analysis-alert-service');
  const {normalEntrySop}=require('../normal-entry-sop');
  const h={fast:102,slow:101,previousFast:101,previousSlow:100};
- const x=normalEntrySop({timeframe:'2',normal3Side:'BUY',normal3Solid:true,normal3Entry:100,normal3Close:100.1,normal3Atr:1,
+ const x=normalEntrySop({timeframe:'2',chopIndex:40,normal3Side:'BUY',normal3Solid:true,normal3Entry:100,normal3Close:100.1,normal3Atr:1,
   normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Forecast:'NEUTRAL',normal3MarketPower:56,
   hemaConfirmation:{tf2:h,tf3:{...h,confirmed:true}}});
  const alerts=new AnalysisAlerts({fetchFn:()=>{throw Error('No external sends in test');}});await alerts.init();

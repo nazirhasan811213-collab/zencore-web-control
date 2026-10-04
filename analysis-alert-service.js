@@ -93,22 +93,24 @@ class AnalysisAlerts {
     return this.queue;
   }
   async record(m) {
+    if(!['XAUUSD','GBPUSD','GBPJPY'].includes(m.symbol))return;
+    const stateKey=m.symbol+'|'+String(m.timeframe||m.strategyNormal?.tf||'2').replace(/m$/, '');
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
         green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
-        hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,gates:m.strategyNormal.sop?.gates},
-      telegramMarket:{sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
+        hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,gates:m.strategyNormal.sop?.gates},
+      telegramMarket:{signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
     }:e);
     if(!this.pool){
-      const prev=this.states.get(next.symbol);if(prev&&next.time<=prev.time)return;
+      const prev=this.states.get(stateKey);if(prev&&next.time<=prev.time)return;
       const events=notificationEvents(prev);
       next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
         events.find(e=>e.kind==='ENTRY')?.telegramPlan
           ? {side:events.find(e=>e.kind==='ENTRY').side,entryType:events.find(e=>e.kind==='ENTRY').entryType,
              openedAt:next.time,plan:events.find(e=>e.kind==='ENTRY').telegramPlan}
           : prev?.activePlan||null;
-      this.states.set(next.symbol,next);
+      this.states.set(stateKey,next);
       for(const e of events) this.events.push({...e,id:++this.sequence});
       this.events=this.events.slice(-500);return;
     }
@@ -116,14 +118,14 @@ class AnalysisAlerts {
     const c=await this.pool.connect();
     try {
       await c.query('BEGIN');
-      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['analysis-alert:'+next.symbol]);
-      const prev=(await c.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[next.symbol])).rows[0]?.data;
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['analysis-alert:'+stateKey]);
+      const prev=(await c.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[stateKey])).rows[0]?.data;
       if(!prev||next.time>prev.time){
         const events=notificationEvents(prev);
         const opened=events.find(e=>e.kind==='ENTRY');
         next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
           opened?.telegramPlan?{side:opened.side,entryType:opened.entryType,openedAt:next.time,plan:opened.telegramPlan}:prev?.activePlan||null;
-        await c.query('INSERT INTO zencore_alert_states(symbol,data) VALUES($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=$2',[next.symbol,next]);
+        await c.query('INSERT INTO zencore_alert_states(symbol,data) VALUES($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=$2',[stateKey,next]);
         for(const e of events){
           const row=(await c.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1) RETURNING id',[e])).rows[0];
           if(e.telegramDuplicate)continue;
@@ -139,7 +141,7 @@ class AnalysisAlerts {
   }
   async activePlan(symbol) {
     if (!/^[A-Z0-9._-]{2,20}$/.test(symbol)) throw fail('Pair tidak sah.');
-    const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol])).rows[0]?.data:this.states.get(symbol);
+    const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol+'|2'])).rows[0]?.data:this.states.get(symbol+'|2');
     if (state?.activePlan) return state.activePlan;
     if (!state?.telegramPosition || state.telegramPosition.closed) return null;
     // Recover signals issued before activePlan was added to the state.

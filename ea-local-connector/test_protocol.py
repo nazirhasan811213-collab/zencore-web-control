@@ -110,7 +110,7 @@ class ExitPolicyTests(unittest.TestCase):
         c=verified_command(signed('PLACE_SETUP',p),KEY,POD,NOW)
         f=command_fields(c,IDENTITY);self.assertEqual(f['sl'],'2490');self.assertEqual(f['exitPolicyVersion'],'TF2_TIGHT_SL_3C_V1')
         c['payload']['strategyMode']='TF10_LONG'
-        with self.assertRaisesRegex(ValueError,'EXIT_POLICY_REJECTED'):command_fields(c,IDENTITY)
+        with self.assertRaisesRegex(ValueError,'EXIT_POLICY_REJECTED|STRATEGY_MODE_REJECTED'):command_fields(c,IDENTITY)
     def test_upgrade_is_advertised_only_with_matching_ea_heartbeat(self):
         f=local_heartbeat();self.assertEqual(heartbeat(f,IDENTITY,NOW)['connectorVersion'],'1.0.0-ea-local')
         f['exitPolicyVersion']='TF2_TIGHT_SL_3C_V1'

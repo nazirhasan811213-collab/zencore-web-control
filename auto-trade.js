@@ -189,6 +189,8 @@
 
   let modeDraft = null;
   let displayedMode = 'TF2_SCALPING';
+  let configuredMode='TF2_SCALPING';
+  const editingMode=()=>displayedMode==='BOTH'?configuredMode:displayedMode;
   function hydrateModeDraft(settings) {
     const normalized = Core.validateSettings(settings).value;
     modeDraft = JSON.parse(JSON.stringify(normalized.modeSettings));
@@ -198,22 +200,23 @@
   }
   function storeModeFields() {
     if (!modeDraft) return;
-    modeDraft[displayedMode] = {
-      gold: {lotPerLayer: byId('lotPerLayer').value, layers: displayedMode === 'TF10_LONG' ? 2 : byId('layers').value},
-      fx: {lotPerLayer: byId('fxLotPerLayer').value, layers: displayedMode === 'TF10_LONG' ? 2 : byId('fxLayers').value}
+    modeDraft[editingMode()] = {
+      gold: {lotPerLayer: byId('lotPerLayer').value, layers: editingMode() === 'TF15_INTRA' ? 2 : byId('layers').value},
+      fx: {lotPerLayer: byId('fxLotPerLayer').value, layers: editingMode() === 'TF15_INTRA' ? 2 : byId('fxLayers').value}
     };
   }
   function displayModeFields() {
-    const config = modeDraft[displayedMode];
+    byId('settingsModeLabel').hidden=displayedMode!=='BOTH';
+    const config = modeDraft[editingMode()];
     byId('lotPerLayer').value = config.gold.lotPerLayer;
     byId('layers').value = config.gold.layers;
     byId('fxLotPerLayer').value = config.fx.lotPerLayer;
     byId('fxLayers').value = config.fx.layers;
-    const tf10 = displayedMode === 'TF10_LONG';
-    byId('layers').disabled = tf10;
-    byId('fxLayers').disabled = tf10;
-    setText('strategyNotice', tf10
-      ? 'TF10: tepat 2 layer. Setting boleh disimpan; ON menunggu sambungan feed Analysis dan adapter TF10. BUY dan SELL mengikut SOP.'
+    const tf15 = editingMode() === 'TF15_INTRA';
+    byId('layers').disabled = tf15;
+    byId('fxLayers').disabled = tf15;
+    setText('strategyNotice', tf15
+      ? 'TF15 Intra: SOLID TF15 + HEMA TF15/TF45. Tepat 2 layer. EA/Connector 1.2 diperlukan. Both menggunakan satu setup aktif bagi setiap pair.'
       : 'TF2: SOP SOLID, checklist, forecast dan HEMA TF2/TF3. Setting Gold dan currency berasingan. SL 20% lebih kecil dan exit 3 candle tanpa sentuhan TP1 memerlukan EA/Connector 1.1; simpan setting selepas kemas kini EA.');
   }
 
@@ -262,7 +265,7 @@
     }
     const settings = state.settings;
     setText('summaryExposure', settings?.totalLot == null ? '—' : Number(settings.totalLot).toFixed(3));
-    setText('summaryLayers', settings ? `${settings.strategyMode === 'TF10_LONG' ? 'TF10' : 'TF2'} · Gold ${Core.effectiveSettings(settings, 'XAUUSD').totalLot} lot · FX ${Core.effectiveSettings(settings, 'EURUSD').totalLot} lot` : 'Belum dikonfigurasi');
+    setText('summaryLayers', settings ? `${settings.strategyMode==='BOTH'?'TF2 + TF15':settings.strategyMode === 'TF15_INTRA' ? 'TF15' : 'TF2'} · Gold ${Core.effectiveSettings(settings, 'XAUUSD').totalLot} lot · FX ${Core.effectiveSettings(settings, 'EURUSD').totalLot} lot` : 'Belum dikonfigurasi');
   }
 
   function renderPositions(state) {
@@ -390,7 +393,7 @@
     const effective = Core.effectiveSettings(validation.value, symbol);
     setText('riskTotalLot', effective.totalLot == null ? '—' : effective.totalLot.toFixed(3));
     const market = markets.find(item => Core.normaliseSymbol(item.symbol) === symbol);
-    const matchingTf = String(market?.timeframe || market?.strategyNormal?.tf || '').replace(/m$/, '') === (displayedMode === 'TF10_LONG' ? '10' : '2');
+    const matchingTf = String(market?.timeframe || market?.strategyNormal?.tf || '').replace(/m$/, '') === (editingMode() === 'TF15_INTRA' ? '10' : '2');
     const plan = matchingTf ? market?.strategyNormal?.plan : null;
     const spec = (currentState?.hostedAccount?.symbolSpecs || currentState?.pod?.symbolSpecs)?.[symbol];
     const risk = Core.calculateRisk({
@@ -428,7 +431,7 @@
     if (currentRecommendation) {
       setText('recommendedSize', `${currentRecommendation.layers} LAYER × ${currentRecommendation.lotPerLayer} LOT`);
       setText('recommendationMessage', `${recommendation.message} Anggaran ${currentRecommendation.estimatedRiskPercent.toFixed(2)}% / ${money(currentRecommendation.estimatedRiskUsd)}.`);
-      if (apply) apply.disabled = displayedMode === 'TF10_LONG' && currentRecommendation.layers !== 2;
+      if (apply) apply.disabled = editingMode() === 'TF15_INTRA' && currentRecommendation.layers !== 2;
     } else {
       setText('recommendedSize', 'BELUM TERSEDIA');
       setText('recommendationMessage', recommendation.message);
@@ -507,8 +510,9 @@
   function initialiseSymbols() {
     const riskSelect = byId('riskSymbol');
     if (!Core || !riskSelect) return;
-    riskSelect.innerHTML = Core.SUPPORTED_MARKETS.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
+    riskSelect.innerHTML = Core.TRADE_SYMBOLS.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
     hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD']});
+    byId('settingsMode').addEventListener('change', () => { storeModeFields(); configuredMode=byId('settingsMode').value;displayModeFields(); settingsDirty=true; updateRiskPreview(); });
     byId('strategyMode').addEventListener('change', () => {
       storeModeFields(); displayedMode = byId('strategyMode').value;
       displayModeFields(); settingsDirty = true; updateRiskPreview();
@@ -603,7 +607,7 @@
     if (!currentRecommendation) return;
     const fx = byId('riskSymbol').value !== 'XAUUSD';
     byId(fx ? 'fxLotPerLayer' : 'lotPerLayer').value = currentRecommendation.lotPerLayer;
-    byId(fx ? 'fxLayers' : 'layers').value = displayedMode === 'TF10_LONG' ? 2 : currentRecommendation.layers;
+    byId(fx ? 'fxLayers' : 'layers').value = editingMode() === 'TF15_INTRA' ? 2 : currentRecommendation.layers;
     settingsDirty = true;
     updateRiskPreview();
     toast('Cadangan lot dan layer digunakan. Simpan konfigurasi untuk confirm.');

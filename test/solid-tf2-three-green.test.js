@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {normalEntrySop,hemaStrength}=require('../normal-entry-sop');
 const Contract=require('../analysis-execution-contract');
-const base={timeframe:'2',normal3Side:'BUY',normal3Solid:true,normal3Entry:100,normal3Close:101,normal3Atr:2,
+const base={timeframe:'2',chopIndex:40,normal3Side:'BUY',normal3Solid:true,normal3Entry:100,normal3Close:101,normal3Atr:2,
  normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:false,normal3Sop5:false,
  normal3Forecast:'BULLISH',normal3MarketPower:51,
  hemaConfirmation:{tf2:{fast:102,slow:101,previousFast:101,previousSlow:100},tf3:{confirmed:true,fast:102,slow:101,previousFast:101,previousSlow:100}}};

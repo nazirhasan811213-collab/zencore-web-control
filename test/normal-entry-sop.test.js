@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {normalEntrySop}=require('../normal-entry-sop');
 const ribbon={fast:102,slow:101,previousFast:101,previousSlow:100};
-const base={timeframe:'2',normal3Side:'BUY',normal3Entry:100,normal3Close:101,normal3Atr:2,
+const base={timeframe:'2',chopIndex:40,normal3Side:'BUY',normal3Entry:100,normal3Close:101,normal3Atr:2,
  normal3Solid:true,normal3Forecast:'NEUTRAL',normal3MarketPower:56,
  hemaConfirmation:{tf2:ribbon,tf3:{...ribbon,confirmed:true}}};
 test('any three checklist flags qualify with SOLID forecast and both HEMA confirmations',()=>{

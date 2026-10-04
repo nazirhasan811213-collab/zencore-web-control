@@ -68,8 +68,9 @@
     return round(units * step, digits);
   }
 
-  const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF10_LONG']);
+  const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF15_INTRA', 'BOTH']);
 
+  const TRADE_SYMBOLS=Object.freeze(['XAUUSD','GBPUSD','GBPJPY']);
   function malaysiaTradingSchedule(enabled = true) {
     return {enabled: enabled === true, timeZone: 'Asia/Kuala_Lumpur',
       start: '07:00', end: '03:00', newsPauseMinutes: 30,
@@ -96,7 +97,7 @@
     const group = normaliseSymbol(symbol) === 'XAUUSD' ? 'gold' : 'fx';
     const asset = input.modeSettings?.[mode]?.[group] || {};
     const lotPerLayer = number(asset.lotPerLayer ?? input.lotPerLayer);
-    const layers = mode === 'TF10_LONG' ? 2 : Number(asset.layers ?? input.layers);
+    const layers = mode === 'TF15_INTRA' ? 2 : Number(asset.layers ?? input.layers);
     return { ...input, lotPerLayer, layers,
       totalLot: lotPerLayer === null ? null : round(lotPerLayer * layers, 5),
       assetGroup: group, strategyMode: mode,
@@ -108,12 +109,12 @@
     const lotPerLayer = number(input.lotPerLayer);
     const layers = Number(input.layers);
     const symbols = [...new Set((Array.isArray(input.symbols) ? input.symbols : ['XAUUSD'])
-      .map(normaliseSymbol).filter(symbol => SUPPORTED_MARKETS.includes(symbol)))];
+      .map(normaliseSymbol).filter(symbol => TRADE_SYMBOLS.includes(symbol)))];
     const errors = {};
     if (input.tradingSchedule != null && (typeof input.tradingSchedule !== 'object' || typeof input.tradingSchedule.enabled !== 'boolean')) errors.tradingSchedule = 'Status jadual trade mesti ON atau OFF.';
     const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true);
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
-    if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping atau TF10 Long.';
+    if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
     const strategyExitPolicies = {
       ...(input.strategyExitPolicies || {}),
       TF2_SCALPING: { version: 'TF2_TIGHT_SL_3C_V1', timeframeMinutes: 2,
@@ -122,15 +123,15 @@
         executionStatus: 'REQUIRES_EA_1_1' }
     };
     const modeSettings = {};
-    for (const mode of STRATEGY_MODES) {
+    for (const mode of ['TF2_SCALPING','TF15_INTRA']) {
       modeSettings[mode] = {};
       for (const group of ['gold', 'fx']) {
         const raw = input.modeSettings?.[mode]?.[group] || {};
         const lot = number(raw.lotPerLayer ?? input.lotPerLayer);
-        const count = mode === 'TF10_LONG' ? 2 : Number(raw.layers ?? input.layers);
+        const count = mode === 'TF15_INTRA' ? 2 : Number(raw.layers ?? input.layers);
         if (lot === null || lot <= 0 || lot > 100) errors[mode + '.' + group + '.lotPerLayer'] = 'Lot Gold dan currency mesti lebih 0 hingga 100.';
         if (!Number.isInteger(count) || count < 1 || count > 10) errors[mode + '.' + group + '.layers'] = 'Layer mesti antara 1 hingga 10.';
-        if (mode === 'TF10_LONG' && raw.layers != null && Number(raw.layers) !== 2) errors[mode + '.' + group + '.layers'] = 'TF10 Long menggunakan tepat 2 layer.';
+        if (mode === 'TF15_INTRA' && raw.layers != null && Number(raw.layers) !== 2) errors[mode + '.' + group + '.layers'] = 'TF15 Intra menggunakan tepat 2 layer.';
         modeSettings[mode][group] = {lotPerLayer: lot === null ? null : round(lot, 5), layers: count};
       }
     }
@@ -315,6 +316,7 @@
     const lock = String(raw.slLock || 'INITIAL').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
     return {
       ticket,
+      strategyMode: raw.strategyMode==='TF15_INTRA'?'TF15_INTRA':'TF2_SCALPING',
       symbol,
       side,
       volume,
@@ -419,17 +421,20 @@
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
     if (!tradingWindow(settings.tradingSchedule,at).allowed) return null;
+    const observed=number(market.signalObservedAt);
+    if(observed!==null&&(at-observed>30000||observed>at+5000))return null;
     const validation = validateSettings(settings);
-    const mode = validation.value.strategyMode;
+    const selected = validation.value.strategyMode;
+    const mode=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
     const tf = String(market.timeframe || market.strategyNormal?.tf || '').replace(/m$/, '');
     // Never reuse a TF2/legacy signal for a TF10 account.
-    if (mode === 'TF10_LONG' || (settings.strategyMode && tf !== '2')) return null;
+    if(!['2','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
     const decision = Contract.createEntryDecision(market);
     if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
     const symbol = snapshot.symbol;
     if (!validation.value.symbols.includes(symbol)) return null;
-    const execution = effectiveSettings(validation.value, symbol);
+    const execution = effectiveSettings({...validation.value,strategyMode:mode}, symbol);
     const risk = calculateRisk({
       ...execution,
       entry: snapshot.entry,
@@ -439,6 +444,7 @@
     });
     return {
       signalKey: decision.signalKey,
+      notAfterMs: observed!==null?observed+30000:Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: snapshot,
@@ -455,7 +461,7 @@
         layers: execution.layers,
         totalLot: execution.totalLot,
         strategyMode: execution.strategyMode,
-        exitPolicy: settings.strategyExitPolicies?.TF2_SCALPING || null,
+        exitPolicy: mode==='TF2_SCALPING'?(settings.strategyExitPolicies?.TF2_SCALPING || null):null,
         assetGroup: execution.assetGroup,
         risk,
         signalReceivedAt: snapshot.sourceReceivedAt
@@ -475,6 +481,7 @@
         schemaVersion: snapshot.schemaVersion,
         strategy: snapshot.strategy,
         symbol: snapshot.symbol,
+        strategyMode: String(market.timeframe||market.strategyNormal?.tf||'2').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING',
         actions: snapshot.actions,
         reason: snapshot.reason,
         signalReceivedAt: snapshot.sourceReceivedAt
@@ -485,6 +492,7 @@
   return {
     SUPPORTED_MARKETS,
     STRATEGY_MODES,
+    TRADE_SYMBOLS,
     malaysiaTradingSchedule,
     tradingWindow,
     effectiveSettings,

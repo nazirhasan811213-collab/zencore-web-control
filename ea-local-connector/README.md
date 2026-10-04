@@ -62,3 +62,11 @@ Deploy the branch's `auto-trade-service.js`, `auto-trade-core.js`, `server-analy
 ## TF2 rule upgrade 1.1
 
 Package carries EA source 1.10. Stop new entries, update Connector, use Pasang EA to compile with MetaEditor, reload EA on one chart, then save TF2 web settings. Verify new EX5 and DEMO heartbeat 1.1. Hosted Python worker does not support this preset. Windows compilation and installation cannot be verified from this Linux workspace.
+
+
+## TF2 / TF15 / Both release
+Connector 1.2 + EA source 1.20. Entry pairs: XAUUSD, GBPUSD, GBPJPY. Web selects TF2 Scalping, TF15 Intra, or Both. TF15 uses SOLID TF15 and confirmed HEMA TF45, exactly two layers. Both keeps one active setup per pair; management is scoped by broker magic to the owning strategy.
+
+Install EA using the Connector button (MetaEditor compilation), reload the EA on a chart, then verify the web reports Connector 1.2 before enabling TF15/Both. Install the corresponding realtime feed script on a TradingView TF2 and/or TF15 chart and create an Any alert() function call alert to the existing ZenCore webhook; old alerts retain the old script snapshot and must be recreated. Never expose webhook secrets. Pine source must compile and its actual alert must be verified in TradingView.
+
+The Windows CI compiles the Python Connector executable and tests the packaged EXE. It does not compile MQ5 or Pine, or place broker trades.

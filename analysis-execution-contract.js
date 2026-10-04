@@ -66,13 +66,36 @@
     return { score, grade, high: String(n.state || '').toUpperCase() === 'READY' && score >= 80 && !market.sidewaysGuard };
   }
 
+  // Entry-only guard: management decisions deliberately do not use this filter.
+  function tf2MarketRegime(input = {}, requireChop = false) {
+    const chop = number(input.chopIndex ?? input.sidewaysChop ?? input.chop ??
+      input.strategyNormal?.sop?.indicatorContext?.chop ?? input.dashboard?.chop);
+    const structure = String(input.marketStructure ?? input.dashboard?.marketStructure ?? '').toUpperCase();
+    const forecast = String(input.normal3Forecast ?? input.strategyNormal?.sop?.forecast ?? '').toUpperCase();
+    let reason = null;
+    if (input.sidewaysGuard === true || /SIDEWAY|CHOP|RANGE|FLAT/.test(structure) || forecast === 'CHOPPY')
+      reason = 'CHOPPY_OR_SIDEWAYS';
+    else if (chop !== null && (chop < 0 || chop > 100)) reason = 'INVALID_CHOP_DATA';
+    else if (chop !== null && chop >= 61.8) reason = 'CHOP_TOO_HIGH';
+    else if (requireChop && chop === null) reason = 'WAIT_CHOP_DATA';
+    else if (input.strategyNormal?.sop?.marketRegime?.pass === false)
+      reason = input.strategyNormal.sop.marketRegime.reason || 'DIRECTION_UNCLEAR';
+    return { pass: reason === null, reason: reason || 'MARKET_CLEAR', chop, threshold: 61.8 };
+  }
+
   // READY remains the Pine SOP decision; entry quality is an additional filter.
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
     const solidTf2=normal.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2';
-    if(solidTf2 && (normal.tf!=='2m' || normal.solid!==true || !Array.isArray(normal.sop?.gates) || normal.sop.gates.length!==6 || !normal.sop.gates.every(g=>g.pass===true)))return null;
+    const solidTf15=normal.entrySopVersion==='SOLID_TF15_3GREEN_HEMA1545_2L_V1';
+    if(String(normal.entrySopVersion||'').startsWith('SOLID_TF15_')&&!solidTf15)return null;
+    const solidSop=solidTf2||solidTf15;
+    if(solidTf2 && !tf2MarketRegime(market).pass)return null;
+    const expectedTf=solidTf15?'15m':'2m';
+    if(solidSop && (normal.tf!==expectedTf || (market.timeframe!=null && String(market.timeframe).replace(/m$/, '')!==expectedTf.replace(/m$/, '')) || normal.solid!==true || !Array.isArray(normal.sop?.gates) || normal.sop.gates.length!==6 || !normal.sop.gates.every(g=>g.pass===true)))return null;
     const symbol = normaliseSymbol(market.symbol);
+    if(!['XAUUSD','GBPUSD','GBPJPY'].includes(symbol))return null;
     const side = String(normal.side || plan.side || '').toUpperCase();
     const receivedAt = sourceTime(market);
     const prices = {
@@ -87,7 +110,7 @@
         ? livePrice >= prices.tp1 || livePrice <= prices.sl
         : side === 'SELL' && (livePrice <= prices.tp1 || livePrice >= prices.sl))) return null;
     if (!SUPPORTED_MARKETS.includes(symbol) || String(normal.state || '').toUpperCase() !== 'READY' ||
-        (!solidTf2 && !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade)) ||
+        (!solidSop && !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade)) ||
         !['BUY', 'SELL'].includes(side) || !receivedAt || Object.values(prices).some(value => value === null)) {
       return null;
     }
@@ -101,11 +124,13 @@
       side,
       executionTimeframe: String(market.timeframe || normal.tf || '3'),
       ...prices,
+      ...(market.setupKey?{setupKey:market.setupKey}:{}),
+      ...(market.signalObservedAt?{signalObservedAt:market.signalObservedAt}:{}),
       sourceReceivedAt: receivedAt,
-      ...(solidTf2?{analysisSopVersion:normal.entrySopVersion}:{})
+      ...(solidSop?{analysisSopVersion:normal.entrySopVersion}:{})
     };
     return deepFreeze({
-      signalKey: [CONTRACT_VERSION, symbol, side, prices.entry, receivedAt].join('|'),
+      signalKey: [CONTRACT_VERSION,market.timeframe||normal.tf||'2', symbol, side, prices.entry, market.setupKey||receivedAt].join('|'),
       snapshot
     });
   }
@@ -153,6 +178,7 @@
         strategy: STRATEGY,
         schemaVersion: SCHEMA_VERSION,
         symbol,
+        executionTimeframe:String(market.timeframe||market.strategyNormal?.tf||'2'),
         actions,
         reason: String(management.reason || '').slice(0, 180),
         sourceReceivedAt: receivedAt
@@ -168,6 +194,7 @@
     number,
     normaliseSymbol,
     entryQuality,
+    tf2MarketRegime,
     createEntryDecision,
     createManagementDecision
   };

@@ -13,12 +13,12 @@ function signals(m, now = Date.now()) {
     message:`${m.symbol} • ${String(m.strategyNormal?.entryType||'').includes('REENTRY')?'RE-ENTRY':'ENTRY'} ${entry.side}\nEntry: ${entry.entry} | SL: ${entry.sl}\nTP1: ${entry.tp1} | TP2: ${entry.tp2} | TP3: ${entry.tp3}`});
   if (close) items.push({kind:'CLOSE', signature:close.reason, percent:close.percent,
     message:`${m.symbol} • ${close.percent === 50 ? 'CLOSE 50%' : close.reason === 'EXIT_REMAINING' ? 'CLOSE BAKI' : 'CLOSE SEMUA'}\n${String(m.positionManagement.reason || close.reason).slice(0,180)}`});
-  return {symbol:m.symbol,time,entry:items.find(x=>x.kind==='ENTRY')?.signature||'',close:items.find(x=>x.kind==='CLOSE')?.signature||'',items};
+  return {symbol:m.symbol,timeframe:String(m.timeframe||'2'),time,entry:items.find(x=>x.kind==='ENTRY')?.signature||'',close:items.find(x=>x.kind==='CLOSE')?.signature||'',items};
 }
 function transitions(previous, next) {
   if (!next || (previous && next.time <= previous.time)) return [];
   return next.items.filter(x=> !previous || previous[x.kind.toLowerCase()] !== x.signature)
-    .map(({signature,...x})=>({...x,symbol:next.symbol,time:next.time}));
+    .map(({signature,...x})=>({...x,symbol:next.symbol,time:next.time,timeframe:next.timeframe}));
 }
 const defaults = () => ({popup:true,sound:true,telegramEnabled:false,telegramId:'',verified:false});
 module.exports = {signals,transitions,defaults};

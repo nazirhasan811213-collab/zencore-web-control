@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Core = require('../auto-trade-core');
 
-test('settings support 9 markets and calculate total layered lot', () => {
+test('settings support three entry markets and calculate total layered lot', () => {
   const result = Core.validateSettings({
     capitalUsd: 100,
     lotPerLayer: 0.01,
@@ -11,7 +11,7 @@ test('settings support 9 markets and calculate total layered lot', () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.value.totalLot, 0.03);
-  assert.deepEqual(result.value.symbols, Core.SUPPORTED_MARKETS);
+  assert.deepEqual(result.value.symbols, Core.TRADE_SYMBOLS);
 });
 
 test('high risk produces a warning and never blocks the order', () => {

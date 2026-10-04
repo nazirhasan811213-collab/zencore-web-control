@@ -47,8 +47,7 @@ const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
 const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
-const AUTOTRADE_DEMO_SYMBOLS = String(process.env.ZENCORE_AUTOTRADE_DEMO_SYMBOLS || 'XAUUSD')
-  .split(',').map(value => value.trim()).filter(Boolean);
+const AUTOTRADE_DEMO_SYMBOLS = ['XAUUSD','GBPUSD','GBPJPY'];
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
   process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.2-gcp-multiuser-multipair'
 );
@@ -1305,7 +1304,7 @@ function fetchLocalMarkets() {
         if (response.statusCode !== 200) return reject(new Error(`Market API HTTP ${response.statusCode}`));
         try {
           const parsed = JSON.parse(body);
-          resolve(Array.isArray(parsed.markets) ? parsed.markets : []);
+          resolve([...(Array.isArray(parsed.markets) ? parsed.markets : []),...require('./strategy-market-hub').markets()]);
         } catch (_) {
           reject(new Error('Market API returned invalid JSON'));
         }
@@ -1378,23 +1377,18 @@ function fetchLocalValidation(symbol) {
 
 function startAutoTradeDispatcher() {
   if (autoTradeState.dispatchTimer || !autoTradeState.service) return;
-  let running = false;
   let lastErrorLogAt = 0;
-  const tick = async () => {
-    if (running || !autoTradeState.ready) return;
-    running = true;
-    try {
-      const markets = await fetchLocalMarkets();
-      await autoTradeState.service.dispatchMarkets(markets);
-    } catch (error) {
-      if (Date.now() - lastErrorLogAt > 60_000) {
-        lastErrorLogAt = Date.now();
-        console.error('ZenCore Auto Trade dispatcher waiting:', error.message);
-      }
-    } finally {
-      running = false;
+  const {createCoalescingDispatcher}=require('./coalescing-dispatcher');
+  const tick = createCoalescingDispatcher(async () => {
+    if (!autoTradeState.ready) return;
+    const markets = await fetchLocalMarkets();
+    await autoTradeState.service.dispatchMarkets(markets);
+  }, error => {
+    if (Date.now() - lastErrorLogAt > 60_000) {
+      lastErrorLogAt = Date.now();
+      console.error('ZenCore Auto Trade dispatcher waiting:', error.message);
     }
-  };
+  });
   // A confirmed market snapshot dispatches immediately; periodic checks recover missed events.
   const onMarket = () => { const timer = setTimeout(tick, 0); timer.unref?.(); };
   require('./analysis-alert-bus').on('market', onMarket);
@@ -1494,6 +1488,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_SOP_HEMA23.md') return sendAuthAsset(res, 'docs/LIVE_SOP_HEMA23.md', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_Multi_Pair_Feed_32_3.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCoreExecutor.mq5') return sendAuthAsset(res, 'ea-local-connector/ZenCoreExecutor.mq5', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-execution-contract.js') return sendAuthAsset(res, 'analysis-execution-contract.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auto-trade-core.js') return sendAuthAsset(res, 'auto-trade-core.js', 'application/javascript; charset=utf-8');

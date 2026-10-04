@@ -115,7 +115,7 @@ function createAutoTradeService(options = {}) {
   const allowedDemoSymbols = [...new Set(
     (Array.isArray(options.allowedDemoSymbols) ? options.allowedDemoSymbols : ['XAUUSD'])
       .map(Core.normaliseSymbol)
-      .filter(symbol => Core.SUPPORTED_MARKETS.includes(symbol))
+      .filter(symbol => Core.TRADE_SYMBOLS.includes(symbol))
   )];
   if (!allowedDemoSymbols.length) throw new Error('At least one DEMO execution symbol is required.');
   const allowedDemoOwnershipModes = [...new Set(
@@ -188,7 +188,7 @@ function createAutoTradeService(options = {}) {
   function connectionState(pod) {
     if (pod && !executionAllowed(pod.userId, pod)) pod = { ...pod, demoExecutionUnlocked: false };
     return Core.podConnectionState(pod, now(), executionAllowed(pod?.userId, pod) ? {
-      connectorVersion: isLocalEa(pod) ? (pod.connectorVersion==='1.1.0-ea-local'?'1.1.0-ea-local':LOCAL_EA_VERSION) : requiredDemoConnectorVersion,
+      connectorVersion: isLocalEa(pod) ? (['1.1.0-ea-local','1.2.0-ea-local'].includes(pod.connectorVersion)?pod.connectorVersion:LOCAL_EA_VERSION) : requiredDemoConnectorVersion,
       ownershipModes: isLocalEa(pod) ? ['TRADER_OWNED_EA_LOCAL'] : allowedDemoOwnershipModes
     } : {});
   }
@@ -304,7 +304,8 @@ function createAutoTradeService(options = {}) {
     const effectiveState = !pod && !hostedAccount ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
     const desiredState = profile?.desiredState || 'STOPPED';
     const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
-    const exitPolicyReady = !(profile?.strategyMode!=='TF10_LONG' && profile?.strategyExitPolicies?.TF2_SCALPING) || (!hostedAccount && isLocalEa(pod) && pod?.connectorVersion==='1.1.0-ea-local');
+    const strategyReady=profile?.strategyMode==='TF2_SCALPING'||!profile?.strategyMode||(!hostedAccount&&isLocalEa(pod)&&pod?.connectorVersion==='1.2.0-ea-local');
+    const exitPolicyReady = !(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING) || (!hostedAccount && isLocalEa(pod) && ['1.1.0-ea-local','1.2.0-ea-local'].includes(pod?.connectorVersion));
     const settingsReady = !!profile && Core.validateSettings(profile).ok && !!profile.riskAcknowledgedAt;
     return {
       ok: true,
@@ -319,12 +320,12 @@ function createAutoTradeService(options = {}) {
         pendingCommandId: profile?.pendingCommandId || null,
         lastError: profile?.lastError || null,
         tradingWindow: entryWindow,
-        strategyReady: profile?.strategyMode !== 'TF10_LONG',
-        strategyReason: profile?.strategyMode === 'TF10_LONG' ? 'TF10 menunggu feed Analysis dan adapter MT5.' : null,
+        strategyReady,
+        strategyReason: strategyReady?null:'TF15/Both memerlukan EA/Connector 1.2.',
         exitPolicyReady,
         exitPolicyReason: exitPolicyReady ? null : 'Rule TF2 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
-        canEnter: exitPolicyReady && entryWindow.allowed && profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: exitPolicyReady && profile?.strategyMode !== 'TF10_LONG' && allowDemoExecution && settingsReady && connection.ready
+        canEnter: exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
       pod: pod ? {
@@ -821,13 +822,11 @@ function createAutoTradeService(options = {}) {
       store.getPodForUser(userId),
       activeHostedAccount(userId)
     ]);
-    if(profile?.strategyMode!=='TF10_LONG' && profile?.strategyExitPolicies?.TF2_SCALPING &&
-      (hostedAccount || !isLocalEa(pod) || pod?.connectorVersion!=='1.1.0-ea-local')) {
+    if(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING &&
+      (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local'].includes(pod?.connectorVersion))) {
       throw serviceError('TF2_EA_UPGRADE_REQUIRED','Rule TF2 memerlukan EA/Connector 1.1 sebelum entry boleh dihidupkan.',409);
     }
-    if (profile?.strategyMode === 'TF10_LONG') {
-      throw serviceError('TF10_FEED_REQUIRED', 'Setting TF10 disimpan. Feed Analysis dan adapter TF10 belum disambungkan; entry TF2 tidak akan digunakan.', 409);
-    }
+    if(['TF15_INTRA','BOTH'].includes(profile?.strategyMode)&&(hostedAccount||!isLocalEa(pod)||pod?.connectorVersion!=='1.2.0-ea-local'))throw serviceError('EA_STRATEGY_UPGRADE_REQUIRED','TF15/Both memerlukan EA/Connector 1.2.',409);
     if (hostedAccount) {
       const hostedConnection = hostedConnectionState(hostedAccount);
       const settingsValidation = Core.validateSettings(profile || {});
@@ -1186,10 +1185,11 @@ function createAutoTradeService(options = {}) {
         // Diagnostics never change the execution decision or expose account identity.
         try { options.onDispatchDiagnostic(report); } catch (_) {}
       }
+      if(['TF15_INTRA','BOTH'].includes(profile.strategyMode)&&(hostedAccount||!isLocalEa(pod)||pod?.connectorVersion!=='1.2.0-ea-local'))continue;
       if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
       // Never dispatch new exit rules to a hosted worker or old EA that would silently ignore them.
-      if(profile.strategyMode!=='TF10_LONG' && profile.strategyExitPolicies?.TF2_SCALPING &&
-        (hostedAccount || !isLocalEa(pod) || pod.connectorVersion!=='1.1.0-ea-local'))continue;
+      if(profile.strategyMode!=='TF15_INTRA' && profile.strategyExitPolicies?.TF2_SCALPING &&
+        (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local'].includes(pod.connectorVersion)))continue;
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
@@ -1206,12 +1206,12 @@ function createAutoTradeService(options = {}) {
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: entryWindow.validUntil ?? Infinity
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: Math.min(entryWindow.validUntil ?? Infinity,setup.notAfterMs ?? Infinity)
             })
           : await issueCommand({
               userId: profile.userId, podId: pod.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: entryWindow.validUntil ?? Infinity
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: Math.min(entryWindow.validUntil ?? Infinity,setup.notAfterMs ?? Infinity)
             });
         if (issued.created) {
           queued += 1;
@@ -1239,6 +1239,9 @@ function createAutoTradeService(options = {}) {
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!positionSymbols.has(symbol)) continue;
+        const mode=String(market.timeframe||market.strategyNormal?.tf||'2').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
+        if(!positions.some(p=>p.symbol===symbol&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
+        if(mode==='TF15_INTRA'&&(hostedAccount||pod?.connectorVersion!=='1.2.0-ea-local'))continue;
         const management = Core.buildManagementCommand(market);
         if (!management) continue;
         const issued = hostedAccount

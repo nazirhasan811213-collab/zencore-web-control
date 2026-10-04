@@ -1,4 +1,5 @@
 'use strict';
+const {tf2MarketRegime}=require('./analysis-execution-contract');
 
 const num=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Number(v):null;
 const upper=v=>String(v||'').toUpperCase();
@@ -16,7 +17,7 @@ function hemaStrength(r={},side,requireConfirmed=false){
     gapState:gap>previousGap?'EXPANDING':gap<previousGap?'CONTRACTING':'FLAT'};
 }
 
-function evaluateEntrySop(d={},timeframe='2',version='SOLID_TF2_3GREEN_HEMA23_V2'){
+function evaluateEntrySop(d={},timeframe='2',version='SOLID_TF2_3GREEN_HEMA23_V2',hemaTimeframes=['2','3']){
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
@@ -30,20 +31,22 @@ function evaluateEntrySop(d={},timeframe='2',version='SOLID_TF2_3GREEN_HEMA23_V2
   const pricePast=d.normal3PricePastEntry===true;
   const m5Position=upper(d.normal5Position);
   const m5Pass=side==='BUY'?m5Position==='ABOVE':side==='SELL'&&m5Position==='BELOW';
-  const hema2=hemaStrength(d.hemaConfirmation?.tf2,side);
-  const hema3=hemaStrength(d.hemaConfirmation?.tf3,side,true);
+  const [entryHemaTf,higherHemaTf]=hemaTimeframes;
+  const entryHema=hemaStrength(d.hemaConfirmation?.['tf'+entryHemaTf],side);
+  const higherHema=hemaStrength(d.hemaConfirmation?.['tf'+higherHemaTf],side,true);
   const gates=[
     {key:'timeframe',label:'Chart TF'+timeframe,pass:String(d.timeframe)===String(timeframe)},
     {key:'solid',label:'Solid Entry Signal',pass:d.normal3Solid===true},
     {key:'sop',label:'SOP Dashboard ≥3/5 Green',pass:green>=3,detail:`${green}/5`},
     {key:'forecast',label:'10-Candle Forecast',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
-    {key:'hema2',label:'HEMA TF2 searah dan bergerak kuat',pass:hema2.pass,detail:hema2.state},
-    {key:'hema3',label:'HEMA TF3 confirmed searah dan bergerak kuat',pass:hema3.pass,detail:hema3.state}
+    {key:'hema'+entryHemaTf,label:'HEMA TF'+entryHemaTf+' searah dan bergerak kuat',pass:entryHema.pass,detail:entryHema.state},
+    {key:'hema'+higherHemaTf,label:'HEMA TF'+higherHemaTf+' confirmed searah dan bergerak kuat',pass:higherHema.pass,detail:higherHema.state}
   ];
   // Friday 25 Sep Normal entry has no separate re-entry route.
   const reentryType='NONE',reentrySide='WAIT',reentryGates=[],reentryReady=false;
-  const standardReady=['BUY','SELL'].includes(side)&&gates.every(g=>g.pass)&&entry!==null&&close!==null&&atr!==null&&atr>0;
-  return {version,hema2,hema3,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
+  const marketRegime=String(timeframe)==='2'?tf2MarketRegime(d,true):null;
+  const standardReady=(!marketRegime||marketRegime.pass)&&['BUY','SELL'].includes(side)&&gates.every(g=>g.pass)&&entry!==null&&close!==null&&atr!==null&&atr>0;
+  return {version,marketRegime,['hema'+entryHemaTf]:entryHema,['hema'+higherHemaTf]:higherHema,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
     standardReady,reentryType,reentrySide,reentryGates,reentryReady};
 }
 

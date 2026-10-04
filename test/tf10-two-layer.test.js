@@ -12,8 +12,8 @@ const input={now,pine:{symbol:'XAUUSD',timeframe:'10',confirmed:true,receivedAt:
 test('new strategy requires TF10, emits exactly two layers, preserves TF2 existing strategy',()=>{
  const r=S.entryDecision(input);assert.equal(r.status,'READY');assert.equal(r.command.layers,2);assert.equal(r.command.totalLot,.02);
  assert.equal(normalEntrySop(input.pine).standardReady,false);
- assert.equal(normalEntrySop({...input.pine,timeframe:'2'}).standardReady,true);
- assert.equal(S.sop({...input.pine,timeframe:'2'}).standardReady,false);
+ assert.equal(normalEntrySop({...input.pine,timeframe:'2',chopIndex:40}).standardReady,true);
+ assert.equal(S.sop({...input.pine,timeframe:'2',chopIndex:40}).standardReady,false);
 });
 test('HEMA TF2/TF3 and strict forecast rules remain unchanged',()=>{
  for(const edit of [{hemaConfirmation:undefined},{normal3MarketPower:50},{normal3Sop3:false}])assert.equal(S.sop({...input.pine,...edit}).standardReady,false);

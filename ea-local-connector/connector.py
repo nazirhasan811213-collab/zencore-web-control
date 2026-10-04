@@ -15,6 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 import urllib.error
 import urllib.request
 import webbrowser
+import uuid
 from protocol import VERSION, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat
 
 BASE = 'https://zencore-precision-entry.onrender.com'
@@ -117,13 +118,33 @@ class Runner:
         self.config=config; self.status=status; self.api=Api(); self.stop=threading.Event()
         self.channel=Path(config['channel'])
         self.last_verified=0
+        self.next_heartbeat=0
+        self.desired_state="STOPPED"
+        self.delivered_at={}
+    def timing(self, command_id, stage, **metrics):
+        # Bounded local diagnostics: IDs and durations only, never account/auth/payload.
+        try:
+            command_id=str(uuid.UUID(command_id))
+            row={'commandId':command_id,'stage':stage,'recordedAtMs':int(time.time()*1000)}
+            for key,value in metrics.items():
+                if key in ('commandFetchMs','serverQueueAgeMs','handoffToAckMs','eaProcessingMs') and isinstance(value,(int,float)) and 0<=value<86400000:row[key]=round(value,2)
+            target=self.channel/'execution-timing.jsonl'
+            if target.exists() and target.stat().st_size>200000:
+                target.replace(self.channel/'execution-timing.previous.jsonl')
+            with target.open('a',encoding='utf-8') as log:log.write(json.dumps(row)+'\n')
+        except (OSError,ValueError,TypeError):pass
     def cycle(self):
         local=read_fields(self.channel/'heartbeat.tsv')
         report=heartbeat(local,self.config)
-        response=self.api.request('/api/execution/heartbeat',report,self.config['podToken'])
-        # Short local lease: stale connector/network never permits a new entry.
-        atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'], 'server':self.config['server'],
-          'expiresAt':int(time.time()*1000)+12000,'desiredState':response['desiredState']}))
+        # Poll commands quickly without multiplying database heartbeat writes.
+        if time.monotonic()>=self.next_heartbeat:
+            response=self.api.request('/api/execution/heartbeat',report,self.config['podToken'])
+            self.desired_state=response['desiredState']
+            # Only a successful server heartbeat renews permission to enter.
+            atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'], 'server':self.config['server'],
+              'expiresAt':int(time.time()*1000)+12000,'desiredState':self.desired_state}))
+            self.next_heartbeat=time.monotonic()+2
+
         for result_path in sorted(self.channel.glob('*.result')):
             result=read_fields(result_path)
             try:
@@ -131,14 +152,23 @@ class Runner:
                   {'status':result['status'],'code':result['code'],'brokerOrderId':result.get('brokerOrderId','')},self.config['podToken'])
             except RuntimeError as error:
                 if str(error) != 'COMMAND_NOT_FOUND': raise
+            delivered=self.delivered_at.pop(result['id'],None)
+            measurements={}
+            if delivered is not None:measurements['handoffToAckMs']=(time.monotonic()-delivered)*1000
+            try:measurements['eaProcessingMs']=float(result.get('eaProcessingMs','nan'))
+            except ValueError:pass
+            self.timing(result['id'],'ACKNOWLEDGED',**measurements)
             result_path.unlink()
         if (self.channel/'command.tsv').exists(): return
+        fetch_started=time.monotonic()
         result=self.api.request('/api/execution/commands/next',token=self.config['podToken'])
+        fetch_ms=(time.monotonic()-fetch_started)*1000
         if result.get('command'):
             command=result['command']
             try:
                 signed=verified_command(command,self.config['commandSigningKey'],self.config['podId'])
                 fields=command_fields(signed,self.config)
+                if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
             except (ValueError,KeyError,TypeError):
@@ -146,15 +176,22 @@ class Runner:
                   {'status':'REJECTED','code':'COMMAND_VALIDATION_FAILED'},self.config['podToken'])
                 return
             atomic_write(self.channel/'command.tsv',encode_fields(fields))
-        self.status('MT5 DEMO tersambung • '+response['desiredState'])
+            self.delivered_at[command['id']]=time.monotonic()
+            metrics={'commandFetchMs':fetch_ms}
+            if isinstance(result.get('serverTime'),(int,float)):
+                metrics['serverQueueAgeMs']=result['serverTime']-command['createdAt']
+            self.timing(command['id'],'DELIVERED',**metrics)
+        self.status('MT5 DEMO tersambung • '+self.desired_state)
     def run(self):
         while not self.stop.is_set():
+            delay=.5
             try: self.cycle()
             except Exception as error:
                 # Never include response bodies, auth values or raw exceptions in logs/UI.
                 code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','DEMO_ONLY','INVALID_POD_TOKEN','TRANSPORT_REPLACED') else 'CONNECTION_PENDING'
                 self.status(code+' — entry baharu menunggu sambungan.')
-            self.stop.wait(2)
+                delay=2
+            self.stop.wait(delay)
 
 class App:
     def __init__(self,root):
