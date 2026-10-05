@@ -16,8 +16,8 @@ function ingest(batch,at=Date.now()) {
   const market={symbol:pine.symbol,timeframe:'15',receivedAt:at,sourceBarTime:pine.sourceBarOpenAt,signalObservedAt:pine.signalObservedAt,
    setupKey:pine.setupKey,price:pine.normal3Close,freshness:'LIVE',feedMode:pine.confirmed?'BAR-CLOSE':'INTRABAR',
    strategyNormal:{tf:'15m',side:x.side,state:ready?'READY':'WATCH',solid:pine.normal3Solid,entrySopVersion:x.version,
-    reason:ready?'SOP 1/10 TF15 + entry line + 4/5 + forecast + HEMA5':'Tunggu SOP 1/10: SOLID, entry line, 4/5, forecast dan HEMA5',plan,
-    sop:{gates:x.gates,sopGreen:x.green,forecast:x.forecast,marketPower:x.power,m5Position:pine.normal5Position,m5Pass:x.m5Pass,pricePastEntry:x.pricePast}},
+    reason:ready?'SOP 1/10 TF15 + entry line + 4/5 + forecast + HEMA5 + HEMA15/30 searah':'Tunggu SOP 1/10: SOLID, entry line, 4/5, forecast, HEMA5 dan HEMA15/30 searah',plan,
+    sop:{gates:x.gates,sopGreen:x.green,forecast:x.forecast,marketPower:x.power,m5Position:pine.normal5Position,m5Pass:x.m5Pass,pricePastEntry:x.pricePast,hema15:x.hema15,hema30:x.hema30}},
    positionManagement:{action:pineExit.action,reason:'TF15 confirmed exit',slMoveTriggered:pineExit.slMoveTriggered,slMoveAction:pineExit.slMoveAction,activeSl:pineExit.activeSl,slLockLabel:pineExit.slLockLabel}};
   entries.set(pine.symbol,market);touched.push(market);
  }

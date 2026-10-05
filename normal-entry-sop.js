@@ -16,10 +16,17 @@ function hemaStrength(r={},side,requireConfirmed=false){
     gapState:gap>previousGap?'EXPANDING':gap<previousGap?'CONTRACTING':'FLAT'};
 }
 
+// Direction means ribbon alignment, independent of slope and candle-close state.
+function hemaMode(r={},side){
+  const fast=num(r.fast),slow=num(r.slow);
+  const mode=fast===null||slow===null?'WAIT_DATA':fast>slow?'BUY':fast<slow?'SELL':'NEUTRAL';
+  return {mode,state:mode,pass:['BUY','SELL'].includes(side)&&mode===side};
+}
+
 // Verified production snapshot: 284b98d, 2026-10-01 21:43 MYT.
-// Only the entry candle timeframe varies; original HEMA5 and thresholds stay identical.
+// October 1 baseline plus current-direction HEMA2/3 or HEMA15/30; no candle-close/slope gate.
 function evaluateEntrySop(d={},timeframe='2'){
-  const version=`NORMAL_20261001_TF${timeframe}_V1`;
+  const version=`NORMAL_20261001_TF${timeframe}_V2`;
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
@@ -33,19 +40,25 @@ function evaluateEntrySop(d={},timeframe='2'){
   const pricePast=d.normal3PricePastEntry===true;
   const m5Position=upper(d.normal5Position);
   const m5Pass=side==='BUY'?m5Position==='ABOVE':side==='SELL'&&m5Position==='BELOW';
+  const higherTf=String(timeframe)==='15'?'30':'3';
+  const currentHema=d.hemaConfirmation?.version===(String(timeframe)==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1')?d.hemaConfirmation:null;
+  const ownHema=hemaMode(currentHema?.['tf'+timeframe],side);
+  const higherHema=hemaMode(currentHema?.['tf'+higherTf],side);
   const gates=[
     {key:'solid',label:'Solid Entry Signal',pass:d.normal3Solid===true},
     {key:'entry',label:'Price Lepas Entry Line',pass:pricePast},
     {key:'sop',label:'SOP Dashboard ≥4/5 Green',pass:green>=4,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
-    {key:'m5',label:'Current 5m vs HEMA Ribbon',pass:m5Pass,detail:m5Position||'WAIT'}
+    {key:'m5',label:'Current 5m vs HEMA Ribbon',pass:m5Pass,detail:m5Position||'WAIT'},
+    {key:'hema'+timeframe,label:'HEMA TF'+timeframe+' searah entry',pass:ownHema.pass,detail:ownHema.mode},
+    {key:'hema'+higherTf,label:'HEMA TF'+higherTf+' searah entry',pass:higherHema.pass,detail:higherHema.mode}
   ];
   // Friday 25 Sep Normal entry has no separate re-entry route.
   const reentryType='NONE',reentrySide='WAIT',reentryGates=[],reentryReady=false;
   const standardReady=String(d.timeframe)===String(timeframe)&&['BUY','SELL'].includes(side)&&gates.every(g=>g.pass)&&entry!==null&&close!==null&&atr!==null&&atr>0;
-  return {version,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
+  return {version,['hema'+timeframe]:ownHema,['hema'+higherTf]:higherHema,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
     standardReady,reentryType,reentrySide,reentryGates,reentryReady};
 }
 
 function normalEntrySop(d={}){return evaluateEntrySop(d,'2');}
-module.exports={normalEntrySop,evaluateEntrySop,hemaStrength};
+module.exports={normalEntrySop,evaluateEntrySop,hemaStrength,hemaMode};

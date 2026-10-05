@@ -1378,19 +1378,17 @@ function fetchLocalValidation(symbol) {
 function startAutoTradeDispatcher() {
   if (autoTradeState.dispatchTimer || !autoTradeState.service) return;
   let lastErrorLogAt = 0;
-  const {createCoalescingDispatcher}=require('./coalescing-dispatcher');
-  const tick = createCoalescingDispatcher(async () => {
-    if (!autoTradeState.ready) return;
-    const markets = await fetchLocalMarkets();
-    await autoTradeState.service.dispatchMarkets(markets);
-  }, error => {
+  const {createRealtimeDispatcher}=require('./realtime-dispatcher');
+  const {tick,onMarket}=createRealtimeDispatcher({
+    fetchMarkets:fetchLocalMarkets,
+    dispatch:async markets=>{if(autoTradeState.ready)await autoTradeState.service.dispatchMarkets(markets);},
+    onError:error => {
     if (Date.now() - lastErrorLogAt > 60_000) {
       lastErrorLogAt = Date.now();
       console.error('ZenCore Auto Trade dispatcher waiting:', error.message);
     }
-  });
-  // A confirmed market snapshot dispatches immediately; periodic checks recover missed events.
-  const onMarket = () => { const timer = setTimeout(tick, 0); timer.unref?.(); };
+  }});
+  // Dispatch intrabar entry payload immediately; periodic checks are recovery only.
   require('./analysis-alert-bus').on('market', onMarket);
   autoTradeState.dispatchTimer = setInterval(tick, 3000);
   autoTradeState.dispatchTimer.unref?.();

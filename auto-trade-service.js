@@ -1221,7 +1221,9 @@ function createAutoTradeService(options = {}) {
             side: setup.payload.side,
             totalLot: setup.payload.totalLot,
             riskLevel: setup.payload.risk.level,
-            riskBlocksOrder: false
+            riskBlocksOrder: false,
+            timeframe: String(market.timeframe||''),
+            signalToQueueMs: Math.max(0,now()-(Number(market.signalObservedAt)||market.receivedAt))
           });
         }
       }

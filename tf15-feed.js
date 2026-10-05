@@ -3,7 +3,7 @@
 function decodeTf15Market(row,batch={},receivedAt=Date.now()) {
  if(batch.feedVersion!=='TF15_REALTIME_V1'||String(batch.timeframe)!=='15'||!Array.isArray(row)||row.length!==67)return null;
  const meta=row[66],hema=row[65];
- if(hema?.version!=='HEMA1545_V1'||meta?.version!=='TF15_ENTRY_EVENT_V1')return null;
+ if(hema?.version!=='HEMA1530_V1'||meta?.version!=='TF15_ENTRY_EVENT_V1')return null;
  const symbol=String(row[0]||'').toUpperCase(),side=String(row[34]||'').toUpperCase();
  const opened=Number(row[1]),observed=Number(batch.emittedAt),setupAt=Number(meta.setupAt);
  if(!Number.isFinite(opened)||!Number.isFinite(observed)||!Number.isFinite(setupAt)||setupAt<=0||setupAt>opened)return null;

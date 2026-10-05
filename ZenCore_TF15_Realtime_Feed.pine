@@ -39,20 +39,20 @@ f_quote(string value)=>
     safe:=str.replace_all(safe,"\"","\\\"")
     "\"" + safe + "\""
 
-f_hema23_closed()=>
+f_hema_live()=>
     float fast=f_hema(close,20)
     float slow=f_hema(close,40)
-    [fast[1],slow[1],fast[2],slow[2]]
+    [fast,slow,fast[1],slow[1]]
 
 f_hema23_num(float value)=>
     na(value)?"null":str.tostring(value,"#.########")
 
 f_hema23_json(float f2,float s2,float pf2,float ps2,float f3,float s3,float pf3,float ps3)=>
-    "{\"version\":\"HEMA1545_V1\",\"tf15\":{\"fast\":"+f_hema23_num(f2)+",\"slow\":"+f_hema23_num(s2)+",\"previousFast\":"+f_hema23_num(pf2)+",\"previousSlow\":"+f_hema23_num(ps2)+"},\"tf45\":{\"confirmed\":true,\"fast\":"+f_hema23_num(f3)+",\"slow\":"+f_hema23_num(s3)+",\"previousFast\":"+f_hema23_num(pf3)+",\"previousSlow\":"+f_hema23_num(ps3)+"}}"
+    "{\"version\":\"HEMA1530_V1\",\"tf15\":{\"fast\":"+f_hema23_num(f2)+",\"slow\":"+f_hema23_num(s2)+",\"previousFast\":"+f_hema23_num(pf2)+",\"previousSlow\":"+f_hema23_num(ps2)+"},\"tf30\":{\"confirmed\":false,\"fast\":"+f_hema23_num(f3)+",\"slow\":"+f_hema23_num(s3)+",\"previousFast\":"+f_hema23_num(pf3)+",\"previousSlow\":"+f_hema23_num(ps3)+"}}"
 
 // Executes independently inside each requested 15-minute symbol context.
-// Higher-timeframe EMA states are updated only when their candles close,
-// matching lookahead_off confirmed-bar behaviour while using three requests per supported pair.
+// Forecast EMA states are updated only when their candles close,
+// while HEMA entry confirmations below use the current live ribbon modes.
 f_scan3()=>
     float e9=ta.ema(close,9)
     float e20=ta.ema(close,20)
@@ -324,7 +324,7 @@ if feedEnabled and correctTf
         string alias=array.get(aliases,i)
         [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema,previousH20,previousH40,setupAt]=request.security(ticker,"15",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
         [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
-        [f3,s3,pf3,ps3]=request.security(ticker,"45",f_hema23_closed(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_on,ignore_invalid_symbol=true,calc_bars_count=180)
+        [f3,s3,pf3,ps3]=request.security(ticker,"30",f_hema_live(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
         string hemaJson=f_hema23_json(h20,h40,previousH20,previousH40,f3,s3,pf3,ps3)
         string m5pos=na(m5close)?"WAIT":m5close>math.max(m5h20,m5h40)?"ABOVE":m5close<math.min(m5h20,m5h40)?"BELOW":"INSIDE"
         bool sop5=side=="BUY"?m5h20>m5h40:side=="SELL"?m5h20<m5h40:false
@@ -333,11 +333,11 @@ if feedEnabled and correctTf
         bool buy=side=="BUY"
         bool direction=buy or side=="SELL"
         bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
-        bool ownHema=buy?(h20>h40 and h20>previousH20 and h40>previousH40):(h20<h40 and h20<previousH20 and h40<previousH40)
-        bool higherHema=buy?(f3>s3 and f3>pf3 and s3>ps3):(f3<s3 and f3<pf3 and s3<ps3)
+        bool ownHema=buy?h20>h40:h20<h40
+        bool higherHema=buy?f3>s3:f3<s3
         bool ribbonPass=buy?m5pos=="ABOVE":m5pos=="BELOW"
-        // Identical October 1 SOP for TF2 and TF15; HEMA5 is the original confirmation.
-        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ribbonPass and not na(setupAt)
+        // October 1 SOP + current HEMA modes. Entry alerts do not wait for candle close.
+        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ribbonPass and ownHema and higherHema and not na(setupAt)
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
         bool entryEvent=barstate.isrealtime and eligible and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent

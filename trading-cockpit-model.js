@@ -5,7 +5,7 @@ function cockpit(markets,now=Date.now()){
  const pairs=SYMBOLS.map(symbol=>dualAnalysis(markets,symbol,now));
  for(const pair of pairs)for(const view of pair.views){
   const observed=Number(view.market?.signalObservedAt),normal=view.market?.strategyNormal;
-  const expected=view.timeframe===2?'NORMAL_20261001_TF2_V1':'NORMAL_20261001_TF15_V1';
+  const expected=view.timeframe===2?'NORMAL_20261001_TF2_V2':'NORMAL_20261001_TF15_V2';
   view.entryReady=normal?.entrySopVersion===expected&&view.status==='LIVE'&&Number.isFinite(observed)&&observed<=now+5000&&now-observed<=30000&&!!createEntryDecision(view.market);
   view.displayState=view.status!=='LIVE'?'WAITING':view.entryReady?'READY':normal?.state==='READY'?'WAIT_CONFIRMATION':normal?.state||'WATCH';
  }

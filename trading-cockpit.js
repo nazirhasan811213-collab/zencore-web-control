@@ -22,7 +22,7 @@
   $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'WATCHLIST':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
   $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU CONFIRMATION':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
   $('featuredReason').textContent=fresh(best)?n.reason||'Semak confirmation pada Analysis.':'Feed TF'+best.timeframe+' belum tersedia. Signal akan muncul selepas data segar diterima.';
-  const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));chips.push(el('span','HEMA5 '+(s.m5Position||'WAIT'),s.m5Pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
+  const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));chips.push(el('span','HEMA5 '+(s.m5Position||'WAIT'),s.m5Pass?'pass':''));for(const h of [best.timeframe,best.timeframe===2?3:30])chips.push(el('span','HEMA'+h+' '+(s['hema'+h]?.mode||'WAIT'),s['hema'+h]?.pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
   $('featuredEntry').textContent=format(p.entry,best.symbol);$('featuredTp').textContent=format(p.tp1,best.symbol);$('featuredSl').textContent=format(p.sl,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
   const cards=[];
   for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'FOREX'));card.append(head);
