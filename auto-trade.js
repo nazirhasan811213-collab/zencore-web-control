@@ -349,6 +349,9 @@
   async function refreshState(silent = true) {
     try {
       render(await api('/api/auto-trade/state'));
+      const diagnostics = await api('/api/auto-trade/execution-diagnostics');
+      const diagnosticList = byId('executionDiagnostics');
+      if (diagnosticList) diagnosticList.innerHTML = (diagnostics.commands || []).filter(c => c.type === 'PLACE_SETUP').slice(0,3).map(c => `<div class="audit-row"><b>DIAGNOSTIK ${escape(c.symbol)} TF${escape(c.timeframe)}</b><span>${escape(c.resultCode || c.status)} • ${escape(c.checks.length ? c.checks.join(', ') : 'Semakan struktur server lulus')}</span><time>${escape(timeText(c.createdAt))}</time></div>`).join('');
     } catch (error) {
       render(syntheticUnavailable(error.message));
       if (!silent) toast(error.message, true);
