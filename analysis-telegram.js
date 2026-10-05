@@ -36,11 +36,11 @@ function entrySopAllowed(e){
     (!['2','15'].includes(String(e.timeframe)) || s.tf!==String(e.timeframe)+'m' ||
     (e.telegramMarket?.timeframe!=null && String(e.telegramMarket.timeframe)!==String(e.timeframe))))return false;
   if(s?.version==='NORMAL_20261001_TF2_V2'&&s.tf==='2m'||s?.version==='NORMAL_20261001_TF15_V2'&&s.tf==='15m')
-    return ['XAUUSD','GBPUSD','GBPJPY'].includes(e.symbol)&&s.solid===true&&s.green>=4&&
+    return ['XAUUSD'].includes(e.symbol)&&s.solid===true&&s.green>=4&&
       Array.isArray(s.gates)&&s.gates.length===7&&s.gates.every(g=>g.pass===true)&&s['hema'+s.tf.replace('m','')]?.mode===e.side&&
       s['hema'+(s.tf==='15m'?'30':'3')]?.mode===e.side&&numeric(e.telegramQuality?.score)>=50;
   const valid=s?.version===SOP_VERSION&&s.tf==='2m'||s?.version==='SOLID_TF15_3GREEN_HEMA1545_2L_V1'&&s.tf==='15m';
-  return valid&&['XAUUSD','GBPUSD','GBPJPY'].includes(e.symbol)&&s.solid===true&&s.green>=3&&Array.isArray(s.gates)&&s.gates.length===6&&s.gates.every(g=>g.pass===true);
+  return valid&&['XAUUSD'].includes(e.symbol)&&s.solid===true&&s.green>=3&&Array.isArray(s.gates)&&s.gates.length===6&&s.gates.every(g=>g.pass===true);
 }
 function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':score>=60?'B':score>=50?'C+':'C';}
 

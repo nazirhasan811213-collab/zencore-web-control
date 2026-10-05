@@ -1,6 +1,6 @@
 (() => {
  'use strict';
- const $=id=>document.getElementById(id),symbols=['XAUUSD','GBPUSD','GBPJPY'];
+ const $=id=>document.getElementById(id),symbols=['XAUUSD'];
  let payload=null,failed=false,filter='both',stopped=false;
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toFixed(symbol==='GBPUSD'?5:3);
@@ -15,7 +15,7 @@
  function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[2,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
  function render(){
   const all=views(),visible=all.filter(v=>filter==='both'||String(v.timeframe)===filter);
-  const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'DISCONNECTED':live?live+'/6 FEED LIVE':'WAITING FEED';
+  const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'DISCONNECTED':live?live+'/'+(symbols.length*2)+' FEED LIVE':'WAITING FEED';
   const ranked=visible.slice().sort((a,b)=>Number(ready(b))-Number(ready(a))||Number(fresh(b))-Number(fresh(a))||Number(b.market?.strategyNormal?.sop?.sopGreen||0)-Number(a.market?.strategyNormal?.sop?.sopGreen||0));
   const best=ranked[0],n=best.market?.strategyNormal||{},s=n.sop||{},p=n.plan||{};
   $('featuredPair').textContent=best.symbol;$('featuredTf').textContent='TF'+best.timeframe+' · '+tfName(best.timeframe);

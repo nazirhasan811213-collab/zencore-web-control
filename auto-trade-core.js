@@ -70,7 +70,7 @@
 
   const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF15_INTRA', 'BOTH']);
 
-  const TRADE_SYMBOLS=Object.freeze(['XAUUSD','GBPUSD','GBPJPY']);
+  const TRADE_SYMBOLS=Object.freeze(['XAUUSD']);
   function malaysiaTradingSchedule(enabled = true) {
     return {enabled: enabled === true, timeZone: 'Asia/Kuala_Lumpur',
       start: '07:00', end: '03:00', newsPauseMinutes: 30,

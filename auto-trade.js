@@ -217,7 +217,7 @@
     byId('fxLayers').disabled = tf15;
     setText('strategyNotice', tf15
       ? 'TF15 Intra: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast, HEMA5 dan HEMA15/30 searah. Entry realtime. Tepat 2 layer. EA/Connector 1.2 diperlukan. Both menggunakan satu setup aktif bagi setiap pair dan TF. Posisi serentak dua TF memerlukan akaun MT5 hedging dan EA 1.21.'
-      : 'TF2: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast, HEMA5 dan HEMA2/3 searah. Entry realtime. Setting Gold dan currency berasingan. SL/TP dan close mengikut Pine StepLock asal.');
+      : 'TF2: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast, HEMA5 dan HEMA2/3 searah. Entry realtime. XAUUSD sahaja. SL/TP dan close mengikut Pine StepLock asal.');
   }
 
   function renderSettings(state) {
@@ -265,7 +265,7 @@
     }
     const settings = state.settings;
     setText('summaryExposure', settings?.totalLot == null ? '—' : Number(settings.totalLot).toFixed(3));
-    setText('summaryLayers', settings ? `${settings.strategyMode==='BOTH'?'TF2 + TF15':settings.strategyMode === 'TF15_INTRA' ? 'TF15' : 'TF2'} · Gold ${Core.effectiveSettings(settings, 'XAUUSD').totalLot} lot · FX ${Core.effectiveSettings(settings, 'EURUSD').totalLot} lot` : 'Belum dikonfigurasi');
+    setText('summaryLayers', settings ? `${settings.strategyMode==='BOTH'?'TF2 + TF15':settings.strategyMode === 'TF15_INTRA' ? 'TF15' : 'TF2'} · Gold ${Core.effectiveSettings(settings, 'XAUUSD').totalLot} lot` : 'Belum dikonfigurasi');
   }
 
   function renderPositions(state) {

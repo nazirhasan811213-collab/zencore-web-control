@@ -47,7 +47,7 @@ const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
 const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
-const AUTOTRADE_DEMO_SYMBOLS = ['XAUUSD','GBPUSD','GBPJPY'];
+const AUTOTRADE_DEMO_SYMBOLS = ['XAUUSD'];
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
   process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.2-gcp-multiuser-multipair'
 );

@@ -1,5 +1,5 @@
 'use strict';
-const SYMBOLS=['XAUUSD','GBPUSD','GBPJPY'];
+const SYMBOLS=['XAUUSD'];
 function dualAnalysis(markets,symbol,now=Date.now()) {
  if(!SYMBOLS.includes(symbol))throw new Error('INVALID_SYMBOL');
  return {ok:true,symbol,serverTime:now,views:[2,15].map(tf=>{

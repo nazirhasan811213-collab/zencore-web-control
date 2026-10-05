@@ -106,7 +106,7 @@
     const expectedTf=solidTf15?'15m':'2m';
     if(solidSop && (normal.tf!==expectedTf || (market.timeframe!=null && String(market.timeframe).replace(/m$/, '')!==expectedTf.replace(/m$/, '')) || normal.solid!==true || !Array.isArray(normal.sop?.gates) || normal.sop.gates.length!==6 || !normal.sop.gates.every(g=>g.pass===true)))return null;
     const symbol = normaliseSymbol(market.symbol);
-    if(!['XAUUSD','GBPUSD','GBPJPY'].includes(symbol))return null;
+    if(!['XAUUSD'].includes(symbol))return null;
     const side = String(normal.side || plan.side || '').toUpperCase();
     const receivedAt = sourceTime(market);
     const prices = {

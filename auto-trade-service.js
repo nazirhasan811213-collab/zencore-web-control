@@ -332,7 +332,7 @@ function createAutoTradeService(options = {}) {
       capitalUsd: profile.capitalUsd,
       lotPerLayer: profile.lotPerLayer,
       layers: profile.layers,
-      symbols: profile.symbols,
+      symbols: profile.symbols.filter(symbol => Core.TRADE_SYMBOLS.includes(symbol)),
       totalLot: profile.lotPerLayer != null && profile.layers != null
         ? Math.round(profile.lotPerLayer * profile.layers * 100000) / 100000 : null,
       riskAcknowledgedAt: profile.riskAcknowledgedAt

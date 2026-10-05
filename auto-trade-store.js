@@ -1250,6 +1250,7 @@ class PostgresAutoTradeStore {
       const result = await client.query(
         `SELECT * FROM zencore_autotrade_commands
          WHERE pod_id = $1 AND status IN ('PENDING','DELIVERED') AND expires_at > $2
+           AND (command_type <> 'PLACE_SETUP' OR payload->>'symbol' = 'XAUUSD')
          ORDER BY CASE command_type
            WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
            WHEN 'SYSTEM_STOP' THEN 1
@@ -1364,6 +1365,7 @@ class PostgresAutoTradeStore {
       const result = await client.query(
         `SELECT * FROM zencore_hosted_autotrade_commands
          WHERE account_id = $1 AND status IN ('PENDING','DELIVERED') AND expires_at > $2
+           AND (command_type <> 'PLACE_SETUP' OR payload->>'symbol' = 'XAUUSD')
          ORDER BY CASE command_type
            WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
            WHEN 'SYSTEM_STOP' THEN 1
@@ -2026,7 +2028,8 @@ class MemoryAutoTradeStore {
       PLACE_SETUP: 4
     };
     const row = rows
-      .filter(item => ['PENDING', 'DELIVERED'].includes(item.status) && item.expiresAt > now)
+      .filter(item => ['PENDING', 'DELIVERED'].includes(item.status) && item.expiresAt > now &&
+        (item.type !== 'PLACE_SETUP' || item.payload?.symbol === 'XAUUSD'))
       .sort((left, right) =>
         (priority[left.type] ?? 5) - (priority[right.type] ?? 5) || left.createdAt - right.createdAt
       )[0];
@@ -2105,7 +2108,8 @@ class MemoryAutoTradeStore {
     }
     const priority = { EMERGENCY_CLOSE_ALL: 0, SYSTEM_STOP: 1, MANAGE_POSITION: 2, SYSTEM_ON: 3, PLACE_SETUP: 4 };
     const row = rows
-      .filter(item => ['PENDING','DELIVERED'].includes(item.status) && item.expiresAt > now)
+      .filter(item => ['PENDING','DELIVERED'].includes(item.status) && item.expiresAt > now &&
+        (item.type !== 'PLACE_SETUP' || item.payload?.symbol === 'XAUUSD'))
       .sort((a,b) => (priority[a.type] ?? 5) - (priority[b.type] ?? 5) || a.createdAt - b.createdAt)[0];
     if (!row) return null;
     row.status = 'DELIVERED';
