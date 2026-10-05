@@ -1196,9 +1196,9 @@ function createAutoTradeService(options = {}) {
         if (!allowedDemoSymbols.includes(symbol) || !Core.permitsPositionEntry(market,positions)) continue;
         if (hostedAccount) {
           if (typeof store.hasRecentHostedEntryCommand === 'function' &&
-              await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
+              await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         } else if (typeof store.hasRecentEntryCommand === 'function' &&
-            await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000)) continue;
+            await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup) continue;

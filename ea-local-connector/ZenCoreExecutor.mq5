@@ -1,5 +1,5 @@
 #property strict
-#property version "1.20"
+#property version "1.21"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. DEMO only."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -171,20 +171,21 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(c!="XAUUSD" && c!="GBPUSD" && c!="GBPJPY")return false;
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return false;
  if(strategyMode=="TF15_INTRA" && (layers!=2 || tightTf2))return false;
- trade.SetExpertMagicNumber(strategyMode=="TF15_INTRA"?MAGIC15:MAGIC);
+ ulong entryScope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
+ trade.SetExpertMagicNumber(entryScope);
  if(!armed || StringFind(","+enabledSymbols+",",","+c+",")<0 || !Permissions() || !FreshLease())return false;
  if(layers<1 || layers>10 || !VolumeValid(symbol,lot) || (side!="BUY" && side!="SELL"))return false;
  bool buy=side=="BUY";
  if(entry<=0 || sl<=0 || !(buy?(sl<entry && entry<tp1 && tp1<tp2 && tp2<tp3):(sl>entry && entry>tp1 && tp1>tp2 && tp2>tp3)))return false;
- // Do not merge manual/other-EA positions into a ZenCore netting position.
- if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && PositionSelect(symbol) && (ulong)PositionGetInteger(POSITION_MAGIC)!=MAGIC)return false;
+ // Netting cannot hold separate strategy positions on one symbol.
+ if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && PositionSelect(symbol))return false;
  for(int i=0;i<PositionsTotal();i++){
-  ulong ticket=PositionGetTicket(i);if(IsOwn(ticket) && PositionGetString(POSITION_SYMBOL)==symbol &&
+  ulong ticket=PositionGetTicket(i);if(IsOwn(ticket) && (ulong)PositionGetInteger(POSITION_MAGIC)==entryScope && PositionGetString(POSITION_SYMBOL)==symbol &&
    (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)!=buy)return false;
  }
  // A netting merge or second setup would lose setup-level metadata: refuse rather than close unrelated trades.
  if(true){
-  for(int j=0;j<PositionsTotal();j++){ulong existing=PositionGetTicket(j);if(IsOwn(existing) && PositionGetString(POSITION_SYMBOL)==symbol)return false;}
+  for(int j=0;j<PositionsTotal();j++){ulong existing=PositionGetTicket(j);if(IsOwn(existing) && (ulong)PositionGetInteger(POSITION_MAGIC)==entryScope && PositionGetString(POSITION_SYMBOL)==symbol)return false;}
   sl=entry+(sl-entry)*0.8;
  }
  trade.SetTypeFillingBySymbol(symbol);sl=Price(symbol,sl);

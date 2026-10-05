@@ -39,7 +39,7 @@ test('Both dispatches separate strategy commands and management cannot cross tim
  const rows=store.commands.get('pod-owner');assert.deepEqual(rows.map(r=>r.payload.strategyMode),['TF2_SCALPING','TF15_INTRA']);
  await store.replacePositions('owner',[{ticket:'1',symbol:'GBPUSD',strategyMode:'TF15_INTRA'}],now);
  const wrong={...market('2','GBPUSD'),positionManagement:{action:'EXIT_ALL'}};
- assert.deepEqual(await service.dispatchMarkets([wrong]),{queued:0});
+ assert.deepEqual(await service.dispatchMarkets([wrong]),{queued:1});
  const correct={...wrong,timeframe:'15'};assert.deepEqual(await service.dispatchMarkets([correct]),{queued:1});assert.equal(rows.at(-1).payload.strategyMode,'TF15_INTRA');
 });
 test('Telegram state dedupe is independent for two timeframes on the same pair',async()=>{

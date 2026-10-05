@@ -32,6 +32,9 @@ function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
   const s=e.telegramSop;
+  if(String(s?.version||'').startsWith('NORMAL_20261001_') &&
+    (!['2','15'].includes(String(e.timeframe)) || s.tf!==String(e.timeframe)+'m' ||
+    (e.telegramMarket?.timeframe!=null && String(e.telegramMarket.timeframe)!==String(e.timeframe))))return false;
   if(s?.version==='NORMAL_20261001_TF2_V2'&&s.tf==='2m'||s?.version==='NORMAL_20261001_TF15_V2'&&s.tf==='15m')
     return ['XAUUSD','GBPUSD','GBPJPY'].includes(e.symbol)&&s.solid===true&&s.green>=4&&
       Array.isArray(s.gates)&&s.gates.length===7&&s.gates.every(g=>g.pass===true)&&s['hema'+s.tf.replace('m','')]?.mode===e.side&&
@@ -75,7 +78,7 @@ function telegramMessage(e){
       `Harga feed: ${price(e.telegramMarket?.price)}\nFeed: ${e.telegramMarket?.feedMode==='INTRABAR'?'REALTIME • candle belum tutup':'candle '+tf+'M ditutup'}\nSOP confirmation lengkap; bukan jaminan profit.\n\n${footer}`;
   }
   if(!p||!q)return `ZENCORE | SIGNAL ENTRY\n\n${e.message}\n\nA+ PROFIT QUALITY\nQuality: Belum tersedia\n\n${footer}`;
-  return `ZENCORE | SIGNAL ENTRY\n${e.symbol} • ${e.side} • NORMAL 3M\n\n`+
+  return `ZENCORE | SIGNAL ENTRY TF${e.timeframe}\n${e.symbol} • ${e.side} • ${e.timeframe==='15'?'INTRA':'SCALPING'}\n\n`+
     `Entry SOP: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n`+
     `Harga feed ketika signal: ${price(e.telegramMarket?.price)}\nFeed: candle ${e.telegramMarket?.timeframe||'3'}M ditutup\n\n`+
     `A+ PROFIT QUALITY\nGred: ${qualityGrade(q.score)} • Quality: ${q.score}/100\nStatus: ${q.high?'POTENSI TINGGI':'VALID SOP • LOW QUALITY'}\n\n`+

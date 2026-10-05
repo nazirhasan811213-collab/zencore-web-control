@@ -1189,14 +1189,15 @@ class PostgresAutoTradeStore {
     }
   }
 
-  async hasRecentEntryCommand(userId, symbol, since) {
+  async hasRecentEntryCommand(userId, symbol, since, strategyMode = null) {
     const result = await this.pool.query(
       `SELECT 1 FROM zencore_autotrade_commands
        WHERE user_id = $1 AND command_type = 'PLACE_SETUP'
          AND payload->>'symbol' = $2 AND created_at >= $3
+         AND ($4::text IS NULL OR COALESCE(payload->>'strategyMode','TF2_SCALPING') = $4)
          AND status NOT IN ('FAILED','REJECTED','EXPIRED','CANCELLED')
        LIMIT 1`,
-      [userId, symbol, new Date(since)]
+      [userId, symbol, new Date(since), strategyMode]
     );
     return result.rowCount > 0;
   }
@@ -1316,14 +1317,15 @@ class PostgresAutoTradeStore {
     }
   }
 
-  async hasRecentHostedEntryCommand(userId, symbol, since) {
+  async hasRecentHostedEntryCommand(userId, symbol, since, strategyMode = null) {
     const result = await this.pool.query(
       `SELECT 1 FROM zencore_hosted_autotrade_commands
        WHERE user_id = $1 AND command_type = 'PLACE_SETUP'
          AND payload->>'symbol' = $2 AND created_at >= $3
+         AND ($4::text IS NULL OR COALESCE(payload->>'strategyMode','TF2_SCALPING') = $4)
          AND status NOT IN ('FAILED','REJECTED','EXPIRED','CANCELLED')
        LIMIT 1`,
-      [userId, symbol, new Date(since)]
+      [userId, symbol, new Date(since), strategyMode]
     );
     return result.rowCount > 0;
   }
@@ -1952,12 +1954,13 @@ class MemoryAutoTradeStore {
     return { created: true, command: publicCommand(row) };
   }
 
-  async hasRecentEntryCommand(userId, symbol, since) {
+  async hasRecentEntryCommand(userId, symbol, since, strategyMode = null) {
     for (const rows of this.commands.values()) {
       const existing = rows.find(item =>
         item.userId === userId &&
         item.type === 'PLACE_SETUP' &&
         item.payload?.symbol === symbol &&
+        (!strategyMode || (item.payload?.strategyMode || 'TF2_SCALPING') === strategyMode) &&
         item.createdAt >= since &&
         !['FAILED', 'REJECTED', 'EXPIRED', 'CANCELLED'].includes(item.status)
       );
@@ -2055,10 +2058,11 @@ class MemoryAutoTradeStore {
     return { created: true, command: publicHostedCommand(row) };
   }
 
-  async hasRecentHostedEntryCommand(userId, symbol, since) {
+  async hasRecentHostedEntryCommand(userId, symbol, since, strategyMode = null) {
     return [...this.hostedCommands.values()].flat().some(item =>
       item.userId === userId && item.type === 'PLACE_SETUP' &&
       item.payload?.symbol === symbol && item.createdAt >= since &&
+      (!strategyMode || (item.payload?.strategyMode || 'TF2_SCALPING') === strategyMode) &&
       !['FAILED','REJECTED','EXPIRED','CANCELLED'].includes(item.status)
     );
   }

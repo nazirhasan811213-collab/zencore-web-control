@@ -411,7 +411,10 @@
 
   function permitsPositionEntry(market = {}, positions = []) {
     const symbol=normaliseSymbol(market.symbol);
-    const open=positions.filter(position=>normaliseSymbol(position.symbol)===symbol);
+    const tf=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '');
+    const mode=tf==='15'?'TF15_INTRA':'TF2_SCALPING';
+    const open=positions.filter(position=>normaliseSymbol(position.symbol)===symbol &&
+      (position.strategyMode||'TF2_SCALPING')===mode);
     if (!open.length) return true;
     const normal=market.strategyNormal||{};
     return /^(NORMAL|HIGH)_REENTRY$/.test(String(normal.entryType||'')) &&

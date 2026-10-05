@@ -47,7 +47,7 @@ test('TF15 decoder, analysis, execution and Telegram share original SOP and corr
   const m={...market,timeframe:tf,strategyNormal:{...market.strategyNormal,tf:tf+'m',entrySopVersion:x.version,sop:{...market.strategyNormal.sop,gates:x.gates,...Object.fromEntries(Object.entries(x).filter(([k])=>k.startsWith('hema')))}}};
   const cmd=Core.buildSetupCommand(m,settings,{tickSize:.01,tickValue:1},at);
   assert.ok(cmd);assert.equal(cmd.payload.exitPolicy,null);assert.equal(cmd.payload.sl,99);
-  const q=messageQuality(m),event={kind:'ENTRY',symbol:'XAUUSD',side:'BUY',id:'TEST',time:at,telegramPlan:m.strategyNormal.plan,telegramQuality:q,
+  const q=messageQuality(m),event={kind:'ENTRY',timeframe:tf,symbol:'XAUUSD',side:'BUY',id:'TEST',time:at,telegramPlan:m.strategyNormal.plan,telegramQuality:q,
    telegramSop:{version:x.version,tf:tf+'m',solid:true,green:4,gates:x.gates,forecast:x.forecast,power:x.power,m5Position:'ABOVE',...Object.fromEntries(Object.entries(x).filter(([k])=>k.startsWith('hema')))}};
   assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('SOLID ENTRY TF'+tf));assert.match(telegramMessage(event),/HEMA5: ABOVE/);
   assert.equal(entrySopAllowed({...event,telegramQuality:{score:49}}),false);
