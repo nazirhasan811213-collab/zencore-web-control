@@ -399,7 +399,7 @@ function normalScalpStrategy(symbol,d){
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
-  const reason=x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — TF2 SOLID + entry line + 4/5 checklist + forecast + HEMA5 + HEMA2/3 searah.`):
+  const reason=x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — TF2 SOLID + entry line + 4/5 checklist + forecast + HEMA2/3 searah.`):
     sopReady&&pinePlan&&!entryWindowOpen?'SKIP ENTRY — harga sudah melepasi TP1 atau SL.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
