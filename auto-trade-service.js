@@ -250,6 +250,42 @@ function createAutoTradeService(options = {}) {
   }
 
 
+  async function executionDiagnostics(userId) {
+    const commands = await store.listRecentCommands(userId, 10);
+    return { ok: true, commands: commands.map(command => {
+      const checks = [];
+      let signed;
+      try {
+        const raw = Buffer.from(command.signedEnvelope || '', 'base64url');
+        signed = JSON.parse(raw.toString('utf8'));
+        const expected = crypto.createHmac('sha256', commandSigningKeyForPod(command.podId)).update(raw).digest('hex');
+        if (expected !== command.signature) checks.push('SIGNATURE_REJECTED');
+        const { isDeepStrictEqual } = require('node:util');
+        for (const key of ['id','type','payload','createdAt','expiresAt']) {
+          if (!isDeepStrictEqual(command[key], signed[key])) checks.push('ENVELOPE_MISMATCH_' + key.toUpperCase());
+        }
+        if (signed.podId !== command.podId) checks.push('WRONG_POD');
+        const p = signed.payload || {}, snap = p.analysisSnapshot || {};
+        if (['PLACE_SETUP','MANAGE_POSITION'].includes(signed.type)) {
+          if (p.analysisContractVersion !== 'ZENCORE_ANALYSIS_EXECUTION_V1' || snap.contractVersion !== 'ZENCORE_ANALYSIS_EXECUTION_V1' ||
+              p.strategy !== 'NORMAL_3M_SOP_V32' || p.schemaVersion !== '32.3-EXIT-STEPLOCK' || snap.decisionOwner !== 'ZENCORE_ANALYSIS' ||
+              snap.decision !== (signed.type === 'PLACE_SETUP' ? 'ENTRY_AUTHORIZED' : 'POSITION_ACTION_AUTHORIZED')) checks.push('ANALYSIS_CONTRACT_REJECTED');
+          if (p.strategyMode === 'TF15_INTRA' && String(snap.executionTimeframe).replace('m','') !== '15') checks.push('TF15_SNAPSHOT_REQUIRED');
+          if (p.symbol !== snap.symbol) checks.push('SYMBOL_REJECTED');
+          if (signed.type === 'PLACE_SETUP') {
+            for (const key of ['side','entry','sl','tp1','tp2','tp3']) if (p[key] !== snap[key]) checks.push('ANALYSIS_PRICE_MISMATCH_' + key.toUpperCase());
+            if (p.exitPolicy != null && (p.strategyMode !== 'TF2_SCALPING' || p.exitPolicy.version !== 'TF2_TIGHT_SL_3C_V1' || p.exitPolicy.slDistanceFactor !== .8 || p.exitPolicy.maxCompletedCandlesWithoutTp1 !== 3 || p.exitPolicy.timeframeMinutes !== 2)) checks.push('EXIT_POLICY_REJECTED');
+          }
+        }
+      } catch (_) { checks.push('ENVELOPE_INVALID'); }
+      // Whitelist metadata only: never return keys, tokens, signatures, envelopes, credentials or raw payloads.
+      return { type: command.type, symbol: command.payload?.symbol || null,
+        timeframe: command.payload?.strategyMode === 'TF15_INTRA' ? '15' : '2', status: command.status,
+        createdAt: command.createdAt, deliveredAt: command.deliveredAt, acknowledgedAt: command.acknowledgedAt,
+        resultCode: String(command.result?.code || '').replace(/[^A-Za-z0-9_.-]/g,'').slice(0,40), checks };
+    }) };
+  }
+
   async function connectionMonitor(userId) {
     const [profile, pod, hosted, events] = await Promise.all([
       store.getProfile(userId), store.getPodForUser(userId), activeHostedAccount(userId), store.listAudit(userId, 30)
@@ -1273,6 +1309,7 @@ function createAutoTradeService(options = {}) {
   return {
     state,
     connectionMonitor,
+    executionDiagnostics,
     credentialEncryptionConfig,
     connectHostedAccount,
     listHostedAssignments,

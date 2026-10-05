@@ -302,9 +302,9 @@
       SYSTEM_STOP_REQUESTED: 'Entry baharu disekat; EXIT management dikekalkan.',
       SYSTEM_STOPPED: 'Sistem dihentikan.',
       EMERGENCY_CLOSE_REQUESTED: 'Emergency Close All dihantar ke MT5.',
-      SETUP_QUEUED: `${detail.symbol || 'Pair'} ${detail.side || ''} dihantar • ${detail.totalLot || '—'} lot • risk ${detail.riskLevel || 'PENDING'}.`,
+      SETUP_QUEUED: `${detail.symbol || 'Pair'} ${detail.side || ''} TF${detail.timeframe || '—'} dihantar • ${detail.totalLot || '—'} lot • risk ${detail.riskLevel || 'PENDING'}.`,
       HOSTED_MT5_ENVELOPE_SAVED: `Credential envelope disimpan untuk ${detail.accountMask || 'akaun MT5'} • plaintext tidak disimpan.`,
-      COMMAND_ACKNOWLEDGED: `${detail.commandType || 'Command'}: ${detail.status || 'ACK'}.`
+      COMMAND_ACKNOWLEDGED: `${detail.commandType || 'Command'}: ${detail.status || 'ACK'}${detail.code ? ' • ' + detail.code : ''}.`
     };
     return descriptions[item.type] || String(item.type || 'Aktiviti').replaceAll('_', ' ');
   }

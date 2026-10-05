@@ -1189,6 +1189,14 @@ class PostgresAutoTradeStore {
     }
   }
 
+  async listRecentCommands(userId, limit = 10) {
+    const result = await this.pool.query(
+      `SELECT * FROM zencore_autotrade_commands WHERE user_id = $1
+       ORDER BY created_at DESC LIMIT $2`, [userId, Math.max(1, Math.min(20, Number(limit) || 10))]
+    );
+    return result.rows.map(publicCommand);
+  }
+
   async hasRecentEntryCommand(userId, symbol, since, strategyMode = null) {
     const result = await this.pool.query(
       `SELECT 1 FROM zencore_autotrade_commands
@@ -1952,6 +1960,11 @@ class MemoryAutoTradeStore {
     rows.push(row);
     this.commands.set(command.podId, rows);
     return { created: true, command: publicCommand(row) };
+  }
+
+  async listRecentCommands(userId, limit = 10) {
+    return [...this.commands.values()].flat().filter(row => row.userId === userId)
+      .sort((a,b) => b.createdAt-a.createdAt).slice(0, Math.max(1, Math.min(20, Number(limit) || 10))).map(publicCommand);
   }
 
   async hasRecentEntryCommand(userId, symbol, since, strategyMode = null) {

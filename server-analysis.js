@@ -1135,6 +1135,9 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
       if (!limit.allowed) return sendJson(res, 429, { ok: false, error: 'Cuba semula sebentar lagi.' });
       return sendJson(res, 201, await autoTradeState.service.connectLocalEa(userId));
     }
+    if (req.method === 'GET' && pathname === '/api/auto-trade/execution-diagnostics') {
+      return sendJson(res, 200, await autoTradeState.service.executionDiagnostics(userId));
+    }
     if (req.method === 'GET' && pathname === '/api/auto-trade/credential-key') {
       return sendJson(res, 200, autoTradeState.service.credentialEncryptionConfig());
     }
