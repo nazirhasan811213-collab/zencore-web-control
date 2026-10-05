@@ -74,7 +74,7 @@ class TransportTests(unittest.TestCase):
                 def request(self,url,data=None,token=None):
                     calls.append(url)
                     if url.endswith('heartbeat'):return {'ok':True,'desiredState':'STOPPED'}
-                    if url.endswith('/next'):return {'ok':True,'command':signed()}
+                    if url.endswith('/next'):return {'ok':True,'command':signed(),'serverTime':NOW}
                     return {'ok':True}
             runner.api=FakeApi()
             with patch('protocol.time.time',return_value=NOW/1000),patch('connector.time.time',return_value=NOW/1000):runner.cycle()

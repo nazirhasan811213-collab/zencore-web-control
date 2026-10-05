@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m pip install pyinstaller==6.16.0
           python -m PyInstaller --noconfirm --clean --onefile --windowed --name ZenCoreConnector --add-data "ea-local-connector/ZenCoreExecutor.mq5;." --paths ea-local-connector ea-local-connector/connector.py
-          Copy-Item ea-local-connector/README.md dist/README.md
+          Copy-Item ea-local-connector/PANDUAN_INSTALL_1.21.txt dist/PANDUAN_INSTALL_1.21.txt
           Copy-Item ea-local-connector/ZenCoreExecutor.mq5 dist/ZenCoreExecutor.mq5
           Get-FileHash dist/ZenCoreConnector.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreConnector.exe" } | Set-Content dist/SHA256.txt
       - name: Validate packaged EXE without connecting to broker
@@ -34,6 +34,29 @@ jobs:
           if ($process.ExitCode -ne 0) { throw 'Packaged EXE smoke test failed.' }
           $result = Get-Content dist/validation.json -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.eaResource -or -not $result.dpapi -or -not $result.tkGui) { throw 'Packaged EXE validation incomplete.' }
+          if ($result.connectorBuild -ne '1.21.1') { throw 'Wrong Connector build.' }
+          if ($result.eaVersion -ne '1.21') { throw 'Wrong EA version embedded.' }
+      - name: Build easy Windows setup
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler not available on Windows runner.' }
+          & $compiler ea-local-connector/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+          Get-FileHash dist/ZenCoreSetup-1.21.1.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreSetup-1.21.1.exe" } | Add-Content dist/SHA256.txt
+      - name: Validate easy setup install and uninstall
+        shell: pwsh
+        run: |
+          $testDir = Join-Path $env:RUNNER_TEMP 'ZenCore-Setup-Smoke'
+          $setup = Start-Process dist/ZenCoreSetup-1.21.1.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$testDir" -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw 'Setup installation failed.' }
+          $installed = Join-Path $testDir 'ZenCoreConnector.exe'
+          $check = Start-Process $installed -ArgumentList '--self-test', '--output=dist/setup-validation.json' -Wait -PassThru
+          if ($check.ExitCode -ne 0) { throw 'Installed Connector smoke test failed.' }
+          $report = Get-Content dist/setup-validation.json -Raw | ConvertFrom-Json
+          if (-not $report.ok -or $report.eaVersion -ne '1.21') { throw 'Installed EA version mismatch.' }
+          $remove = Start-Process (Join-Path $testDir 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($remove.ExitCode -ne 0) { throw 'Setup uninstall test failed.' }
       - uses: actions/upload-artifact@v4
         with:
           name: ZenCore-EA-Connector-Windows-DEMO

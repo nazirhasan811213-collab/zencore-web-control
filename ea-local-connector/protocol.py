@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.2.0-ea-local'
+EA_VERSION = '1.21'
+CONNECTOR_BUILD = '1.21.1'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -159,3 +161,27 @@ def heartbeat(fields, selected_identity, now_ms=None):
             position[key] = float(fields[prefix+key])
         value['positions'].append(position)
     return value
+
+
+VALIDATION_CODES = frozenset((
+ 'ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
+ 'INVALID_COMMAND_ID','COMMAND_EXPIRED','CLOCK_SKEW','INVALID_NUMBER',
+ 'STRATEGY_MODE_REJECTED','TF15_SNAPSHOT_REQUIRED','SYSTEM_CONTRACT_REJECTED',
+ 'INVALID_SYMBOLS','ANALYSIS_CONTRACT_REJECTED','SYMBOL_REJECTED',
+ 'ANALYSIS_PRICE_MISMATCH','SIDE_REJECTED','EXIT_POLICY_REJECTED',
+ 'ACTIONS_REJECTED','ACTION_REJECTED','PERCENT_REJECTED','TYPE_REJECTED',
+ 'EA_STRATEGY_UPGRADE_REQUIRED','EA_POLICY_UPGRADE_REQUIRED','SERVER_TIME_REQUIRED'
+))
+
+def validation_code(error):
+    if isinstance(error, KeyError): return 'REQUIRED_FIELD_MISSING'
+    if isinstance(error, TypeError): return 'INVALID_COMMAND_TYPE'
+    code = str(error)
+    return code if code in VALIDATION_CODES else 'COMMAND_VALIDATION_FAILED'
+
+def command_server_time(result, request_elapsed_ms):
+    value = result.get('serverTime')
+    if isinstance(value, bool) or not isinstance(value, (int,float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError('SERVER_TIME_REQUIRED')
+    # Add the full measured round trip conservatively; never extend the signed deadline.
+    return value + max(0, request_elapsed_ms)
