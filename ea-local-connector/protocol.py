@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 VERSION = '1.2.0-ea-local'
+EA_VERSION = '1.21'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
