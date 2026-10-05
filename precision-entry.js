@@ -108,7 +108,7 @@ function qualityLayer(m){
     return {score:Math.round(passed/Math.max(1,gates.length)*100),grade:n.state==='READY'?'SOP READY':'WAIT',
       checks:gates.map(g=>({label:g.label,detail:g.detail||(g.pass?'PASS':'WAIT'),earned:g.pass?1:0,max:1})),
       aPlusExecution:false,action:n.state==='READY'?'SEMAK QUOTE BROKER':'TUNGGU CONFIRMATION',
-      advice:'SOLID TF2 • checklist ≥3/5 • forecast • HEMA TF2 dan TF3 searah serta bergerak searah.',rr:rrFromPlan(n.plan)};
+      advice:'SOP 1/10 • SOLID • harga lepas entry • checklist ≥4/5 • forecast • HEMA5.',rr:rrFromPlan(n.plan)};
   }
 
   const p=n?.plan||null;
@@ -325,7 +325,7 @@ function renderMarket(m){
   setText('riskDistance',fmtPrice(p?.riskDistance));
   const planRr=rrFromPlan(p);
   setText('rrTp3',planRr==null?'—':planRr.toFixed(1)+'R');
-  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Paras Entry, SL dan TP mengikut '+(p.tpMode||'pelan')+' pada carta TradingView.':'Pelan entry memerlukan SOLID TF2, 3/5 checklist, forecast dan HEMA TF2/TF3.');
+  setText('planNote',active?'Signal entry direkod '+new Date(active.openedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Pelan kekal sehingga signal close 100%.':p?'Paras Entry, SL dan TP mengikut '+(p.tpMode||'pelan')+' pada carta TradingView.':'Pelan entry SOP 1/10 memerlukan SOLID, harga lepas entry, 4/5 checklist, forecast dan HEMA5.');
 
   setText('riskState',m?.sidewaysGuard?'HIGH / SIDEWAYS':state==='READY'?'CONTROLLED':'WAIT');
   setText('setupProbability',m?.setupProbability==null?'—':Math.round(num(m.setupProbability))+'%');

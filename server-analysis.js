@@ -1487,7 +1487,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_Gold_065_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_Multi_Pair_Feed_32_3.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_SOP_HEMA23.md') return sendAuthAsset(res, 'docs/LIVE_SOP_HEMA23.md', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
-  if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_Multi_Pair_Feed_32_3.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCoreExecutor.mq5') return sendAuthAsset(res, 'ea-local-connector/ZenCoreExecutor.mq5', 'text/plain; charset=utf-8');

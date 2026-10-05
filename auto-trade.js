@@ -216,8 +216,8 @@
     byId('layers').disabled = tf15;
     byId('fxLayers').disabled = tf15;
     setText('strategyNotice', tf15
-      ? 'TF15 Intra: SOLID TF15 + HEMA TF15/TF45. Tepat 2 layer. EA/Connector 1.2 diperlukan. Both menggunakan satu setup aktif bagi setiap pair.'
-      : 'TF2: SOP SOLID, checklist, forecast dan HEMA TF2/TF3. Setting Gold dan currency berasingan. SL 20% lebih kecil dan exit 3 candle tanpa sentuhan TP1 memerlukan EA/Connector 1.1; simpan setting selepas kemas kini EA.');
+      ? 'TF15 Intra: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast dan HEMA5. Tepat 2 layer. EA/Connector 1.2 diperlukan. Both menggunakan satu setup aktif bagi setiap pair.'
+      : 'TF2: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast dan HEMA5. Setting Gold dan currency berasingan. SL/TP dan close mengikut Pine StepLock asal.');
   }
 
   function renderSettings(state) {

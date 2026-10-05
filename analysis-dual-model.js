@@ -7,7 +7,7 @@ function dualAnalysis(markets,symbol,now=Date.now()) {
   const market=candidates.sort((a,b)=>Number(b.receivedAt)-Number(a.receivedAt))[0]||null;
   const at=Number(market?.receivedAt)||0;
   const ageMs=at?Math.max(0,now-at):null;
-  return {timeframe:tf,label:tf===2?'Scalping':'Intra',confirmationTimeframe:tf===2?3:45,status:!at?'WAITING':at>now+5000?'INVALID_TIME':ageMs>30000?'STALE':'LIVE',ageMs,market};
+  return {timeframe:tf,label:tf===2?'Scalping':'Intra',confirmationTimeframe:5,status:!at?'WAITING':at>now+5000?'INVALID_TIME':ageMs>30000?'STALE':'LIVE',ageMs,market};
  })};
 }
 module.exports={dualAnalysis,SYMBOLS};

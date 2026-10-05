@@ -8,7 +8,7 @@ test('dual analysis isolates timeframe, pair and plan with independently aged fe
  const data=dualAnalysis([make(2,now),make(15,now-31000,'SELL'),make(3,now+1),{...make(15,now),symbol:'GBPUSD'}],'XAUUSD',now);
  assert.equal(data.views[0].status,'LIVE');assert.equal(data.views[0].market.strategyNormal.plan.entry,2);
  assert.equal(data.views[1].status,'STALE');assert.equal(data.views[1].market.strategyNormal.side,'SELL');
- assert.equal(data.views[1].confirmationTimeframe,45);
+ assert.equal(data.views[1].confirmationTimeframe,5);
 });
 test('missing TF15 is waiting and never borrowed from TF2; mismatched strategy is excluded',()=>{
  const data=dualAnalysis([make(2,100),{...make(15,100),strategyNormal:{tf:'2m'}}],'XAUUSD',100);

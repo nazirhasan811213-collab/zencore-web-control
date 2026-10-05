@@ -385,8 +385,8 @@ function fastTradeStrategy(symbol,d){
 }
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
-  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',entrySopVersion:'SOLID_TF2_3GREEN_HEMA23_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
-  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'SOLID_TF2_3GREEN_HEMA23_V2',tf:'2m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — SOP TF2 perlukan SOLID, checklist, forecast dan HEMA TF2/TF3 Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
+  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V1',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
+  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V1',tf:'2m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — SOP 1/10 perlukan SOLID, entry line, checklist 4/5, forecast dan HEMA 5M Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
   const x=normalEntrySop({...d,sidewaysGuard:sidewaysGuardBySymbol.get(symbol)?.active===true});
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
@@ -399,7 +399,7 @@ function normalScalpStrategy(symbol,d){
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
-  const reason=x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — TF2 SOLID + 3/5 checklist + forecast + HEMA TF2/TF3 lulus.`):
+  const reason=x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} ENTRY — TF2 SOLID + entry line + 4/5 checklist + forecast + HEMA 5M lulus.`):
     sopReady&&pinePlan&&!entryWindowOpen?'SKIP ENTRY — harga sudah melepasi TP1 atau SL.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
@@ -642,7 +642,7 @@ function proxyPairHtml(req,res,symbol){
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
-  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'SOLID_TF2_3GREEN_HEMA23_V2',timeframe:'2',checklistMinimum:3,hemaTimeframes:['2','3'],telegramFollowsSop:true,requiresNewPineFeed:true}));
+  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'NORMAL_20261001_DUAL_V1',baselineCommit:'284b98d',baselineDate:'2026-10-01',timeframes:['2','15'],checklistMinimum:4,hemaTimeframes:['5'],pricePastEntryRequired:true,forecastBuyAbove:50,forecastSellNeutralBelow:50,forecastSellBearishAbove:50,minimumGrade:'C+',exitPolicy:'PINE_STEPLOCK_ORIGINAL',telegramFollowsSop:true,requiresNewPineFeed:true}));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);
     try{captureBody(body)}catch(error){console.error('ZenCore webhook snapshot failed:',error);return send(res,500,JSON.stringify({ok:false,error:'Snapshot processing failed'}));}

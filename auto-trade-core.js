@@ -461,7 +461,8 @@
         layers: execution.layers,
         totalLot: execution.totalLot,
         strategyMode: execution.strategyMode,
-        exitPolicy: mode==='TF2_SCALPING'?(settings.strategyExitPolicies?.TF2_SCALPING || null):null,
+        // Restored October 1 SOP uses Pine StepLock/partial/yellow exits, without later overrides.
+        exitPolicy: String(snapshot.analysisSopVersion||'').startsWith('NORMAL_20261001_')?null:mode==='TF2_SCALPING'?(settings.strategyExitPolicies?.TF2_SCALPING || null):null,
         assetGroup: execution.assetGroup,
         risk,
         signalReceivedAt: snapshot.sourceReceivedAt

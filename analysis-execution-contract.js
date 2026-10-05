@@ -87,6 +87,15 @@
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
+    const restoredTf2=normal.entrySopVersion==='NORMAL_20261001_TF2_V1';
+    const restoredTf15=normal.entrySopVersion==='NORMAL_20261001_TF15_V1';
+    const restored=restoredTf2||restoredTf15;
+    if(String(normal.entrySopVersion||'').startsWith('NORMAL_20261001_')&&!restored)return null;
+    if(restored){
+      const expected=restoredTf15?'15':'2';
+      if(normal.tf!==expected+'m'||String(market.timeframe)!==expected||normal.solid!==true||
+        !Array.isArray(normal.sop?.gates)||normal.sop.gates.length!==5||!normal.sop.gates.every(g=>g.pass===true))return null;
+    }
     const solidTf2=normal.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2';
     const solidTf15=normal.entrySopVersion==='SOLID_TF15_3GREEN_HEMA1545_2L_V1';
     if(String(normal.entrySopVersion||'').startsWith('SOLID_TF15_')&&!solidTf15)return null;
@@ -127,7 +136,7 @@
       ...(market.setupKey?{setupKey:market.setupKey}:{}),
       ...(market.signalObservedAt?{signalObservedAt:market.signalObservedAt}:{}),
       sourceReceivedAt: receivedAt,
-      ...(solidSop?{analysisSopVersion:normal.entrySopVersion}:{})
+      ...((solidSop||restored)?{analysisSopVersion:normal.entrySopVersion}:{})
     };
     return deepFreeze({
       signalKey: [CONTRACT_VERSION,market.timeframe||normal.tf||'2', symbol, side, prices.entry, market.setupKey||receivedAt].join('|'),

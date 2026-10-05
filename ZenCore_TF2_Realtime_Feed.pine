@@ -8,7 +8,7 @@ grp="ZenCore Multi-Pair Web Feed"
 feedEnabled=input.bool(true,"Enable 3-Pair Batch Feed",group=grp)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
 tpModeStr=input.string("Fixed R:R","Mod Sasaran TP",options=["Fibonacci","Fixed R:R"],group=grp)
-goldAtrMultiplier=input.float(0.65,"Gold 2M ATR multiplier — DEMO test",minval=0.10,maxval=2.0,step=0.05,group=grp)
+goldAtrMultiplier=input.float(1.0,"Gold 2M ATR multiplier — SOP 1 Oct",minval=0.10,maxval=2.0,step=0.05,group=grp)
 
 f_hema(float src,int len)=>
     int half=int(math.max(1,math.round(len/2)))
@@ -332,10 +332,12 @@ if feedEnabled and correctTf
         int greens=(sop1?1:0)+(sop2?1:0)+(sop3?1:0)+(sop4?1:0)+(sop5?1:0)
         bool buy=side=="BUY"
         bool direction=buy or side=="SELL"
-        bool forecastOk=buy?((forecast=="NEUTRAL" and power>55) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<45) or (forecast=="BEARISH" and power>50))
+        bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
         bool ownHema=buy?(h20>h40 and h20>previousH20 and h40>previousH40):(h20<h40 and h20<previousH20 and h40<previousH40)
         bool higherHema=buy?(f3>s3 and f3>pf3 and s3>ps3):(f3<s3 and f3<pf3 and s3<ps3)
-        bool eligible=direction and solid and greens>=3 and forecastOk and ownHema and higherHema and not na(setupAt)
+        bool ribbonPass=buy?m5pos=="ABOVE":m5pos=="BELOW"
+        // Identical October 1 SOP for TF2 and TF15; HEMA5 is the original confirmation.
+        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ribbonPass and not na(setupAt)
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
         bool entryEvent=barstate.isrealtime and eligible and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent

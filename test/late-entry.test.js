@@ -23,7 +23,7 @@ test('dispatcher refuses old feed and signs entry with a 15 second lifetime',asy
   localEaExecutionUserIds:['u'],allowedDemoSymbols:['XAUUSD']});
  store.podsByUser.set('u',{id:'p',userId:'u',ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:now,
   tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,
-  demoExecutionUnlocked:true,connectorVersion:'1.0.0-ea-local'});
+  demoExecutionUnlocked:true,connectorVersion:'1.2.0-ea-local'});
  await service.saveSettings('u',{capitalUsd:100,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true});
  await store.setControl('u',{desiredState:'ON',effectiveState:'ON'});
  const signal=market('BUY',100);signal.receivedAt=now-31000;
