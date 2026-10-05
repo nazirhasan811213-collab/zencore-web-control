@@ -1,7 +1,7 @@
 const http=require('http');
 const fs=require('fs');
 const path=require('path');
-const {acceptsSnapshot,effectiveReceivedAt}=require('./market-feed-sync');
+const {acceptsSnapshot,acceptsFeedSource,effectiveReceivedAt}=require('./market-feed-sync');
 const {normalEntrySop}=require('./normal-entry-sop');
 const {chartTradePlan}=require('./chart-trade-plan');
 
@@ -570,7 +570,7 @@ function expandCompactMarket(row,batch){
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
     ...(['HEMA23_V1','HEMA23_LIVE_V1'].includes(row[65]?.version)?{hemaConfirmation:row[65]}:{}),
-    source:'ZenCore AI Dashboard Pro + Alerts',feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupKey:row[66]?.setupAt?`TF2|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
+    source:'ZenCore AI Dashboard Pro + Alerts',feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupKey:row[66]?.setupAt?`TF2|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
     symbol,timeframe:String(batch.timeframe||'3'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
@@ -588,10 +588,8 @@ function storeSnapshot(parsed){
   const symbol=normSymbol(parsed.symbol||parsed.tickerid);
   if(!DEFAULT_MARKETS.includes(symbol)||N(parsed.close)==null)return null;
   const previous=latestBySymbol.get(symbol);
-  if(!acceptsSnapshot(previous,parsed))return null;
-  // On the same candle, the main TradingView chart owns its plan settings.
-  if(previous&&N(previous.time)===N(parsed.time)&&previous.feedType!=='MULTI_PAIR_BATCH'&&
-     parsed.feedType==='MULTI_PAIR_BATCH')return null;
+  // Current realtime entry payload must survive a competing legacy chart alert.
+  if(!acceptsFeedSource(previous,parsed))return null;
   const d={...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'};
   latestBySymbol.set(symbol,d);
   const arr=historyBySymbol.get(symbol)||[];

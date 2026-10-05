@@ -16,3 +16,24 @@ test('old source candle cannot become fresh by arriving late',()=>{
   assert.equal(effectiveReceivedAt({time:now-60000,receivedAt:now,timeframe:'3'}),now);
   assert.equal(effectiveReceivedAt({time:42,receivedAt:now,timeframe:'3'}),now);
 });
+
+test('current realtime TF2 outranks legacy main chart on the same candle in either delivery order',()=>{
+ const {acceptsFeedSource}=require('../market-feed-sync');
+ const chart={time:1800000000000,timeframe:'2',barIndex:100,feedType:'LIVE',normalSopVersion:'TF2_REQUIRED'};
+ const live={...chart,feedType:'MULTI_PAIR_BATCH',feedVersion:'TF2_REALTIME_V1',hemaConfirmation:{version:'HEMA23_LIVE_V1'},entryEvent:true,signalObservedAt:1800000000100};
+ assert.equal(acceptsFeedSource(chart,live),true);
+ assert.equal(acceptsFeedSource(live,chart),false);
+ assert.equal(acceptsFeedSource(live,{...live,signalObservedAt:1800000000000}),false);
+ assert.equal(acceptsFeedSource(live,{...live,signalObservedAt:1800000000200,entryEvent:false}),true);
+ assert.equal(acceptsFeedSource(chart,{...live,hemaConfirmation:{version:'HEMA23_V1'}}),false);
+ assert.equal(acceptsFeedSource(live,{...live,time:chart.time-120000}),false);
+ assert.equal(acceptsFeedSource(live,{...live,time:chart.time+120000}),true);
+});
+test('compact ingress retains live feed version used by source priority guard',()=>{
+ const fs=require('node:fs'),vm=require('node:vm');
+ const code=fs.readFileSync(require.resolve('../server-v17'),'utf8'),start=code.indexOf('function expandCompactMarket('),end=code.indexOf('function storeSnapshot(',start),ctx={};
+ vm.runInNewContext(code.slice(start,end),ctx);
+ const row=Array(67).fill(null);row[0]='XAUUSD';row[65]={version:'HEMA23_LIVE_V1'};row[66]={entryEvent:true,setupAt:1800000000000};
+ const d=ctx.expandCompactMarket(row,{feedVersion:'TF2_REALTIME_V1',schemaVersion:'32.3-EXIT-STEPLOCK',timeframe:'2',emittedAt:1800000000100});
+ assert.equal(d.feedVersion,'TF2_REALTIME_V1');assert.equal(d.hemaConfirmation.version,'HEMA23_LIVE_V1');assert.equal(d.entryEvent,true);
+});

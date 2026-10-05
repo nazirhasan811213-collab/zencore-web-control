@@ -20,6 +20,26 @@ function acceptsSnapshot(previous, incoming) {
   return oldIndex === null || newIndex === null || newIndex >= oldIndex;
 }
 
+// On the same candle, a versioned realtime bridge owns execution data.
+// A legacy chart payload has no current HEMA/event fields and cannot replace it.
+function realtimeTf2(snapshot){
+  return String(snapshot?.timeframe)==='2'&&snapshot?.feedVersion==='TF2_REALTIME_V1'&&
+    snapshot?.hemaConfirmation?.version==='HEMA23_LIVE_V1'&&
+    typeof snapshot?.entryEvent==='boolean'&&number(snapshot?.signalObservedAt)>0;
+}
+function acceptsFeedSource(previous,incoming){
+  if(!acceptsSnapshot(previous,incoming))return false;
+  if(!previous||number(previous.time)!==number(incoming.time))return true;
+  const oldRealtime=realtimeTf2(previous),newRealtime=realtimeTf2(incoming);
+  if(oldRealtime||newRealtime){
+    if(oldRealtime&&!newRealtime)return false;
+    if(oldRealtime&&newRealtime&&number(incoming.signalObservedAt)<number(previous.signalObservedAt))return false;
+    return true;
+  }
+  // Preserve legacy chart plan ownership when neither source is the current bridge.
+  return !(previous.feedType!=='MULTI_PAIR_BATCH'&&incoming.feedType==='MULTI_PAIR_BATCH');
+}
+
 function effectiveReceivedAt(snapshot) {
   const received = number(snapshot?.receivedAt);
   const bar = number(snapshot?.time);
@@ -30,4 +50,4 @@ function effectiveReceivedAt(snapshot) {
     : received;
 }
 
-module.exports = {acceptsSnapshot,effectiveReceivedAt};
+module.exports = {acceptsSnapshot,acceptsFeedSource,realtimeTf2,effectiveReceivedAt};
