@@ -335,9 +335,9 @@ if feedEnabled and correctTf
         bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
         bool ownHema=buy?h20>h40:h20<h40
         bool higherHema=buy?f3>s3:f3<s3
-        bool ribbonPass=buy?m5pos=="ABOVE":m5pos=="BELOW"
-        // October 1 SOP + current HEMA modes. Entry alerts do not wait for candle close.
-        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ribbonPass and ownHema and higherHema and not na(setupAt)
+        // TF2: price-vs-HEMA5 gate removed; checklist and HEMA2/3 remain.
+        // Entry alerts do not wait for candle close.
+        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ownHema and higherHema and not na(setupAt)
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
         bool entryEvent=barstate.isrealtime and eligible and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent
@@ -369,7 +369,7 @@ if showStatus
         status:=table.new(position.top_right,2,4,bgcolor=color.new(#07131d,5),border_width=1)
     if barstate.islast
         table.cell(status,0,0,"ZENCORE MULTI-PAIR",text_color=color.aqua)
-        table.cell(status,1,0,"32.5 • 2M SOP",text_color=color.lime)
+        table.cell(status,1,0,"TF2 • HEMA2/3 • NO M5 PRICE GATE",text_color=color.lime)
         table.cell(status,0,1,"Markets",text_color=color.gray)
         table.cell(status,1,1,"3",text_color=color.white)
         table.cell(status,0,2,"Chart TF",text_color=color.gray)
