@@ -94,7 +94,7 @@
     if(restored){
       const expected=restoredTf15?'15':'2';
       if(normal.tf!==expected+'m'||String(market.timeframe)!==expected||normal.solid!==true||
-        !Array.isArray(normal.sop?.gates)||!(restoredTf2?[6,7].includes(normal.sop.gates.length):normal.sop.gates.length===7)||!normal.sop.gates.every(g=>g.pass===true))return null;
+        !Array.isArray(normal.sop?.gates)||![6,7].includes(normal.sop.gates.length)||!normal.sop.gates.every(g=>g.pass===true))return null;
       const side=String(normal.side||'').toUpperCase(),higher=expected==='15'?'30':'3';
       if(normal.sop?.['hema'+expected]?.mode!==side||normal.sop?.['hema'+higher]?.mode!==side)return null;
     }

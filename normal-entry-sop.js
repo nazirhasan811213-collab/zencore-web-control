@@ -25,7 +25,7 @@ function hemaMode(r={},side){
 
 // Verified production snapshot: 284b98d, 2026-10-01 21:43 MYT.
 // October 1 baseline plus current-direction HEMA2/3 or HEMA15/30; no candle-close/slope gate.
-// TF2 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
+// TF2 and TF15 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
 function evaluateEntrySop(d={},timeframe='2'){
   const version=`NORMAL_20261001_TF${timeframe}_V2`;
   const side=upper(d.normal3Side);
@@ -50,7 +50,6 @@ function evaluateEntrySop(d={},timeframe='2'){
     {key:'entry',label:'Price Lepas Entry Line',pass:pricePast},
     {key:'sop',label:'SOP Dashboard ≥4/5 Green',pass:green>=4,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
-    ...(String(timeframe)==='15'?[{key:'m5',label:'Current 5m vs HEMA Ribbon',pass:m5Pass,detail:m5Position||'WAIT'}]:[]),
     {key:'hema'+timeframe,label:'HEMA TF'+timeframe+' searah entry',pass:ownHema.pass,detail:ownHema.mode},
     {key:'hema'+higherTf,label:'HEMA TF'+higherTf+' searah entry',pass:higherHema.pass,detail:higherHema.mode}
   ];

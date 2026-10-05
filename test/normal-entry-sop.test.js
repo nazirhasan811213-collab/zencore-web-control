@@ -10,12 +10,12 @@ const base={timeframe:'2',normal3Side:'BUY',normal3Entry:100,normal3Close:100.1,
 test('October 1 gates are extended by two directional HEMA gates, without slope or close gates',()=>{
  for(const tf of ['2','15']){
   const d={...base,timeframe:tf,chopIndex:90,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1'}};
-  const x=evaluateEntrySop(d,tf);assert.equal(x.standardReady,true);assert.equal(x.gates.length,tf==='2'?6:7);
+  const x=evaluateEntrySop(d,tf);assert.equal(x.standardReady,true);assert.equal(x.gates.length,6);
   for(const edit of [{normal3Solid:false},{normal3PricePastEntry:false},{normal3Sop4:false},{normal3MarketPower:50},{normal3Atr:0},{timeframe:'3'}])
    assert.equal(evaluateEntrySop({...d,...edit},tf).standardReady,false,JSON.stringify(edit));
  }
  assert.equal(evaluateEntrySop({...base,normal5Position:'INSIDE'},'2').standardReady,true);
- assert.equal(evaluateEntrySop({...base,timeframe:'15',normal5Position:'INSIDE',hemaConfirmation:{...base.hemaConfirmation,version:'HEMA1530_V1'}},'15').standardReady,false);
+ assert.equal(evaluateEntrySop({...base,timeframe:'15',normal5Position:'INSIDE',hemaConfirmation:{...base.hemaConfirmation,version:'HEMA1530_V1'}},'15').standardReady,true);
 });
 test('all checklist combinations retain the original minimum four, in both timeframes',()=>{
  for(const tf of ['2','15'])for(let mask=0;mask<32;mask++){
@@ -50,7 +50,7 @@ test('TF15 decoder, analysis, execution and Telegram share original SOP and corr
   assert.ok(cmd);assert.equal(cmd.payload.exitPolicy,null);assert.equal(cmd.payload.sl,99);
   const q=messageQuality(m),event={kind:'ENTRY',timeframe:tf,symbol:'XAUUSD',side:'BUY',id:'TEST',time:at,telegramPlan:m.strategyNormal.plan,telegramQuality:q,
    telegramSop:{version:x.version,tf:tf+'m',solid:true,green:4,gates:x.gates,forecast:x.forecast,power:x.power,m5Position:'ABOVE',...Object.fromEntries(Object.entries(x).filter(([k])=>k.startsWith('hema')))}};
-  assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('SOLID ENTRY TF'+tf));if(tf==='15')assert.match(telegramMessage(event),/HEMA5: ABOVE/);else assert.doesNotMatch(telegramMessage(event),/HEMA5:/);
+  assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('SOLID ENTRY TF'+tf));assert.doesNotMatch(telegramMessage(event),/HEMA5:/);
   assert.equal(entrySopAllowed({...event,telegramQuality:{score:49}}),false);
  }
  const late={...market,price:101};assert.equal(Contract.createEntryDecision(late),null);
