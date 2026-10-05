@@ -1,0 +1,33 @@
+ZENCORE — PEMASANGAN MUDAH EA 1.21 (WINDOWS, DEMO)
+
+Jika sudah menggunakan versi lama:
+1. Di web ZenCore, tekan STOP ENTRY dan tunggu status STOPPED.
+   STOP ENTRY bukan Close All. Jangan tekan Emergency Close All untuk upgrade.
+2. Tutup ZenCore Connector lama.
+3. Double-click ZenCoreSetup-EA-1.21.exe. Ikut Install -> Finish.
+   Gunakan Windows user yang sama dengan MT5. Tidak perlu Run as Administrator.
+
+Pasang EA:
+4. Buka MT5 desktop dan login akaun DEMO broker anda.
+5. MT5 -> File -> Open Data Folder. Salin lokasi folder tersebut.
+6. Dalam ZenCore Connector, pilih folder tadi.
+7. Klik Pasang / Kemas kini EA 1.21. Connector akan compile sendiri.
+8. Selepas berjaya: MT5 Navigator -> Refresh -> Expert Advisors -> ZenCore.
+9. Jika ada EA lama pada chart, tanggalkannya. Pasang ZenCoreExecutor pada
+   SATU chart sahaja. Semua pair dan TF diurus oleh EA ini.
+10. Hidupkan Algo Trading. DLL dan WebRequest tidak diperlukan.
+
+Pautkan akaun:
+11. Klik Cari akaun MT5 dan pilih akaun DEMO anda.
+12. Pengguna baharu: login dengan akaun ZenCore dan klik Login & pautkan akaun.
+    Pengguna yang sudah dipautkan: kekalkan pautan sedia ada jika status READY.
+    Password broker hanya dimasukkan dalam MT5.
+13. Klik Buka ZenCore. Pilih TF2, TF15 atau Both; pilih pair, lot dan layer.
+14. Simpan konfigurasi, kemudian hidupkan Auto Trade sendiri apabila bersedia.
+15. Sahkan MT5 READY, Auto Trade ON dan EA aktif pada chart.
+
+Biarkan MT5 dan Connector berjalan serta PC/VM online.
+HP/tablet boleh mengawal web; EA berjalan pada PC/VM Windows.
+TF2: HEMA2 + HEMA3. TF15: HEMA15 + HEMA30.
+Posisi dua TF berasingan pada pair sama memerlukan akaun MT5 hedging.
+Pakej ini DEMO sahaja. Installer tidak membuka order ujian.

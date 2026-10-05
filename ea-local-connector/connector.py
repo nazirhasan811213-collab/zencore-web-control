@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 import webbrowser
 import uuid
-from protocol import VERSION, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat
+from protocol import VERSION, EA_VERSION, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat
 
 BASE = 'https://zencore-precision-entry.onrender.com'
 INSTALL = Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZenCore' / 'Connector'
@@ -195,7 +195,7 @@ class Runner:
 
 class App:
     def __init__(self,root):
-        self.root=root; root.title('ZenCore Connector'); root.geometry('640x590')
+        self.root=root; root.title('ZenCore Connector • EA '+EA_VERSION); root.geometry('640x590')
         self.runner=None; self.pairing=False
         self.status=tk.StringVar(value='Login broker dalam MT5. Password MT5 tidak diperlukan di sini.')
         outer=ttk.Frame(root);outer.pack(fill='both',expand=True)
@@ -217,7 +217,7 @@ class App:
         row=ttk.Frame(box);row.pack(fill='x',pady=6)
         ttk.Entry(row,textvariable=self.folder).pack(side='left',fill='x',expand=True)
         ttk.Button(row,text='Pilih folder',command=lambda:self.folder.set(filedialog.askdirectory() or self.folder.get())).pack(side='left')
-        ttk.Button(box,text='Pasang EA',command=self.install).pack(anchor='w')
+        ttk.Button(box,text='Pasang / Kemas kini EA '+EA_VERSION,command=self.install).pack(anchor='w')
         ttk.Label(box,text='Folder: MT5 → File → Open Data Folder. Selepas pemasangan,\nNavigator → Refresh → ZenCoreExecutor → letak pada satu chart.\nHidupkan Algo Trading; DLL dan WebRequest tidak diperlukan.').pack(anchor='w',pady=8)
         ttk.Label(box,text='2. Login akaun ZenCore (bukan password broker)').pack(anchor='w',pady=(12,4))
         self.email=tk.StringVar(); self.password=tk.StringVar();self.account=tk.StringVar()
@@ -293,11 +293,12 @@ if __name__=='__main__':
         # Packaging smoke test: no network, registry mutation, broker or pairing.
         try:
             assert (RESOURCE/'ZenCoreExecutor.mq5').is_file()
+            assert '#property version "'+EA_VERSION+'"' in (RESOURCE/'ZenCoreExecutor.mq5').read_text()
             sample=b'ZenCore packaging test'
             assert dpapi(dpapi(sample),True)==sample
             gui=tk.Tk();gui.withdraw();gui.update();gui.destroy()
             output=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--output=')),None)
-            if output:Path(output).write_text(json.dumps({'ok':True,'version':VERSION,'eaResource':True,'dpapi':True,'tkGui':True}))
+            if output:Path(output).write_text(json.dumps({'ok':True,'version':VERSION,'eaVersion':EA_VERSION,'eaResource':True,'dpapi':True,'tkGui':True}))
         except Exception:
             raise SystemExit(1)
         raise SystemExit(0)
