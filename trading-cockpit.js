@@ -4,7 +4,7 @@
  let payload=null,failed=false,filter='both',stopped=false;
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toFixed(symbol==='GBPUSD'?5:3);
- const tfName=tf=>tf===2?'SCALPING':'INTRA';
+ const tfName=tf=>tf===2?'SCALPING':'INTRADAY';
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
  function fresh(v){return !failed&&v.status==='LIVE'&&Date.now()-Number(v.market?.receivedAt)<=30000;}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
@@ -15,12 +15,12 @@
  function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[2,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
  function render(){
   const all=views(),visible=all.filter(v=>filter==='both'||String(v.timeframe)===filter);
-  const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'DISCONNECTED':live?live+'/'+(symbols.length*2)+' FEED LIVE':'WAITING FEED';
+  const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'MENUNGGU DATA';
   const ranked=visible.slice().sort((a,b)=>Number(ready(b))-Number(ready(a))||Number(fresh(b))-Number(fresh(a))||Number(b.market?.strategyNormal?.sop?.sopGreen||0)-Number(a.market?.strategyNormal?.sop?.sopGreen||0));
   const best=ranked[0],n=best.market?.strategyNormal||{},s=n.sop||{},p=n.plan||{};
   $('featuredPair').textContent=best.symbol;$('featuredTf').textContent='TF'+best.timeframe+' · '+tfName(best.timeframe);
-  $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'WATCHLIST':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
-  $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU CONFIRMATION':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
+  $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'DALAM PEMERHATIAN':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
+  $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU PENGESAHAN':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
   $('featuredReason').textContent=fresh(best)?n.reason||'Semak confirmation pada Analysis.':'Feed TF'+best.timeframe+' belum tersedia. Signal akan muncul selepas data segar diterima.';
   const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));chips.push(el('span','HEMA5 '+(s.m5Position||'WAIT'),s.m5Pass?'pass':''));for(const h of [best.timeframe,best.timeframe===2?3:30])chips.push(el('span','HEMA'+h+' '+(s['hema'+h]?.mode||'WAIT'),s['hema'+h]?.pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
   $('featuredEntry').textContent=format(p.entry,best.symbol);$('featuredTp').textContent=format(p.tp1,best.symbol);$('featuredSl').textContent=format(p.sl,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);

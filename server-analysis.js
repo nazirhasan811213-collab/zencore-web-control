@@ -1417,7 +1417,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {

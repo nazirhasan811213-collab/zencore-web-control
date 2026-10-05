@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/auth.css?v=1.1">
   <link rel="stylesheet" href="/management.css?v=1.3">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
-</head>
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"></head>
 <body data-detail-page="client">
   <div class="mg-shell">
     <aside class="mg-sidebar">
@@ -27,17 +27,17 @@
 
     <main class="mg-main">
       <header class="mg-topbar">
-        <div><span class="mg-kicker">CLIENT PROFILE</span><h1 id="detailTitle">Client Detail</h1></div>
+        <div><span class="mg-kicker">PROFIL CLIENT</span><h1 id="detailTitle">Maklumat client</h1></div>
         <div class="mg-user">
           <a id="backButton" class="mg-ghost mg-link-btn" href="/admin">← BACK</a>
-          <button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button>
+          <button id="logoutButton" class="mg-ghost" type="button">Log keluar</button>
         </div>
       </header>
 
       <section class="mg-hero detail-hero client-hero">
         <div>
           <span class="mg-kicker">ZENCORE CLIENT</span>
-          <h2 id="clientName">Loading client...</h2>
+          <h2 id="clientName">Memuatkan maklumat client…</h2>
           <p id="clientEmail">—</p>
           <div class="detail-tags">
             <span id="clientStatusTag" class="detail-chip">STATUS —</span>
@@ -81,7 +81,7 @@
         <div class="mg-panel-head">
           <div>
             <span class="mg-kicker">ADMIN • CLIENT SETTINGS</span>
-            <h2>Edit Maklumat & Reset Password</h2>
+            <h2>Kemas kini maklumat & tetapkan semula password</h2>
             <p>Admin boleh kemaskini maklumat client dan reset password. Password Admin diperlukan untuk tindakan sensitif.</p>
           </div>
         </div>
@@ -114,14 +114,14 @@
         <div class="mg-panel-head">
           <div>
             <span class="mg-kicker">ADMIN • IB CONTROL</span>
-            <h2>Urus Ownership & Role Client</h2>
+            <h2>Urus IB dan peranan client</h2>
             <p>Admin boleh pindahkan client ke mana-mana IB atau tukar akaun client ini menjadi IB.</p>
           </div>
         </div>
         <div class="admin-ib-actions">
           <div class="admin-ib-action">
             <label for="adminIbSelect">PINDAH CLIENT KE IB</label>
-            <select id="adminIbSelect"><option value="">Loading IB...</option></select>
+            <select id="adminIbSelect"><option value="">Memuatkan maklumat IB…</option></select>
             <button id="moveClientIb" class="mg-primary" type="button">MOVE CLIENT</button>
           </div>
           <div class="admin-ib-action promote">

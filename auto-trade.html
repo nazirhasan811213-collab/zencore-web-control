@@ -12,14 +12,14 @@
   <link rel="stylesheet" href="/viewer-mode.css?v=1.1">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
-</head>
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"></head>
 <body>
   <main class="portal-shell autotrade-shell">
     <div class="portal-wrap autotrade-wrap">
       <header class="portal-top autotrade-top">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-          <div><b>ZenCore Precision Entry</b><span>Total Trade System • DEMO Control Plane</span></div>
+          <div><b>ZenCore Precision Entry</b><span>XAUUSD · TF2 / TF15 · Akaun DEMO</span></div>
         </div>
 
         <nav class="top-nav" aria-label="Navigasi utama">
@@ -41,13 +41,13 @@
             <span class="eyebrow">ZenCore Total Trade System</span>
             <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
           </div>
-          <h1>Analysis ZenCore. Execution MT5. Satu kawalan.</h1>
-          <p>Normal SOP V32 • TF mengikut feed menentukan entry. EXIT 32.3 StepLock mengurus posisi. MT5 hanya melaksanakan arahan yang telah disahkan oleh Analysis.</p>
+          <h1>Kawal Auto Trade XAUUSD.</h1>
+          <p>Pilih strategi, tetapkan lot dan layer, kemudian semak sambungan MT5. Entry TF2 dan TF15 menggunakan SOP masing-masing.</p>
         </div>
         <div class="hero-mode">
           <span>ROLLOUT MODE</span>
           <b>DEMO ONLY</b>
-          <small>Real account dikunci pada fasa ini</small>
+          <small>Akaun sebenar belum diaktifkan</small>
         </div>
       </section>
 
@@ -55,9 +55,9 @@
         <div class="security-icon" aria-hidden="true">◇</div>
         <div>
           <b>Credential MT5 dienkripsi dalam browser sebelum dihantar.</b>
-          <span>Web server hanya menerima encrypted envelope dan identiti bertopeng. Private key mesti kekal di external vault/managed worker—bukan di aplikasi web atau database.</span>
+          <span>Password broker kekal dalam MT5. Identiti akaun dipaparkan secara bertopeng.</span>
         </div>
-        <span class="security-lock">ENVELOPE ONLY</span>
+        <span class="security-lock">PASSWORD DILINDUNGI</span>
       </aside>
 
       <aside class="security-banner" aria-label="EA Connector">
@@ -90,7 +90,7 @@
       <section class="auto-grid">
         <article class="auto-panel account-panel">
           <div class="panel-heading">
-            <div><span class="eyebrow">Secure Execution</span><h2>Akaun MT5 Hosted</h2></div>
+            <div><span class="eyebrow">Secure Execution</span><h2>Sambungan akaun MT5</h2></div>
             <span id="connectionBadge" class="mini-status offline">UNPROVISIONED</span>
           </div>
           <div class="account-identity">
@@ -106,7 +106,7 @@
             <div><span>Expert Trade</span><b id="expertTradeState">WAIT</b></div>
           </div>
           <div id="podNotice" class="panel-notice">
-            Akaun MT5 belum disambungkan. Plaintext credential tidak boleh masuk ke web server.
+            Belum ada sambungan MT5. Buka Connector pada PC Windows untuk memautkan akaun.
           </div>
           <div id="pairingActions" class="pairing-actions">
             <div><b>Sambung dalam ZenCore</b><span>Masukkan login, password dan server dalam popup. Browser akan enkripsi sebelum request dihantar.</span></div>
@@ -121,7 +121,7 @@
 
         <article class="auto-panel master-panel">
           <div class="panel-heading">
-            <div><span class="eyebrow">Master Control</span><h2>Keseluruhan Sistem</h2></div>
+            <div><span class="eyebrow">KAWALAN SISTEM</span><h2>Kawalan Auto Trade</h2></div>
             <span id="pendingBadge" class="mini-status hidden">PENDING ACK</span>
           </div>
           <div id="masterState" class="master-state stopped">
@@ -134,7 +134,7 @@
             <button id="stopButton" class="control-button stop" type="button">STOP ENTRY</button>
           </div>
           <div class="stop-policy">
-            <b>STOP tidak meninggalkan posisi.</b>
+            <b>STOP ENTRY hanya menghentikan entry baharu.</b>
             <span>Entry baharu disekat serta-merta; posisi terbuka terus diurus oleh EXIT 32.3 StepLock.</span>
           </div>
           <button id="emergencyButton" class="emergency-button" type="button">EMERGENCY CLOSE ALL</button>
@@ -145,10 +145,10 @@
         <article class="auto-panel settings-panel">
           <div class="panel-heading">
             <div><span class="eyebrow">Trade Configuration</span><h2>Strategi XAUUSD</h2></div>
-            <span class="mini-status warning-only">WARNING ONLY</span>
+            <span class="mini-status warning-only">SEMAK RISIKO</span>
           </div>
           <form id="settingsForm" novalidate>
-            <label class="risk-symbol"><span>STRATEGI ENTRY</span><select id="strategyMode"><option value="TF2_SCALPING">TF2 min — Scalping</option><option value="TF15_INTRA">TF15 min — Intra · 2 layer</option><option value="BOTH">Both — TF2 + TF15</option></select></label><p>Pair: XAUUSD sahaja. Both: satu setup aktif setiap pair dan TF. SOP, lot, layer dan exit TF2/TF15 berasingan.</p><p><a href="/downloads/ZenCore_TF2_Realtime_Feed.pine">Feed TF2 realtime</a> · <a href="/downloads/ZenCore_TF15_Realtime_Feed.pine">Feed TF15 realtime</a></p><label id="settingsModeLabel" hidden><span>SETTING UNTUK</span><select id="settingsMode"><option value="TF2_SCALPING">TF2 Scalping</option><option value="TF15_INTRA">TF15 Intra</option></select></label>
+            <label class="risk-symbol"><span>STRATEGI ENTRY</span><select id="strategyMode"><option value="TF2_SCALPING">TF2 min — Scalping</option><option value="TF15_INTRA">TF15 min — Intraday · 2 layer</option><option value="BOTH">Both — TF2 + TF15</option></select></label><p>Pair: XAUUSD sahaja. Both: satu setup aktif setiap pair dan TF. SOP, lot, layer dan exit TF2/TF15 berasingan.</p><p><a href="/downloads/ZenCore_TF2_Realtime_Feed.pine">Feed TF2 realtime</a> · <a href="/downloads/ZenCore_TF15_Realtime_Feed.pine">Feed TF15 realtime</a></p><label id="settingsModeLabel" hidden><span>SETTING UNTUK</span><select id="settingsMode"><option value="TF2_SCALPING">TF2 Scalping</option><option value="TF15_INTRA">TF15 Intra</option></select></label>
             <p id="strategyNotice">TF2 / TF15: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast, HEMA5 dan pengesahan HEMA2/3 atau HEMA15/30 searah. Entry realtime.</p>
             <div class="settings-fields">
               <label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label>
@@ -223,10 +223,10 @@
 
       <section class="auto-panel audit-panel">
         <div class="panel-heading">
-          <div><span class="eyebrow">Immutable Activity View</span><h2>Audit Auto Trade</h2></div>
+          <div><span class="eyebrow">Immutable Activity View</span><h2>Aktiviti Auto Trade</h2></div>
           <span id="lastRefresh" class="mini-status">BELUM UPDATE</span>
         </div>
-        <div id="executionDiagnostics" class="audit-list" aria-label="Diagnostik execution"></div>
+        <details class="diagnostic-details"><summary>Butiran teknikal dan sebab penolakan entry</summary><div id="executionDiagnostics" class="audit-list" aria-label="Diagnostik execution"></div></details>
         <div id="auditList" class="audit-list"><div class="audit-empty">Belum ada aktiviti Auto Trade.</div></div>
       </section>
       </div>

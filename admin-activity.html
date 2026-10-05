@@ -5,7 +5,7 @@
   <title>Activity — ZenCore Admin</title>
   <link rel="stylesheet" href="/auth.css?v=1.1"><link rel="stylesheet" href="/management.css?v=1.2">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
-</head>
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"></head>
 <body data-admin-ops-page="activity">
   <div class="mg-shell">
     <aside class="mg-sidebar">
@@ -16,15 +16,15 @@
         <a href="/admin#clients"><span>◎</span>Clients</a>
         <a href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
         <a class="active" href="/admin/activity"><span>▤</span>Activity</a>
-        <a href="/admin/system"><span>⚙</span>System Settings</a>
+        <a href="/admin/system"><span>⚙</span>Tetapan sistem</a>
         <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
       </nav>
       <div class="mg-side-note"><span>AUDIT</span><b>SAFE VIEW</b><small>Sensitive fields redacted</small></div>
     </aside>
     <main class="mg-main">
       <header class="mg-topbar">
-        <div><span class="mg-kicker">SYSTEM AUDIT</span><h1>Activity Monitor</h1></div>
-        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">LOG OUT</button></div>
+        <div><span class="mg-kicker">AUDIT SISTEM</span><h1>Aktiviti sistem</h1></div>
+        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">Log keluar</button></div>
       </header>
       <section class="mg-hero ops-hero">
         <div><span class="mg-kicker">AUDIT TRAIL</span><h2>Jejak aktiviti Auto Trade dan MT5.</h2><p>Event dipaparkan dengan client dan IB owner. Field sensitif seperti token, credential, password dan envelope dibuang sebelum sampai ke browser.</p></div>
@@ -32,7 +32,7 @@
       </section>
       <section class="mg-panel">
         <div class="mg-panel-head">
-          <div><span class="mg-kicker">LATEST EVENTS</span><h2>System Activity</h2></div>
+          <div><span class="mg-kicker">AKTIVITI TERKINI</span><h2>Rekod aktiviti sistem</h2></div>
           <div class="ops-filters"><input id="activitySearch" type="search" placeholder="Client, IB, event"><select id="activityType"><option value="">All events</option></select></div>
         </div>
         <div id="activityList" class="activity-list"><div class="mg-loading">Loading activity...</div></div>

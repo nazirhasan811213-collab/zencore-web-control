@@ -2,7 +2,7 @@
   'use strict';
   const existing = document.querySelector('.mg-sidebar');
   const path = location.pathname;
-  const links = [['/app','Market Radar','◈'],['/analysis','Analysis','⌁'],['/results','Result','▤'],['/analysis#alerts','Alerts','◉'],['/auto-trade','Auto Trade','↯'],['/account','Akaun','○']];
+  const links = [['/app','Dashboard','◈'],['/analysis','Analisis','⌁'],['/results','Prestasi','▤'],['/analysis#alerts','Signal','◉'],['/auto-trade','Auto Trade','↯'],['/account','Akaun','○']];
   function makeLink(href,label,icon) {
     const a=document.createElement('a'); a.href=href;
     const mark=document.createElement('span');mark.textContent=icon;mark.setAttribute('aria-hidden','true');
@@ -13,14 +13,14 @@
   }
   if(existing){
     const nav=existing.querySelector('nav');
-    if(nav&&!nav.querySelector('a[href="/app"]'))nav.prepend(makeLink('/app','Market Radar','◈'));
-    if(nav&&!nav.querySelector('a[href="/analysis#alerts"]'))nav.append(makeLink('/analysis#alerts','Alerts','◉'));
+    if(nav&&!nav.querySelector('a[href="/app"]'))nav.prepend(makeLink('/app','Dashboard','◈'));
+    if(nav&&!nav.querySelector('a[href="/analysis#alerts"]'))nav.append(makeLink('/analysis#alerts','Signal','◉'));
   } else {
     document.body.classList.add('zc-workspace');
     const aside=document.createElement('aside');aside.className='zc-workspace-nav';aside.id='zcWorkspaceNav';
-    const brand=document.createElement('a');brand.className='zc-workspace-brand';brand.href='/app';brand.innerHTML='<b><span class="zc-logo" aria-hidden="true"><i class="zc-logo-ring ring-a"></i><i class="zc-logo-ring ring-b"></i><i class="zc-logo-ring ring-c"></i><i class="zc-logo-shield"></i><i class="zc-logo-z"></i><i class="zc-logo-flare"></i></span><span>ZenCore</span></b><small>TRADER WORKSPACE</small>';
+    const brand=document.createElement('a');brand.className='zc-workspace-brand';brand.href='/app';brand.innerHTML='<b><span class="zc-logo" aria-hidden="true"><i class="zc-logo-ring ring-a"></i><i class="zc-logo-ring ring-b"></i><i class="zc-logo-ring ring-c"></i><i class="zc-logo-shield"></i><i class="zc-logo-z"></i><i class="zc-logo-flare"></i></span><span>ZenCore</span></b><small>XAUUSD · TF2 / TF15</small>';
     const nav=document.createElement('nav');nav.setAttribute('aria-label','Navigasi utama');links.forEach(l=>nav.append(makeLink(...l)));
-    const note=document.createElement('p');note.className='zc-workspace-note';note.textContent='Baca market. Nilai setup. Urus risiko.';
+    const note=document.createElement('p');note.className='zc-workspace-note';note.textContent='Analisis jelas. Entry berdisiplin. Risiko terkawal.';
     aside.append(brand,nav,note);document.body.prepend(aside);
     const menu=document.createElement('button');menu.type='button';menu.className='zc-menu-toggle';menu.textContent='☰ Menu ZenCore';menu.setAttribute('aria-controls',aside.id);menu.setAttribute('aria-expanded','false');
     function close(){document.body.classList.remove('zc-menu-open');menu.setAttribute('aria-expanded','false');}

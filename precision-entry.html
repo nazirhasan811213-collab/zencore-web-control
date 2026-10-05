@@ -1,16 +1,16 @@
 <!doctype html>
 <html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#071018"><title>ZenCore Precision Entry • Dual TF Analysis</title>
-<link rel="stylesheet" href="/workspace-shell.css?v=36.0"><link rel="stylesheet" href="/analysis-alerts.css?v=35.0"><link rel="stylesheet" href="/analysis-dual.css?v=1"><link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0"></head>
+<link rel="stylesheet" href="/workspace-shell.css?v=36.0"><link rel="stylesheet" href="/analysis-alerts.css?v=35.0"><link rel="stylesheet" href="/analysis-dual.css?v=1"><link rel="stylesheet" href="/auto-trade-monitor.css?v=1.0"><link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"></head>
 <body><main class="app dual-app">
-<header class="dual-header"><div><span class="eyebrow">ZENCORE ANALYSIS</span><h1>Dual Timeframe</h1><p>TF2 Scalping &amp; TF15 Intra • Signal dan pengesahan berasingan</p></div><label>PAIR<select id="pairSelector"><option>XAUUSD</option></select></label></header>
-<nav class="dual-tabs" aria-label="Paparan timeframe"><button type="button" data-view="both" aria-pressed="true">Kedua-dua TF</button><button type="button" data-view="2" aria-pressed="false">TF2 • Scalping</button><button type="button" data-view="15" aria-pressed="false">TF15 • Intra</button></nav>
+<header class="dual-header"><div><span class="eyebrow">ZENCORE ANALYSIS</span><h1>Analisis XAUUSD</h1><p>TF2 Scalping · HEMA2 + HEMA3 | TF15 Intraday · HEMA15 + HEMA30</p></div><label>PAIR<select id="pairSelector"><option>XAUUSD</option></select></label></header>
+<nav class="dual-tabs" aria-label="Paparan timeframe"><button type="button" data-view="both" aria-pressed="true">Kedua-dua TF</button><button type="button" data-view="2" aria-pressed="false">TF2 • Scalping</button><button type="button" data-view="15" aria-pressed="false">TF15 • Intraday</button></nav>
 <p id="dualConnection" role="status">Menyambung feed…</p><section id="dualViews" class="dual-views" aria-label="Analysis TF2 dan TF15"></section>
 <p class="dual-note">Analysis mengikut feed Pine setiap timeframe. Chart TradingView ialah rujukan harga; signal ZenCore datang daripada feed. Pilihan view tidak mengubah tetapan Auto Trade.</p>
   <section id="mt5LiveMonitor" class="mt5-live-monitor panel" aria-label="MT5 live trade monitor" hidden>
     <div class="panel-head mt5-monitor-head">
       <div>
         <span class="eyebrow">ZENCORE TOTAL TRADE SYSTEM</span>
-        <h3>MT5 Live Execution Monitor</h3>
+        <h3>Status Auto Trade MT5</h3>
       </div>
       <div id="mt5MonitorBadge" class="mt5-monitor-badge stopped"><i></i> STOPPED</div>
     </div>
@@ -25,13 +25,13 @@
         </div>
       </div>
       <div class="mt5-connection-tile">
-        <div><span>SECURE POD</span><b id="mt5PodState">BELUM CONNECT</b></div>
+        <div><span>SAMBUNGAN MT5</span><b id="mt5PodState">BELUM TERSAMBUNG</b></div>
         <div><span>ACCOUNT</span><b id="mt5AccountMask">—</b></div>
         <div><span>SERVER</span><b id="mt5ServerMask">—</b></div>
         <div><span>FLOATING P/L</span><b id="mt5FloatingPnl">USD 0.00</b></div>
       </div>
       <div class="mt5-position-tile">
-        <div class="mt5-position-title"><span>POSISI PAIR SEMASA</span><a href="/auto-trade">BUKA CONTROL CENTER →</a></div>
+        <div class="mt5-position-title"><span>POSISI PAIR SEMASA</span><a href="/auto-trade">BUKA AUTO TRADE →</a></div>
         <div id="mt5PairPositions" class="mt5-pair-positions"><div class="mt5-empty">Tiada posisi MT5 untuk pair ini.</div></div>
       </div>
     </div>
