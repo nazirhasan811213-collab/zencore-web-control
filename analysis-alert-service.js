@@ -173,7 +173,8 @@ class AnalysisAlerts {
           const p=await this.get(row.user_id);
           const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
-          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e&&Date.now()-e.time<180000&&
+          // Apply to every notification, including closes and already queued events.
+          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&Date.now()-e.time<180000&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
