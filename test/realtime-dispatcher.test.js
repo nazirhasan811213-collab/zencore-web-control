@@ -27,6 +27,15 @@ test('events arriving during fallback fetch supersede its stale result',async()=
  const d=createRealtimeDispatcher({dispatch:async batch=>seen.push(batch),fetchMarkets:async()=>{await wait;return [{symbol:'OLD'}];}});
  const first=d.tick();d.onMarket(ready());release();await first;assert.equal(seen[0][0].symbol,'XAUUSD');
 });
+test('sequential TF2 pending entry is revoked when a later feed no longer confirms it',async()=>{
+ let release;const wait=new Promise(r=>release=r),seen=[];
+ const d=createRealtimeDispatcher({dispatch:async batch=>{seen.push(batch);if(seen.length===1)await wait;},fetchMarkets:async()=>[]});
+ const first=d.onMarket(ready('15'));
+ const m=ready();m.strategyNormal.entrySopVersion='NORMAL_20261001_TF2_SEQ_V3';
+ d.onMarket(m);d.onMarket({...m,strategyNormal:{...m.strategyNormal,state:'WATCH',plan:null}});
+ release();await first;
+ assert.equal(seen[1][0].strategyNormal.state,'WATCH');
+});
 test('HEMA mode requires both ribbons to match BUY or SELL; equality/missing/opposite reject, slopes/confirmation not required',()=>{
  for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
   const m=ready(tf),higher=tf==='15'?'30':'3',r=side==='BUY'?{fast:102,slow:101,previousFast:110,previousSlow:109}:{fast:98,slow:99,previousFast:90,previousSlow:91};

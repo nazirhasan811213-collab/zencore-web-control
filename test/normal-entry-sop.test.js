@@ -35,13 +35,13 @@ test('original strict forecast boundaries are restored on BUY and SELL',()=>{
 });
 test('TF15 decoder, analysis, execution and Telegram share original SOP and correct candle timeframe',()=>{
  const at=Date.now(),row=Array(67).fill(null);
- Object.assign(row,{0:'XAUUSD',1:at-1000,6:100.1,21:1,22:100,23:99,24:99,25:101,26:102,27:103,
+ Object.assign(row,{0:'XAUUSD',1:at-1000,3:100,4:100.2,5:99.8,6:100.1,28:true,21:1,22:100,23:99,24:99,25:101,26:102,27:103,
   34:'BUY',35:true,36:true,37:true,38:true,39:true,40:true,41:false,42:'NEUTRAL',43:51,44:'ABOVE',
-  65:{version:'HEMA1530_V1',tf15:{fast:102,slow:101},tf30:{fast:102,slow:101,confirmed:false}},66:{version:'TF15_ENTRY_EVENT_V1',entryEvent:true,setupAt:at-1000}});
+  65:{version:'HEMA1530_V1',tf15:{fast:102,slow:101},tf30:{fast:102,slow:101,confirmed:false}},66:{version:'TF15_ENTRY_EVENT_V1',policy:'SEQUENTIAL_ATR40_V1',atrBeforeBar:1,entryEvent:true,setupAt:at-1000}});
  const hub=require('../strategy-market-hub');
  const [market]=hub.ingest({feedVersion:'TF15_REALTIME_V1',timeframe:'15',confirmed:false,emittedAt:at,markets:[row]},at);
  assert.equal(market.strategyNormal.state,'READY');assert.equal(market.strategyNormal.plan.sourceTimeframe,'15');
- assert.equal(Contract.createEntryDecision(market).snapshot.analysisSopVersion,'NORMAL_20261001_TF15_V2');
+ assert.equal(Contract.createEntryDecision(market).snapshot.analysisSopVersion,'NORMAL_20261001_TF15_SEQ_ATR40_V4');
  const settings={capitalUsd:1000,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',strategyExitPolicies:{TF2_SCALPING:{version:'TF2_TIGHT_SL_3C_V1'}}};
  for(const tf of ['2','15']){
   const x=evaluateEntrySop({...base,timeframe:tf,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1'}},tf);
@@ -54,5 +54,5 @@ test('TF15 decoder, analysis, execution and Telegram share original SOP and corr
   assert.equal(entrySopAllowed({...event,telegramQuality:{score:49}}),false);
  }
  const late={...market,price:101};assert.equal(Contract.createEntryDecision(late),null);
- row[36]=false;assert.equal(hub.ingest({feedVersion:'TF15_REALTIME_V1',timeframe:'15',confirmed:false,emittedAt:at+1,markets:[row]},at+1)[0].strategyNormal.state,'WATCH');
+ row[36]=false;row[6]=99.9;assert.equal(hub.ingest({feedVersion:'TF15_REALTIME_V1',timeframe:'15',confirmed:false,emittedAt:at+1,markets:[row]},at+1)[0].strategyNormal.state,'WATCH');
 });

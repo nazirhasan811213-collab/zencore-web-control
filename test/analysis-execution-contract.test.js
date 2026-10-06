@@ -5,7 +5,7 @@ const Core = require('../auto-trade-core');
 
 function readyMarket(overrides = {}) {
   return {
-    symbol: 'GBPUSD',timeframe:'2',
+    symbol: 'XAUUSD',timeframe:'2',
     receivedAt: 1_790_000_010_000,
     strategyNormal: {
       state: 'READY',
@@ -71,7 +71,7 @@ test('Core command carries the immutable Analysis snapshot without recalculating
     capitalUsd: 1000,
     lotPerLayer: 0.03,
     layers: 3,
-    symbols: ['GBPUSD']
+    symbols: ['XAUUSD']
   }, { tickSize: 0.00001, tickValue: 1 });
   assert.ok(command);
   assert.equal(command.payload.analysisContractVersion, Contract.CONTRACT_VERSION);

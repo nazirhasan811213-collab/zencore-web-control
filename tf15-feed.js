@@ -10,6 +10,7 @@ function decodeTf15Market(row,batch={},receivedAt=Date.now()) {
  const confirmed=batch.confirmed===true;
  if(confirmed&&observed<opened+900000)return null;
  const pine={symbol,timeframe:'15',confirmed,feedMode:'REALTIME_ENTRY',entryEvent:meta.entryEvent===true,
+  setupMeta:meta,time:opened,open:row[3],high:row[4],low:row[5],initialSl:row[23],tp1:row[25],tp2:row[26],tp3:row[27],tradeActive:row[28],slHit:row[33],positionExitStage:row[48],positionExitAction:row[49],
   receivedAt,signalObservedAt:observed,sourceBarOpenAt:opened,sourceBarCloseAt:opened+900000,
   setupKey:`TF15|${symbol}|${side}|${setupAt}`,normal3Side:side,normal3Solid:row[35]===true,
   normal3PricePastEntry:row[36]===true,normal3PriceCrossEntry:row[61]===true,normal5Position:row[44],normal5Close:row[45],normal5Hema20:row[46],normal5Hema40:row[47],

@@ -32,10 +32,12 @@ function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
   const s=e.telegramSop;
+  if(String(s?.version||'').includes('_SEQ_ATR40_')&&
+    (s.gates?.length!==7||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
   if(String(s?.version||'').startsWith('NORMAL_20261001_') &&
     (!['2','15'].includes(String(e.timeframe)) || s.tf!==String(e.timeframe)+'m' ||
     (e.telegramMarket?.timeframe!=null && String(e.telegramMarket.timeframe)!==String(e.timeframe))))return false;
-  if(s?.version==='NORMAL_20261001_TF2_V2'&&s.tf==='2m'||s?.version==='NORMAL_20261001_TF15_V2'&&s.tf==='15m')
+  if(['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(s?.version)&&s.tf==='2m'||['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(s?.version)&&s.tf==='15m')
     return ['XAUUSD'].includes(e.symbol)&&s.solid===true&&s.green>=4&&
       Array.isArray(s.gates)&&[6,7].includes(s.gates.length)&&s.gates.every(g=>g.pass===true)&&s['hema'+s.tf.replace('m','')]?.mode===e.side&&
       s['hema'+(s.tf==='15m'?'30':'3')]?.mode===e.side&&numeric(e.telegramQuality?.score)>=50;
@@ -61,11 +63,11 @@ function telegramMessage(e){
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI TF${e.timeframe||'2'}\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(/^NORMAL_20261001_TF(2|15)_V2$/.test(e.telegramSop?.version||'')){
+  if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')){
     const s=e.telegramSop,tf=s.tf.replace('m','');
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     return `ZENCORE | SOLID ENTRY TF${tf} • ${tf==='15'?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\nSOP 1/10/2026\n\n`+
-      `SOLID: PASS\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\nHEMA TF${tf}: ${s['hema'+tf]?.mode||'WAIT_DATA'}\nHEMA TF${tf==='15'?'30':'3'}: ${s['hema'+(tf==='15'?'30':'3')]?.mode||'WAIT_DATA'}\nGred: ${q.grade} (${q.score}/100)\n\n`+
+      `SOLID: ${s.version.includes('_SEQ_')?'SETUP DIPEGANG':'PASS'}\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\n${s.pullback?`Pullback: ${s.pullback.required?'40% • PASS':'Candle biasa'}\n`:''}HEMA TF${tf}: ${s['hema'+tf]?.mode||'WAIT_DATA'}\nHEMA TF${tf==='15'?'30':'3'}: ${s['hema'+(tf==='15'?'30':'3')]?.mode||'WAIT_DATA'}\nGred: ${q.grade} (${q.score}/100)\n\n`+
       `Entry SOP: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
   }
   if([SOP_VERSION,'SOLID_TF15_3GREEN_HEMA1545_2L_V1'].includes(e.telegramSop?.version)){
@@ -73,7 +75,7 @@ function telegramMessage(e){
     const s=e.telegramSop;
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     return `ZENCORE | SOLID ENTRY TF${tf} • ${tf15?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\n\n`+
-      `SOLID: PASS\nChecklist: ${s.green}/5 hijau\nForecast 10 candle: ${s.forecast} ${s.power}%\nHEMA TF${tf}: ${(tf15?s.hema15:s.hema2)?.state||'WAIT'}\nHEMA TF${higher} confirmed: ${(tf15?s.hema45:s.hema3)?.state||'WAIT'}\n\n`+
+      `SOLID: PASS\nChecklist: ${s.green}/5 hijau\nForecast 10 candle: ${s.forecast} ${s.power}%\n${s.pullback?`Pullback: ${s.pullback.required?'40% • PASS':'Candle biasa'}\n`:''}HEMA TF${tf}: ${(tf15?s.hema15:s.hema2)?.state||'WAIT'}\nHEMA TF${higher} confirmed: ${(tf15?s.hema45:s.hema3)?.state||'WAIT'}\n\n`+
       `Entry SOP: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n`+
       `Harga feed: ${price(e.telegramMarket?.price)}\nFeed: ${e.telegramMarket?.feedMode==='INTRABAR'?'REALTIME • candle belum tutup':'candle '+tf+'M ditutup'}\nSOP confirmation lengkap; bukan jaminan profit.\n\n${footer}`;
   }

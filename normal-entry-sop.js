@@ -27,7 +27,10 @@ function hemaMode(r={},side){
 // October 1 baseline plus current-direction HEMA2/3 or HEMA15/30; no candle-close/slope gate.
 // TF2 and TF15 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
 function evaluateEntrySop(d={},timeframe='2'){
-  const version=`NORMAL_20261001_TF${timeframe}_V2`;
+  const atrPullback=d.normal3SetupPolicy==='SEQUENTIAL_ATR40_V1';
+  const sequential=atrPullback||String(timeframe)==='2'&&d.normal3SetupPolicy==='TF2_SEQUENTIAL_V1';
+  const solid=sequential?d.normal3SetupArmed===true:d.normal3Solid===true;
+  const version=atrPullback?`NORMAL_20261001_TF${timeframe}_SEQ_ATR40_V4`:sequential?'NORMAL_20261001_TF2_SEQ_V3':`NORMAL_20261001_TF${timeframe}_V2`;
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
@@ -38,7 +41,7 @@ function evaluateEntrySop(d={},timeframe='2'){
     : direction==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>50));
   const forecastPass=forecastFor(side);
   const cross=d.normal3PriceCrossEntry===true;
-  const pricePast=d.normal3PricePastEntry===true;
+  const pricePast=sequential&&entry!==null&&close!==null?(side==='BUY'?close>entry:side==='SELL'&&close<entry):d.normal3PricePastEntry===true;
   const m5Position=upper(d.normal5Position);
   const m5Pass=side==='BUY'?m5Position==='ABOVE':side==='SELL'&&m5Position==='BELOW';
   const higherTf=String(timeframe)==='15'?'30':'3';
@@ -46,17 +49,18 @@ function evaluateEntrySop(d={},timeframe='2'){
   const ownHema=hemaMode(currentHema?.['tf'+timeframe],side);
   const higherHema=hemaMode(currentHema?.['tf'+higherTf],side);
   const gates=[
-    {key:'solid',label:'Solid Entry Signal',pass:d.normal3Solid===true},
+    {key:'solid',label:sequential?'SOLID setup dipegang':'Solid Entry Signal',pass:solid},
     {key:'entry',label:'Price Lepas Entry Line',pass:pricePast},
     {key:'sop',label:'SOP Dashboard ≥4/5 Green',pass:green>=4,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
     {key:'hema'+timeframe,label:'HEMA TF'+timeframe+' searah entry',pass:ownHema.pass,detail:ownHema.mode},
     {key:'hema'+higherTf,label:'HEMA TF'+higherTf+' searah entry',pass:higherHema.pass,detail:higherHema.mode}
   ];
+  if(atrPullback)gates.splice(1,0,{key:'pullback',label:'Candle besar: pullback 40%',pass:d.pullback?.pass===true,detail:d.pullback?.state||'WAIT_ATR'});
   // Friday 25 Sep Normal entry has no separate re-entry route.
   const reentryType='NONE',reentrySide='WAIT',reentryGates=[],reentryReady=false;
   const standardReady=String(d.timeframe)===String(timeframe)&&['BUY','SELL'].includes(side)&&gates.every(g=>g.pass)&&entry!==null&&close!==null&&atr!==null&&atr>0;
-  return {version,['hema'+timeframe]:ownHema,['hema'+higherTf]:higherHema,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
+  return {version,solid,sequential,pullback:atrPullback?d.pullback:null,['hema'+timeframe]:ownHema,['hema'+higherTf]:higherHema,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
     standardReady,reentryType,reentrySide,reentryGates,reentryReady};
 }
 

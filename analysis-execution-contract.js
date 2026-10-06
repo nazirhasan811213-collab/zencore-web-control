@@ -87,9 +87,12 @@
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
-    const restoredTf2=normal.entrySopVersion==='NORMAL_20261001_TF2_V2';
-    const restoredTf15=normal.entrySopVersion==='NORMAL_20261001_TF15_V2';
+    const restoredTf2=['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
+    const restoredTf15=['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restored=restoredTf2||restoredTf15;
+    if(String(normal.entrySopVersion||'').includes('_SEQ_ATR40_')&&
+      (normal.sop?.gates?.length!==7||normal.sop?.pullback?.pass!==true||
+       !normal.sop.gates.some(g=>g.key==='pullback'&&g.pass===true)))return null;
     if(String(normal.entrySopVersion||'').startsWith('NORMAL_20261001_')&&!restored)return null;
     if(restored){
       const expected=restoredTf15?'15':'2';

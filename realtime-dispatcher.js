@@ -19,7 +19,10 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  function onMarket(m){
   if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','15'].includes(String(m.timeframe)))return;
   const k=key(m),previous=pending.get(k);
-  if(!previous||!createEntryDecision(previous)||createEntryDecision(m))pending.set(k,m);
+  const sequential=String(previous?.strategyNormal?.entrySopVersion||'').includes('_SEQ_')||
+   String(m.strategyNormal?.entrySopVersion||'').includes('_SEQ_');
+  // A held setup uses current confirmations: a later WAIT must revoke queued readiness.
+  if(!previous||sequential||!createEntryDecision(previous)||createEntryDecision(m))pending.set(k,m);
   // Start immediately; coalescer serializes order creation and reruns pending work.
   return tick();
  }

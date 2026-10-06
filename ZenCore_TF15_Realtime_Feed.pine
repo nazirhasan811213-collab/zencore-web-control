@@ -308,7 +308,7 @@ f_scan3()=>
     string slLabel=completed?"CLOSED":not active?"IDLE":lockStage==3?"TP2_LOCKED":lockStage==2?"TP1_LOCKED":lockStage==1?"BREAKEVEN":"INITIAL"
     string webAction=zoneBuy?"BUY":zoneSell?"SELL":globalTrend>0?"LONG_BIAS":globalTrend<0?"SHORT_BIAS":"WAIT"
 
-    [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema,h20[1],h40[1],setupAt]
+    [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema,h20[1],h40[1],setupAt,a14[1]]
 
 var string[] symbols=array.from("OANDA:XAUUSD","OANDA:GBPUSD","OANDA:GBPJPY")
 var string[] aliases=array.from("XAUUSD","GBPUSD","GBPJPY")
@@ -316,13 +316,21 @@ var string[] aliases=array.from("XAUUSD","GBPUSD","GBPJPY")
 bool correctTf=timeframe.period=="15"
 string marketsJson=""
 varip string[] emittedSetupKeys=array.new_string(3,"")
+varip string[] armedSetupKeys=array.new_string(3,"")
+varip bool[] solidArmed=array.new_bool(3,false)
+varip int[] impulseBars=array.new_int(3,0)
+varip float[] impulseOpens=array.new_float(3,na)
+varip float[] impulseExtremes=array.new_float(3,na)
+varip float[] impulseAtrs=array.new_float(3,na)
+varip bool[] lastEligible=array.new_bool(3,false)
 bool emitEntry=false
+bool emitSetup=false
 
 if feedEnabled and correctTf
     for i=0 to array.size(symbols)-1
         string ticker=array.get(symbols,i)
         string alias=array.get(aliases,i)
-        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema,previousH20,previousH40,setupAt]=request.security(ticker,"15",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
+        [bt,bi,o,h,l,c,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,gt,prob,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMoved,webAction,priceCross,reType,reSide,reHema,previousH20,previousH40,setupAt,previousAtr]=request.security(ticker,"15",f_scan3(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=650)
         [m5close,m5h20,m5h40]=request.security(ticker,"5",[close,f_hema(close,20),f_hema(close,40)],gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
         [f3,s3,pf3,ps3]=request.security(ticker,"30",f_hema_live(),gaps=barmerge.gaps_off,lookahead=barmerge.lookahead_off,ignore_invalid_symbol=true,calc_bars_count=180)
         string hemaJson=f_hema23_json(h20,h40,previousH20,previousH40,f3,s3,pf3,ps3)
@@ -335,16 +343,57 @@ if feedEnabled and correctTf
         bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
         bool ownHema=buy?h20>h40:h20<h40
         bool higherHema=buy?f3>s3:f3<s3
-        // TF15 price-vs-HEMA5 gate removed; checklist and HEMA15/30 remain.
-        // Entry alerts do not wait for candle close.
-        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ownHema and higherHema and not na(setupAt)
+        // SOLID is held across candles; confirmations and pullback use current values.
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
+        if array.get(armedSetupKeys,i)!=setupKey
+            array.set(armedSetupKeys,i,setupKey)
+            array.set(solidArmed,i,false)
+            array.set(impulseBars,i,0)
+            array.set(impulseOpens,i,na)
+            array.set(impulseExtremes,i,na)
+            array.set(impulseAtrs,i,na)
+        bool previouslyArmed=array.get(solidArmed,i)
+        bool setupEnded=not active or slHit or exitStage=="CLOSED" or (buy?c<=initialSl:c>=initialSl)
+        if setupEnded
+            array.set(solidArmed,i,false)
+            array.set(impulseBars,i,0)
+        else if solid
+            array.set(solidArmed,i,true)
+        bool solidLatched=array.get(solidArmed,i)
+        if solidLatched!=previouslyArmed
+            emitSetup:=true
+        float extreme=buy?h:l
+        float leg=buy?extreme-o:o-extreme
+        bool largeCandle=solidLatched and not na(previousAtr) and previousAtr>0 and leg>=1.5*previousAtr
+        int impulseBar=array.get(impulseBars,i)
+        if largeCandle and bt>=impulseBar
+            if bt!=impulseBar
+                array.set(impulseBars,i,bt)
+                array.set(impulseOpens,i,o)
+                array.set(impulseExtremes,i,extreme)
+                array.set(impulseAtrs,i,previousAtr)
+            else
+                float oldExtreme=array.get(impulseExtremes,i)
+                array.set(impulseExtremes,i,buy?math.max(oldExtreme,extreme):math.min(oldExtreme,extreme))
+        impulseBar:=array.get(impulseBars,i)
+        float impulseOpen=array.get(impulseOpens,i)
+        float impulseExtreme=array.get(impulseExtremes,i)
+        float impulseAtr=array.get(impulseAtrs,i)
+        bool impulseRequired=impulseBar>0
+        float impulseDistance=buy?impulseExtreme-impulseOpen:impulseOpen-impulseExtreme
+        float pullbackLevel=impulseRequired?impulseExtreme+(buy?-1:1)*0.4*impulseDistance:na
+        bool pullbackReady=not na(previousAtr) and previousAtr>0 and (not impulseRequired or (buy?c<=pullbackLevel:c>=pullbackLevel))
+        bool entryRange=buy?(c>entry and c<tp1):(c<entry and c>tp1)
+        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=4 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt)
+        if eligible!=array.get(lastEligible,i)
+            emitSetup:=true
+            array.set(lastEligible,i,eligible)
         bool entryEvent=barstate.isrealtime and eligible and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent
             array.set(emittedSetupKeys,i,setupKey)
             emitEntry:=true
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF15_ENTRY_EVENT_V1\",\"entryEvent\":"+f_bool(entryEvent)+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF15_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","
@@ -360,7 +409,7 @@ if feedEnabled and correctTf
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"15\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
     payload:=str.replace(payload,"{", "{\"feedVersion\":\"TF15_REALTIME_V1\",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"emittedAt\":"+str.tostring(timenow)+",")
-    if barstate.isrealtime and (emitEntry or barstate.isconfirmed)
+    if barstate.isrealtime and (emitEntry or emitSetup or barstate.isconfirmed)
         alert(payload,alert.freq_all)
 
 var table status=na
@@ -369,7 +418,7 @@ if showStatus
         status:=table.new(position.top_right,2,4,bgcolor=color.new(#07131d,5),border_width=1)
     if barstate.islast
         table.cell(status,0,0,"ZENCORE MULTI-PAIR",text_color=color.aqua)
-        table.cell(status,1,0,"TF15 • HEMA15/30 • NO M5 PRICE GATE",text_color=color.lime)
+        table.cell(status,1,0,"TF15 • SOLID HOLD • ATR40",text_color=color.lime)
         table.cell(status,0,1,"Markets",text_color=color.gray)
         table.cell(status,1,1,"3",text_color=color.white)
         table.cell(status,0,2,"Chart TF",text_color=color.gray)
