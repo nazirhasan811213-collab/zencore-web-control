@@ -15,6 +15,11 @@ process.env.PORT=String(PUBLIC_PORT);
 const DEFAULT_MARKETS=['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'];
 const latestBySymbol=new Map();
 const historyBySymbol=new Map();
+const MarketRetention=require('./market-retention');
+const retentionTimer=setInterval(()=>{
+  for(const [symbol,rows] of historyBySymbol)historyBySymbol.set(symbol,MarketRetention.recent(rows));
+  for(const [symbol,d] of latestBySymbol)if(!MarketRetention.retained(d))latestBySymbol.delete(symbol);
+},60000);retentionTimer.unref?.();
 const marketClients=new Set();
 const predictionClients=new Map();
 const signalCoreBySymbol=new Map();
@@ -597,8 +602,8 @@ function storeSnapshot(parsed){
   const key=N(d.time)||N(d.barIndex)||Date.now();
   const i=arr.findIndex(x=>(N(x.time)||N(x.barIndex))===key);
   if(i>=0)arr[i]=d;else arr.push(d);
-  if(arr.length>600)arr.splice(0,arr.length-600);
-  historyBySymbol.set(symbol,arr);
+  const retained=MarketRetention.recent(arr).slice(-600);
+  historyBySymbol.set(symbol,retained);
   updateSignalCore(symbol,d);
   updateOpportunity(symbol,d);
   updateValidation(symbol,d);
@@ -641,7 +646,7 @@ function proxyPairHtml(req,res,symbol){
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
-  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'NORMAL_20261006_DUAL_ATR40_V4',feedRefreshVersion:'GATE_CHANGE_HEARTBEAT_V1',analysisFreshness:'PINE_EMITTED_AT',plannedHeartbeatMs:20000,baselineCommit:'284b98d',baselineDate:'2026-10-01',timeframes:['2','15'],checklistMinimum:4,hemaTimeframes:{TF2:['2','3'],TF15:['15','30']},baselineHemaTimeframe:'5',hemaMode:'CURRENT_RIBBON_DIRECTION',entryTiming:'INTRABAR_EVENT',setupPolicy:'SEQUENTIAL_ATR40_V1',impulseAtrMultiplier:1.5,pullbackFraction:.4,atrReference:'PREVIOUS_BAR_ATR14',entryRange:'BETWEEN_ENTRY_AND_TP1',pricePastEntryRequired:true,forecastBuyAbove:50,forecastSellNeutralBelow:50,forecastSellBearishAbove:50,minimumGrade:'C+',exitPolicy:'PINE_STEPLOCK_ORIGINAL',telegramFollowsSop:true,requiresNewPineFeed:true}));
+  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'NORMAL_20261006_DUAL_ATR40_V4',feedRefreshVersion:'GATE_CHANGE_HEARTBEAT_V1',analysisFreshness:'PINE_EMITTED_AT',analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,plannedHeartbeatMs:20000,baselineCommit:'284b98d',baselineDate:'2026-10-01',timeframes:['2','15'],checklistMinimum:4,hemaTimeframes:{TF2:['2','3'],TF15:['15','30']},baselineHemaTimeframe:'5',hemaMode:'CURRENT_RIBBON_DIRECTION',entryTiming:'INTRABAR_EVENT',setupPolicy:'SEQUENTIAL_ATR40_V1',impulseAtrMultiplier:1.5,pullbackFraction:.4,atrReference:'PREVIOUS_BAR_ATR14',entryRange:'BETWEEN_ENTRY_AND_TP1',pricePastEntryRequired:true,forecastBuyAbove:50,forecastSellNeutralBelow:50,forecastSellBearishAbove:50,minimumGrade:'C+',exitPolicy:'PINE_STEPLOCK_ORIGINAL',telegramFollowsSop:true,requiresNewPineFeed:true}));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);
     try{captureBody(body)}catch(error){console.error('ZenCore webhook snapshot failed:',error);return send(res,500,JSON.stringify({ok:false,error:'Snapshot processing failed'}));}

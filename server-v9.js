@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const MarketRetention=require('./market-retention');
 
 const PORT = process.env.PORT || 8080;
 const DATABASE_URL = process.env.DATABASE_URL || '';
@@ -320,7 +321,7 @@ function saveFeed(raw, feedType='LIVE'){
   const data=normalizeFeed(raw);
   latest={...data,feedType,receivedAt:Date.now()};
   history.unshift(latest);
-  history=history.slice(0,1800);
+  history=MarketRetention.recent(history).slice(0,1800);
 
   const action=upper(latest.action);
   if(action==='BUY'||action==='SELL'){
@@ -509,8 +510,10 @@ async function initDb(){
       ALTER TABLE zencore_trades ADD COLUMN IF NOT EXISTS superseded BOOLEAN DEFAULT FALSE;
       CREATE INDEX IF NOT EXISTS zencore_trades_signal_time_idx ON zencore_trades(signal_time DESC);
       CREATE INDEX IF NOT EXISTS zencore_snapshots_bar_time_idx ON zencore_snapshots(bar_time DESC);
+      CREATE INDEX IF NOT EXISTS zencore_snapshots_received_at_idx ON zencore_snapshots(received_at);
     `);
-    const sr=await pool.query(`SELECT payload,feed_type,received_at FROM zencore_snapshots ORDER BY bar_time DESC NULLS LAST,received_at DESC LIMIT 1200`);
+    await MarketRetention.pruneSnapshots(pool);
+    const sr=await pool.query(`SELECT payload,feed_type,received_at FROM zencore_snapshots WHERE received_at >= $1 ORDER BY bar_time DESC NULLS LAST,received_at DESC LIMIT 1200`,[Date.now()-MarketRetention.RETENTION_MS]);
     history=sr.rows.map(r=>normalizeFeed({...r.payload,feedType:r.feed_type||r.payload.feedType||'DB',receivedAt:Number(r.received_at)||Date.now()}));
     latest=history[0]||null;
     journal=history.filter(x=>['BUY','SELL'].includes(upper(x.action))).slice(0,600).reverse();
@@ -529,6 +532,17 @@ async function initDb(){
     console.error('[DB init]',e.message);
   }
 }
+
+let retentionSweepRunning=false;
+async function sweepMarketRetention(){
+  history=MarketRetention.recent(history);
+  if(latest&&!MarketRetention.retained(latest))latest=null;
+  if(retentionSweepRunning)return;
+  retentionSweepRunning=true;
+  try{await MarketRetention.pruneSnapshots(pool);}catch(e){console.error('[DB retention]',e.message);}
+  finally{retentionSweepRunning=false;}
+}
+const retentionTimer=setInterval(sweepMarketRetention,60000);retentionTimer.unref?.();
 
 function persistSnapshot(d){
   if(!pool)return;

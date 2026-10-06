@@ -3,6 +3,8 @@
 const {decodeTf15Market}=require('./tf15-feed');
 const {evaluateEntrySop}=require('./normal-entry-sop');
 const entries=new Map();
+const MarketRetention=require('./market-retention');
+const retentionTimer=setInterval(()=>{for(const [symbol,m] of entries)if(!MarketRetention.retained(m))entries.delete(symbol);},60000);retentionTimer.unref?.();
 const setupTracker=require('./entry-setup-state').createEntrySetupTracker();
 function ingest(batch,at=Date.now()) {
  const touched=[];

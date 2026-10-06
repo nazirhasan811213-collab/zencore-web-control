@@ -1684,6 +1684,14 @@ const server = http.createServer(async (req, res) => {
     catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia.'});}
   }
 
+  if(req.method==='GET' && pathname==='/api/analysis/timeframes/events'){
+    if(AUTH_ENABLED && !await requireSession(req,res))return;
+    const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();
+    if(!require('./analysis-dual-model').SYMBOLS.includes(symbol))return sendJson(res,400,{ok:false,error:'Pair tidak disokong.'});
+    require('./analysis-stream').openAnalysisStream({req,res,symbol,bus:require('./analysis-alert-bus'),fetchMarkets:fetchLocalMarkets});
+    return;
+  }
+
   if (req.method==='GET' && pathname==='/api/analysis/timeframes') {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();

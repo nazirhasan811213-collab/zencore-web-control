@@ -1,7 +1,7 @@
 (() => {
  'use strict';
  const root=document.getElementById('dualViews'),pair=document.getElementById('pairSelector'),connection=document.getElementById('dualConnection');
- let selected='both',generation=0,controller=null,timer=null,payload=null,failed=false;
+ let selected='both',generation=0,controller=null,timer=null,payload=null,failed=false,stream=null,streamLive=false;
  const cards=new Map();
  const label=v=>({WAITING:'MENUNGGU DATA',WAIT:'TUNGGU',WAIT_DATA:'MENUNGGU DATA',STALE:'DATA LAMA',DISCONNECTED:'TERPUTUS',WATCH:'PEMERHATIAN',PASS:'LULUS',ABOVE:'DI ATAS',BELOW:'DI BAWAH',INTRABAR:'DALAM CANDLE',BAR_CLOSE:'CANDLE DITUTUP'}[v]||v);
  function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
@@ -33,8 +33,25 @@
   root.classList.toggle('single',selected!=='both');
  }
  for(const button of document.querySelectorAll('[data-view]'))button.onclick=()=>{selected=button.dataset.view;document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};
- async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;if(!j.ok||j.symbol!==pair.value||!Array.isArray(j.views))throw new Error('INVALID_RESPONSE');payload=j;failed=false;connection.textContent='Feed berasingan TF2 & TF15 • Kemaskini automatik';}catch(e){if(g!==generation)return;failed=true;connection.textContent='Sambungan feed terputus. Mencuba semula…';}finally{clearTimeout(timeout);if(g===generation){render();timer=setTimeout(poll,1000);}}}
- pair.onchange=()=>{generation++;clearTimeout(timer);controller?.abort();payload=null;failed=false;for(const c of cards.values())c.chart.replaceChildren();connection.textContent='Menyambung '+pair.value+'…';render();poll();};
+ function acceptPayload(j){
+  if(!j.ok||j.symbol!==pair.value||!Array.isArray(j.views))throw new Error('INVALID_RESPONSE');
+  if(payload?.symbol===j.symbol){
+   j.views=j.views.map(v=>{const old=payload.views?.find(x=>x.timeframe===v.timeframe);const a=old?.market,b=v.market;
+    return a&&Date.now()-Number(a.receivedAt)<=18000000&&(!b||Number(b.receivedAt)<Number(a.receivedAt)||Number(b.signalObservedAt)>0&&Number(a.signalObservedAt)>0&&Number(b.signalObservedAt)<Number(a.signalObservedAt))?old:v;});
+  }
+  payload=j;failed=false;
+ }
+ function startStream(){
+  const g=generation;stream?.close();streamLive=false;
+  if(!window.EventSource)return;
+  const active=new EventSource('/api/analysis/timeframes/events?symbol='+encodeURIComponent(pair.value));stream=active;
+  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;clearTimeout(timer);connection.textContent='Feed push TF2 & TF15 • Sambungan aktif';render();}catch(_){}});
+  active.addEventListener('unavailable',()=>{if(g===generation&&!controller)poll();});
+  active.onerror=()=>{if(g!==generation)return;streamLive=false;connection.textContent='Menyambung semula feed push • polling aktif';if(!controller){clearTimeout(timer);poll();}};
+ }
+ async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Feed push TF2 & TF15 • Sambungan aktif':'Feed TF2 & TF15 • Polling sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Sambungan feed terputus. Mencuba semula…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
+ pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values())c.chart.replaceChildren();connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
  const params=new URLSearchParams(location.search);if(['XAUUSD'].includes(params.get('pair')))pair.value=params.get('pair');if(['2','15'].includes(params.get('tf'))){selected=params.get('tf');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));}
- render();poll();setInterval(render,1000);
+ render();startStream();poll();setInterval(render,1000);
+ window.addEventListener('pagehide',()=>{generation++;clearTimeout(timer);controller?.abort();stream?.close();});
 })();
