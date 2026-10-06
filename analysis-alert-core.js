@@ -11,10 +11,10 @@ function signals(m, now = Date.now()) {
   const items = [];
   const entryType=String(m.strategyNormal?.entryType||'');
   const reentry=/^(NORMAL|HIGH)_REENTRY$/.test(entryType);
-  if (entry) items.push({kind:'ENTRY', signature:`${entry.side}|${entry.entry}|${entry.sl}${reentry?`|${entryType}|${m.sourceBarTime||''}`:''}`, side:entry.side,
-    entryType:reentry?entryType:'SOLID_ENTRY',sourceBarTime:m.sourceBarTime||null,
+  if (entry) items.push({kind:'ENTRY', signature:`${entry.side}|${entry.entry}|${entry.sl}${reentry?`|${entryType}|${m.sourceBarTime||''}`:''}${m.setupKey?`|SETUP:${m.setupKey}`:''}`, side:entry.side,
+    setupKey:entry.setupKey||m.setupKey||null,entryType:reentry?entryType:'SOLID_ENTRY',sourceBarTime:m.sourceBarTime||null,
     message:`${m.symbol} • TF${tf} • ${String(m.strategyNormal?.entryType||'').includes('REENTRY')?'RE-ENTRY':'ENTRY'} ${entry.side}\nEntry: ${entry.entry} | SL: ${entry.sl}\nTP1: ${entry.tp1} | TP2: ${entry.tp2} | TP3: ${entry.tp3}`});
-  if (close) items.push({kind:'CLOSE', signature:close.reason, percent:close.percent,
+  if (close) items.push({kind:'CLOSE', setupKey:m.setupKey||null,signature:close.reason, percent:close.percent,
     message:`${m.symbol} • TF${tf} • ${close.percent === 50 ? 'CLOSE 50%' : close.reason === 'EXIT_REMAINING' ? 'CLOSE BAKI' : 'CLOSE SEMUA'}\n${String(m.positionManagement.reason || close.reason).slice(0,180)}`});
   return {symbol:m.symbol,timeframe:tf,time,entry:items.find(x=>x.kind==='ENTRY')?.signature||'',close:items.find(x=>x.kind==='CLOSE')?.signature||'',items};
 }

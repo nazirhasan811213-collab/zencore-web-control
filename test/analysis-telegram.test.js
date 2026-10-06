@@ -21,10 +21,10 @@ test('Telegram entry remains once per pair/direction/position without changing p
   await frame({positionManagement:{action:'EXIT_ALL'}});
   await frame({strategyNormal:{...m.strategyNormal,plan:{...m.strategyNormal.plan,sl:51503.337}}});
   assert.equal((await s.feed('0')).events.filter(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).length,1,'stale READY after close is not a new entry');
-  await frame({strategyNormal:{state:'WAIT'}});await frame({});
+  await frame({strategyNormal:{state:'WAIT'}});await frame({setupKey:'NEW-BUY-2'});
   assert.equal((await s.feed('0')).events.filter(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).length,2,'new position after close is allowed immediately');
-  await frame({strategyNormal:{...m.strategyNormal,side:'SELL'}});
-  await frame({symbol:'XAUUSD'});
+  await frame({setupKey:'NEW-SELL-3',strategyNormal:{...m.strategyNormal,side:'SELL'}});
+  await frame({symbol:'XAUUSD',setupKey:'NEW-BUY-4'});
   assert.equal((await s.feed('0')).events.filter(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).length,4,'direction and pair are independent');
  }finally{clearInterval(s.cleanupTimer);}
 });

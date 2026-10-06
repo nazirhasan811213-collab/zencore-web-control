@@ -2,11 +2,12 @@
 const crypto = require('crypto');
 const {signals,transitions,defaults} = require('./analysis-alert-core');
 const {prepareTelegram,messageQuality,telegramMessage,entryFresh,entrySopAllowed} = require('./analysis-telegram');
+const {notificationKey}=require('./telegram-notification-key');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
   constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
     this.pool=pool; this.token=token; this.botName=/^[A-Za-z0-9_]+$/.test(botName)?botName:''; this.fetch=fetchFn;
-    this.prefs=new Map(); this.states=new Map(); this.events=[]; this.sequence=0; this.queue=Promise.resolve(); this.ready=false;
+    this.notificationKeys=new Set();this.prefs=new Map(); this.states=new Map(); this.events=[]; this.sequence=0; this.queue=Promise.resolve(); this.ready=false;
   }
   async init() {
     if(this.pool) await this.pool.query(`
@@ -14,11 +15,13 @@ class AnalysisAlerts {
       CREATE TABLE IF NOT EXISTS zencore_alert_states(symbol TEXT PRIMARY KEY, data JSONB NOT NULL);
       CREATE TABLE IF NOT EXISTS zencore_analysis_alerts(id BIGSERIAL PRIMARY KEY, data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
       CREATE TABLE IF NOT EXISTS zencore_telegram_deliveries(id BIGSERIAL PRIMARY KEY, event_id BIGINT REFERENCES zencore_analysis_alerts(id) ON DELETE CASCADE, user_id UUID REFERENCES zencore_users(id) ON DELETE CASCADE, status TEXT NOT NULL DEFAULT 'pending', UNIQUE(event_id,user_id));
+      CREATE TABLE IF NOT EXISTS zencore_notification_keys(notification_key TEXT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS zencore_telegram_signal_claims(notification_key TEXT NOT NULL, chat_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(notification_key,chat_id));
       CREATE TABLE IF NOT EXISTS zencore_telegram_chat_claims(event_id BIGINT REFERENCES zencore_analysis_alerts(id) ON DELETE CASCADE, chat_id TEXT NOT NULL, PRIMARY KEY(event_id,chat_id));
     `);
     this.ready=true;
     if(this.pool && this.token) { this.timer=setInterval(()=>this.deliver().catch(()=>console.error('Telegram delivery unavailable')),2000); this.timer.unref?.(); }
-    this.cleanupTimer=setInterval(()=>this.pool?.query("DELETE FROM zencore_analysis_alerts WHERE created_at < NOW()-INTERVAL '7 days'").catch(()=>{}),3600000); this.cleanupTimer.unref?.();
+    this.cleanupTimer=setInterval(()=>this.pool?.query("DELETE FROM zencore_analysis_alerts WHERE created_at < NOW()-INTERVAL '7 days'; DELETE FROM zencore_notification_keys WHERE created_at < NOW()-INTERVAL '30 days'; DELETE FROM zencore_telegram_signal_claims WHERE created_at < NOW()-INTERVAL '30 days'").catch(()=>{}),3600000); this.cleanupTimer.unref?.();
   }
   async withUserLock(user, method, argument) {
     // Serialise code attempts and ID changes across concurrent requests/instances.
@@ -101,17 +104,20 @@ class AnalysisAlerts {
         pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
         m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},
       telegramMarket:{signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
-    }:e);
+    }:e).map(e=>({...e,notificationKey:notificationKey(e,prev)}));
     if(!this.pool){
       const prev=this.states.get(stateKey);if(prev&&next.time<=prev.time)return;
       const events=notificationEvents(prev);
       next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
         events.find(e=>e.kind==='ENTRY')?.telegramPlan
           ? {side:events.find(e=>e.kind==='ENTRY').side,entryType:events.find(e=>e.kind==='ENTRY').entryType,
-             openedAt:next.time,plan:events.find(e=>e.kind==='ENTRY').telegramPlan}
+             setupKey:events.find(e=>e.kind==='ENTRY')?.setupKey||null,openedAt:next.time,plan:events.find(e=>e.kind==='ENTRY').telegramPlan}
           : prev?.activePlan||null;
       this.states.set(stateKey,next);
-      for(const e of events) this.events.push({...e,id:++this.sequence});
+      for(const e of events){
+        if(this.notificationKeys.has(e.notificationKey))e.telegramDuplicate=true;else this.notificationKeys.add(e.notificationKey);
+        this.events.push({...e,id:++this.sequence});
+      }
       this.events=this.events.slice(-500);return;
     }
     let queued=false;
@@ -124,9 +130,11 @@ class AnalysisAlerts {
         const events=notificationEvents(prev);
         const opened=events.find(e=>e.kind==='ENTRY');
         next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
-          opened?.telegramPlan?{side:opened.side,entryType:opened.entryType,openedAt:next.time,plan:opened.telegramPlan}:prev?.activePlan||null;
+          opened?.telegramPlan?{side:opened.side,entryType:opened.entryType,setupKey:opened.setupKey||null,openedAt:next.time,plan:opened.telegramPlan}:prev?.activePlan||null;
         await c.query('INSERT INTO zencore_alert_states(symbol,data) VALUES($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=$2',[stateKey,next]);
         for(const e of events){
+          const claimed=await c.query('INSERT INTO zencore_notification_keys(notification_key) VALUES($1) ON CONFLICT DO NOTHING RETURNING notification_key',[e.notificationKey]);
+          if(!claimed.rows.length)e.telegramDuplicate=true;
           const row=(await c.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1) RETURNING id',[e])).rows[0];
           if(e.telegramDuplicate)continue;
           queued=true;
@@ -174,10 +182,12 @@ class AnalysisAlerts {
           const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           // Apply to every notification, including closes and already queued events.
-          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&Date.now()-e.time<180000&&
+          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
+              const stableClaim=await this.pool.query('INSERT INTO zencore_telegram_signal_claims(notification_key,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING notification_key',[e.notificationKey||notificationKey(e),p.telegramId]);
+              if(!stableClaim.rows.length){await this.pool.query('UPDATE zencore_telegram_deliveries SET status=$2 WHERE id=$1',[row.id,'skipped']);continue;}
               await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)}));status='sent';
             }
           }

@@ -11,9 +11,12 @@ function prepareTelegram(previous, next, events) {
   let newEntry=false;
   if(entry && !close){
     const eventExists=events.some(e=>e.kind==='ENTRY');
+    const distinctSetup=entry.setupKey&&position?.setupKey&&entry.setupKey!==position.setupKey;
+    // Adopt a key for an already-announced legacy position without announcing it again.
+    if(position&&!position.setupKey&&entry.setupKey&&anchor===position.anchor)position.setupKey=entry.setupKey;
     const freshReentry=/^(NORMAL|HIGH)_REENTRY$/.test(entry.entryType)&&Number.isFinite(entry.sourceBarTime)&&entry.sourceBarTime>0;
-    if(eventExists && (freshReentry || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
-      position={side:entry.side,anchor,closed:false,idle:false};newEntry=true;
+    if(eventExists && (distinctSetup || freshReentry || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
+      position={side:entry.side,anchor,setupKey:entry.setupKey||null,closed:false,idle:false};newEntry=true;
     }
   }
   if(position && close?.percent===100)position.closed=true;

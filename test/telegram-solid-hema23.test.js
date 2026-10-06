@@ -18,8 +18,8 @@ test('Analysis records the same approved SOP and plan for Telegram without sendi
  const {normalEntrySop}=require('../normal-entry-sop');
  const h={fast:102,slow:101,previousFast:101,previousSlow:100};
  const x=normalEntrySop({timeframe:'2',chopIndex:40,normal3Side:'BUY',normal3Solid:true,normal3Entry:100,normal3Close:100.1,normal3Atr:1,
-  normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Forecast:'NEUTRAL',normal3MarketPower:56,
-  hemaConfirmation:{tf2:h,tf3:{...h,confirmed:true}}});
+  normal3PricePastEntry:true,normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Forecast:'NEUTRAL',normal3MarketPower:56,
+  hemaConfirmation:{version:'HEMA23_LIVE_V1',tf2:h,tf3:{...h,confirmed:true}}});
  const alerts=new AnalysisAlerts({fetchFn:()=>{throw Error('No external sends in test');}});await alerts.init();
  const now=Date.now();
  await alerts.record({symbol:'XAUUSD',receivedAt:now,sourceBarTime:now-120000,price:100.1,timeframe:'2',feedMode:'BAR_CLOSE',
