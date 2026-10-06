@@ -241,7 +241,7 @@
     const status = byId('systemMessage');
     toggle.disabled = true;
     status.className = 'mg-form-status';
-    status.textContent = 'Saving...';
+    status.textContent = 'Tengah simpan…';
     try {
       const body = await api('/api/admin/system/registration', {
         method:'PATCH',

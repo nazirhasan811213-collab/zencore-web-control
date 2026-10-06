@@ -39,7 +39,7 @@
         <div class="mg-user">
           <div><b id="accountName">IB</b><small id="accountEmail">Loading...</small></div>
           <span class="mg-role ib">IB</span>
-          <button id="logoutButton" class="mg-ghost" type="button">Log keluar</button>
+          <button id="logoutButton" class="mg-ghost" type="button">Logout</button>
         </div>
       </header>
 
@@ -47,7 +47,7 @@
         <div>
           <span class="mg-kicker">PARTNER WORKSPACE</span>
           <h2>Urus client bawah anda.</h2>
-          <p>Dashboard ini hanya memaparkan client yang mendaftar melalui referral link IB anda. Client IB lain tidak boleh dilihat atau dikawal.</p>
+          <p>Kat sini hanya nampak client yang daftar melalui link IB anda. Client IB lain tak boleh dilihat atau diurus.</p>
         </div>
         <div class="mg-system">
           <span>ACCESS SCOPE</span>
@@ -68,7 +68,7 @@
           <span class="mg-role ib">LOCKED TO YOUR IB</span>
         </div>
         <div class="referral-box">
-          <div><span>SHARE THIS LINK</span><b id="referralLink">Loading...</b><small>Client yang daftar melalui link ini akan kekal di bawah IB anda.</small></div>
+          <div><span>SHARE THIS LINK</span><b id="referralLink">Loading...</b><small>Client yang daftar melalui link ni akan kekal bawah IB anda.</small></div>
           <button id="copyReferral" class="mg-primary" type="button">COPY LINK</button>
         </div>
       </section>
@@ -91,7 +91,7 @@
 
 
       <section id="connectionMonitor" class="mg-panel" data-connection-scope="ib">
-        <div class="mg-panel-head"><div><span class="mg-kicker">CLIENT → CONNECTOR → MT5</span><h2>Status sambungan client</h2><p>Semakan setiap 10 saat. Heartbeat terkini tidak semestinya MT5 sedia berdagang.</p></div></div>
+        <div class="mg-panel-head"><div><span class="mg-kicker">CLIENT → CONNECTOR → MT5</span><h2>Status sambungan client</h2><p>Status check setiap 10 saat. Heartbeat fresh belum tentu MT5 ready untuk trade.</p></div></div>
         <div class="ops-filters"><input id="connectionSearch" type="search" aria-label="Cari client" placeholder="Cari nama, email atau akaun"><select id="connectionFilter" aria-label="Filter sambungan"><option value="all">Semua</option><option value="ready">Ready</option><option value="offline">Offline</option><option value="attention">Perlu perhatian</option><option value="unlinked">Belum paut</option></select><button id="connectionRefresh" type="button" class="mg-ghost">Refresh</button></div>
         <p id="connectionMessage" role="status">Memuatkan status…</p>
         <div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Client</th><th>Akaun / Server</th><th>Connector</th><th>MT5</th><th>Algo / Account / EA</th><th>Auto trade</th><th>Heartbeat terakhir</th></tr></thead><tbody id="connectionRows"></tbody></table></div>
@@ -100,7 +100,7 @@
     </main>
   </div>
   <script src="/management.js?v=1.0" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
+<script src="/workspace-shell.js?v=20261007.2" defer></script>
   <script src="/client-connections.js?v=1.0" defer></script>
 </body>
 </html>

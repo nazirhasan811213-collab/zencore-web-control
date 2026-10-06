@@ -23,15 +23,15 @@
         </div>
 
         <nav class="top-nav" aria-label="Navigasi utama">
-          <a href="/app">MARKET RADAR</a>
+          <a href="/app">DASHBOARD</a>
           <a href="/analysis?pair=XAUUSD">ANALYSIS</a>
           <a href="/results">RESULT</a>
           <a class="active" href="/auto-trade">AUTO TRADE</a>
         </nav>
 
         <div class="user-actions">
-          <span id="userPill" class="user-pill">Memuatkan akaun...</span>
-          <button id="logoutButton" class="ghost-btn" type="button">LOG KELUAR</button>
+          <span id="userPill" class="user-pill">Tengah load akaun…</span>
+          <button id="logoutButton" class="ghost-btn" type="button">LOGOUT</button>
         </div>
       </header>
 
@@ -42,7 +42,7 @@
             <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
           </div>
           <h1>Kawal Auto Trade XAUUSD.</h1>
-          <p>Pilih strategi, tetapkan lot dan layer, kemudian semak sambungan MT5. Entry TF2 dan TF15 menggunakan SOP masing-masing.</p>
+          <p>Pilih strategi, set lot dan layer, lepas tu check connection MT5. TF2 dan TF15 jalan ikut SOP sendiri.</p>
         </div>
         <div class="hero-mode">
           <span>ROLLOUT MODE</span>
@@ -55,7 +55,7 @@
         <div class="security-icon" aria-hidden="true">◇</div>
         <div>
           <b>Credential MT5 dienkripsi dalam browser sebelum dihantar.</b>
-          <span>Password broker kekal dalam MT5. Identiti akaun dipaparkan secara bertopeng.</span>
+          <span>Password broker kekal dalam MT5. Nombor akaun dipaparkan separa sahaja.</span>
         </div>
         <span class="security-lock">PASSWORD DILINDUNGI</span>
       </aside>
@@ -63,16 +63,16 @@
       <aside class="security-banner" aria-label="EA Connector">
         <div>
           <b>Fasa 1: EA + Connector pada PC Windows.</b>
-          <span>Buka ZenCore Connector, klik Pasang EA, kemudian login ZenCore dan pautkan akaun DEMO. MT5 tidak memerlukan WebRequest atau API Python. Password broker kekal dalam MT5.</span>
-          <span>Hentikan worker lama sebelum berpindah. Pair, lot, layer dan ON/OFF diurus di sini selepas pautan berjaya.</span>
+          <span>Buka ZenCore Connector → klik Pasang EA → login ZenCore → link akaun DEMO. Tak perlu set WebRequest atau API Python. Password broker kekal dalam MT5.</span>
+          <span>Stop worker lama sebelum tukar. Bila akaun dah link, pair, lot, layer dan ON/OFF semua set kat sini.</span>
         </div>
       </aside>
 
       <section id="autoTradeGate" class="auto-trade-gate">
         <div>
           <span class="eyebrow">Auto Trade ialah pilihan trader</span>
-          <h2>Sambungkan MT5 hanya apabila anda mahu aktifkan Auto Trade.</h2>
-          <p>Analysis ZenCore kekal seperti sekarang. Selepas dipilih, bahagian akaun MT5, cadangan saiz dan kawalan ON/STOP akan muncul.</p>
+          <h2>Nak guna Auto Trade? Sambung MT5 dulu.</h2>
+          <p>Bila pilih Auto Trade, akaun MT5, cadangan lot/layer dan butang ON/STOP akan keluar.</p>
         </div>
         <button id="startAutoTradeButton" type="button">MULA AUTO TRADE</button>
       </section>
@@ -106,10 +106,10 @@
             <div><span>Expert Trade</span><b id="expertTradeState">WAIT</b></div>
           </div>
           <div id="podNotice" class="panel-notice">
-            Belum ada sambungan MT5. Buka Connector pada PC Windows untuk memautkan akaun.
+            MT5 belum connect. Buka Connector kat PC Windows untuk link akaun.
           </div>
           <div id="pairingActions" class="pairing-actions">
-            <div><b>Sambung dalam ZenCore</b><span>Masukkan login, password dan server dalam popup. Browser akan enkripsi sebelum request dihantar.</span></div>
+            <div><b>Sambung dalam ZenCore</b><span>Isi login, password dan server dalam popup. Browser encrypt dulu sebelum hantar.</span></div>
             <button id="connectMt5Button" type="button">SAMBUNG MT5</button>
           </div>
           <details class="legacy-pod" id="legacyPod" hidden>
@@ -135,7 +135,7 @@
           </div>
           <div class="stop-policy">
             <b>STOP ENTRY hanya menghentikan entry baharu.</b>
-            <span>Entry baharu disekat serta-merta; posisi terbuka terus diurus oleh EXIT 32.3 StepLock.</span>
+            <span>Entry baru terus stop. Posisi yang dah buka tetap diurus ikut EXIT 32.3 StepLock.</span>
           </div>
           <button id="emergencyButton" class="emergency-button" type="button">EMERGENCY CLOSE ALL</button>
         </article>
@@ -148,8 +148,8 @@
             <span class="mini-status warning-only">SEMAK RISIKO</span>
           </div>
           <form id="settingsForm" novalidate>
-            <label class="risk-symbol"><span>STRATEGI ENTRY</span><select id="strategyMode"><option value="TF2_SCALPING">TF2 min — Scalping</option><option value="TF15_INTRA">TF15 min — Intraday · 2 layer</option><option value="BOTH">Both — TF2 + TF15</option></select></label><p>Pair: XAUUSD sahaja. Both: satu setup aktif setiap pair dan TF. SOP, lot, layer dan exit TF2/TF15 berasingan.</p><p><a href="/downloads/ZenCore_TF2_Realtime_Feed.pine">Feed TF2 realtime</a> · <a href="/downloads/ZenCore_TF15_Realtime_Feed.pine">Feed TF15 realtime</a></p><label id="settingsModeLabel" hidden><span>SETTING UNTUK</span><select id="settingsMode"><option value="TF2_SCALPING">TF2 Scalping</option><option value="TF15_INTRA">TF15 Intra</option></select></label>
-            <p id="strategyNotice">TF2 / TF15: SOP 1/10 — SOLID, harga lepas entry, checklist 4/5, forecast, HEMA5 dan pengesahan HEMA2/3 atau HEMA15/30 searah. Entry realtime.</p>
+            <label class="risk-symbol"><span>STRATEGI ENTRY</span><select id="strategyMode"><option value="TF2_SCALPING">TF2 min — Scalping</option><option value="TF15_INTRA">TF15 min — Intraday · 2 layer</option><option value="BOTH">Both — TF2 + TF15</option></select></label><p>Pair XAUUSD sahaja. Pilih Both untuk guna dua TF. Setiap TF ada setup, SOP, lot, layer dan exit sendiri.</p><p><a href="/downloads/ZenCore_TF2_Realtime_Feed.pine">Feed TF2 realtime</a> · <a href="/downloads/ZenCore_TF15_Realtime_Feed.pine">Feed TF15 realtime</a></p><label id="settingsModeLabel" hidden><span>SETTING UNTUK</span><select id="settingsMode"><option value="TF2_SCALPING">TF2 Scalping</option><option value="TF15_INTRA">TF15 Intra</option></select></label>
+            <p id="strategyNotice">TF2 / TF15: SOLID, price lepas entry, checklist 4/5 dan forecast ikut SOP. HEMA2/3 untuk TF2; HEMA15/30 untuk TF15. Setiap TF check arah sendiri.</p>
             <div class="settings-fields">
               <label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label>
               <label><span>GOLD — LOT / LAYER</span><input id="lotPerLayer" name="lotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
@@ -170,12 +170,12 @@
             <fieldset class="symbol-fieldset" aria-describedby="executionSymbolNotice">
               <legend>PAIR AUTO ZENCORE</legend>
               <div id="symbolOptions" class="symbol-options"></div>
-              <small id="executionSymbolNotice">ZenCore memilih semua pair yang telah disahkan pada control plane. Pengguna tidak perlu membuat tetapan pair.</small>
+              <small id="executionSymbolNotice">ZenCore ikut pair yang sistem dah sahkan. Tak perlu set pair sendiri.</small>
             </fieldset>
 
             <label class="risk-ack">
               <input id="riskAcknowledged" type="checkbox">
-              <span>Saya faham saiz lot dan layer boleh menghasilkan risiko tinggi. ZenCore akan memberi warning tetapi tidak menghalang order selepas saya confirm.</span>
+              <span>Saya faham lot dan layer besar boleh naikkan risiko. ZenCore akan bagi warning, tapi order tak dihalang selepas saya confirm.</span>
             </label>
             <div id="settingsError" class="form-error" role="alert"></div>
             <button id="saveSettingsButton" class="save-settings" type="submit">SIMPAN KONFIGURASI</button>
@@ -198,10 +198,10 @@
             <div><span>SL</span><b id="riskSl">—</b></div>
             <div><span>TOTAL LOT</span><b id="riskTotalLot">0.03</b></div>
           </div>
-          <p id="riskMessage">Menunggu Entry, SL dan spesifikasi broker untuk kira risiko sebenar.</p>
+          <p id="riskMessage">Tunggu level entry, SL dan info broker dulu untuk kira risiko sebenar.</p>
           <div class="size-recommendation">
-            <div><span>CADANGAN ZENCORE</span><b id="recommendedSize">MENUNGGU DATA</b></div>
-            <small id="recommendationMessage">Cadangan memerlukan active plan dan spesifikasi volume broker.</small>
+            <div><span>CADANGAN ZENCORE</span><b id="recommendedSize">TUNGGU DATA</b></div>
+            <small id="recommendationMessage">Cadangan lot/layer perlukan setup aktif dan info saiz lot broker.</small>
             <button id="applyRecommendationButton" type="button" disabled>GUNA CADANGAN</button>
           </div>
           <div class="warning-policy"><b>Tiada hard block kerana risk level.</b><span>Security, invalid command atau Secure Pod offline tetap boleh menghalang execution.</span></div>
@@ -233,7 +233,7 @@
 
       <footer class="portal-foot autotrade-foot">
         <span>Normal SOP V32 • TF mengikut feed • EXIT 32.3 StepLock • Hosted MT5 staged</span>
-        <span>Auto Trade tidak menjamin profit. Semua execution tertakluk kepada broker, spread dan slippage.</span>
+        <span>Auto Trade tak jamin profit. Order tetap bergantung pada broker, spread dan slippage.</span>
       </footer>
     </div>
   </main>
@@ -277,7 +277,7 @@
         <legend>HOST SECURE POD</legend>
         <label class="host-profile-option">
           <input type="radio" name="ownershipMode" value="TRADER_OWNED_WINDOWS_PC" checked>
-          <span><b>PC WINDOWS SENDIRI</b><small>Sesuai untuk sambungan Demo sekarang. PC dan MT5 mesti sentiasa hidup.</small></span>
+          <span><b>PC WINDOWS SENDIRI</b><small>Untuk sambungan Demo sekarang. PC dan MT5 kena sentiasa hidup.</small></span>
         </label>
         <label class="host-profile-option">
           <input type="radio" name="ownershipMode" value="TRADER_OWNED_AZURE">
@@ -301,7 +301,7 @@
       <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
       <span class="eyebrow danger">Emergency Action</span>
       <h2>Tutup semua posisi MT5?</h2>
-      <p>Arahan ini cuba menutup semua posisi terbuka dan mematikan entry baharu. Execution masih tertakluk kepada sambungan broker.</p>
+      <p>Butang ni akan cuba close semua posisi dan stop entry baru. Order close masih perlukan connection broker.</p>
       <label><span>PASSWORD AKAUN ZENCORE</span><input id="emergencyPassword" type="password" autocomplete="current-password"></label>
       <label><span>TAIP TUTUP SEMUA</span><input id="emergencyConfirmation" autocomplete="off" placeholder="TUTUP SEMUA"></label>
       <div id="emergencyError" class="form-error" role="alert"></div>
@@ -312,8 +312,8 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/analysis-execution-contract.js?v=1.1" defer></script>
   <script src="/auto-trade-core.js?v=1.2" defer></script>
-  <script src="/auto-trade.js?v=1.3" defer></script>
+  <script src="/auto-trade.js?v=20261007.2" defer></script>
   <script src="/viewer-mode.js?v=1.1" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
+<script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>
 </html>

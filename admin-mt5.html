@@ -19,7 +19,7 @@
         <a href="/admin#clients"><span>◎</span>Clients</a>
         <a class="active" href="/admin/mt5"><span>◉</span>MT5 Accounts</a>
         <a href="/admin/activity"><span>▤</span>Activity</a>
-        <a href="/admin/system"><span>⚙</span>Tetapan sistem</a>
+        <a href="/admin/system"><span>⚙</span>Setting sistem</a>
         <a href="/analysis?pair=XAUUSD"><span>⌁</span>Analysis</a>
       </nav>
       <div class="mg-side-note"><span>ROLE</span><b>SUPER ADMIN</b><small>Global MT5 visibility</small></div>
@@ -27,11 +27,11 @@
     <main class="mg-main">
       <header class="mg-topbar">
         <div><span class="mg-kicker">BROKER CONNECTION CONTROL</span><h1>MT5 Accounts</h1></div>
-        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">Log keluar</button></div>
+        <div class="mg-user"><div><b id="accountName">Admin</b><small id="accountEmail">Loading...</small></div><span class="mg-role admin">ADMIN</span><button id="logoutButton" class="mg-ghost" type="button">Logout</button></div>
       </header>
 
       <section class="mg-hero ops-hero">
-        <div><span class="mg-kicker">ALL CLIENT TERMINALS</span><h2>Semua sambungan MT5 dalam satu view.</h2><p>Admin boleh melihat status sambungan client, account mask, server, control state dan open positions tanpa mendedahkan credential broker.</p></div>
+        <div><span class="mg-kicker">ALL CLIENT TERMINALS</span><h2>Semua connection MT5 dalam satu view.</h2><p>Admin boleh check connection client, akaun separa, server, status Auto Trade dan posisi terbuka. Password broker tak dipaparkan.</p></div>
         <div class="mg-system"><span>EXECUTION GATE</span><b id="executionGate">CHECKING...</b><small id="requiredConnector">Protected by server gate</small></div>
       </section>
 
@@ -65,7 +65,7 @@
       </section>
 
       <section id="connectionMonitor" class="mg-panel" data-connection-scope="admin">
-        <div class="mg-panel-head"><div><span class="mg-kicker">CLIENT → CONNECTOR → MT5</span><h2>Status sambungan client</h2><p>Semakan setiap 10 saat. Heartbeat terkini tidak semestinya MT5 sedia berdagang.</p></div></div>
+        <div class="mg-panel-head"><div><span class="mg-kicker">CLIENT → CONNECTOR → MT5</span><h2>Status sambungan client</h2><p>Status check setiap 10 saat. Heartbeat fresh belum tentu MT5 ready untuk trade.</p></div></div>
         <div class="ops-filters"><input id="connectionSearch" type="search" aria-label="Cari client" placeholder="Cari nama, email atau akaun"><select id="connectionFilter" aria-label="Filter sambungan"><option value="all">Semua</option><option value="ready">Ready</option><option value="offline">Offline</option><option value="attention">Perlu perhatian</option><option value="unlinked">Belum paut</option></select><button id="connectionRefresh" type="button" class="mg-ghost">Refresh</button></div>
         <p id="connectionMessage" role="status">Memuatkan status…</p>
         <div class="mg-table-wrap"><table class="mg-table"><thead><tr><th>Client</th><th>Akaun / Server</th><th>Connector</th><th>MT5</th><th>Algo / Account / EA</th><th>Auto trade</th><th>Heartbeat terakhir</th></tr></thead><tbody id="connectionRows"></tbody></table></div>
@@ -73,8 +73,8 @@
       <footer class="mg-foot">ZenCore Admin • Credentials are never displayed in this view</footer>
     </main>
   </div>
-  <script src="/admin-ops.js?v=1.0" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
+  <script src="/admin-ops.js?v=20261007.2" defer></script>
+<script src="/workspace-shell.js?v=20261007.2" defer></script>
   <script src="/client-connections.js?v=1.0" defer></script>
 </body>
 </html>

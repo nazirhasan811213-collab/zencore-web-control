@@ -79,13 +79,13 @@
 
   function stateCopy(effective) {
     const copy = {
-      UNPROVISIONED: 'Secure Pod belum disediakan. Entry baharu disekat.',
-      STOPPED: 'Tiada entry baharu akan dihantar.',
-      ARMING: 'Menunggu Secure Pod mengakui arahan ON.',
-      ON: 'Setup READY boleh dihantar ke MT5.',
-      STOPPING: 'Entry baharu sudah disekat. Menunggu acknowledgement STOP.',
-      EMERGENCY_CLOSING: 'Arahan tutup semua sedang diproses oleh MT5.',
-      ERROR: 'Execution memerlukan perhatian. Entry baharu disekat.'
+      UNPROVISIONED: 'Secure Pod belum ready. Entry baru tak akan dihantar.',
+      STOPPED: 'Entry baru dah stop.',
+      ARMING: 'Arahan ON dah hantar. Tunggu pengesahan dari Secure Pod.',
+      ON: 'Setup READY boleh hantar ke MT5.',
+      STOPPING: 'Entry baru dah stop. Tunggu pengesahan STOP.',
+      EMERGENCY_CLOSING: 'MT5 tengah proses arahan close semua.',
+      ERROR: 'Order ada masalah. Entry baru disekat dulu.'
     };
     return copy[effective] || 'Status belum tersedia.';
   }
@@ -247,7 +247,7 @@
         ? allowed.map(symbol => localEa
           ? `<label class="symbol-option"><input type="checkbox" name="executionPair" value="${escape(symbol)}" ${selected.has(symbol) ? 'checked' : ''}><span>${escape(symbol)}</span></label>`
           : `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
-        : '<span class="symbol-scope-empty">Menunggu pair yang disahkan.</span>';
+        : '<span class="symbol-scope-empty">Tunggu pair disahkan dulu.</span>';
     }
     setText('executionSymbolNotice', localEa
       ? 'Pilih pair untuk EA daripada skop broker yang disahkan. Simpan untuk menghantar setting kepada EA.'
@@ -413,7 +413,7 @@
       level.className = `mini-status risk-level ${risk.level.toLowerCase()}`;
     }
     setText('riskPercent', risk.available ? `${risk.riskPercent.toFixed(2)}%` : '—');
-    setText('riskUsd', risk.available ? money(risk.riskUsd) : 'Menunggu active plan');
+    setText('riskUsd', risk.available ? money(risk.riskUsd) : 'Tunggu setup aktif');
     setText('riskEntry', price(plan?.entry, symbol));
     setText('riskSl', price(plan?.sl, symbol));
     setText('riskMessage', risk.message);
@@ -594,7 +594,7 @@
       credentialEncryption = null;
       byId('mt5ConnectDialog').close();
       render(state);
-      toast('Encrypted MT5 envelope disimpan. Menunggu managed Demo worker.');
+      toast('Info MT5 dah disimpan dalam bentuk encrypted. Tunggu worker Demo ready.');
     } catch (error) {
       setText('mt5ConnectError', error.message);
     } finally {
@@ -712,7 +712,7 @@
       });
       byId('onDialog').close();
       render(state);
-      toast('Arahan ON dihantar. Menunggu acknowledgement Secure Pod.');
+      toast('Arahan ON dah hantar. Tunggu Secure Pod confirm dulu.');
     } catch (error) {
       setText('onError', error.message);
     } finally {
@@ -726,7 +726,7 @@
     button.disabled = true;
     try {
       render(await api('/api/auto-trade/stop', { method: 'POST', body: '{}' }));
-      toast('Entry baharu telah disekat. Menunggu acknowledgement STOP.');
+      toast('Entry baru dah stop. Tunggu pengesahan STOP.');
     } catch (error) {
       toast(error.message, true);
     } finally {

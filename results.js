@@ -118,7 +118,7 @@
     setText('openCount', `${rows.length} signal`);
     openSignalList.innerHTML = rows.length
       ? rows.map(openCard).join('')
-      : '<div class="open-empty"><b>Belum ada signal open.</b><span>ZenCore akan paparkan trade validation di sini bila setup aktif.</span></div>';
+      : '<div class="open-empty"><b>Belum ada signal open.</b><span>Bila setup aktif, rekod signal akan keluar kat sini.</span></div>';
   }
 
   function visibleRows() {

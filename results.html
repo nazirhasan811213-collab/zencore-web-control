@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>Prestasi signal — ZenCore Precision Entry</title>
+  <title>Rekod signal — ZenCore Precision Entry</title>
   <link rel="stylesheet" href="/auth.css?v=1.0">
   <link rel="stylesheet" href="/results.css?v=1.0">
   <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
@@ -21,15 +21,15 @@
         </div>
 
         <nav class="top-nav" aria-label="Navigasi utama">
-          <a href="/app">MARKET RADAR</a>
+          <a href="/app">DASHBOARD</a>
           <a href="/analysis?pair=XAUUSD">ANALYSIS</a>
           <a class="active" href="/results">RESULT</a>
           <a href="/auto-trade">AUTO TRADE</a>
         </nav>
 
         <div class="user-actions">
-          <span id="userPill" class="user-pill">Memuatkan akaun...</span>
-          <button id="logoutButton" class="ghost-btn" type="button">LOG KELUAR</button>
+          <span id="userPill" class="user-pill">Tengah load akaun…</span>
+          <button id="logoutButton" class="ghost-btn" type="button">LOGOUT</button>
         </div>
       </header>
 
@@ -40,7 +40,7 @@
             <span id="resultConnection" class="connection-pill connecting"><i></i> MEMUATKAN</span>
           </div>
           <h1>Keputusan signal, jelas tanpa teka-teki.</h1>
-          <p>Semua 9 pair dihimpunkan daripada engine validation Normal 3M yang sama. Semak apa yang menang, terkena SL, dilindungi StepLock atau masih berjalan.</p>
+          <p>Check rekod signal: mana kena TP, kena SL, dilindungi StepLock atau masih jalan. Auto Trade sekarang fokus XAUUSD TF2 dan TF15.</p>
         </div>
         <div class="validation-stamp">
           <span>STATUS DATA</span>
@@ -51,7 +51,7 @@
 
       <aside class="data-notice" aria-label="Penerangan data result">
         <i aria-hidden="true">i</i>
-        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span>Ringkasan semasa datang daripada memori engine; arkib keputusan selesai disimpan berasingan selepas diselaraskan. Jumlah pada ringkasan boleh bermula semula selepas restart.</span></div>
+        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span>Ringkasan ni ikut rekod yang engine sedang pegang. Rekod selesai disimpan berasingan. Jumlah ringkasan boleh mula semula lepas server restart.</span></div>
       </aside>
 
       <section class="result-summary" aria-label="Ringkasan keputusan signal">
@@ -66,7 +66,7 @@
       <section class="results-overview">
         <article class="result-panel pair-panel">
           <div class="panel-heading">
-            <div><span class="eyebrow">9-Pair Scoreboard</span><h2>Prestasi mengikut pair</h2></div>
+            <div><span class="eyebrow">9-Pair Scoreboard</span><h2>Rekod mengikut pair</h2></div>
             <span id="pairCoverage" class="mini-pill">0/11 tersedia</span>
           </div>
           <div class="pair-table-wrap">
@@ -85,7 +85,7 @@
             <span id="openCount" class="mini-pill open">0 signal</span>
           </div>
           <div id="openSignalList" class="open-list" aria-live="polite">
-            <div class="open-empty"><b>Belum ada signal open.</b><span>ZenCore akan paparkan trade validation di sini bila setup aktif.</span></div>
+            <div class="open-empty"><b>Belum ada signal open.</b><span>Bila setup aktif, rekod signal akan keluar kat sini.</span></div>
           </div>
         </article>
       </section>
@@ -111,7 +111,7 @@
       <section class="result-panel history-panel">
         <div class="panel-heading history-heading">
           <div><span class="eyebrow">Signal History</span><h2 id="historyTitle">Semua keputusan terkini</h2></div>
-          <div class="history-meta"><span id="visibleCount">0 rekod</span><span id="lastUpdated">Belum dikemas kini</span></div>
+          <div class="history-meta"><span id="visibleCount">0 rekod</span><span id="lastUpdated">Belum diupdate</span></div>
         </div>
         <div class="history-table-wrap">
           <table class="history-table">
@@ -126,20 +126,20 @@
       </section>
 
       <section class="result-panel history-panel" aria-label="Arkib keputusan signal kekal">
-        <div class="panel-heading"><div><span class="eyebrow">DURABLE SIGNAL AUDIT</span><h2>Arkib validasi selepas restart</h2></div><span id="durableStatus" class="mini-pill">MENYEMAK</span></div>
-        <p class="data-notice">Rekod selesai yang diselaraskan ke pangkalan data. Ini bukan P/L broker; sejarah sebelum pengaktifan dan signal yang terlepas ketika servis tergendala tidak dapat direka semula.</p>
+        <div class="panel-heading"><div><span class="eyebrow">DURABLE SIGNAL AUDIT</span><h2>Arkib validasi selepas restart</h2></div><span id="durableStatus" class="mini-pill">TENGAH CHECK</span></div>
+        <p class="data-notice">Ini rekod signal selesai yang dah disimpan, bukan profit/loss broker. Rekod lama atau signal yang tak diterima masa sistem down tak boleh direka semula.</p>
         <div class="history-table-wrap"><table class="history-table"><thead><tr><th>MASA</th><th>PAIR</th><th>ARAH</th><th>ENTRY</th><th>HASIL</th><th>SKOR SOP</th></tr></thead><tbody id="durableRows"><tr><td colspan="6">Memuatkan arkib…</td></tr></tbody></table></div>
       </section>
 
       <footer class="portal-foot results-foot">
-        <span>Normal 3M SOP V32 • EXIT 32.3 StepLock • Auto Trade DEMO</span>
+        <span>Rekod signal • TF2 / TF15 • EXIT 32.3 StepLock</span>
         <span>Keputusan validation bukan jaminan prestasi masa depan.</span>
       </footer>
     </div>
   </main>
   <script src="/results-core.js?v=1.0" defer></script>
-  <script src="/results.js?v=1.0" defer></script>
+  <script src="/results.js?v=20261007.2" defer></script>
   <script src="/viewer-mode.js?v=1.0" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
+<script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>
 </html>

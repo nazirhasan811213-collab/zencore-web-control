@@ -32,7 +32,7 @@
         <div class="mg-user">
           <div><b id="accountName">Client</b><small id="accountEmail">Loading...</small></div>
           <span class="mg-role ib">CLIENT</span>
-          <button id="logoutButton" class="mg-ghost" type="button">Log keluar</button>
+          <button id="logoutButton" class="mg-ghost" type="button">Logout</button>
         </div>
       </header>
 
@@ -40,7 +40,7 @@
         <div>
           <span class="mg-kicker">ZENCORE PROFILE</span>
           <h2 id="profileName">Loading account...</h2>
-          <p>Urus maklumat peribadi dan keselamatan akaun anda. Assignment IB kekal dikawal oleh Admin.</p>
+          <p>Update profil dan keselamatan akaun kat sini. Urusan tukar IB masih melalui Admin.</p>
           <div class="detail-tags">
             <span id="profileStatus" class="detail-chip">ACTIVE</span>
             <span id="profileIb" class="detail-chip">IB —</span>
@@ -61,8 +61,8 @@
           <label>E-mel<input id="profileEmail" name="email" type="email" maxlength="254" required></label>
           <label>No. IC / Passport / National ID<input id="profileIc" name="icNumber" maxlength="64" required></label>
           <label>Your IB<input id="profileIbName" disabled></label>
-          <label>Password semasa <small>Wajib jika ubah e-mel atau ID</small><input id="profileCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
-          <p class="account-lock-note">🔒 IB owner tidak boleh diubah oleh client. Untuk tukar e-mel atau ID/Passport, sahkan dengan password semasa.</p>
+          <label>Password sekarang <small>Wajib jika ubah e-mel atau ID</small><input id="profileCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
+          <p class="account-lock-note">🔒 Client tak boleh tukar IB sendiri. Nak tukar e-mel atau ID/Passport? Confirm dengan password sekarang.</p>
           <div class="mg-create-actions">
             <span id="profileStatusMessage" class="mg-form-status"></span>
             <button id="saveProfile" class="mg-primary" type="submit">SAVE PROFILE</button>
@@ -79,14 +79,14 @@
               <div><dt>Worker Slot</dt><dd id="accountWorkerSlot">—</dd></div>
               <div><dt>Worker Host</dt><dd id="accountWorkerHost">—</dd></div>
             </dl>
-            <a id="accountMt5Action" class="mg-primary mg-link-btn primary-link" href="/auto-trade?connect=1">CONNECT MT5</a>
+            <a id="accountMt5Action" class="mg-primary mg-link-btn primary-link" href="/auto-trade?connect=1">SAMBUNG MT5</a>
           </article>
 
           <form id="passwordForm" class="mg-panel account-password-card" novalidate>
             <span class="mg-kicker">ACCOUNT SECURITY</span><h3>Tukar Password</h3>
-            <p>Password baharu minimum 10 aksara dan mesti mempunyai sekurang-kurangnya satu huruf dan satu nombor.</p>
-            <label>Password semasa<input id="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
-            <label>Password baharu<input id="newPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+            <p>Password baru minimum 10 aksara, dengan sekurang-kurangnya satu huruf dan satu nombor.</p>
+            <label>Password sekarang<input id="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+            <label>Password baru<input id="newPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
             <label>Ulang password baharu<input id="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
             <div class="mg-create-actions password-actions">
               <span id="passwordStatusMessage" class="mg-form-status"></span>
@@ -99,7 +99,7 @@
       <footer class="mg-foot">ZenCore Client Portal • Own account only</footer>
     </main>
   </div>
-  <script src="/account.js?v=1.2" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
+  <script src="/account.js?v=20261007.2" defer></script>
+<script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>
 </html>

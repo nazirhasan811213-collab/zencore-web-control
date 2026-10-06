@@ -18,20 +18,20 @@
  function renderLive(){
   const now=Date.now(),q=Live.quote(liveViews().filter(()=>!failed||streamLive),now),last=tape.points().at(-1);
   $('marketClock').textContent=new Date(now).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
-  $('liveQuoteStatus').textContent=q?'FEED LIVE':last?'DATA LAMA':'MENUNGGU FEED';$('liveQuoteStatus').classList.toggle('live',!!q);document.querySelector('.live-market').classList.toggle('is-live',!!q);
+  $('liveQuoteStatus').textContent=q?'FEED LIVE':last?'DATA LAMA':'TUNGGU DATA';$('liveQuoteStatus').classList.toggle('live',!!q);document.querySelector('.live-market').classList.toggle('is-live',!!q);
   if(q){
    const point=tape.push(q);if(point){
     $('livePrice').textContent=format(point.price,'XAUUSD');$('livePrice').dataset.direction=point.delta>0?'up':point.delta<0?'down':'flat';
     if(point.delta!==null&&point.delta!==0){$('livePrice').classList.remove('price-flash');void $('livePrice').offsetWidth;$('livePrice').classList.add('price-flash');clearTimeout(flashTimer);flashTimer=setTimeout(()=>$('livePrice').classList.remove('price-flash'),900);}
-    $('liveDelta').textContent=point.delta===null?'Kemas kini pertama diterima.':(point.delta>0?'↑ +':point.delta<0?'↓ −':'→ ')+Math.abs(point.delta).toFixed(3)+' USD / kemas kini';
+    $('liveDelta').textContent=point.delta===null?'Update price pertama dah masuk.':(point.delta>0?'↑ +':point.delta<0?'↓ −':'→ ')+Math.abs(point.delta).toFixed(3)+' USD / kemas kini';
     $('liveDelta').className=point.delta>0?'buy':point.delta<0?'sell':'';
-    const points=tape.points();$('priceLine').setAttribute('d',Live.sparkline(points));$('liveSampleCount').textContent=points.length+' kemas kini';$('traceNote').textContent=points.length<2?'Menunggu kemas kini kedua untuk graf.':'Kemas kini feed sejak dashboard dibuka · '+new Date(points[0].at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' hingga '+new Date(point.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
+    const points=tape.points();$('priceLine').setAttribute('d',Live.sparkline(points));$('liveSampleCount').textContent=points.length+' kemas kini';$('traceNote').textContent=points.length<2?'Tunggu update price kedua untuk graf.':'Kemas kini feed sejak dashboard dibuka · '+new Date(points[0].at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' hingga '+new Date(point.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
    }
    const observed=Number(q.market.signalObservedAt)||Number(q.market.receivedAt),age=Math.max(0,now-observed);
-   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='USIA DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/30000*100)+'%';
-   const delta=tape.points().at(-1)?.delta;$('liveNow').textContent=delta===null?'Harga pertama diterima daripada feed.':delta>0?'Harga meningkat berbanding kemas kini sebelumnya.':delta<0?'Harga menurun berbanding kemas kini sebelumnya.':'Harga tidak berubah pada kemas kini terakhir.';
+   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='UMUR DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/30000*100)+'%';
+   const delta=tape.points().at(-1)?.delta;$('liveNow').textContent=delta===null?'Price pertama dah masuk.':delta>0?'Price naik berbanding update tadi.':delta<0?'Price turun berbanding update tadi.':'Price masih sama macam update tadi.';
   }else{
-   $('liveNow').textContent=last?'Harga terakhir dipaparkan. Tunggu feed segar sebelum menilai setup.':'Menunggu data harga sebenar daripada feed Pine.';$('freshnessBar').style.width='0%';$('liveAge').textContent=last?'USIA DATA '+Math.max(0,(now-last.at)/1000).toFixed(1)+'s':'USIA DATA —';$('liveDelta').textContent=last?'Perubahan harga tidak aktif — data lama.':'Perubahan akan muncul selepas kemas kini kedua.';$('liveDelta').className='';$('livePrice').classList.remove('price-flash');
+   $('liveNow').textContent=last?'Ini price terakhir. Tunggu data fresh sebelum check setup.':'Tunggu price latest masuk dari Pine.';$('freshnessBar').style.width='0%';$('liveAge').textContent=last?'UMUR DATA '+Math.max(0,(now-last.at)/1000).toFixed(1)+'s':'UMUR DATA —';$('liveDelta').textContent=last?'Price tak update — data dah lama.':'Price bergerak akan nampak lepas update kedua.';$('liveDelta').className='';$('livePrice').classList.remove('price-flash');
   }
   document.dispatchEvent(new CustomEvent('zencore:dashboard',{detail:{views:views(),failed}}));
   $('liveTfSummary').replaceChildren(...views().map(v=>el('span','TF'+v.timeframe+' · '+state(v),tone(v))));
@@ -53,12 +53,12 @@
  }
  function render(){
   renderLive();const all=views(),visible=all.filter(v=>filter==='both'||String(v.timeframe)===filter);
-  const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'MENUNGGU DATA';
+  const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'TUNGGU DATA';
   const ranked=visible.slice().sort((a,b)=>Number(ready(b))-Number(ready(a))||Number(fresh(b))-Number(fresh(a))||Number(b.market?.strategyNormal?.sop?.sopGreen||0)-Number(a.market?.strategyNormal?.sop?.sopGreen||0));
   const best=ranked[0],n=best.market?.strategyNormal||{},s=n.sop||{},p=n.plan||{};
   $('featuredPair').textContent=best.symbol;$('featuredTf').textContent='TF'+best.timeframe+' · '+tfName(best.timeframe);
-  $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'DALAM PEMERHATIAN':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
-  $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU PENGESAHAN':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
+  $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'TENGAH MONITOR':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
+  $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU CONFIRMATION':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
   $('featuredReason').textContent=fresh(best)?n.reason||'Semak confirmation pada Analysis.':'Feed TF'+best.timeframe+' belum tersedia. Signal akan muncul selepas data segar diterima.';
   const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));if(s.hemaShape)chips.push(el('span','SHAPE '+s.hemaShape.state,s.hemaShape.pass?'pass':''));for(const h of [best.timeframe,best.timeframe===2?3:30])chips.push(el('span','HEMA'+h+' '+(s['hema'+h]?.mode||'WAIT'),s['hema'+h]?.pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
   $('featuredEntry').textContent=format(p.entry,best.symbol);$('featuredTp').textContent=format(p.tp1,best.symbol);$('featuredSl').textContent=format(p.sl,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
@@ -73,10 +73,10 @@
   $('planReason').textContent=!fresh(v)?'Menunggu data segar '+symbol+' TF'+timeframe+'. Paras lama, jika ada, hanya untuk rujukan.':ready(v)?'SOLID '+v.market.strategyNormal.side+' · Semak risiko dan tetapan akaun sebelum execution.':v.market.strategyNormal?.reason||'Setup belum disahkan. Semak checklist dan HEMA.';
  }
  for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};$('planSelector').onchange=render;
- async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF2 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Feed tidak tersedia. Mencuba semula…';}render();if(!stopped)setTimeout(poll,2000);}
+ async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF2 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Data tak masuk. Tengah cuba connect balik…';}render();if(!stopped)setTimeout(poll,2000);}
  async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings')]);
-  if(results[0].status==='fulfilled'){const a=results[0].value;$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';$('tradeState').textContent=state.replaceAll('_',' ');dot('tradeDot',state==='ON');}else{$('mt5State').textContent='STATUS TIDAK TERSEDIA';$('tradeState').textContent='STATUS TIDAK TERSEDIA';dot('mt5Dot',false);dot('tradeDot',false);}
-  if(results[1].status==='fulfilled'){const p=results[1].value.settings||{};const enabled=p.verified&&p.telegramEnabled&&p.telegramAvailable;$('telegramState').textContent=enabled?'AKTIF':p.telegramAvailable?'BELUM DIAKTIFKAN':'TIDAK TERSEDIA';dot('telegramDot',!!enabled);}else{$('telegramState').textContent='STATUS TIDAK TERSEDIA';dot('telegramDot',false);}if(!stopped)setTimeout(connections,5000);
+  if(results[0].status==='fulfilled'){const a=results[0].value;$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';$('tradeState').textContent=state.replaceAll('_',' ');dot('tradeDot',state==='ON');}else{$('mt5State').textContent='STATUS BELUM ADA';$('tradeState').textContent='STATUS BELUM ADA';dot('mt5Dot',false);dot('tradeDot',false);}
+  if(results[1].status==='fulfilled'){const p=results[1].value.settings||{};const enabled=p.verified&&p.telegramEnabled&&p.telegramAvailable;$('telegramState').textContent=enabled?'AKTIF':p.telegramAvailable?'BELUM DIAKTIFKAN':'BELUM ADA';dot('telegramDot',!!enabled);}else{$('telegramState').textContent='STATUS BELUM ADA';dot('telegramDot',false);}if(!stopped)setTimeout(connections,5000);
  }
  api('/auth/me').then(j=>{$('welcomeName').textContent=j.user?.displayName||'Trader';}).catch(()=>{});
  $('logoutButton').onclick=async()=>{$('logoutButton').disabled=true;try{await fetch('/auth/logout',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});}finally{location.replace('/login');}};

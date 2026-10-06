@@ -30,7 +30,7 @@
         <div><span class="mg-kicker">PROFIL CLIENT</span><h1 id="detailTitle">Maklumat client</h1></div>
         <div class="mg-user">
           <a id="backButton" class="mg-ghost mg-link-btn" href="/admin">← BACK</a>
-          <button id="logoutButton" class="mg-ghost" type="button">Log keluar</button>
+          <button id="logoutButton" class="mg-ghost" type="button">Logout</button>
         </div>
       </header>
 
@@ -65,14 +65,14 @@
         <article class="mg-panel detail-card">
           <span class="mg-kicker">IB OWNERSHIP</span><h3>Assigned Partner</h3>
           <div class="detail-value" id="clientIbName">—</div>
-          <p id="clientIbCode">Client tidak boleh menukar IB sendiri. Admin boleh pindahkan assignment.</p>
+          <p id="clientIbCode">Client tak boleh tukar IB sendiri. Admin boleh urus pindahan IB.</p>
           <span id="clientIbLockTag" class="status-pill active">ADMIN CONTROLLED</span>
         </article>
 
         <article class="mg-panel detail-card">
           <span class="mg-kicker">ACCOUNT ACCESS</span><h3>Login Control</h3>
           <div class="detail-value" id="clientAccessText">—</div>
-          <p>Disable akan tamatkan akses login baru untuk akaun client ini.</p>
+          <p>Disable akan sekat login baru untuk client ni.</p>
           <button id="toggleClientStatus" class="table-action" type="button">LOADING...</button>
         </article>
       </section>
@@ -82,7 +82,7 @@
           <div>
             <span class="mg-kicker">ADMIN • CLIENT SETTINGS</span>
             <h2>Kemas kini maklumat & tetapkan semula password</h2>
-            <p>Admin boleh kemaskini maklumat client dan reset password. Password Admin diperlukan untuk tindakan sensitif.</p>
+            <p>Admin boleh update info client dan reset password. Tindakan sensitif perlukan password Admin.</p>
           </div>
         </div>
         <div class="admin-client-settings-grid">
@@ -105,7 +105,7 @@
               <span id="adminClientPasswordStatus" class="mg-form-status"></span>
               <button id="resetClientPassword" class="table-action danger" type="submit">RESET CLIENT PASSWORD</button>
             </div>
-            <p class="admin-client-reset-note">Reset password akan tamatkan semua sesi login client. Client perlu log masuk semula menggunakan password baru.</p>
+            <p class="admin-client-reset-note">Reset password akan tamatkan semua sesi client. Client kena login semula dengan password baru.</p>
           </form>
         </div>
       </section>
@@ -115,7 +115,7 @@
           <div>
             <span class="mg-kicker">ADMIN • IB CONTROL</span>
             <h2>Urus IB dan peranan client</h2>
-            <p>Admin boleh pindahkan client ke mana-mana IB atau tukar akaun client ini menjadi IB.</p>
+            <p>Admin boleh pindahkan client ke IB lain atau tukar akaun client jadi IB.</p>
           </div>
         </div>
         <div class="admin-ib-actions">
@@ -133,7 +133,7 @@
         </div>
         <div class="admin-ib-foot">
           <span id="adminIbStatus" class="mg-form-status">Perubahan ini hanya boleh dibuat oleh Super Admin.</span>
-          <small>Promote ke IB dibenarkan hanya apabila Auto Trade berhenti dan tiada posisi terbuka.</small>
+          <small>Nak tukar jadi IB? Auto Trade kena stop dan semua posisi kena tutup dulu.</small>
         </div>
       </section>
 
@@ -170,6 +170,6 @@
     </main>
   </div>
   <script src="/detail.js?v=1.2" defer></script>
-<script src="/workspace-shell.js?v=35.0" defer></script>
+<script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>
 </html>

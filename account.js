@@ -34,19 +34,19 @@
     const mt5 = trading?.mt5 || {};
 
     byId('accountTradeState').textContent = available ? (control.effectiveState || 'STOPPED') : 'UNAVAILABLE';
-    byId('accountConnection').textContent = available ? (conn.label || conn.state || 'NOT CONNECTED') : 'Status unavailable';
+    byId('accountConnection').textContent = available ? (conn.label || conn.state || 'NOT CONNECTED') : 'Status belum ada';
     byId('accountMt5Status').textContent = mt5.status || 'NOT CONNECTED';
     byId('accountMt5Mask').textContent = mt5.accountMask || '—';
     byId('accountServerMask').textContent = mt5.serverMask || '—';
     byId('accountConnState').textContent = conn.connected ? 'CONNECTED' : (conn.state || 'NOT CONNECTED');
-    byId('accountWorkerSlot').textContent = mt5.workerSlotCode || 'WAITING FOR ASSIGNMENT';
+    byId('accountWorkerSlot').textContent = mt5.workerSlotCode || 'TUNGGU SLOT AKAUN';
     byId('accountWorkerHost').textContent = mt5.workerHostName || '—';
 
     const action = byId('accountMt5Action');
     const hasHostedMt5 = !!(mt5.accountMask || mt5.workerSlotCode || (mt5.status && mt5.status !== 'NOT_CONNECTED'));
     if (action) {
       action.href = hasHostedMt5 ? '/auto-trade' : '/auto-trade?connect=1';
-      action.textContent = hasHostedMt5 ? 'OPEN AUTO TRADE' : 'CONNECT MT5';
+      action.textContent = hasHostedMt5 ? 'BUKA AUTO TRADE' : 'SAMBUNG MT5';
     }
   }
 
@@ -80,7 +80,7 @@
     const status = byId('profileStatusMessage');
     button.disabled = true;
     status.className = 'mg-form-status';
-    status.textContent = 'Saving...';
+    status.textContent = 'Tengah simpan…';
     try {
       const body = await api('/api/account/profile', {
         method:'PATCH',
@@ -98,7 +98,7 @@
       byId('profileName').textContent = profile.displayName;
       byId('profileCurrentPassword').value = '';
       status.className = 'mg-form-status success';
-      status.textContent = 'Maklumat akaun berjaya dikemaskini.';
+      status.textContent = 'Info akaun dah update.';
     } catch (error) {
       status.className = 'mg-form-status error';
       status.textContent = error.message;
@@ -113,7 +113,7 @@
     const status = byId('passwordStatusMessage');
     button.disabled = true;
     status.className = 'mg-form-status';
-    status.textContent = 'Updating password...';
+    status.textContent = 'Tengah tukar password…';
     try {
       const body = await api('/api/account/password', {
         method:'POST',
@@ -124,7 +124,7 @@
         })
       });
       status.className = 'mg-form-status success';
-      status.textContent = body.message || 'Password berjaya ditukar.';
+      status.textContent = body.message || 'Password dah tukar.';
       event.currentTarget.reset();
       window.setTimeout(() => window.location.replace('/login'), 900);
     } catch (error) {
