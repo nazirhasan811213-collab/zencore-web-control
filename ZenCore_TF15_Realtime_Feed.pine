@@ -323,6 +323,10 @@ varip float[] impulseOpens=array.new_float(3,na)
 varip float[] impulseExtremes=array.new_float(3,na)
 varip float[] impulseAtrs=array.new_float(3,na)
 varip bool[] lastEligible=array.new_bool(3,false)
+varip int lastFeedSentAt=0
+varip string lastSentGateState=""
+varip int[] recentFeedSends=array.new_int()
+string gateState=""
 bool emitEntry=false
 bool emitSetup=false
 
@@ -388,6 +392,8 @@ if feedEnabled and correctTf
         if eligible!=array.get(lastEligible,i)
             emitSetup:=true
             array.set(lastEligible,i,eligible)
+        // Track confirmations even while eligibility remains false.
+        gateState+=alias+"|"+side+"|"+str.tostring(greens)+"|"+forecast+"|"+f_bool(forecastOk)+"|"+f_bool(ownHema)+"|"+f_bool(higherHema)+"|"+f_bool(pricePast)+"|"+f_bool(pullbackReady)+"|"+f_bool(active)+";"
         bool entryEvent=barstate.isrealtime and eligible and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent
             array.set(emittedSetupKeys,i,setupKey)
@@ -408,9 +414,22 @@ if feedEnabled and correctTf
         marketsJson+=(i>0?",":"")+row
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"15\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
-    payload:=str.replace(payload,"{", "{\"feedVersion\":\"TF15_REALTIME_V1\",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"emittedAt\":"+str.tostring(timenow)+",")
-    if barstate.isrealtime and (emitEntry or emitSetup or barstate.isconfirmed)
-        alert(payload,alert.freq_all)
+    payload:=str.replace(payload,"{", "{\"feedUpdateVersion\":\"GATE_CHANGE_HEARTBEAT_V1\",\"snapshotIntervalMs\":20000,\"feedVersion\":\"TF15_REALTIME_V1\",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"emittedAt\":"+str.tostring(timenow)+",")
+    // Update dashboard on gate changes and on a 20s heartbeat, not only close.
+    // TradingView stops regular alerts above 15 triggers/3min. Cap at 14 and
+    // reserve four slots beyond the ten routine updates for priority events.
+    if barstate.isrealtime
+        while array.size(recentFeedSends)>0 and timenow-array.get(recentFeedSends,0)>=180000
+            array.shift(recentFeedSends)
+        bool priorityUpdate=emitEntry or emitSetup or barstate.isconfirmed or gateState!=lastSentGateState
+        bool heartbeatDue=timenow-lastFeedSentAt>=20000
+        int sentCount=array.size(recentFeedSends)
+        bool sendAllowed=sentCount<14 and (priorityUpdate or (heartbeatDue and sentCount<10))
+        if sendAllowed
+            alert(payload,alert.freq_all)
+            array.push(recentFeedSends,timenow)
+            lastFeedSentAt:=timenow
+            lastSentGateState:=gateState
 
 var table status=na
 if showStatus
