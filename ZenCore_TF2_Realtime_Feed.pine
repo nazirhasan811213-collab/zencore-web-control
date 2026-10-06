@@ -6,6 +6,7 @@ indicator("ZenCore TF2 Real-Time Entry Candidate", shorttitle="ZC RT 2M", overla
 // Run this bridge on a 2-minute chart. It does not draw or alter the original indicator.
 grp="ZenCore Multi-Pair Web Feed"
 feedEnabled=input.bool(true,"Enable 3-Pair Batch Feed",group=grp)
+feedChannel=input.string("Execution","Alert channel",options=["Execution","Dashboard"],group=grp)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
 tpModeStr=input.string("Fixed R:R","Mod Sasaran TP",options=["Fibonacci","Fixed R:R"],group=grp)
 goldAtrMultiplier=input.float(1.0,"Gold 2M ATR multiplier — SOP 1 Oct",minval=0.10,maxval=2.0,step=0.05,group=grp)
@@ -310,8 +311,8 @@ f_scan3()=>
 
     [time,bar_index,open,high,low,close,e9,e20,e50,h20,h40,b20,w1,w2,r14,ch,rv,globalTrend,probability,stars,a14,entry,initialSl,activeSl,tp1,tp2,tp3,active,isBuy,hit1,hit2,hit3,slHit,side,solid,pricePast,sop1,sop2,sop3,sop4,forecast,power,exitStage,exitAction,halfArmed,oppositeYellow,remaining,yellowType,closeType,closeReason,lockStage,slLabel,slMove,slMove!="NONE",webAction,priceCross,reType,reSide,reTriggered and reHema,h20[1],h40[1],setupAt,a14[1]]
 
-var string[] symbols=array.from("OANDA:XAUUSD","OANDA:GBPUSD","OANDA:GBPJPY")
-var string[] aliases=array.from("XAUUSD","GBPUSD","GBPJPY")
+var string[] symbols=array.from("OANDA:XAUUSD")
+var string[] aliases=array.from("XAUUSD")
 
 bool correctTf=timeframe.period=="2"
 string marketsJson=""
@@ -323,6 +324,10 @@ varip float[] impulseOpens=array.new_float(3,na)
 varip float[] impulseExtremes=array.new_float(3,na)
 varip float[] impulseAtrs=array.new_float(3,na)
 varip bool[] lastEligible=array.new_bool(3,false)
+varip bool realtimeStarted=false
+varip string lastSentManagementState=""
+string managementState=""
+bool bootstrap=barstate.isrealtime and not realtimeStarted
 varip int lastFeedSentAt=0
 varip string lastSentGateState=""
 varip int[] recentFeedSends=array.new_int()
@@ -394,12 +399,15 @@ if feedEnabled and correctTf
             array.set(lastEligible,i,eligible)
         // Track confirmations even while eligibility remains false.
         gateState+=alias+"|"+side+"|"+str.tostring(greens)+"|"+forecast+"|"+f_bool(forecastOk)+"|"+f_bool(ownHema)+"|"+f_bool(higherHema)+"|"+f_bool(pricePast)+"|"+f_bool(pullbackReady)+"|"+f_bool(active)+";"
-        bool entryEvent=barstate.isrealtime and eligible and array.get(emittedSetupKeys,i)!=setupKey
-        if entryEvent
+        // A recreated alert must never replay a setup reconstructed from history.
+        if bootstrap
             array.set(emittedSetupKeys,i,setupKey)
+        bool entryEvent=barstate.isrealtime and not bootstrap and feedChannel=="Execution" and eligible and array.get(emittedSetupKeys,i)!=setupKey
+        if entryEvent
             emitEntry:=true
+        managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","
@@ -414,22 +422,27 @@ if feedEnabled and correctTf
         marketsJson+=(i>0?",":"")+row
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"2\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
-    payload:=str.replace(payload,"{", "{\"feedUpdateVersion\":\"GATE_CHANGE_HEARTBEAT_V1\",\"snapshotIntervalMs\":20000,\"feedVersion\":\"TF2_REALTIME_V1\",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"emittedAt\":"+str.tostring(timenow)+",")
-    // Update dashboard on gate changes and on a 20s heartbeat, not only close.
-    // TradingView stops regular alerts above 15 triggers/3min. Cap at 14 and
-    // reserve four slots beyond the ten routine updates for priority events.
+    payload:=str.replace(payload,"{", "{\"feedUpdateVersion\":\"SPLIT_CHANNEL_BOOTSTRAP_V2\",\"snapshotIntervalMs\":30000,\"feedChannel\":\""+str.upper(feedChannel)+"\",\"feedVersion\":\"TF2_REALTIME_V1\",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"emittedAt\":"+str.tostring(timenow)+",")
+    // Two independently created alert instances. Dashboard never authorizes entry.
+    // Keep below the documented rolling limit; counters are NEVER reset per candle.
     if barstate.isrealtime
-        while array.size(recentFeedSends)>0 and timenow-array.get(recentFeedSends,0)>=180000
+        realtimeStarted:=true
+        while array.size(recentFeedSends)>0 and timenow-array.get(recentFeedSends,0)>180000
             array.shift(recentFeedSends)
-        bool priorityUpdate=emitEntry or emitSetup or barstate.isconfirmed or gateState!=lastSentGateState
-        bool heartbeatDue=timenow-lastFeedSentAt>=20000
         int sentCount=array.size(recentFeedSends)
-        bool sendAllowed=sentCount<14 and (priorityUpdate or (heartbeatDue and sentCount<10))
-        if sendAllowed
+        bool dashboardDue=feedChannel=="Dashboard" and timenow-lastFeedSentAt>=30000 and sentCount<6
+        bool executionDue=feedChannel=="Execution" and (emitEntry or bootstrap or managementState!=lastSentManagementState) and sentCount<12
+        if dashboardDue or executionDue
             alert(payload,alert.freq_all)
             array.push(recentFeedSends,timenow)
             lastFeedSentAt:=timenow
             lastSentGateState:=gateState
+            lastSentManagementState:=managementState
+            // Mark delivered only after the alert call; quota exhaustion must not lose entry.
+            if emitEntry
+                for i=0 to array.size(symbols)-1
+                    if array.get(lastEligible,i)
+                        array.set(emittedSetupKeys,i,array.get(armedSetupKeys,i))
 
 var table status=na
 if showStatus
@@ -439,10 +452,10 @@ if showStatus
         table.cell(status,0,0,"ZENCORE MULTI-PAIR",text_color=color.aqua)
         table.cell(status,1,0,"TF2 • SOLID HOLD • ATR40",text_color=color.lime)
         table.cell(status,0,1,"Markets",text_color=color.gray)
-        table.cell(status,1,1,"3",text_color=color.white)
+        table.cell(status,1,1,"1",text_color=color.white)
         table.cell(status,0,2,"Chart TF",text_color=color.gray)
         table.cell(status,1,2,correctTf?"2M READY":"SET CHART TO 2M",text_color=correctTf?color.lime:color.red)
         table.cell(status,0,3,"Alert",text_color=color.gray)
-        table.cell(status,1,3,feedEnabled?"BATCH ACTIVE":"OFF",text_color=feedEnabled?color.lime:color.orange)
+        table.cell(status,1,3,feedEnabled?feedChannel+" V2":"OFF",text_color=feedEnabled?color.lime:color.orange)
 
 plot(na,title="Feed only")

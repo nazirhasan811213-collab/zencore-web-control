@@ -1,5 +1,5 @@
 #property strict
-#property version "1.21"
+#property version "1.22"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. DEMO only."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -195,6 +195,8 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)return false;
  if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return false;
+ // Store chart targets locally so StepLock survives a TradingView/feed outage.
+ if(!WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return false;
  for(int i=0;i<layers;i++){
   if(!Permissions() || !FreshLease())return false;
   if(!SymbolInfoTick(symbol,tick) || (buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl))return false;
@@ -246,6 +248,32 @@ bool ValidId(string id){
   else if(!((x>='0' && x<='9') || (x>='a' && x<='f')))return false;
  }
  return true;
+}
+// Broker SL remains installed even when this EA/PC is offline. Local StepLock
+// needs a running connected terminal, but never needs a TradingView heartbeat.
+void ManageLocalStepLock(){
+ if(!Permissions())return;
+ for(int i=0;i<PositionsTotal();i++){
+  ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket))continue;
+  string comment=PositionGetString(POSITION_COMMENT),symbol=PositionGetString(POSITION_SYMBOL);
+  int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
+  if(prefix==0 || !ReadFields("risk-"+StringSubstr(comment,prefix)+".tsv"))continue;
+  bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
+  if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
+  double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
+  if(t1<=0 || !(buy?t1<t2 && t2<t3:t1>t2 && t2>t3))continue;
+  MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
+  double quote=buy?tick.bid:tick.ask,target=0;
+  if(buy?quote>=t3:quote<=t3)target=t2;
+  else if(buy?quote>=t2:quote<=t2)target=t1;
+  else if(buy?quote>=t1:quote<=t1)target=entry;
+  if(target<=0)continue;
+  double old=PositionGetDouble(POSITION_SL),sl=Price(symbol,target);
+  if(sl<=0 || (old>0 && (buy?sl<=old:sl>=old)))continue;
+  double distance=MathMax(SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL),SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL))*SymbolInfoDouble(symbol,SYMBOL_POINT);
+  if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)continue;
+  if(!trade.PositionModify(ticket,sl,PositionGetDouble(POSITION_TP)) || !BrokerDone())Print("ZenCore local StepLock pending ticket=",ticket," retcode=",trade.ResultRetcode());
+ }
 }
 void Process(){
  if(!FileIsExist(channel+"\\command.tsv",FILE_COMMON))return;
@@ -313,7 +341,7 @@ void OnTimer(){
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
- if(now-lastManagement>=1000){ManageTf2Timeout();lastManagement=now;}
+ if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
  Comment("ZenCore DEMO • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");

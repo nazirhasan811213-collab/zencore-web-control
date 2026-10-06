@@ -1045,11 +1045,24 @@ function createAutoTradeService(options = {}) {
     };
   }
 
+  function queuedEntryIsCurrent(command){
+    if(command.type!=='PLACE_SETUP'||typeof options.getLatestMarket!=='function')return true;
+    const p=command.payload||{},snap=p.analysisSnapshot||{},tf=p.strategyMode==='TF15_INTRA'?'15':'2';
+    const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
+    return !!m && now()-(Number(m.signalObservedAt)||m.receivedAt)<=30000 && (Number(m.signalObservedAt)||m.receivedAt)<=now()+5000 &&
+      n?.state==='READY' && n.side===p.side && (!snap.setupKey||m.setupKey===snap.setupKey) &&
+      ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.[key]===p[key]);
+  }
   async function nextCommand(rawToken) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
     const command = await store.nextCommandForPod(pod.id, now());
     if (!command) return { ok: true, command: null, serverTime: now() };
+    if(!queuedEntryIsCurrent(command)){
+      await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED'});
+      await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED'});
+      return {ok:true,command:null,serverTime:now()};
+    }
     return {
       ok: true,
       command: {
@@ -1120,6 +1133,10 @@ function createAutoTradeService(options = {}) {
     await requireHostedTransport(userId);
     const command = await store.nextHostedCommand(accountId, now());
     if (!command) return { ok: true, command: null, serverTime: now() };
+    if(!queuedEntryIsCurrent(command)){
+      await store.ackHostedCommand(accountId,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED'});
+      return {ok:true,command:null,serverTime:now()};
+    }
     return {
       ok: true,
       command: {
@@ -1181,7 +1198,7 @@ function createAutoTradeService(options = {}) {
     return { ok: true, commandId: command.id, status };
   }
 
-  async function dispatchMarkets(markets = []) {
+  async function dispatchMarkets(markets = [], isCurrent = () => true) {
     const profiles = (allowDemoExecution || localEaExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
@@ -1237,7 +1254,7 @@ function createAutoTradeService(options = {}) {
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
-        if (!setup) continue;
+        if (!setup || !isCurrent(market)) continue;
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,

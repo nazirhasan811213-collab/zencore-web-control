@@ -9,7 +9,7 @@ function decodeTf15Market(row,batch={},receivedAt=Date.now()) {
  if(!Number.isFinite(opened)||!Number.isFinite(observed)||!Number.isFinite(setupAt)||setupAt<=0||setupAt>opened)return null;
  const confirmed=batch.confirmed===true;
  if(confirmed&&observed<opened+900000)return null;
- const pine={symbol,timeframe:'15',confirmed,feedMode:'REALTIME_ENTRY',entryEvent:meta.entryEvent===true,
+ const pine={symbol,feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:meta.entryAuthorizedAt,timeframe:'15',confirmed,feedMode:'REALTIME_ENTRY',entryEvent:meta.entryEvent===true,
   setupMeta:meta,time:opened,open:row[3],high:row[4],low:row[5],initialSl:row[23],tp1:row[25],tp2:row[26],tp3:row[27],tradeActive:row[28],slHit:row[33],positionExitStage:row[48],positionExitAction:row[49],
   receivedAt,signalObservedAt:observed,sourceBarOpenAt:opened,sourceBarCloseAt:opened+900000,
   setupKey:`TF15|${symbol}|${side}|${setupAt}`,normal3Side:side,normal3Solid:row[35]===true,

@@ -16,11 +16,11 @@ test('intrabar event starts dispatch immediately without HTTP reread or candle-c
  const d=createRealtimeDispatcher({dispatch:async batch=>seen.push(batch),fetchMarkets:async()=>{fetched++;return [];}});
  const p=d.onMarket(m);assert.equal(seen.length,1);assert.equal(seen[0][0],m);await p;assert.equal(fetched,0);
 });
-test('pending authorized entry survives a following WAIT while another dispatch is busy; both TFs stay separate',async()=>{
+test('latest WAIT revokes a pending entry while another dispatch is busy; both TFs stay separate',async()=>{
  let release,active=0,max=0;const seen=[],wait=new Promise(r=>release=r);
  const d=createRealtimeDispatcher({dispatch:async batch=>{active++;max=Math.max(max,active);seen.push(batch);if(seen.length===1)await wait;active--;},fetchMarkets:async()=>[]});
  const first=d.onMarket(ready());d.onMarket(ready('15'));d.onMarket({...ready('15'),strategyNormal:{state:'WATCH'}});
- release();await first;assert.equal(max,1);assert.equal(seen.length,2);assert.equal(seen[1][0].timeframe,'15');assert.equal(seen[1][0].strategyNormal.state,'READY');
+ release();await first;assert.equal(max,1);assert.equal(seen.length,2);assert.equal(seen[1][0].timeframe,'15');assert.equal(seen[1][0].strategyNormal.state,'WATCH');
 });
 test('events arriving during fallback fetch supersede its stale result',async()=>{
  let release;const wait=new Promise(r=>release=r),seen=[];
@@ -55,4 +55,18 @@ test('obsolete closed TF3 and TF45 confirmation feeds cannot authorize the new l
  assert.equal(evaluateEntrySop(d,'2').standardReady,false);
  const {decodeTf15Market}=require('../tf15-feed');const row=Array(67).fill(null);row[65]={version:'HEMA1545_V1',tf15:ribbon,tf45:ribbon};row[66]={version:'TF15_ENTRY_EVENT_V1'};
  assert.equal(decodeTf15Market(row,{feedVersion:'TF15_REALTIME_V1',timeframe:'15'}),null);
+});
+
+test('direction changes invalidate an in-flight entry before order creation',async()=>{
+ let release;const gate=new Promise(r=>release=r);let allowed;
+ const d=createRealtimeDispatcher({dispatch:async(batch,isCurrent)=>{if(allowed===undefined){await gate;allowed=isCurrent(batch[0]);}},fetchMarkets:async()=>[]});
+ const m=ready(),p=d.onMarket(m);
+ d.onMarket({...m,receivedAt:m.receivedAt+1,strategyNormal:{state:'WATCH',side:'SELL'}});
+ release();await p;assert.equal(allowed,false);
+});
+test('older delivery cannot roll direction back',async()=>{
+ const seen=[],d=createRealtimeDispatcher({dispatch:async batch=>seen.push(batch),fetchMarkets:async()=>[]});
+ const m={...ready(),signalObservedAt:200};await d.onMarket(m);
+ await d.onMarket({...m,signalObservedAt:100,strategyNormal:{state:'READY',side:'SELL'}});
+ assert.equal(seen.length,1);assert.equal(d.getLatestMarket('XAUUSD','2').strategyNormal.side,'BUY');
 });

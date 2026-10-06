@@ -17,7 +17,7 @@ function ingest(batch,at=Date.now()) {
   const x=evaluateEntrySop(tracked,'15');
   const sign=x.side==='BUY'?1:-1,within=sign*(plan.tp1-pine.normal3Close)>0&&sign*(pine.normal3Close-plan.sl)>0;
   const ready=(x.sequential?x.solid:pine.entryEvent)&&x.standardReady&&within;
-  const market={symbol:pine.symbol,timeframe:'15',receivedAt:at,sourceBarTime:pine.sourceBarOpenAt,signalObservedAt:pine.signalObservedAt,
+  const market={symbol:pine.symbol,feedUpdateVersion:pine.feedUpdateVersion,feedChannel:pine.feedChannel,entryEvent:pine.entryEvent,entryAuthorizedAt:pine.entryAuthorizedAt,timeframe:'15',receivedAt:at,sourceBarTime:pine.sourceBarOpenAt,signalObservedAt:pine.signalObservedAt,
    setupKey:pine.setupKey,price:pine.normal3Close,freshness:'LIVE',feedMode:pine.confirmed?'BAR-CLOSE':'INTRABAR',
    strategyNormal:{tf:'15m',side:x.side,state:ready?'READY':'WATCH',solid:x.solid,pullback:x.pullback,triggerPolicy:'SOLID_LATCH_CURRENT_CONFIRMATIONS',entrySopVersion:x.version,
     reason:ready?'SOLID TF15 dipegang + pengesahan semasa lulus':x.pullback?.state==='WAIT_PULLBACK'?'WAIT PULLBACK 40% candle besar':!within&&x.solid?'Harga di luar julat Entry–TP1; tunggu pullback':'Tunggu: '+x.gates.filter(g=>!g.pass).map(g=>g.label).join(' • '),plan,

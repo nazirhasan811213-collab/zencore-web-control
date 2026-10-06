@@ -69,3 +69,15 @@ test('Telegram entries and close state are separate for TF2 and TF15',async()=>{
 test('mismatched or missing timeframe never inherits TF2 for entry or close alerts',()=>{
  const m=market('15');assert.equal(signals({...m,timeframe:'2'}),null);assert.equal(signals({...m,timeframe:undefined}),null);
 });
+
+test('delivery rejects queued entry when same-TF direction changes, preserving other TF',async()=>{
+ const {svc,store,at}=await setup();const rows=[market('2','BUY',at),market('15','SELL',at)];
+ await svc.dispatchMarkets(rows);
+ const current=new Map(rows.map(m=>[m.timeframe,m]));current.set('2',{...rows[0],strategyNormal:{state:'WATCH',side:'SELL'}});
+ const token='zcpod_'+'t'.repeat(48),hash=require('../auto-trade-service').tokenHash(token);
+ store.podsByToken.set(hash,{...store.podsByUser.get('owner'),tokenHash:hash});
+ const guarded=createAutoTradeService({store,now:()=>at,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(symbol,tf)=>current.get(tf)});
+ assert.equal((await guarded.nextCommand(token)).command,null);
+ assert.equal(store.commands.get('pod')[0].result.code,'ENTRY_CONFIRMATION_CHANGED');
+ assert.equal((await guarded.nextCommand(token)).command.payload.side,'SELL');
+});

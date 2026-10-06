@@ -220,6 +220,7 @@ if (AUTH_ENABLED) {
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         localEaExecutionUserIds,
+        getLatestMarket:(symbol,tf)=>autoTradeState.realtimeDispatcher?.getLatestMarket(symbol,tf),
         onDispatchDiagnostic: report => console.log('ZenCore pair dispatch:', JSON.stringify(report)),
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
         requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
@@ -1382,15 +1383,17 @@ function startAutoTradeDispatcher() {
   if (autoTradeState.dispatchTimer || !autoTradeState.service) return;
   let lastErrorLogAt = 0;
   const {createRealtimeDispatcher}=require('./realtime-dispatcher');
-  const {tick,onMarket}=createRealtimeDispatcher({
+  const dispatcher=createRealtimeDispatcher({
     fetchMarkets:fetchLocalMarkets,
-    dispatch:async markets=>{if(autoTradeState.ready)await autoTradeState.service.dispatchMarkets(markets);},
+    dispatch:async (markets,isCurrent)=>{if(autoTradeState.ready)await autoTradeState.service.dispatchMarkets(markets,isCurrent);},
     onError:error => {
     if (Date.now() - lastErrorLogAt > 60_000) {
       lastErrorLogAt = Date.now();
       console.error('ZenCore Auto Trade dispatcher waiting:', error.message);
     }
   }});
+  autoTradeState.realtimeDispatcher=dispatcher;
+  const {tick,onMarket}=dispatcher;
   // Dispatch intrabar entry payload immediately; periodic checks are recovery only.
   require('./analysis-alert-bus').on('market', onMarket);
   autoTradeState.dispatchTimer = setInterval(tick, 3000);

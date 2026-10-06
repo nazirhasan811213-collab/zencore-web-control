@@ -101,3 +101,13 @@ test('StepLock management is emitted only from explicit Analysis actions', () =>
   ]);
   assert.equal(decision.snapshot.decisionOwner, 'ZENCORE_ANALYSIS');
 });
+
+test('split-channel feed admits only fresh execution events, never old setup receipts or dashboard updates',()=>{
+ const observed=1790000010000;
+ const m={...readyMarket(),feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',entryEvent:true,
+ entryAuthorizedAt:observed,signalObservedAt:observed,receivedAt:observed+200,setupKey:'old-setup'};
+ assert.ok(Contract.createEntryDecision(m));
+ for(const edit of [{feedChannel:'DASHBOARD'},{entryEvent:false},{entryAuthorizedAt:null},{entryAuthorizedAt:observed-4*3600000},{receivedAt:observed+30001},{entryAuthorizedAt:observed+6000}])
+  assert.equal(Contract.createEntryDecision({...m,...edit}),null);
+ assert.ok(Contract.createManagementDecision({...m,feedChannel:'DASHBOARD',entryEvent:false,positionManagement:{action:'EXIT_ALL'}}));
+});

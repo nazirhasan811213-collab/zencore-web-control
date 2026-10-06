@@ -94,6 +94,13 @@
       (normal.sop?.gates?.length!==7||normal.sop?.pullback?.pass!==true||
        !normal.sop.gates.some(g=>g.key==='pullback'&&g.pass===true)))return null;
     if(String(normal.entrySopVersion||'').startsWith('NORMAL_20261001_')&&!restored)return null;
+    // A fresh receipt/heartbeat cannot authorize an old latched setup.
+    if(restored && market.entryEvent===false)return null;
+    if(market.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'){
+      const authorized=number(market.entryAuthorizedAt),observed=number(market.signalObservedAt),received=sourceTime(market);
+      if(market.feedChannel!=='EXECUTION'||market.entryEvent!==true||!authorized||authorized!==observed||
+        !received||received-authorized>30000||authorized>received+5000)return null;
+    }
     if(restored){
       const expected=restoredTf15?'15':'2';
       if(normal.tf!==expected+'m'||String(market.timeframe)!==expected||normal.solid!==true||
