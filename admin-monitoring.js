@@ -1,0 +1,29 @@
+(() => {
+ 'use strict';
+ const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const badge=s=>`<span class="monitor-status ${['OK','WARNING','ERROR','UNKNOWN','UNCONFIGURED'].includes(s)?s:'UNKNOWN'}">${esc(s)}</span>`;
+ const date=v=>v?new Date(v).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Belum ada';
+ let data=null,busy=false,sound=false,audio=null,previous=new Set(),failed=false;
+ function stale(){return failed||!data||Date.now()-data.observedAt>30000;}
+ function beep(){if(!sound||!audio)return;const o=audio.createOscillator(),g=audio.createGain();o.connect(g);g.connect(audio.destination);o.frequency.value=660;g.gain.value=.08;o.start();o.stop(audio.currentTime+.22);}
+ function render(){
+  const old=stale();$('overall').className='monitor-status '+(old?'UNKNOWN':data.overall);$('overall').textContent=old?'UNKNOWN':data.overall;
+  $('headline').textContent=old?'Status semasa belum dapat disahkan':data.overall==='OK'?'Semakan sistem lulus':`${data.alerts.length} amaran perlukan perhatian`;
+  $('updated').textContent=old?'Sambungan monitoring gagal atau data >30 saat. Status lama tidak dianggap online.':`Dikemas kini ${date(data.observedAt)} MYT • semakan setiap 10 saat`;
+  if(!data)return;
+  $('summary').innerHTML=[['Semua client','total'],['Dipautkan','linked'],['Online','online'],['Ready','ready'],['Perlu perhatian','attention']].map(([label,key])=>`<div class="monitor-stat"><b>${old?'—':data.summary[key]}</b><span>${label}</span></div>`).join('');
+  $('components').innerHTML=data.components.map(c=>`<article class="monitor-card"><h3>${esc(c.label)}</h3>${badge(old?'UNKNOWN':c.status)}<p>${esc(old?'Perlu data terkini untuk sahkan status.':c.detail)}</p></article>`).join('');
+  $('alertTitle').textContent=old?'Monitoring terputus':`${data.alerts.length} amaran aktif`;
+  $('alerts').innerHTML=old?'<div class="monitor-alert error"><b>Browser → ZenCore</b><p>Status semasa tidak diketahui. Semak internet, sesi login dan server.</p></div>':data.alerts.map(a=>`<div class="monitor-alert ${a.severity==='error'?'error':''}"><b>${esc(a.component)}</b><p>${esc(a.message)}</p>${a.userId?`<a href="/admin/client/${encodeURIComponent(a.userId)}">Semak client →</a>`:''}</div>`).join('')||'<p class="monitor-note">Tiada amaran pada semakan ini.</p>';
+  const q=$('search').value.toLowerCase(),filter=$('filter').value;
+  const rows=data.accounts.filter(r=>[r.client.displayName,r.client.email,r.client.ibName,r.accountMask,r.serverMask].join(' ').toLowerCase().includes(q)&& (filter==='all'||filter==='online'&&!old&&r.online||filter==='attention'&&r.transport!=='NOT_LINKED'&&(old||!r.ready)||filter==='offline'&&r.transport!=='NOT_LINKED'&&(old||!r.online)||filter==='unlinked'&&r.transport==='NOT_LINKED'));
+  $('clients').innerHTML=rows.map(r=>`<tr><td><a href="/admin/client/${encodeURIComponent(r.userId)}">${esc(r.client.displayName)}</a><small>${esc(r.client.email)}</small><small>IB: ${esc(r.client.ibName||'—')}</small></td><td>${esc(r.accountMask||'—')}<small>${esc(r.serverMask||'—')}</small><small>${esc(r.tradeMode)}</small></td><td>${badge(old?'UNKNOWN':r.transport==='NOT_LINKED'?'UNCONFIGURED':r.ready?'OK':r.online?'WARNING':'ERROR')}<small>${old?'UNKNOWN':esc(r.state)}</small><small>${esc(r.transport)} • ${esc(r.connectorVersion||'—')}</small></td><td>${old?'—':['terminal','account','expert'].map(k=>r.permissions[k]?'✓':'✗').join(' / ')}</td><td>${old?'UNKNOWN':esc(r.control.effectiveState)}<small>Diminta: ${esc(r.control.desiredState)}</small></td><td>${esc(date(r.lastSeenAt))}<small>${r.lastSeenAt?`${Math.max(0,Math.floor((Date.now()-r.lastSeenAt)/1000))} saat lalu`:''}</small></td></tr>`).join('')||`<tr><td colspan="6">${data.clientsAvailable?'Tiada client mengikut pilihan.':'Senarai client tidak tersedia. Cuba refresh.'}</td></tr>`;
+  $('count').textContent=`${rows.length} dipaparkan / ${data.accounts.length} client. Masa dalam MYT.`;
+  $('workers').innerHTML=data.workers.map(w=>`<article class="monitor-card"><h3>${esc(w.name)}</h3>${badge(old?'UNKNOWN':!w.enabled?'UNCONFIGURED':w.online?'OK':'ERROR')}<p>${w.assigned} slot dipautkan • ${w.active} aktif<br>Heartbeat: ${esc(date(w.lastSeenAt))}</p></article>`).join('')||'<p class="monitor-note">Tiada host dipaparkan. Semak status komponen Hosted worker di atas.</p>';
+ }
+ async function refresh(){if(busy)return;busy=true;$('refresh').disabled=true;try{const r=await fetch('/api/admin/monitoring',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(12000)});if(r.status===401){location.assign('/login');return;}if(!r.ok)throw new Error('MONITOR_UNAVAILABLE');const next=await r.json();if(!next.ok||!Array.isArray(next.components)||!Array.isArray(next.accounts))throw new Error('INVALID_MONITOR');const ids=new Set(next.alerts.map(a=>a.id));if([...ids].some(id=>!previous.has(id)))beep();previous=ids;data=next;failed=false;}catch(_){if(!failed)beep();failed=true;}finally{busy=false;$('refresh').disabled=false;render();}}
+ $('refresh').onclick=refresh;$('search').oninput=render;$('filter').onchange=render;
+ $('sound').onclick=async()=>{try{if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();await audio.resume();sound=!sound;$('sound').textContent=`Bunyi alert: ${sound?'ON':'OFF'}`;$('sound').setAttribute('aria-pressed',String(sound));}catch(_){$('sound').textContent='Bunyi tidak disokong';}};
+ const poll=setInterval(()=>{if(!document.hidden)refresh();},10000),age=setInterval(()=>{if(!document.hidden)render();},1000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});window.addEventListener('pagehide',()=>{clearInterval(poll);clearInterval(age);audio?.close();});refresh();
+})();

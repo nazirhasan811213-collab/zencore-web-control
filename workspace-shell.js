@@ -13,6 +13,7 @@
   }
   if(existing){
     const nav=existing.querySelector('nav');
+    if(nav&&path.startsWith('/admin')&&!nav.querySelector('a[href="/admin/monitoring"]'))nav.append(makeLink('/admin/monitoring','Monitoring','◉'));
     if(nav&&!nav.querySelector('a[href="/app"]'))nav.prepend(makeLink('/app','Dashboard','◈'));
     if(nav&&!nav.querySelector('a[href="/analysis#alerts"]'))nav.append(makeLink('/analysis#alerts','Signal','◉'));
   } else {

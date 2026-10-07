@@ -87,6 +87,11 @@ const autoTradeState = {
   dispatchTimer: null
 };
 
+const adminMonitoring = require('./admin-monitoring-service').createAdminMonitoring({
+  auth: authState, trading: autoTradeState, telegram: () => analysisAlerts,
+  fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED
+});
+
 if (AUTH_ENABLED) {
   Promise.resolve().then(async () => {
     const usingMemory = !process.env.DATABASE_URL;
@@ -539,6 +544,10 @@ async function handleManagementApi(req, res, pathname, session) {
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/monitoring') {
+        res.setHeader('Cache-Control', 'no-store');
+        return sendJson(res, 200, await adminMonitoring.snapshot(session.user));
       }
       if (req.method === 'GET' && pathname === '/api/admin/overview') {
         return sendJson(res, 200, { ok: true, ...(await authState.service.adminOverview(session.user)) });
@@ -1385,8 +1394,9 @@ function startAutoTradeDispatcher() {
   const {createRealtimeDispatcher}=require('./realtime-dispatcher');
   const dispatcher=createRealtimeDispatcher({
     fetchMarkets:fetchLocalMarkets,
-    dispatch:async (markets,isCurrent)=>{if(autoTradeState.ready)await autoTradeState.service.dispatchMarkets(markets,isCurrent);},
+    dispatch:async (markets,isCurrent)=>{if(autoTradeState.ready){await autoTradeState.service.dispatchMarkets(markets,isCurrent);autoTradeState.dispatchLastSuccessAt=Date.now();autoTradeState.dispatchError=false;}},
     onError:error => {
+    autoTradeState.dispatchError=true;
     if (Date.now() - lastErrorLogAt > 60_000) {
       lastErrorLogAt = Date.now();
       console.error('ZenCore Auto Trade dispatcher waiting:', error.message);
@@ -1420,7 +1430,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {
@@ -1587,6 +1597,12 @@ const server = http.createServer(async (req, res) => {
     const session = await requireRole(req, res, 'admin', '/login');
     if (!session) return;
     return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/monitoring') {
+    const session = await requireRole(req, res, 'admin', '/login');
+    if (!session) return;
+    return sendAuthAsset(res, 'admin-monitoring.html', 'text/html; charset=utf-8');
   }
 
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/mt5') {
