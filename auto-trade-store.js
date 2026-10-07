@@ -1189,6 +1189,17 @@ class PostgresAutoTradeStore {
     }
   }
 
+  async traderActivitySummary(userId, now = Date.now()) {
+    const result = await this.pool.query(`SELECT MAX(COALESCE(acknowledged_at,created_at)) AS last_trade_at,
+      COUNT(*) FILTER (WHERE COALESCE(acknowledged_at,created_at)>=$2)::int AS setups_7d,
+      COUNT(*) FILTER (WHERE COALESCE(acknowledged_at,created_at)>=$3)::int AS setups_30d
+      FROM (SELECT status,command_type,created_at,acknowledged_at FROM zencore_autotrade_commands WHERE user_id=$1
+        UNION ALL SELECT status,command_type,created_at,acknowledged_at FROM zencore_hosted_autotrade_commands WHERE user_id=$1) c
+      WHERE command_type='PLACE_SETUP' AND status='EXECUTED'`,[userId,new Date(now-7*86400000),new Date(now-30*86400000)]);
+    const r=result.rows[0]||{};
+    return {lastTradeAt:timestamp(r.last_trade_at),executedSetups7d:Number(r.setups_7d)||0,executedSetups30d:Number(r.setups_30d)||0};
+  }
+
   async listRecentCommands(userId, limit = 10) {
     const result = await this.pool.query(
       `SELECT * FROM zencore_autotrade_commands WHERE user_id = $1
@@ -1962,6 +1973,12 @@ class MemoryAutoTradeStore {
     rows.push(row);
     this.commands.set(command.podId, rows);
     return { created: true, command: publicCommand(row) };
+  }
+
+  async traderActivitySummary(userId, now = Date.now()) {
+    const rows=[...this.commands.values(),...this.hostedCommands.values()].flat().filter(r=>r.userId===userId && r.type==='PLACE_SETUP' && r.status==='EXECUTED');
+    const times=rows.map(r=>r.acknowledgedAt||r.createdAt);
+    return {lastTradeAt:Math.max(0,...times)||null,executedSetups7d:times.filter(t=>t>=now-7*86400000).length,executedSetups30d:times.filter(t=>t>=now-30*86400000).length};
   }
 
   async listRecentCommands(userId, limit = 10) {

@@ -14,7 +14,7 @@ async function listConnectionMonitor(user, auth, trading) {
   for (let i = 0; i < clients.length; i += 10) {
     accounts.push(...await Promise.all(clients.slice(i, i + 10).map(async client => ({
       userId: client.id,
-      client: { displayName: client.displayName, email: client.email, ibName: client.ibName || null },
+      client: { displayName: client.displayName, email: client.email, ibName: client.ibName || null, lastLoginAt: client.lastLoginAt || null },
       ...(await trading.connectionMonitor(client.id))
     }))));
   }

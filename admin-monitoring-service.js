@@ -10,7 +10,7 @@ function clientView(r,now){
  const fresh=lastSeenAt!==null&&lastSeenAt<=now+5000&&now-lastSeenAt<=30000;
  const online=linked&&fresh&&r.connection?.online===true;
  const ready=online&&r.connection?.ready===true;
- return {userId:r.userId,client:{displayName:r.client?.displayName||'',email:r.client?.email||'',ibName:r.client?.ibName||null},transport:code(r.transport),accountMask:r.accountMask||null,serverMask:r.serverMask||null,tradeMode:['DEMO','REAL'].includes(r.tradeMode)?r.tradeMode:'UNKNOWN',connectorVersion:r.connectorVersion||null,lastSeenAt,online,ready,state:!linked?'NOT_LINKED':!fresh?'OFFLINE':code(r.connection?.state),permissions:{terminal:r.permissions?.terminal===true,account:r.permissions?.account===true,expert:r.permissions?.expert===true},control:{desiredState:code(r.control?.desiredState),effectiveState:code(r.control?.effectiveState)}};
+ return {userId:r.userId,client:{displayName:r.client?.displayName||'',email:r.client?.email||'',ibName:r.client?.ibName||null},tradingActivity:r.tradingActivity||null,lastLoginAt:stamp(r.client?.lastLoginAt),transport:code(r.transport),accountMask:r.accountMask||null,serverMask:r.serverMask||null,tradeMode:['DEMO','REAL'].includes(r.tradeMode)?r.tradeMode:'UNKNOWN',connectorVersion:r.connectorVersion||null,lastSeenAt,online,ready,state:!linked?'NOT_LINKED':!fresh?'OFFLINE':code(r.connection?.state),permissions:{terminal:r.permissions?.terminal===true,account:r.permissions?.account===true,expert:r.permissions?.expert===true},control:{desiredState:code(r.control?.desiredState),effectiveState:code(r.control?.effectiveState)}};
 }
 function createAdminMonitoring(deps){
  let cache=null,inFlight=null;

@@ -1,5 +1,5 @@
 #property strict
-#property version "1.23"
+#property version "1.24"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -68,7 +68,8 @@ void MapSymbols(){
 bool IsOwn(ulong ticket){return PositionSelectByTicket(ticket) && ((ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC || (ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC15);}
 string AccountMode(){long mode=AccountInfoInteger(ACCOUNT_TRADE_MODE);return mode==ACCOUNT_TRADE_MODE_DEMO?"DEMO":mode==ACCOUNT_TRADE_MODE_REAL?"REAL":"UNSUPPORTED";}
 bool SupportedAccount(){return AccountMode()!="UNSUPPORTED";}
-bool Permissions(){return SupportedAccount() &&
+bool AllowedServer(){string s=AccountInfoString(ACCOUNT_SERVER);return s=="InterStellarFinancial-Server" || s=="InterStellarFinancial-Demo";}
+bool Permissions(){return AllowedServer() && SupportedAccount() &&
  TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
  MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
 bool BrokerDone(){uint r=trade.ResultRetcode();return r==TRADE_RETCODE_DONE || r==TRADE_RETCODE_DONE_PARTIAL || r==TRADE_RETCODE_NO_CHANGES;}
@@ -328,6 +329,7 @@ void Process(){
 }
 int OnInit(){
  account=(string)AccountInfoInteger(ACCOUNT_LOGIN);server=AccountInfoString(ACCOUNT_SERVER);
+ if(!AllowedServer()){Print("ZenCore: SERVER_NOT_ALLOWED. Use InterStellarFinancial-Server or InterStellarFinancial-Demo.");return INIT_FAILED;}
  if(!SupportedAccount()){Print("ZenCore: unsupported account mode.");return INIT_FAILED;}
  string digest=Hash(server);if(digest=="")return INIT_FAILED;
  channel="ZenCore\\"+account+"-"+StringSubstr(digest,0,16);
@@ -346,6 +348,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore DEMO • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 1.24 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){armed=false;EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);Comment("");}

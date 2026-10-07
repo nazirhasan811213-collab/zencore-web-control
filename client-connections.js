@@ -4,6 +4,8 @@
   if (!panel) return;
   const byId = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const usageLabel={POSITION_OPEN:'Ada posisi aktif',ACTIVE_7D:'Aktif trade (7 hari)',INACTIVE_7D:'Tiada trade 7 hari',NO_RECORDED_TRADE:'Belum ada rekod trade'};
+  const date=v=>v?new Date(v).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'}):'Belum ada';
   let rows = [], busy = false, observedAt = 0, timer;
   function render() {
     const query = byId('connectionSearch').value.toLowerCase();
@@ -11,6 +13,8 @@
     const stale = !observedAt || Date.now() - observedAt > 30000;
     const visible = rows.filter(r => {
       if (![r.client.displayName, r.client.email, r.accountMask, r.serverMask].join(' ').toLowerCase().includes(query)) return false;
+      if (filter === 'trading') return !stale && ['POSITION_OPEN','ACTIVE_7D'].includes(r.tradingActivity?.status);
+      if (filter === 'inactive') return ['INACTIVE_7D','NO_RECORDED_TRADE'].includes(r.tradingActivity?.status);
       if (filter === 'ready') return !stale && r.connection.ready;
       if (filter === 'offline') return r.transport !== 'NOT_LINKED' && (stale || !r.connection.online);
       if (filter === 'attention') return r.transport !== 'NOT_LINKED' && (stale || !r.connection.ready);
@@ -25,7 +29,8 @@
       <td>${['terminal','account','expert'].map(k => r.permissions[k] ? 'YES' : 'NO').join(' / ')}</td>
       <td>${stale ? 'UNKNOWN' : esc(r.control.effectiveState)}<small>Diminta: ${esc(r.control.desiredState)}</small></td>
       <td>${r.lastSeenAt ? esc(new Date(r.lastSeenAt).toLocaleString('ms-MY')) : 'Belum ada heartbeat'}${(r.activity || []).map(event => `<small>${esc(event.type)} • ${esc(new Date(event.createdAt).toLocaleString('ms-MY'))}</small>`).join('')}</td>
-    </tr>`).join('') || '<tr><td colspan="7">Tiada client mengikut pilihan.</td></tr>';
+      <td>${stale?'UNKNOWN':esc(usageLabel[r.tradingActivity?.status]||'Belum disahkan')}<small>Trade terakhir: ${esc(date(r.tradingActivity?.lastTradeAt))}</small><small>${stale?'—':r.tradingActivity?.openPositions??'—'} posisi • Setup berjaya 7/30 hari: ${r.tradingActivity?.executedSetups7d??'—'} / ${r.tradingActivity?.executedSetups30d??'—'}</small><small>Login web: ${esc(date(r.client.lastLoginAt))}</small></td>
+    </tr>`).join('') || '<tr><td colspan="8">Tiada client mengikut pilihan.</td></tr>';
   }
   async function refresh() {
     if (busy) return;

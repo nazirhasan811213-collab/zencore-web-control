@@ -194,7 +194,7 @@ class Runner:
             try: self.cycle()
             except Exception as error:
                 # Never include response bodies, auth values or raw exceptions in logs/UI.
-                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED') else 'CONNECTION_PENDING'
+                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','SERVER_NOT_ALLOWED') else 'CONNECTION_PENDING'
                 self.status(code+' — entry baharu menunggu sambungan.')
                 delay=2
             self.stop.wait(delay)

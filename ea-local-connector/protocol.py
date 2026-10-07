@@ -10,12 +10,13 @@ import time
 from pathlib import Path
 
 VERSION = '1.3.0-ea-local'
-EA_VERSION = '1.23'
-CONNECTOR_BUILD = '1.22'
+EA_VERSION = '1.24'
+CONNECTOR_BUILD = '1.23'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+ALLOWED_SERVERS = ('InterStellarFinancial-Server','InterStellarFinancial-Demo')
 SUPPORTED = ('XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP')
 
 
@@ -78,6 +79,7 @@ def number(value):
 
 
 def command_fields(command, identity):
+    if identity.get('server') not in ALLOWED_SERVERS: raise ValueError('SERVER_NOT_ALLOWED')
     kind = command['type']
     payload = command['payload']
     mode=payload.get('strategyMode','TF2_SCALPING')
@@ -140,6 +142,8 @@ def heartbeat(fields, selected_identity, now_ms=None):
     now_ms = int(time.time()*1000) if now_ms is None else now_ms
     if now_ms - int(fields['writtenAt']) > 15000 or int(fields['writtenAt']) > now_ms+30000:
         raise ValueError('EA_OFFLINE')
+    if fields.get('server') not in ALLOWED_SERVERS or selected_identity.get('server') not in ALLOWED_SERVERS:
+        raise ValueError('SERVER_NOT_ALLOWED')
     if fields['account'] != selected_identity['account'] or fields['server'] != selected_identity['server']:
         raise ValueError('ACCOUNT_CHANGED')
     if fields['tradeMode'] not in ('DEMO','REAL'): raise ValueError('ACCOUNT_MODE_REJECTED')
@@ -166,7 +170,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
 
 
 VALIDATION_CODES = frozenset((
- 'ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
+ 'SERVER_NOT_ALLOWED','ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
  'INVALID_COMMAND_ID','COMMAND_EXPIRED','CLOCK_SKEW','INVALID_NUMBER',
  'STRATEGY_MODE_REJECTED','TF15_SNAPSHOT_REQUIRED','SYSTEM_CONTRACT_REJECTED',
  'INVALID_SYMBOLS','ANALYSIS_CONTRACT_REJECTED','SYMBOL_REJECTED',

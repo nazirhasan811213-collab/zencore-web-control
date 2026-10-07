@@ -288,12 +288,14 @@ function createAutoTradeService(options = {}) {
   }
 
   async function connectionMonitor(userId) {
-    const [profile, pod, hosted, events] = await Promise.all([
-      store.getProfile(userId), store.getPodForUser(userId), activeHostedAccount(userId), store.listAudit(userId, 30)
+    const [profile, pod, hosted, events, usage, positions] = await Promise.all([
+      store.getProfile(userId), store.getPodForUser(userId), activeHostedAccount(userId), store.listAudit(userId, 30),
+      store.traderActivitySummary(userId, now()), store.listPositions(userId)
     ]);
     const endpoint = hosted || pod;
     const connection = hosted ? hostedConnectionState(hosted) : connectionState(pod);
     return {
+      tradingActivity: require('./trader-activity').activityView(usage, positions, now()),
       activity: events.filter(event => ['EA_LOCAL_CONNECTED', 'SECURE_POD_PAIRED', 'HOSTED_WORKER_ERROR', 'SYSTEM_ON_REQUESTED', 'SYSTEM_STOP_REQUESTED', 'HOSTED_SYSTEM_ON_REQUESTED', 'HOSTED_SYSTEM_STOP_REQUESTED', 'SYSTEM_STOPPED'].includes(event.type)).slice(0, 5).map(event => ({ type: event.type, createdAt: event.createdAt })),
       transport: hosted ? 'HOSTED' : isLocalEa(pod) ? 'EA_LOCAL' : pod ? 'SECURE_POD' : 'NOT_LINKED',
       tradeMode: endpoint?.tradeMode || null,
