@@ -92,7 +92,7 @@ const adminMonitoring = require('./admin-monitoring-service').createAdminMonitor
   fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED
 });
 
-const adminHealthWatchdog=require('./admin-health-watchdog').createHealthWatchdog({monitor:adminMonitoring,alerts:()=>analysisAlerts,ready:()=>authState.ready&&autoTradeState.ready});
+const adminHealthWatchdog=require('./admin-health-watchdog').createHealthWatchdog({monitor:adminMonitoring,alerts:()=>analysisAlerts,ready:()=>authState.ready});
 adminHealthWatchdog.start();
 
 if (AUTH_ENABLED) {
