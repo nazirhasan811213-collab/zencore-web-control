@@ -20,7 +20,7 @@ test('collector upserts by stable signal id and reads saved history',async()=>{
  await collector.init();await collector.sync();await collector.sync();
  assert.equal(stored.size,1);assert.equal((await collector.read('XAUUSD')).records[0].outcome,'TP1');
  assert.equal(calls.filter(s=>s.includes('INSERT INTO')).length,2);
- assert.equal(PAIRS.length,11);
+ assert.deepEqual(PAIRS,['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP']);
 });
 test('target hit statistics are scoped to the same pair and direction',async()=>{
  let args;const store=new SignalOutcomeStore({pool:{query:async(sql,values)=>{

@@ -112,7 +112,7 @@
     const solidTf15=normal.entrySopVersion==='SOLID_TF15_3GREEN_HEMA1545_2L_V1';
     if(String(normal.entrySopVersion||'').startsWith('SOLID_TF15_')&&!solidTf15)return null;
     const solidSop=solidTf2||solidTf15;
-    if(solidTf2 && !tf2MarketRegime(market).pass)return null;
+    if((solidTf2 || restoredTf2) && !tf2MarketRegime(market).pass)return null;
     const expectedTf=solidTf15?'15m':'2m';
     if(solidSop && (normal.tf!==expectedTf || (market.timeframe!=null && String(market.timeframe).replace(/m$/, '')!==expectedTf.replace(/m$/, '')) || normal.solid!==true || !Array.isArray(normal.sop?.gates) || normal.sop.gates.length!==6 || !normal.sop.gates.every(g=>g.pass===true)))return null;
     const symbol = normaliseSymbol(market.symbol);

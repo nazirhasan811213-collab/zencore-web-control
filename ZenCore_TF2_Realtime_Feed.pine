@@ -7,6 +7,7 @@ indicator("ZenCore TF2 Real-Time Entry Candidate", shorttitle="ZC RT 2M", overla
 grp="ZenCore Multi-Pair Web Feed"
 feedEnabled=input.bool(true,"Enable 3-Pair Batch Feed",group=grp)
 feedChannel=input.string("Execution","Alert channel",options=["Execution","Dashboard"],group=grp)
+webhookSecret=input.string("","Admin webhook secret — jangan kongsi",group=grp,display=display.none)
 showStatus=input.bool(true,"Show Feed Status",group=grp)
 tpModeStr=input.string("Fixed R:R","Mod Sasaran TP",options=["Fibonacci","Fixed R:R"],group=grp)
 goldAtrMultiplier=input.float(1.0,"Gold 2M ATR multiplier — SOP 1 Oct",minval=0.10,maxval=2.0,step=0.05,group=grp)
@@ -422,6 +423,7 @@ if feedEnabled and correctTf
         marketsJson+=(i>0?",":"")+row
 
     string payload="{\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"2\",\"goldAtrMultiplier\":"+str.tostring(goldAtrMultiplier)+",\"tpMode\":\""+tpModeStr+"\",\"markets\":["+marketsJson+"]}"
+    payload:=str.replace(payload,"{", "{\"authToken\":"+f_quote(webhookSecret)+",")
     payload:=str.replace(payload,"{", "{\"feedUpdateVersion\":\"SPLIT_CHANNEL_BOOTSTRAP_V2\",\"snapshotIntervalMs\":30000,\"feedChannel\":\""+str.upper(feedChannel)+"\",\"feedVersion\":\"TF2_REALTIME_V1\",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"emittedAt\":"+str.tostring(timenow)+",")
     // Two independently created alert instances. Dashboard never authorizes entry.
     // Keep below the documented rolling limit; counters are NEVER reset per candle.

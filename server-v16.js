@@ -4,7 +4,7 @@ const path=require('path');
 const {acceptsSnapshot,effectiveReceivedAt}=require('./market-feed-sync');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
-const CORE_PORT=PUBLIC_PORT===10001?10002:10001;
+const CORE_PORT=Number(process.env.ZENCORE_INTERNAL_CORE_PORT||(process.env.NODE_ENV==='test'?PUBLIC_PORT-1:PUBLIC_PORT===10001?10002:10001));
 process.env.PORT=String(CORE_PORT);
 require('./server-v9.js');
 process.env.PORT=String(PUBLIC_PORT);
@@ -71,4 +71,4 @@ const gateway=http.createServer(async(req,res)=>{
   return proxySimple(req,res);
 });
 
-gateway.listen(PUBLIC_PORT,'0.0.0.0',()=>console.log(`ZenCore V16 Multi-Pair Command Center running on port ${PUBLIC_PORT} -> core ${CORE_PORT}`));
+gateway.listen(PUBLIC_PORT,'127.0.0.1',()=>console.log(`ZenCore V16 Multi-Pair Command Center running on port ${PUBLIC_PORT} -> core ${CORE_PORT}`));

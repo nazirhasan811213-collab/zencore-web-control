@@ -1,3 +1,4 @@
+const {readyMarket}=require('./fixtures/current-market');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -15,11 +16,12 @@ async function setup() {
     commandSigningKey: SIGNING_KEY,
     allowDemoExecution: true,
     requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
-    allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
+    allowedDemoOwnershipModes: ['INTERNAL_DEMO','TRADER_OWNED_EA_LOCAL'],
     now: () => currentTime
   });
   const userId = '11111111-1111-4111-8111-111111111111';
-  const provisioned = await service.provisionDemoPod(userId, 'Test Secure Pod');
+  const paired = await service.connectLocalEa(userId);
+  const provisioned = {token:paired.podToken};
   await service.heartbeat(provisioned.token, {
     accountMask: '****1234',
     serverMask: '****Demo',
@@ -29,7 +31,7 @@ async function setup() {
     accountTradeAllowed: true,
     expertTradeAllowed: true,
     demoExecutionUnlocked: true,
-    connectorVersion: LEGACY_WINDOWS_CONNECTOR,
+    connectorVersion: '1.3.0-ea-local',
     terminalBuild: '5000',
     symbolSpecs: [{
       symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1,
@@ -265,6 +267,7 @@ test('high-risk READY signal is queued once because risk is warning-only', async
       plan: { entry: 2500, sl: 2490, tp1: 2510, tp2: 2520, tp3: 2530 }
     }
   };
+  Object.assign(market,readyMarket({at:market.receivedAt,plan:market.strategyNormal.plan}));
   assert.deepEqual(await service.dispatchMarkets([market]), { queued: 1 });
   assert.deepEqual(await service.dispatchMarkets([market]), { queued: 0 });
   const setupCommand = await service.nextCommand(token);
@@ -273,7 +276,7 @@ test('high-risk READY signal is queued once because risk is warning-only', async
   assert.equal(setupCommand.command.payload.risk.blocksOrder, false);
 });
 
-test('central dispatcher fans multiple pairs to multiple users with isolated sizing and no duplicate setup', async () => {
+test('central dispatcher fans XAUUSD to multiple users with isolated sizing and no duplicate setup', async () => {
   let currentTime = 1_790_200_000_000;
   const store = new MemoryAutoTradeStore();
   const service = createAutoTradeService({
@@ -282,7 +285,7 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
     allowDemoExecution: true,
     requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
     allowedDemoOwnershipModes: ['INTERNAL_DEMO'],
-    allowedDemoSymbols: ['XAUUSD', 'EURUSD'],
+    allowedDemoSymbols: ['XAUUSD'],
     now: () => currentTime
   });
   const users = [
@@ -300,8 +303,8 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
     }
   ];
   for (const user of users) {
-    const pod = await service.provisionDemoPod(user.id, `Pool ${user.accountMask}`);
-    user.token = pod.token;
+    const pod = await service.connectLocalEa(user.id);
+    user.token = pod.podToken;
     await service.heartbeat(user.token, {
       accountMask: user.accountMask,
       serverMask: '****Demo',
@@ -311,7 +314,7 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
       accountTradeAllowed: true,
       expertTradeAllowed: true,
       demoExecutionUnlocked: true,
-      connectorVersion: LEGACY_WINDOWS_CONNECTOR,
+      connectorVersion: '1.3.0-ea-local',
       terminalBuild: '5000',
       symbolSpecs: [
         { symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 },
@@ -323,10 +326,10 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
       capitalUsd: 1000,
       lotPerLayer: user.lotPerLayer,
       layers: user.layers,
-      symbols: ['US30'],
+      symbols: ['XAUUSD'],
       riskAcknowledged: true
     });
-    assert.deepEqual(saved.settings.symbols, ['XAUUSD', 'EURUSD']);
+    assert.deepEqual(saved.settings.symbols, ['XAUUSD']);
     await service.turnOn(user.id, { confirmation: 'AKTIFKAN DEMO' });
     const on = await service.nextCommand(user.token);
     await service.acknowledgeCommand(user.token, on.command.id, {
@@ -348,21 +351,18 @@ test('central dispatcher fans multiple pairs to multiple users with isolated siz
       } }
     }
   ];
-  assert.deepEqual(await service.dispatchMarkets(markets), { queued: 4 });
+  for(const m of markets)Object.assign(m,readyMarket({at:m.receivedAt,symbol:m.symbol,side:m.strategyNormal.side,plan:m.strategyNormal.plan}));
+  assert.deepEqual(await service.dispatchMarkets(markets), { queued: 2 });
 
   for (const user of users) {
     const first = await service.nextCommand(user.token);
     await service.acknowledgeCommand(user.token, first.command.id, {
       status: 'EXECUTED', code: 'SETUP_ACCEPTED'
     });
-    const second = await service.nextCommand(user.token);
-    assert.deepEqual([first.command.payload.symbol, second.command.payload.symbol], ['XAUUSD', 'EURUSD']);
+    assert.equal(first.command.payload.symbol,'XAUUSD');
     assert.equal(first.command.payload.lotPerLayer, user.lotPerLayer);
-    assert.equal(second.command.payload.lotPerLayer, user.lotPerLayer);
     assert.equal(first.command.payload.layers, user.layers);
-    assert.equal(second.command.payload.layers, user.layers);
     assert.equal(first.command.payload.totalLot, user.lotPerLayer * user.layers);
-    assert.equal(second.command.payload.totalLot, user.lotPerLayer * user.layers);
   }
   assert.deepEqual(await service.dispatchMarkets(markets), { queued: 0 });
 });
@@ -388,13 +388,13 @@ test('reviewed connector version is mandatory before Demo execution can arm', as
   );
 });
 
-test('server-managed pair scope ignores unvalidated user-supplied symbols', async () => {
+test('server rejects unvalidated user-supplied symbols', async () => {
   const { service, userId } = await setup();
-  const state = await service.saveSettings(userId, {
+  await assert.rejects(service.saveSettings(userId, {
     capitalUsd: 100, lotPerLayer: 0.01, layers: 3,
     symbols: ['EURUSD'], riskAcknowledged: true
-  });
-  assert.deepEqual(state.settings.symbols, ['XAUUSD']);
+  }), error => error.code === 'DEMO_SYMBOL_NOT_VALIDATED');
+  await service.saveSettings(userId, {capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true});
   const armed = await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
   assert.equal(armed.control.desiredState, 'ON');
 });
@@ -717,7 +717,7 @@ test('Google hosted worker leases only ciphertext and reports connection with ex
 });
 
 
-test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup commands', async () => {
+test('hosted XAUUSD DEMO worker connects but cannot arm unsupported TF2 exit policies', async () => {
   let currentTime = 1_790_000_200_000;
   const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const store = new MemoryAutoTradeStore();
@@ -784,36 +784,10 @@ test('hosted XAUUSD DEMO worker becomes ready, arms, and receives Analysis setup
   let state = await service.state(userId);
   assert.equal(state.connection.state, 'HOSTED_READY');
   assert.equal(state.connection.ready, true);
-  assert.equal(state.control.canTurnOn, true);
-
-  await service.turnOn(userId, { confirmation: 'AKTIFKAN DEMO' });
-  let next = await service.nextHostedCommand(identity, {
-    accountId, leaseId: lease.lease.id
-  });
-  assert.equal(next.command.type, 'SYSTEM_ON');
-  await service.acknowledgeHostedCommand(identity, next.command.id, {
-    accountId, leaseId: lease.lease.id,
-    status: 'EXECUTED', code: 'HOSTED_DEMO_ARMED'
-  });
-  state = await service.state(userId);
-  assert.equal(state.control.effectiveState, 'ON');
-
-  const dispatched = await service.dispatchMarkets([{
-    symbol: 'XAUUSD', receivedAt: currentTime + 1000,
-    strategyNormal: {
-      state: 'READY', side: 'BUY',
-      plan: { entry: 2500, sl: 2495, tp1: 2505, tp2: 2510, tp3: 2515 }
-    }
-  }]);
-  assert.equal(dispatched.queued, 1);
-  next = await service.nextHostedCommand(identity, {
-    accountId, leaseId: lease.lease.id
-  });
-  assert.equal(next.command.type, 'PLACE_SETUP');
-  assert.equal(next.command.payload.symbol, 'XAUUSD');
-  assert.equal(next.command.payload.totalLot, 0.03);
+  assert.equal(state.control.canTurnOn, false);
+  await assert.rejects(service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='TF2_EA_UPGRADE_REQUIRED');
+  assert.equal((await service.nextHostedCommand(identity,{accountId,leaseId:lease.lease.id})).command,null);
 });
-
 
 test('hosted worker replay IDs survive outside the in-process verifier cache', async () => {
   const store = new MemoryAutoTradeStore();

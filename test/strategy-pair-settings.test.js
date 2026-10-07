@@ -12,17 +12,16 @@ const market = symbol => ({symbol,timeframe:'2',receivedAt:1791000000000,strateg
   plan:{entry:100,sl:99,tp1:101,tp2:102,tp3:103}}});
 
 test('migrates old settings to both strategies and groups without resetting old lots',()=>{
-  const {value,ok}=Core.validateSettings({capitalUsd:500,lotPerLayer:0.05,layers:4,symbols:['GBPUSD']});
+  const {value,ok}=Core.validateSettings({capitalUsd:500,lotPerLayer:0.05,layers:4,symbols:['XAUUSD']});
   assert.equal(ok,true); assert.equal(value.strategyMode,'TF2_SCALPING');
-  assert.deepEqual(value.modeSettings.TF2_SCALPING.fx,{lotPerLayer:0.05,layers:4});
+  assert.deepEqual(value.modeSettings.TF2_SCALPING.gold,{lotPerLayer:0.05,layers:4});
   assert.deepEqual(value.modeSettings.TF15_INTRA.gold,{lotPerLayer:0.05,layers:2});
 });
-test('Gold and currency commands use independent volume without any spread ceilings',()=>{
+test('Gold keeps volume; currency entry is disabled and no spread ceilings added',()=>{
   const gold=Core.buildSetupCommand(market('XAUUSD'),settings()).payload;
-  const fx=Core.buildSetupCommand(market('GBPUSD'),settings()).payload;
+  assert.equal(Core.buildSetupCommand(market('GBPUSD'),settings()),null);
   assert.equal(gold.lotPerLayer,0.01); assert.equal(gold.layers,3); assert.equal(gold.totalLot,0.03);
-  assert.equal(fx.lotPerLayer,0.02); assert.equal(fx.layers,1); assert.equal(fx.totalLot,0.02);
-  assert.equal('maxSpreadPrice' in gold,false); assert.equal('maxSpreadPrice' in fx,false);
+  assert.equal('maxSpreadPrice' in gold,false);
   assert.equal('pairSpreadLimits' in Core.validateSettings(settings()).value,false);
 });
 test('TF15 volume is exactly two layers and cannot consume TF2 or fake TF15 feed',()=>{
@@ -68,5 +67,5 @@ test('service returns saved strategy configuration and refuses strategy switch d
   await store.setControl('owner',{desiredState:'STOPPED',effectiveState:'STOPPED'});
   const updated=await service.saveSettings('owner',{...settings({strategyMode:'TF15_INTRA'}),riskAcknowledged:true});
   assert.equal(updated.settings.strategyMode,'TF15_INTRA');
-  await assert.rejects(service.turnOn('owner',{confirmation:'AKTIFKAN DEMO'}),error=>error.code==='EA_STRATEGY_UPGRADE_REQUIRED');
+  await assert.rejects(service.turnOn('owner',{confirmation:'AKTIFKAN DEMO'}),error=>error.code==='POD_NOT_READY');
 });

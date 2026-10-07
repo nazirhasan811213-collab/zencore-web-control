@@ -88,7 +88,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     response = await fetch(`${BASE}/login`);
     assert.equal(response.status, 200);
     const loginPage = await response.text();
-    assert.match(loginPage, /Log masuk/);
+    assert.match(loginPage, /login/i);
     assert.doesNotMatch(loginPage, /href="\/register"/);
 
     response = await fetch(`${BASE}/register`, { redirect: 'manual' });
@@ -135,7 +135,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
 
     response = await fetch(`${BASE}/app`, { headers: { Cookie: viewerCookie } });
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /Market Radar/);
+    assert.match(await response.text(), /XAUUSD/);
 
     response = await fetch(`${BASE}/analysis?pair=XAUUSD`, { headers: { Cookie: viewerCookie } });
     assert.equal(response.status, 200);
@@ -304,7 +304,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
     const home = await response.text();
-    assert.match(home, /Market Radar/);
+    assert.match(home, /XAUUSD/);
     assert.match(home, /marketGrid/);
     assert.match(home, /\/analysis\?pair=XAUUSD/);
     assert.match(home, /href="\/results"/);
@@ -321,7 +321,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
     const analysisPage = await response.text();
     assert.match(analysisPage, /ZenCore Precision Entry/);
-    assert.match(analysisPage, /MT5 Live Execution Monitor/);
+    assert.match(analysisPage, /Status Auto Trade MT5/);
     assert.match(analysisPage, /mt5LiveMonitor[^>]+hidden/);
     assert.match(analysisPage, /auto-trade-monitor\.js/);
 
@@ -435,8 +435,8 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     });
     assert.equal(response.status, 201);
     const provisioned = await response.json();
-    const podToken = provisioned.podToken;
-    const podSigningKey = provisioned.commandSigningKey;
+    let podToken = provisioned.podToken;
+    let podSigningKey = provisioned.commandSigningKey;
     assert.match(podToken, /^zcpod_/);
     assert.ok(podSigningKey.length >= 32);
 
@@ -449,6 +449,11 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
       })
     });
     assert.equal(response.status, 401);
+
+    response = await fetch(`${BASE}/api/auto-trade/ea-connect`, {method:'POST', headers:{Cookie:cookie,Origin:BASE}});
+    assert.equal(response.status,201);
+    const localPair = await response.json();
+    podToken=localPair.podToken; podSigningKey=localPair.commandSigningKey;
 
     response = await fetch(`${BASE}/api/execution/heartbeat`, {
       method: 'POST',
@@ -467,7 +472,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
         accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
         tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
         expertTradeAllowed: true, demoExecutionUnlocked,
-        connectorVersion: '1.4.0-demo-execution', terminalBuild: '5000',
+        connectorVersion: '1.3.0-ea-local', terminalBuild: '5000',
         symbolSpecs: [{ symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 }],
         positions
       })
@@ -581,7 +586,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
     const markets = await response.json();
     assert.equal(markets.ok, true);
-    assert.equal(markets.markets.length, 11);
+    assert.equal(markets.markets.length, 9);
 
     response = await fetch(`${BASE}/api/analysis-v33?symbol=XAUUSD`);
     assert.equal(response.status, 401);

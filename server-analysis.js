@@ -25,7 +25,7 @@ let signalOutcomes = null;
 require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
-const V17_PORT = 10003;
+const V17_PORT = Number(process.env.ZENCORE_INTERNAL_V17_PORT || (process.env.NODE_ENV==='test'?PUBLIC_PORT+3:10003));
 const SITE_MODE = String(process.env.SITE_MODE || 'legacy').toLowerCase();
 const AUTH_ENABLED = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTH_ENABLED || ''));
 const AUTH_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTH_MEMORY || ''));
@@ -47,6 +47,8 @@ const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
 const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
+const {createWebhookIngress,readWebhook}=require('./webhook-ingress');
+const webhookIngress=createWebhookIngress({secret:process.env.ZENCORE_WEBHOOK_SECRET||''});
 const AUTOTRADE_DEMO_SYMBOLS = ['XAUUSD'];
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
   process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.2-gcp-multiuser-multipair'
@@ -89,8 +91,10 @@ const autoTradeState = {
 
 const adminMonitoring = require('./admin-monitoring-service').createAdminMonitoring({
   auth: authState, trading: autoTradeState, telegram: () => analysisAlerts,
-  fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED
+  fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED, webhook: webhookIngress
 });
+
+const readiness=require('./service-readiness').createReadiness({auth:authState,trading:autoTradeState,autotradeEnabled:AUTOTRADE_ENABLED,allowMemoryDatabase:process.env.NODE_ENV==='test'&&AUTH_MEMORY,webhook:webhookIngress});
 
 const adminHealthWatchdog=require('./admin-health-watchdog').createHealthWatchdog({monitor:adminMonitoring,alerts:()=>analysisAlerts,ready:()=>authState.ready});
 adminHealthWatchdog.start();
@@ -323,8 +327,10 @@ function redirect(res, location, code = 302) {
   res.end();
 }
 
-function proxy(req, res, targetPath) {
+function proxy(req, res, targetPath, body=null) {
   const headers = { ...req.headers, host: `127.0.0.1:${V17_PORT}` };
+  if(body!==null){headers['content-length']=Buffer.byteLength(body);delete headers['transfer-encoding'];}
+  delete headers['authorization'];
   const proxied = http.request({
     hostname: '127.0.0.1',
     port: V17_PORT,
@@ -342,7 +348,7 @@ function proxy(req, res, targetPath) {
     }
     sendJson(res, 503, { ok: false, error: 'ZenCore analysis stack is starting', detail: error.message });
   });
-  req.pipe(proxied);
+  if(body!==null)proxied.end(body);else req.pipe(proxied);
 }
 
 function readJson(req, limit = 16 * 1024) {
@@ -1428,6 +1434,15 @@ function startAutoTradeDispatcher() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
+
+  if(req.method==='POST'&&pathname==='/webhook'){
+    try{return proxy(req,res,'/webhook',webhookIngress.validate(await readWebhook(req,webhookIngress.maxBytes)));}
+    catch(error){return sendJson(res,error.status||400,{ok:false,code:error.code||'WEBHOOK_INVALID',error:'Webhook ditolak.'});}
+  }
+  if(req.method==='GET'&&pathname==='/ready'){
+    const status=await readiness.snapshot();
+    return sendJson(res,status.ok?200:503,status);
+  }
 
   if (SITE_MODE === 'closed') {
     try {

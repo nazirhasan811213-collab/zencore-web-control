@@ -7,7 +7,7 @@ const tf2SetupTracker=require('./entry-setup-state').createEntrySetupTracker();
 const {chartTradePlan}=require('./chart-trade-plan');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
-const V16_PORT=PUBLIC_PORT===10001?10002:10001;
+const V16_PORT=Number(process.env.ZENCORE_INTERNAL_V16_PORT||(process.env.NODE_ENV==='test'?PUBLIC_PORT-1:PUBLIC_PORT===10001?10002:10001));
 process.env.PORT=String(V16_PORT);
 require('./server-v16.js');
 process.env.PORT=String(PUBLIC_PORT);
@@ -673,4 +673,4 @@ const server=http.createServer(async(req,res)=>{
   return proxy(req,res);
 });
 
-server.listen(PUBLIC_PORT,'0.0.0.0',()=>console.log(`ZenCore V17 Forward Prediction gateway running on port ${PUBLIC_PORT} -> V16 ${V16_PORT}`));
+server.listen(PUBLIC_PORT,'127.0.0.1',()=>console.log(`ZenCore V17 Forward Prediction gateway running on port ${PUBLIC_PORT} -> V16 ${V16_PORT}`));

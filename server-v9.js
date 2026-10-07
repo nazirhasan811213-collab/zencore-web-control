@@ -656,5 +656,5 @@ const server=http.createServer(async(req,res)=>{
 });
 
 initDb().finally(()=>{
-  server.listen(PORT,'0.0.0.0',()=>console.log(`ZenCore V9 Analysis Intelligence + Performance running on port ${PORT}`));
+  server.listen(PORT,'127.0.0.1',()=>console.log(`ZenCore V9 Analysis Intelligence + Performance running on port ${PORT}`));
 });

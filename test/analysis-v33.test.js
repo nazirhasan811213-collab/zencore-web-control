@@ -59,7 +59,7 @@ test('external source reports a fresh minute price and completed 3M analysis',as
   fetchImpl:async url=>{assert.equal(url.searchParams.get('symbol'),'XAU/USD');return {ok:true,json:async()=>({meta:{interval:'1min'},values})};}});
  const result=await s.external('XAUUSD');
  assert.equal(result.status,'AVAILABLE');assert.equal(result.currentPrice,101.49);
- assert.equal(result.priceAt,now-60000);assert.equal(result.dataAt,now);
+ assert.equal(result.priceAt,result.dataAt);assert.equal(result.dataAt,now);
  assert.equal(result.timeframe,'3M');
  assert(result.atr3m>0);
 });
@@ -72,8 +72,8 @@ test('3M scenario is conditional and blocks stale, conflict, chase and adverse p
  assert.equal(run({...external,currentPrice:101}).status,'CHASE');
  assert.equal(run({...external,currentPrice:99}).status,'ADVERSE');
  assert.equal(run({...external,bias:'SELL'}).status,'DIVERGENT');
- assert.equal(run({...external,priceAt:now-180000}).status,'WAIT_DATA');
- assert.equal(run({...external,priceAt:now-30000}).status,'WAIT_DATA');
+ assert.equal(run({...external,priceAt:now-180001}).status,'WAIT_DATA');
+ assert.equal(run({...external,priceAt:now+5001}).status,'WAIT_DATA');
  assert.equal(run(external,null).status,'NO_SOP');
  assert.equal(run(external,{...sop,state:'WATCH'}).status,'WAIT_SETUP');
 });

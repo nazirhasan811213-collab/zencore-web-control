@@ -1,3 +1,4 @@
+const {readyMarket}=require('./fixtures/current-market');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { MemoryAutoTradeStore } = require('../auto-trade-store');
@@ -13,7 +14,7 @@ function setup(allowDemoExecution=true) {
 }
 const hb={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',
   terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,
-  connectorVersion:'1.0.0-ea-local',positions:[],symbolSpecs:[]};
+  connectorVersion:'1.3.0-ea-local',positions:[],symbolSpecs:[]};
 const settings={capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true};
 test('login pairing returns automatic machine credentials and web can arm approved EA transport',async()=>{
  const {store,service}=setup();const connected=await service.connectLocalEa(userId);
@@ -30,14 +31,14 @@ test('login pairing returns automatic machine credentials and web can arm approv
  assert.equal(command.signature,signature);
  await service.acknowledgeCommand(connected.podToken,command.id,{status:'EXECUTED',code:'ARMED'});
  assert.equal((await service.state(userId)).control.canEnter,true);
- await service.saveSettings(userId,{...settings,lotPerLayer:0.02,symbols:['EURUSD']});
+ await service.saveSettings(userId,{...settings,lotPerLayer:0.02,symbols:['XAUUSD']});
  const updated=await service.nextCommand(connected.podToken);
  assert.equal(updated.command.type,'SYSTEM_ON');assert.equal(updated.command.payload.settings.lotPerLayer,0.02);
- assert.deepEqual(updated.command.payload.settings.symbols,['EURUSD']);
+ assert.deepEqual(updated.command.payload.settings.symbols,['XAUUSD']);
 });
 test('EA transport refuses REAL heartbeat and unapproved pair',async()=>{
  const {service}=setup();const c=await service.connectLocalEa(userId);
- await assert.rejects(service.heartbeat(c.podToken,{...hb,tradeMode:'REAL'}),e=>e.code==='REAL_EA_UPGRADE_REQUIRED');
+ await assert.rejects(service.heartbeat(c.podToken,{...hb,connectorVersion:'1.0.0-ea-local',tradeMode:'REAL'}),e=>e.code==='REAL_EA_UPGRADE_REQUIRED');
  await assert.rejects(service.saveSettings(userId,{...settings,symbols:['BTCUSD']}),e=>e.code==='DEMO_SYMBOL_NOT_VALIDATED');
 });
 test('pairing refuses active old engine, open positions and running control',async()=>{
@@ -71,6 +72,7 @@ test('Analysis entry, deduplication, OFF and Analysis close use the same local c
    confluence:4,setupProbability:75,sidewaysGuard:false,strategyNormal:{state:'READY',side:'BUY',
      sop:{forecast:'BULLISH',marketPower:80,sopGreen:5,gates:[{pass:true},{pass:true}]},
      plan:{entry:2500,sl:2490,tp1:2505,tp2:2510,tp3:2520}}};
+ Object.assign(market,readyMarket({at:market.receivedAt,plan:market.strategyNormal.plan}));
  assert.equal((await service.dispatchMarkets([market])).queued,1);
  assert.equal((await service.dispatchMarkets([market])).queued,0);
  command=(await service.nextCommand(c.podToken)).command;

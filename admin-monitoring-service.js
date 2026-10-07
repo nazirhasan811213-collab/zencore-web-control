@@ -17,6 +17,7 @@ function createAdminMonitoring(deps){
  async function collect(user){
   const observedAt=Date.now(),components=[],alerts=[];
   const add=(id,label,status,detail)=>{components.push({id,label,status,detail});if(['ERROR','WARNING','UNKNOWN'].includes(status))alerts.push({id,severity:status==='ERROR'?'error':'warning',component:label,message:detail});};
+  if(deps.webhook)add('webhook','TradingView → webhook',deps.webhook.enforced?'OK':'WARNING',deps.webhook.enforced?'Pengesahan secret dan umur payload aktif':'Secret belum diaktifkan; feed lama masih diterima.');
   add('app','Web ZenCore','OK',`Server aktif • uptime ${Math.floor(process.uptime())} saat`);
   add('auth','Login & akses admin',deps.auth.ready?'OK':'ERROR',deps.auth.ready?'Pengesahan akses aktif':'Pengesahan akses belum tersedia');
   const pool=deps.auth.store?.pool;
