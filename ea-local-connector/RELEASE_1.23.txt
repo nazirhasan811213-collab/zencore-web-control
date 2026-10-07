@@ -1,0 +1,6 @@
+ZenCore Connector 1.23 / EA 1.24
+Approved MT5 servers (exact names only):
+InterStellarFinancial-Server
+InterStellarFinancial-Demo
+Upgrade: install Connector, compile EA from Connector, remove old EA from chart, attach updated EA.
+Admin / IB monitoring: last recorded ZenCore trade, open reported positions, executed setups 7/30 days and last web login.
