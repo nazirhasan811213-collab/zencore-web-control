@@ -829,6 +829,8 @@ function createAutoTradeService(options = {}) {
     if (modeChanged && (previous.desiredState === 'ON' || (await store.listPositions(userId)).length > 0)) {
       throw serviceError('STOP_BEFORE_STRATEGY_CHANGE', 'STOP ENTRY dan tunggu posisi sedia ada selesai sebelum menukar strategi.', 409);
     }
+    if (typeof store.cancelPendingEntryCommands === 'function') await store.cancelPendingEntryCommands(userId, 'SETTINGS_UPDATED');
+    if (typeof store.cancelPendingHostedEntryCommands === 'function') await store.cancelPendingHostedEntryCommands(userId, 'SETTINGS_UPDATED');
     const saved = await store.saveSettings(userId, {
       ...validation.value,
       riskAcknowledgedAt: now()
@@ -1064,8 +1066,12 @@ function createAutoTradeService(options = {}) {
     };
   }
 
-  function queuedEntryIsCurrent(command){
-    if(command.type!=='PLACE_SETUP'||typeof options.getLatestMarket!=='function')return true;
+  async function queuedEntryIsCurrent(command){
+    if(command.type!=='PLACE_SETUP')return true;
+    const profile=await store.getProfile(command.userId);
+    const mode=command.payload?.strategyMode||'TF2_SCALPING';
+    if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
+    if(typeof options.getLatestMarket!=='function')return true;
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
     return !!m && now()-(Number(m.signalObservedAt)||m.receivedAt)<=30000 && (Number(m.signalObservedAt)||m.receivedAt)<=now()+5000 &&
@@ -1077,7 +1083,7 @@ function createAutoTradeService(options = {}) {
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
     const command = await store.nextCommandForPod(pod.id, now());
     if (!command) return { ok: true, command: null, serverTime: now() };
-    if(!queuedEntryIsCurrent(command)){
+    if(!await queuedEntryIsCurrent(command)){
       await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED'});
       await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED'});
       return {ok:true,command:null,serverTime:now()};
@@ -1152,7 +1158,7 @@ function createAutoTradeService(options = {}) {
     await requireHostedTransport(userId);
     const command = await store.nextHostedCommand(accountId, now());
     if (!command) return { ok: true, command: null, serverTime: now() };
-    if(!queuedEntryIsCurrent(command)){
+    if(!await queuedEntryIsCurrent(command)){
       await store.ackHostedCommand(accountId,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED'});
       return {ok:true,command:null,serverTime:now()};
     }

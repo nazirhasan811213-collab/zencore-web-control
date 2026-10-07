@@ -96,9 +96,10 @@
     const mode = input.strategyMode || 'TF2_SCALPING';
     const group = normaliseSymbol(symbol) === 'XAUUSD' ? 'gold' : 'fx';
     const asset = input.modeSettings?.[mode]?.[group] || {};
-    const lotPerLayer = number(asset.lotPerLayer ?? input.lotPerLayer);
-    const layers = mode === 'TF15_INTRA' ? 2 : Number(asset.layers ?? input.layers);
-    return { ...input, lotPerLayer, layers,
+    const enabled = asset.enabled !== false;
+    const lotPerLayer = enabled ? number(asset.lotPerLayer ?? input.lotPerLayer) : null;
+    const layers = enabled ? Number(asset.layers ?? (mode === 'TF15_INTRA' ? 2 : input.layers)) : 0;
+    return { ...input, enabled, lotPerLayer, layers,
       totalLot: lotPerLayer === null ? null : round(lotPerLayer * layers, 5),
       assetGroup: group, strategyMode: mode,
       exitPolicy: input.strategyExitPolicies?.[mode] || null };
@@ -127,12 +128,12 @@
       modeSettings[mode] = {};
       for (const group of ['gold', 'fx']) {
         const raw = input.modeSettings?.[mode]?.[group] || {};
-        const lot = number(raw.lotPerLayer ?? input.lotPerLayer);
-        const count = mode === 'TF15_INTRA' ? 2 : Number(raw.layers ?? input.layers);
+        if (raw.enabled === false || ['lotPerLayer','layers'].some(key=>Object.hasOwn(raw,key)&&(raw[key]===null||raw[key]===''))) { modeSettings[mode][group] = {enabled:false,lotPerLayer:null,layers:null}; continue; }
+        const lot = number(Object.hasOwn(raw,'lotPerLayer') ? raw.lotPerLayer : input.lotPerLayer);
+        const count = Number(Object.hasOwn(raw,'layers') ? raw.layers : mode === 'TF15_INTRA' ? 2 : input.layers);
         if (lot === null || lot <= 0 || lot > 100) errors[mode + '.' + group + '.lotPerLayer'] = 'Lot Gold dan currency mesti lebih 0 hingga 100.';
         if (!Number.isInteger(count) || count < 1 || count > 10) errors[mode + '.' + group + '.layers'] = 'Layer mesti antara 1 hingga 10.';
-        if (mode === 'TF15_INTRA' && raw.layers != null && Number(raw.layers) !== 2) errors[mode + '.' + group + '.layers'] = 'TF15 Intra menggunakan tepat 2 layer.';
-        modeSettings[mode][group] = {lotPerLayer: lot === null ? null : round(lot, 5), layers: count};
+        modeSettings[mode][group] = {...(Object.hasOwn(raw,'enabled')?{enabled:true}:{}),lotPerLayer: lot === null ? null : round(lot, 5), layers: count};
       }
     }
 
@@ -439,6 +440,7 @@
     const symbol = snapshot.symbol;
     if (!validation.value.symbols.includes(symbol)) return null;
     const execution = effectiveSettings({...validation.value,strategyMode:mode}, symbol);
+    if (!execution.enabled || !execution.lotPerLayer || !execution.layers) return null;
     const risk = calculateRisk({
       ...execution,
       entry: snapshot.entry,

@@ -8,7 +8,7 @@
   <title>Auto Trade — ZenCore Precision Entry</title>
   <link rel="stylesheet" href="/auth.css?v=1.0">
   <link rel="stylesheet" href="/home.css?v=2.0">
-  <link rel="stylesheet" href="/auto-trade.css?v=1.3">
+  <link rel="stylesheet" href="/auto-trade.css?v=20261007.dual-inputs">
   <link rel="stylesheet" href="/viewer-mode.css?v=1.1">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
@@ -148,20 +148,13 @@
             <span class="mini-status warning-only">SEMAK RISIKO</span>
           </div>
           <form id="settingsForm" novalidate>
-            <label class="risk-symbol"><span>STRATEGI ENTRY</span><select id="strategyMode"><option value="TF2_SCALPING">TF2 min — Scalping</option><option value="TF15_INTRA">TF15 min — Intraday · 2 layer</option><option value="BOTH">Both — TF2 + TF15</option></select></label><p>Pair XAUUSD sahaja. Pilih Both untuk guna dua TF. Setiap TF ada setup, SOP, lot, layer dan exit sendiri.</p><p><a href="/downloads/ZenCore_TF2_Realtime_Feed.pine">Feed TF2 realtime</a> · <a href="/downloads/ZenCore_TF15_Realtime_Feed.pine">Feed TF15 realtime</a></p><label id="settingsModeLabel" hidden><span>SETTING UNTUK</span><select id="settingsMode"><option value="TF2_SCALPING">TF2 Scalping</option><option value="TF15_INTRA">TF15 Intra</option></select></label>
-            <p id="strategyNotice">TF2 / TF15: SOLID, price lepas entry, checklist 4/5 dan forecast ikut SOP. HEMA2/3 untuk TF2; HEMA15/30 untuk TF15. Setiap TF check arah sendiri.</p>
-            <div class="settings-fields">
-              <label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label>
-              <label><span>GOLD — LOT / LAYER</span><input id="lotPerLayer" name="lotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
-              <label><span>GOLD — LAYER</span><input id="layers" name="layers" type="number" min="1" max="10" step="1" value="3" required></label>
-              <div class="total-exposure"><span>TOTAL LOT / SETUP</span><b id="totalLotPreview">0.03</b></div>
+            <div class="settings-fields dual-capital"><label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label></div>
+            <div class="dual-trade-settings">
+              <section class="tf-setting-card" aria-labelledby="tf2Heading"><header><h3 id="tf2Heading">Scalping <b>TF2</b></h3><strong id="tf2EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" max="10" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf2Total">—</b></p></section>
+              <section class="tf-setting-card" aria-labelledby="tf15Heading"><header><h3 id="tf15Heading">Intra <b>TF15</b></h3><strong id="tf15EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="tf15LotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="tf15Layers" type="number" min="1" max="10" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf15Total">—</b></p></section>
             </div>
-
-            <div class="settings-fields">
-              <label hidden><span>CURRENCY — LOT / LAYER</span><input id="fxLotPerLayer" type="number" min="0.001" max="100" step="0.001" value="0.01" required></label>
-              <label hidden><span>CURRENCY — LAYER</span><input id="fxLayers" type="number" min="1" max="10" step="1" value="3" required></label>
-              <div class="total-exposure" hidden><span>CURRENCY TOTAL LOT / SETUP</span><b id="fxTotalLotPreview">0.03</b></div>
-            </div>
+            <p class="tf-empty-note">Lot atau layer kosong = tiada entry selepas Simpan.</p>
+            <div hidden><input id="fxLotPerLayer" value="0.01"><input id="fxLayers" value="1"><b id="totalLotPreview"></b><b id="fxTotalLotPreview"></b></div>
             <fieldset class="symbol-fieldset">
               <legend>WAKTU TRADE MALAYSIA</legend>
               <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox"><span>Gunakan jadual 7:00 pagi–3:00 pagi hari berikutnya.</span></label>
@@ -312,8 +305,8 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/analysis-execution-contract.js?v=1.1" defer></script>
-  <script src="/auto-trade-core.js?v=real-demo-1.3" defer></script>
-  <script src="/auto-trade.js?v=real-demo-1.3-20261007.2" defer></script>
+  <script src="/auto-trade-core.js?v=20261007.dual-inputs" defer></script>
+  <script src="/auto-trade.js?v=20261007.dual-inputs" defer></script>
   <script src="/viewer-mode.js?v=1.1" defer></script>
 <script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>

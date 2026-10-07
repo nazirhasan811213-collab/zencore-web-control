@@ -37,10 +37,10 @@ Jika EA 1.21 sudah aktif, tidak perlu pasang EA semula. Tutup Connector lama,
 install kemas kini dengan Windows user yang sama, dan buka Connector baharu.
 Pautan sedia ada dikekalkan. Tiada password broker diminta.
 
-KEMAS KINI REAL + DEMO: Connector 1.23, EA 1.24
-1. Install ZenCoreSetup-1.23.exe pada PC/VM Windows yang menjalankan MT5.
+KEMAS KINI REAL + DEMO: Connector 1.24, EA 1.25
+1. Install ZenCoreSetup-1.24.exe pada PC/VM Windows yang menjalankan MT5.
 2. Login akaun broker yang hendak digunakan dalam MT5.
-3. Dalam Connector klik Pasang / Kemas kini EA 1.24. Refresh Navigator MT5.
+3. Dalam Connector klik Pasang / Kemas kini EA 1.25. Refresh Navigator MT5.
 4. Pasang EA baru pada satu chart dan hidupkan Algo Trading.
 5. Cari akaun MT5; pilih akaun REAL atau DEMO yang betul dan link login ZenCore sendiri.
 6. Buka web ZenCore (Android pun boleh). Semak akaun bertopeng dan MODE.
@@ -50,4 +50,4 @@ Akaun yang lama tidak ditukar atau dihidupkan secara automatik. Jika hendak tuka
 SERVER DIBENARKAN SAHAJA:
 InterStellarFinancial-Server
 InterStellarFinancial-Demo
-Selepas compile EA baru: tanggalkan EA lama dari chart, kemudian pasang EA 1.24 semula.
+Selepas compile EA baru: tanggalkan EA lama dari chart, kemudian pasang EA 1.25 semula.

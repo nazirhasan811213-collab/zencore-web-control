@@ -1,5 +1,5 @@
 #property strict
-#property version "1.24"
+#property version "1.25"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -173,7 +173,7 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
 bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING"){
  if(c!="XAUUSD" && c!="GBPUSD" && c!="GBPJPY")return false;
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return false;
- if(strategyMode=="TF15_INTRA" && (layers!=2 || tightTf2))return false;
+ if(strategyMode=="TF15_INTRA" && tightTf2)return false;
  ulong entryScope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
  trade.SetExpertMagicNumber(entryScope);
  if(!armed || StringFind(","+enabledSymbols+",",","+c+",")<0 || !Permissions() || !FreshLease())return false;
@@ -348,6 +348,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 1.24 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 1.25 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){armed=false;EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);Comment("");}
