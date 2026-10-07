@@ -23,6 +23,17 @@
   $('workers').innerHTML=data.workers.map(w=>`<article class="monitor-card"><h3>${esc(w.name)}</h3>${badge(old?'UNKNOWN':!w.enabled?'UNCONFIGURED':w.online?'OK':'ERROR')}<p>${w.assigned} slot dipautkan • ${w.active} aktif<br>Heartbeat: ${esc(date(w.lastSeenAt))}</p></article>`).join('')||'<p class="monitor-note">Tiada host dipaparkan. Semak status komponen Hosted worker di atas.</p>';
  }
  async function refresh(){if(busy)return;busy=true;$('refresh').disabled=true;try{const r=await fetch('/api/admin/monitoring',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(12000)});if(r.status===401){location.assign('/login');return;}if(!r.ok)throw new Error('MONITOR_UNAVAILABLE');const next=await r.json();if(!next.ok||!Array.isArray(next.components)||!Array.isArray(next.accounts))throw new Error('INVALID_MONITOR');const ids=new Set(next.alerts.map(a=>a.id));if([...ids].some(id=>!previous.has(id)))beep();previous=ids;data=next;failed=false;}catch(_){if(!failed)beep();failed=true;}finally{busy=false;$('refresh').disabled=false;render();}}
+ let healthEnabled=false;
+ async function healthConfig(enabled){
+  const notice=$('healthNotice'),button=$('healthTelegram');button.disabled=true;
+  try{
+   const response=await fetch('/api/admin/monitoring/notifications',{credentials:'same-origin',cache:'no-store',...(enabled===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})}),signal:AbortSignal.timeout(12000)});
+   const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Setting tidak dapat disahkan.');
+   healthEnabled=result.enabled;button.textContent='Telegram kesihatan: '+(healthEnabled?'ON':'OFF');button.setAttribute('aria-pressed',String(healthEnabled));
+   notice.textContent=healthEnabled?'Alert masalah dan notis pulih dihantar ke Telegram admin yang disahkan, walaupun panel ditutup. Gangguan server keseluruhan memerlukan monitor luar.':result.verified?'Telegram sudah disahkan. Klik ON untuk terima alert kesihatan sistem.':'Sahkan Telegram ID sendiri melalui setting alert di halaman Analisis, kemudian aktifkan di sini.';
+  }catch(error){notice.textContent=error.message;}finally{button.disabled=false;}
+ }
+ $('healthTelegram').onclick=()=>healthConfig(!healthEnabled);healthConfig();
  $('refresh').onclick=refresh;$('search').oninput=render;$('filter').onchange=render;
  $('sound').onclick=async()=>{try{if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();await audio.resume();sound=!sound;$('sound').textContent=`Bunyi alert: ${sound?'ON':'OFF'}`;$('sound').setAttribute('aria-pressed',String(sound));}catch(_){$('sound').textContent='Bunyi tidak disokong';}};
  const poll=setInterval(()=>{if(!document.hidden)refresh();},10000),age=setInterval(()=>{if(!document.hidden)render();},1000);

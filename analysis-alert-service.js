@@ -64,6 +64,37 @@ class AnalysisAlerts {
     Object.assign(p,{popup:body.popup,sound:body.sound,telegramEnabled:body.telegramEnabled,telegramId:id});
     await this.put(user,p); return this.publicPrefs(p);
   }
+  async healthSettings(user,body) {
+    const p=await this.get(user);
+    if(body!==undefined){
+      if(typeof body.enabled!=='boolean')throw fail('Pilihan alert mesti ON atau OFF.');
+      if(body.enabled&&(!this.token||!p.verified||!p.telegramId))throw fail('Sahkan Telegram ID sendiri dalam setting alert Analisis dahulu.');
+      p.healthNotificationsEnabled=body.enabled;
+      if(!body.enabled)delete p.healthNotificationState;
+      await this.put(user,p);
+    }
+    return {enabled:p.healthNotificationsEnabled===true,verified:!!p.verified,available:!!this.token};
+  }
+  async deliverHealthSnapshot(user,snapshot) {
+    const p=await this.get(user);
+    if(!p.healthNotificationsEnabled||!p.verified||!p.telegramId||!this.token)return;
+    // Recheck the role inside the same per-user lock, including after role changes.
+    if(this.pool){const role=await this.pool.query('SELECT role,status FROM zencore_users WHERE id=$1',[user]);if(role.rows[0]?.role!=='admin'||role.rows[0]?.status!=='active')return;}
+    const previous=p.healthNotificationState||{},current={};
+    const newAlerts=[];
+    for(const a of snapshot.alerts||[]){
+      const signature=String(a.severity||'warning');current[a.id]=signature;
+      if(previous[a.id]!==signature)newAlerts.push(a);
+    }
+    const resolved=Object.keys(previous).filter(id=>!Object.hasOwn(current,id));
+    if(!newAlerts.length&&!resolved.length)return;
+    const stamp=new Date(snapshot.observedAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false});
+    const lines=newAlerts.slice(0,12).map(a=>`${a.severity==='error'?'🔴':'🟠'} ${a.component}: ${String(a.message||'').slice(0,160)}`);
+    if(newAlerts.length>12)lines.push(`+ ${newAlerts.length-12} lagi amaran dalam panel admin.`);
+    if(resolved.length)lines.push(`🟢 ${resolved.length} amaran terdahulu sudah tiada pada semakan ini. Semak panel untuk status terkini.`);
+    await this.telegram(p.telegramId,`ZENCORE • SYSTEM HEALTH\n${stamp} MYT\n${lines.join('\n')}\nhttps://zencore-precision-entry.onrender.com/admin/monitoring`);
+    p.healthNotificationState=current;await this.put(user,p);
+  }
   async telegram(chat,text) {
     if(!this.token) throw fail('Telegram belum dikonfigurasi oleh pentadbir.');
     let r,j;

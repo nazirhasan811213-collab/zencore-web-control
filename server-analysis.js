@@ -92,6 +92,9 @@ const adminMonitoring = require('./admin-monitoring-service').createAdminMonitor
   fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED
 });
 
+const adminHealthWatchdog=require('./admin-health-watchdog').createHealthWatchdog({monitor:adminMonitoring,alerts:()=>analysisAlerts,ready:()=>authState.ready&&autoTradeState.ready});
+adminHealthWatchdog.start();
+
 if (AUTH_ENABLED) {
   Promise.resolve().then(async () => {
     const usingMemory = !process.env.DATABASE_URL;
@@ -544,6 +547,17 @@ async function handleManagementApi(req, res, pathname, session) {
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
+      }
+      if(pathname==='/api/admin/monitoring/notifications'){
+        res.setHeader('Cache-Control','no-store');
+        if(!analysisAlerts?.ready)return sendJson(res,503,{ok:false,error:'Servis alert belum tersedia.'});
+        if(req.method==='GET')return sendJson(res,200,{ok:true,...await analysisAlerts.healthSettings(session.user.id)});
+        if(req.method==='POST'){
+          if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+          const body=await readJson(req);
+          return sendJson(res,200,{ok:true,...await analysisAlerts.withUserLock(session.user.id,'healthSettings',body)});
+        }
+        return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
       }
       if (req.method === 'GET' && pathname === '/api/admin/monitoring') {
         res.setHeader('Cache-Control', 'no-store');
