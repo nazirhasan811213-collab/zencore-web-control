@@ -20,7 +20,7 @@ function acceptsSnapshot(previous, incoming) {
   return oldIndex === null || newIndex === null || newIndex >= oldIndex;
 }
 
-// On the same candle, a versioned realtime bridge owns execution data.
+// A versioned realtime bridge owns execution data across candle boundaries.
 // A legacy chart payload has no current HEMA/event fields and cannot replace it.
 function realtimeTf2(snapshot){
   return String(snapshot?.timeframe)==='2'&&snapshot?.feedVersion==='TF2_REALTIME_V1'&&
@@ -28,6 +28,9 @@ function realtimeTf2(snapshot){
     typeof snapshot?.entryEvent==='boolean'&&number(snapshot?.signalObservedAt)>0;
 }
 function acceptsFeedSource(previous,incoming){
+  // Check ownership before bar ordering: a newer legacy bar must not displace
+  // TF2 and then cause its next realtime update to fail the bar-time check.
+  if(realtimeTf2(previous)&&!realtimeTf2(incoming))return false;
   if(!acceptsSnapshot(previous,incoming))return false;
   if(!previous||number(previous.time)!==number(incoming.time))return true;
   const oldRealtime=realtimeTf2(previous),newRealtime=realtimeTf2(incoming);

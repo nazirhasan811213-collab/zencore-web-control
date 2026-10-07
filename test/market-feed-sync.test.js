@@ -37,3 +37,14 @@ test('compact ingress retains live feed version used by source priority guard',(
  const d=ctx.expandCompactMarket(row,{feedVersion:'TF2_REALTIME_V1',schemaVersion:'32.3-EXIT-STEPLOCK',timeframe:'2',emittedAt:1800000000100});
  assert.equal(d.feedVersion,'TF2_REALTIME_V1');assert.equal(d.hemaConfirmation.version,'HEMA23_LIVE_V1');assert.equal(d.entryEvent,true);
 });
+
+test('legacy next-bar snapshots cannot displace TF2 or block its next execution event',()=>{
+ const {acceptsFeedSource}=require('../market-feed-sync');
+ const live={time:1800000000000,timeframe:'2',barIndex:100,feedVersion:'TF2_REALTIME_V1',hemaConfirmation:{version:'HEMA23_LIVE_V1'},entryEvent:false,signalObservedAt:1800000119000};
+ const legacy={time:live.time+120000,timeframe:'2',barIndex:101,feedType:'LIVE',normalSopVersion:'TF2_REQUIRED'};
+ assert.equal(acceptsFeedSource(live,legacy),false);
+ assert.equal(acceptsFeedSource(live,{...legacy,time:live.time+240000}),false);
+ assert.equal(acceptsFeedSource(live,{...live,entryEvent:true,signalObservedAt:1800000119500}),true);
+ assert.equal(acceptsFeedSource(live,{...live,time:legacy.time,barIndex:101,entryEvent:true,signalObservedAt:1800000120100}),true);
+ assert.equal(acceptsFeedSource(live,{...live,time:live.time-120000,signalObservedAt:1800000120100}),false);
+});

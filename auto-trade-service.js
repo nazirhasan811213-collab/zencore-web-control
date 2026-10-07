@@ -1220,8 +1220,10 @@ function createAutoTradeService(options = {}) {
           connection: connection.state,
           enabledSymbols: profile.symbols,
           brokerSymbols: Object.keys(specs || {}),
-          pairs: allowedDemoSymbols.map(symbol => {
-            const market = markets.find(item => Core.normaliseSymbol(item?.symbol) === symbol);
+          pairs: allowedDemoSymbols.flatMap(symbol => {
+            const scoped = markets.filter(item => Core.normaliseSymbol(item?.symbol) === symbol);
+            return (scoped.length ? scoped : [null]).map(market => {
+            const normal = market?.strategyNormal || {}, sop = normal.sop || {};
             return {
               symbol,
               timeframe: market?.timeframe || null,
@@ -1229,10 +1231,22 @@ function createAutoTradeService(options = {}) {
               ageSeconds: market?.receivedAt ? Math.round((now() - market.receivedAt) / 1000) : null,
               state: market?.strategyNormal?.state || 'WAIT',
               side: market?.strategyNormal?.side || 'WAIT',
+              observedAgeSeconds: market?.signalObservedAt ? Math.round((now() - market.signalObservedAt) / 1000) : null,
+              feedVersion: market?.feedVersion || null,
+              feedChannel: market?.feedChannel || null,
+              setupSolid: normal.solid === true,
+              failedGates: (Array.isArray(sop.gates) ? sop.gates : []).filter(g => g.pass !== true).map(g => ({key:g.key,detail:g.detail || null})),
+              sopGreen: sop.sopGreen ?? null,
+              forecast: sop.forecast || null,
+              marketPower: sop.marketPower ?? null,
+              hemaOwn: sop['hema'+String(market?.timeframe)]?.mode || null,
+              hemaHigher: sop['hema'+(String(market?.timeframe)==='15'?'30':'3')]?.mode || null,
+              pullback: sop.pullback?.state || null,
               enabled: profile.symbols.includes(symbol),
               analysisEligible: !!(market && Core.buildSetupCommand(market, profile, specs?.[symbol],now())),
               positionAllowsEntry: !!(market && Core.permitsPositionEntry(market, positions))
             };
+            });
           })
         };
         // Diagnostics never change the execution decision or expose account identity.
