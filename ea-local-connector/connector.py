@@ -187,14 +187,14 @@ class Runner:
             if isinstance(result.get('serverTime'),(int,float)):
                 metrics['serverQueueAgeMs']=result['serverTime']-command['createdAt']
             self.timing(command['id'],'DELIVERED',**metrics)
-        self.status('MT5 DEMO tersambung • '+self.desired_state)
+        self.status('MT5 '+self.config.get('tradeMode','DEMO')+' tersambung • '+self.desired_state)
     def run(self):
         while not self.stop.is_set():
             delay=.5
             try: self.cycle()
             except Exception as error:
                 # Never include response bodies, auth values or raw exceptions in logs/UI.
-                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','DEMO_ONLY','INVALID_POD_TOKEN','TRANSPORT_REPLACED') else 'CONNECTION_PENDING'
+                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED') else 'CONNECTION_PENDING'
                 self.status(code+' — entry baharu menunggu sambungan.')
                 delay=2
             self.stop.wait(delay)
@@ -215,7 +215,7 @@ class App:
         canvas.bind('<Configure>',lambda event:canvas.itemconfigure(window,width=event.width))
         root.bind('<MouseWheel>',lambda event:canvas.yview_scroll(int(-event.delta/120),'units'))
         ttk.Label(box,text='ZenCore • EA + Connector',font=('Segoe UI',18,'bold')).pack(anchor='w')
-        ttk.Label(box,text='Fasa 1 DEMO • Tiada webhook, key manual atau WebRequest MT5').pack(anchor='w',pady=(4,18))
+        ttk.Label(box,text='REAL + DEMO • Setting di web, password broker kekal dalam MT5').pack(anchor='w',pady=(4,18))
         ttk.Label(box,text='1. Pasang EA dalam MT5').pack(anchor='w')
         self.folder=tk.StringVar()
         candidates=list((Path(os.environ.get('APPDATA','.'))/'MetaQuotes'/'Terminal').glob('*/MQL5'))
@@ -249,7 +249,7 @@ class App:
             try:
                 f=read_fields(path)
                 heartbeat(f,f)
-                label='DEMO • ****'+f['account'][-4:]+' • '+f['server']
+                label=f['tradeMode']+' • ****'+f['account'][-4:]+' • '+f['server']
                 if label in self.available: label+=' • '+path.parent.name
                 self.available[label]=(path.parent,f)
             except Exception:pass
@@ -274,7 +274,7 @@ class App:
             try:
                 api=Api();api.request('/auth/login',{'email':email,'password':password})
                 config=api.request('/api/auto-trade/ea-connect',{})
-                config.update(account=identity['account'],server=identity['server'],channel=str(channel))
+                config.update(account=identity['account'],server=identity['server'],tradeMode=identity['tradeMode'],channel=str(channel))
                 save_config(config);install_app()
                 self.root.after(0,lambda:self.start(config))
             except RuntimeError as e:

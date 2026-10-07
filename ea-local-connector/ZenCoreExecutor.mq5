@@ -1,6 +1,6 @@
 #property strict
-#property version "1.22"
-#property description "ZenCore local executor: no WebRequest, DLL or Python API. DEMO only."
+#property version "1.23"
+#property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
 const ulong MAGIC=32603231;
@@ -66,7 +66,9 @@ void MapSymbols(){
  }
 }
 bool IsOwn(ulong ticket){return PositionSelectByTicket(ticket) && ((ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC || (ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC15);}
-bool Permissions(){return AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO &&
+string AccountMode(){long mode=AccountInfoInteger(ACCOUNT_TRADE_MODE);return mode==ACCOUNT_TRADE_MODE_DEMO?"DEMO":mode==ACCOUNT_TRADE_MODE_REAL?"REAL":"UNSUPPORTED";}
+bool SupportedAccount(){return AccountMode()!="UNSUPPORTED";}
+bool Permissions(){return SupportedAccount() &&
  TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
  MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
 bool BrokerDone(){uint r=trade.ResultRetcode();return r==TRADE_RETCODE_DONE || r==TRADE_RETCODE_DONE_PARTIAL || r==TRADE_RETCODE_NO_CHANGES;}
@@ -78,9 +80,9 @@ bool VolumeValid(string symbol,double value){
 void SaveState(){WriteAtomic("state.tsv",Row("armed",armed?"1":"0")+Row("symbols",enabledSymbols));}
 void Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
- string mode=AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO?"DEMO":"REAL";
+ string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -291,7 +293,7 @@ void Process(){
  if(!ValidId(id)){armed=false;return;}
  if(Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
- AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO){armed=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
+ !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
  if((long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
  if(FileIsExist(channel+"\\"+id+".started",FILE_COMMON)){
   // Existing result is authoritative. Never overwrite it or execute a replay.
@@ -326,7 +328,7 @@ void Process(){
 }
 int OnInit(){
  account=(string)AccountInfoInteger(ACCOUNT_LOGIN);server=AccountInfoString(ACCOUNT_SERVER);
- if(AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO){Print("ZenCore phase 1: DEMO only.");return INIT_FAILED;}
+ if(!SupportedAccount()){Print("ZenCore: unsupported account mode.");return INIT_FAILED;}
  string digest=Hash(server);if(digest=="")return INIT_FAILED;
  channel="ZenCore\\"+account+"-"+StringSubstr(digest,0,16);
  FolderCreate("ZenCore",FILE_COMMON);FolderCreate(channel,FILE_COMMON);

@@ -36,3 +36,13 @@ Connector 1.21.1: masa arahan mengikuti server; kod penolakan sebenar dipaparkan
 Jika EA 1.21 sudah aktif, tidak perlu pasang EA semula. Tutup Connector lama,
 install kemas kini dengan Windows user yang sama, dan buka Connector baharu.
 Pautan sedia ada dikekalkan. Tiada password broker diminta.
+
+KEMAS KINI REAL + DEMO: Connector 1.22, EA 1.23
+1. Install ZenCoreSetup-1.22.exe pada PC/VM Windows yang menjalankan MT5.
+2. Login akaun broker yang hendak digunakan dalam MT5.
+3. Dalam Connector klik Pasang / Kemas kini EA 1.23. Refresh Navigator MT5.
+4. Pasang EA baru pada satu chart dan hidupkan Algo Trading.
+5. Cari akaun MT5; pilih akaun REAL atau DEMO yang betul dan link login ZenCore sendiri.
+6. Buka web ZenCore (Android pun boleh). Semak akaun bertopeng dan MODE.
+7. Simpan lot/layer/TF; tekan ON. REAL guna AKTIFKAN REAL; DEMO guna AKTIFKAN DEMO.
+Akaun yang lama tidak ditukar atau dihidupkan secara automatik. Jika hendak tukar akaun: OFF dan selesaikan posisi ZenCore dahulu, tutup Connector lama dan pautkan semula.

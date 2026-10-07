@@ -120,7 +120,7 @@
     setText('accountMask', identity?.accountMask || 'Belum dipautkan');
     setText('serverMask', identity?.serverMask || '—');
     setText('brokerMask', identity?.brokerMask || '—');
-    setText('tradeMode', identity?.tradeMode || 'DEMO');
+    setText('tradeMode', identity?.tradeMode || 'BELUM LINK');
     setText('podOwner', hosted ? 'ZENCORE MANAGED' : ownershipLabel(pod?.ownershipMode));
     const health = (id, enabled) => {
       const el = byId(id);
@@ -643,6 +643,9 @@
   byId('turnOnButton')?.addEventListener('click', () => {
     setText('onError', '');
     byId('onConfirmation').value = '';
+    const mode = currentState?.pod?.tradeMode === 'REAL' ? 'REAL' : 'DEMO';
+    setText('onConfirmationLabel', 'TAIP AKTIFKAN '+mode);
+    byId('onConfirmation').placeholder = 'AKTIFKAN '+mode;
     byId('onDialog').showModal();
   });
 

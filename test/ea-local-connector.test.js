@@ -37,7 +37,7 @@ test('login pairing returns automatic machine credentials and web can arm approv
 });
 test('EA transport refuses REAL heartbeat and unapproved pair',async()=>{
  const {service}=setup();const c=await service.connectLocalEa(userId);
- await assert.rejects(service.heartbeat(c.podToken,{...hb,tradeMode:'REAL'}),e=>e.code==='INVALID_HEARTBEAT');
+ await assert.rejects(service.heartbeat(c.podToken,{...hb,tradeMode:'REAL'}),e=>e.code==='REAL_EA_UPGRADE_REQUIRED');
  await assert.rejects(service.saveSettings(userId,{...settings,symbols:['BTCUSD']}),e=>e.code==='DEMO_SYMBOL_NOT_VALIDATED');
 });
 test('pairing refuses active old engine, open positions and running control',async()=>{

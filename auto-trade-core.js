@@ -342,7 +342,7 @@
     const identity = validateMaskedIdentity(input);
     const tradeMode = String(input.tradeMode || '').toUpperCase();
     const errors = { ...identity.errors };
-    if (tradeMode !== 'DEMO') errors.tradeMode = 'Versi pertama hanya menerima akaun DEMO.';
+    if (!['DEMO', 'REAL'].includes(tradeMode)) errors.tradeMode = 'Jenis akaun MT5 mesti DEMO atau REAL.';
     const positions = (Array.isArray(input.positions) ? input.positions : [])
       .map(sanitisePosition).filter(Boolean).slice(0, 50);
     return {
@@ -368,7 +368,8 @@
     const lastSeen = number(pod.lastSeenAt);
     const online = lastSeen !== null && now - lastSeen <= 30_000;
     if (!online) return { state: 'OFFLINE', label: 'SECURE POD OFFLINE', online: false, connected: false, ready: false };
-    if (String(pod.tradeMode).toUpperCase() !== 'DEMO') return { state: 'BLOCKED_REAL', label: 'REAL ACCOUNT DIKUNCI', online: true, connected: true, ready: false };
+    const tradeMode = String(pod.tradeMode).toUpperCase();
+    if (!['DEMO', 'REAL'].includes(tradeMode) || (tradeMode === 'REAL' && requirements.realAccountAllowed !== true)) return { state: 'BLOCKED_REAL', label: 'REAL memerlukan EA/Connector terbaru', online: true, connected: true, ready: false };
     if (!pod.terminalTradeAllowed || !pod.accountTradeAllowed || !pod.expertTradeAllowed) {
       return { state: 'CHECK_MT5', label: 'SEMAK ALGO TRADING', online: true, connected: true, ready: false };
     }

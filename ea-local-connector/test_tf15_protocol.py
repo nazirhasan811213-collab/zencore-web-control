@@ -13,4 +13,4 @@ class TF15ProtocolTests(unittest.TestCase):
   h={**local_heartbeat(),'exitPolicyVersion':'TF2_TIGHT_SL_3C_V1'}
   self.assertEqual(heartbeat(h,IDENTITY,NOW)['connectorVersion'],'1.1.0-ea-local')
   h['strategyExecutionVersion']='TF2_TF15_V1'
-  self.assertEqual(heartbeat(h,IDENTITY,NOW)['connectorVersion'],'1.2.0-ea-local')
+  self.assertEqual(heartbeat(h,IDENTITY,NOW)['connectorVersion'],'1.3.0-ea-local')

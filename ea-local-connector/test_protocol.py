@@ -115,3 +115,19 @@ class ExitPolicyTests(unittest.TestCase):
         f=local_heartbeat();self.assertEqual(heartbeat(f,IDENTITY,NOW)['connectorVersion'],'1.0.0-ea-local')
         f['exitPolicyVersion']='TF2_TIGHT_SL_3C_V1'
         self.assertEqual(heartbeat(f,IDENTITY,NOW)['connectorVersion'],'1.1.0-ea-local')
+
+class RealAccountTests(unittest.TestCase):
+    def test_real_account_requires_new_ea_and_bound_mode(self):
+        identity={**IDENTITY,'tradeMode':'REAL'}
+        fields={**local_heartbeat(),'tradeMode':'REAL','accountExecutionVersion':'REAL_DEMO_V1','strategyExecutionVersion':'TF2_TF15_V1'}
+        self.assertEqual(heartbeat(fields,identity,NOW)['tradeMode'],'REAL')
+        with self.assertRaisesRegex(ValueError,'REAL_EA_UPGRADE_REQUIRED'):
+            heartbeat({**fields,'accountExecutionVersion':'OLD'},identity,NOW)
+        with self.assertRaisesRegex(ValueError,'ACCOUNT_MODE_CHANGED'):
+            heartbeat({**fields,'tradeMode':'DEMO'},identity,NOW)
+    def test_signed_system_on_mode_must_match_paired_account(self):
+        payload={'mode':'REAL','strategy':STRATEGY,'exitSchema':SCHEMA,'settings':{'symbols':['XAUUSD'],'lotPerLayer':.01,'layers':2}}
+        command=verified_command(signed('SYSTEM_ON',payload),KEY,POD,NOW)
+        self.assertEqual(command_fields(command,{**IDENTITY,'tradeMode':'REAL'})['tradeMode'],'REAL')
+        with self.assertRaisesRegex(ValueError,'SYSTEM_CONTRACT_REJECTED'):
+            command_fields(command,IDENTITY)

@@ -9,9 +9,9 @@ import re
 import time
 from pathlib import Path
 
-VERSION = '1.2.0-ea-local'
-EA_VERSION = '1.21'
-CONNECTOR_BUILD = '1.21.1'
+VERSION = '1.3.0-ea-local'
+EA_VERSION = '1.23'
+CONNECTOR_BUILD = '1.22'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -86,9 +86,9 @@ def command_fields(command, identity):
         if str(payload.get('analysisSnapshot',{}).get('executionTimeframe','')).replace('m','')!='15':raise ValueError('TF15_SNAPSHOT_REQUIRED')
     fields = {'strategyMode':mode,'protocol':1, 'id':command['id'], 'type':kind,
               'expiresAt':command['expiresAt'], 'account':identity['account'],
-              'server':identity['server']}
+              'server':identity['server'], 'tradeMode':identity.get('tradeMode','DEMO')}
     if kind == 'SYSTEM_ON':
-        if payload.get('mode') != 'DEMO' or payload.get('strategy') != STRATEGY or payload.get('exitSchema') != SCHEMA:
+        if payload.get('mode') != identity.get('tradeMode','DEMO') or payload.get('mode') not in ('DEMO','REAL') or payload.get('strategy') != STRATEGY or payload.get('exitSchema') != SCHEMA:
             raise ValueError('SYSTEM_CONTRACT_REJECTED')
         settings = payload['settings']
         symbols = settings['symbols']
@@ -142,10 +142,12 @@ def heartbeat(fields, selected_identity, now_ms=None):
         raise ValueError('EA_OFFLINE')
     if fields['account'] != selected_identity['account'] or fields['server'] != selected_identity['server']:
         raise ValueError('ACCOUNT_CHANGED')
-    if fields['tradeMode'] != 'DEMO': raise ValueError('DEMO_ONLY')
+    if fields['tradeMode'] not in ('DEMO','REAL'): raise ValueError('ACCOUNT_MODE_REJECTED')
+    if fields['tradeMode'] != selected_identity.get('tradeMode','DEMO'): raise ValueError('ACCOUNT_MODE_CHANGED')
+    if fields['tradeMode']=='REAL' and fields.get('accountExecutionVersion')!='REAL_DEMO_V1': raise ValueError('REAL_EA_UPGRADE_REQUIRED')
     value = {
       'accountMask':'****'+fields['account'][-4:], 'serverMask':'****'+re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:],
-      'brokerMask':'****MT5', 'tradeMode':'DEMO', 'connectorVersion':VERSION if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
+      'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':VERSION if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'positions':[], 'symbolSpecs':[]
