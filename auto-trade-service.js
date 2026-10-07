@@ -421,7 +421,7 @@ function createAutoTradeService(options = {}) {
         traderOwnsExecutionHost: !hostedAccount,
         brokerCredentialsStayOnExecutionHost: !hostedAccount,
         controlPlaneExecutionUnlocked: allowDemoExecution,
-        demoOnly: true,
+        demoOnly: !isLocalEa(pod),
         allowedDemoSymbols,
         requiredConnectorVersion: allowDemoExecution ? (isLocalEa(pod) ? (pod.tradeMode === 'REAL' ? '1.3.0-ea-local' : LOCAL_EA_VERSION) : requiredDemoConnectorVersion) : null,
         podCommandKeyIsPerPod: true,

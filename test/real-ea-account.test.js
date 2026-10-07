@@ -19,7 +19,7 @@ test('REAL local EA reports REAL and requires REAL confirmation; mode persists o
  await service.saveSettings(user,{capitalUsd:100,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],riskAcknowledged:true,strategyMode:'BOTH'});
  await assert.rejects(service.turnOn(user,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='CONFIRMATION_REQUIRED');
  let state=await service.turnOn(user,{confirmation:'AKTIFKAN REAL'});
- assert.equal(state.mode,'REAL');assert.equal(state.connection.ready,true);
+ assert.equal(state.mode,'REAL');assert.equal(state.connection.ready,true);assert.equal(state.safeguards.demoOnly,false);
  let cmd=(await service.nextCommand(linked.podToken)).command;
  assert.equal(cmd.payload.mode,'REAL');assert.equal(cmd.type,'SYSTEM_ON');
  await service.acknowledgeCommand(linked.podToken,cmd.id,{status:'EXECUTED',code:'ARMED'});

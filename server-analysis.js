@@ -214,7 +214,7 @@ if (AUTH_ENABLED) {
         const user = await store.findUserForLogin(email);
         if (user && user.role !== 'viewer' && user.status === 'active') localEaExecutionUserIds.push(user.id);
       }
-      console.log(`ZenCore local EA scoped DEMO gate: ${localEaExecutionUserIds.length} account(s)`);
+      console.log(`ZenCore local EA scoped account gate: ${localEaExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         commandSigningKey: COMMAND_SIGNING_KEY,
