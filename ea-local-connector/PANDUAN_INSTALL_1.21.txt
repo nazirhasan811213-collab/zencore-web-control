@@ -1,53 +1,42 @@
-ZENCORE — PEMASANGAN MUDAH EA 1.21 (WINDOWS, DEMO)
+ZENCORE CONNECTOR 1.25 / EA 1.26 — WINDOWS, REAL + DEMO
 
-Jika sudah menggunakan versi lama:
-1. Di web ZenCore, tekan STOP ENTRY dan tunggu status STOPPED.
-   STOP ENTRY bukan Close All. Jangan tekan Emergency Close All untuk upgrade.
-2. Tutup ZenCore Connector lama.
-3. Double-click ZenCoreSetup-1.21.1.exe. Ikut Install -> Finish.
-   Gunakan Windows user yang sama dengan MT5. Tidak perlu Run as Administrator.
+Satu installer yang sama untuk setiap client. Setiap client login akaun ZenCore
+sendiri dan pautkan MT5 sendiri. Jangan salin paired.dpapi dari PC lain.
 
-Pasang EA:
-4. Buka MT5 desktop dan login akaun DEMO broker anda.
-5. MT5 -> File -> Open Data Folder. Salin lokasi folder tersebut.
-6. Dalam ZenCore Connector, pilih folder tadi.
-7. Klik Pasang / Kemas kini EA 1.21. Connector akan compile sendiri.
-8. Selepas berjaya: MT5 Navigator -> Refresh -> Expert Advisors -> ZenCore.
-9. Jika ada EA lama pada chart, tanggalkannya. Pasang ZenCoreExecutor pada
-   SATU chart sahaja. Semua pair dan TF diurus oleh EA ini.
-10. Hidupkan Algo Trading. DLL dan WebRequest tidak diperlukan.
+KEMAS KINI
+1. Di web tekan STOP ENTRY. Ini bukan Close All.
+2. Tutup Connector lama. Biarkan posisi sedia ada dikendalikan dengan berhati-hati.
+3. Jalankan ZenCoreSetup-1.25.exe menggunakan Windows user yang sama dengan MT5.
+   Tidak perlu Run as Administrator.
+4. MT5: File > Open Data Folder. Salin lokasi folder yang dibuka.
+5. Connector: pilih folder tadi, klik Pasang / Kemas kini EA.
+6. Tunggu compile berjaya. Jika gagal, semak compile.log dalam
+   folder MQL5/Experts/ZenCore yang sama.
+7. Tanggalkan EA lama. Navigator > Refresh. Pasang ZenCoreExecutor
+   pada SATU chart sahaja untuk akaun ini. Jangan pasang dua salinan.
+8. Hidupkan Algo Trading. Dalam Experts, cari EA_READY version=1.26.
+9. Connector: Cari akaun MT5. Pilih akaun sendiri. Client baru login
+   akaun ZenCore sendiri dan klik Login & pautkan akaun.
+   Pautan lama yang masih sah boleh dikekalkan selepas upgrade.
+10. Web: semak akaun bertopeng, sambungan READY, lot/layer TF2 dan TF15.
+    Lot atau layer kosong = tiada entry untuk TF itu selepas Simpan.
+11. Simpan konfigurasi. Hidupkan Auto Trade apabila bersedia.
+    Akses execution mestilah dibenarkan untuk akaun ZenCore client.
 
-Pautkan akaun:
-11. Klik Cari akaun MT5 dan pilih akaun DEMO anda.
-12. Pengguna baharu: login dengan akaun ZenCore dan klik Login & pautkan akaun.
-    Pengguna yang sudah dipautkan: kekalkan pautan sedia ada jika status READY.
-    Password broker hanya dimasukkan dalam MT5.
-13. Klik Buka ZenCore. Pilih TF2, TF15 atau Both; pilih pair, lot dan layer.
-14. Simpan konfigurasi, kemudian hidupkan Auto Trade sendiri apabila bersedia.
-15. Sahkan MT5 READY, Auto Trade ON dan EA aktif pada chart.
-
-Biarkan MT5 dan Connector berjalan serta PC/VM online.
-HP/tablet boleh mengawal web; EA berjalan pada PC/VM Windows.
-TF2: HEMA2 + HEMA3. TF15: HEMA15 + HEMA30.
-Posisi dua TF berasingan pada pair sama memerlukan akaun MT5 hedging.
-Pakej ini DEMO sahaja. Installer tidak membuka order ujian.
-
-Connector 1.21.1: masa arahan mengikuti server; kod penolakan sebenar dipaparkan.
-Jika EA 1.21 sudah aktif, tidak perlu pasang EA semula. Tutup Connector lama,
-install kemas kini dengan Windows user yang sama, dan buka Connector baharu.
-Pautan sedia ada dikekalkan. Tiada password broker diminta.
-
-KEMAS KINI REAL + DEMO: Connector 1.24, EA 1.25
-1. Install ZenCoreSetup-1.24.exe pada PC/VM Windows yang menjalankan MT5.
-2. Login akaun broker yang hendak digunakan dalam MT5.
-3. Dalam Connector klik Pasang / Kemas kini EA 1.25. Refresh Navigator MT5.
-4. Pasang EA baru pada satu chart dan hidupkan Algo Trading.
-5. Cari akaun MT5; pilih akaun REAL atau DEMO yang betul dan link login ZenCore sendiri.
-6. Buka web ZenCore (Android pun boleh). Semak akaun bertopeng dan MODE.
-7. Simpan lot/layer/TF; tekan ON. REAL guna AKTIFKAN REAL; DEMO guna AKTIFKAN DEMO.
-Akaun yang lama tidak ditukar atau dihidupkan secara automatik. Jika hendak tukar akaun: OFF dan selesaikan posisi ZenCore dahulu, tutup Connector lama dan pautkan semula.
-
-SERVER DIBENARKAN SAHAJA:
+SERVER YANG DIBENARKAN
 InterStellarFinancial-Server
 InterStellarFinancial-Demo
-Selepas compile EA baru: tanggalkan EA lama dari chart, kemudian pasang EA 1.25 semula.
+
+JIKA EA GAGAL MASUK CHART
+Buka MT5 Toolbox > Experts. Salin baris ZenCore sebelum INIT_FAILED.
+INIT_FOLDER_FAILED: folder Common Files tidak dapat dibuat.
+INIT_LOCK_FAILED: EA lain memegang kunci atau fail tidak dapat dibuka.
+INIT_HASH_FAILED: hash identiti server gagal.
+INIT_HEARTBEAT_FAILED: heartbeat tempatan gagal ditulis.
+INIT_TIMER_FAILED: timer MT5 gagal bermula.
+SERVER_NOT_ALLOWED: server bukan salah satu nama di atas.
+unsupported account mode: akaun bukan mode REAL atau DEMO yang disokong.
+
+PC/VM, MT5 dan Connector mesti terus hidup. HP/tablet mengawal web sahaja.
+Password broker hanya dimasukkan dalam MT5. DLL/WebRequest tidak diperlukan.
+Installer tidak membuka order ujian. MQ5 di-compile oleh MetaEditor pada PC client.

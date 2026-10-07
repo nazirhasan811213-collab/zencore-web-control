@@ -84,7 +84,8 @@ def install_ea(data_folder):
     candidates = []
     if origin_file.exists():
         raw=origin_file.read_bytes()
-        origin = raw.decode('utf-16' if raw.startswith(b'\xff\xfe') else 'utf-8-sig').strip().strip('\x00')
+        encoding = 'utf-16' if raw.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-16-le' if b'\x00' in raw else 'utf-8-sig'
+        origin = raw.decode(encoding).strip('\x00\r\n ').strip('"')
         candidates.append(Path(origin)/'metaeditor64.exe')
     candidates.extend([data_folder/'metaeditor64.exe',Path(r'C:\Program Files\InterStellar MT5\metaeditor64.exe'),Path(r'C:\Program Files\MetaTrader 5\metaeditor64.exe')])
     editor = next((p for p in candidates if p.is_file()),None)
@@ -195,7 +196,7 @@ class Runner:
             except Exception as error:
                 # Never include response bodies, auth values or raw exceptions in logs/UI.
                 code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','SERVER_NOT_ALLOWED') else 'CONNECTION_PENDING'
-                self.status(code+' — entry baharu menunggu sambungan.')
+                self.status(('Pautan tidak sah. Tutup Connector dan pautkan semula akaun ZenCore.' if code=='INVALID_POD_TOKEN' else code+' — entry baharu menunggu sambungan.'))
                 delay=2
             self.stop.wait(delay)
 

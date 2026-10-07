@@ -1,5 +1,5 @@
 #property strict
-#property version "1.25"
+#property version "1.26"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -79,7 +79,7 @@ bool VolumeValid(string symbol,double value){
  return step>0 && value>=minv-1e-9 && value<=maxv+1e-9 && MathAbs(value/step-MathRound(value/step))<1e-6;
 }
 void SaveState(){WriteAtomic("state.tsv",Row("armed",armed?"1":"0")+Row("symbols",enabledSymbols));}
-void Heartbeat(){
+bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
@@ -106,7 +106,7 @@ void Heartbeat(){
   Row(p+"currentPrice",Num(PositionGetDouble(POSITION_PRICE_CURRENT)))+Row(p+"activeSl",Num(PositionGetDouble(POSITION_SL)))+
   Row(p+"profitUsd",Num(PositionGetDouble(POSITION_PROFIT)))+Row(p+"openedAt",(string)(PositionGetInteger(POSITION_TIME)*1000));count++;
  }
- text+=Row("positionCount",(string)count);WriteAtomic("heartbeat.tsv",text);
+ text+=Row("positionCount",(string)count);return WriteAtomic("heartbeat.tsv",text);
 }
 bool FreshLease(){
  if(!ReadFields("lease.tsv"))return false;
@@ -331,15 +331,21 @@ int OnInit(){
  account=(string)AccountInfoInteger(ACCOUNT_LOGIN);server=AccountInfoString(ACCOUNT_SERVER);
  if(!AllowedServer()){Print("ZenCore: SERVER_NOT_ALLOWED. Use InterStellarFinancial-Server or InterStellarFinancial-Demo.");return INIT_FAILED;}
  if(!SupportedAccount()){Print("ZenCore: unsupported account mode.");return INIT_FAILED;}
- string digest=Hash(server);if(digest=="")return INIT_FAILED;
+ ResetLastError();
+ string digest=Hash(server);if(digest==""){Print("ZenCore: INIT_HASH_FAILED error=",GetLastError());return INIT_FAILED;}
  channel="ZenCore\\"+account+"-"+StringSubstr(digest,0,16);
- FolderCreate("ZenCore",FILE_COMMON);FolderCreate(channel,FILE_COMMON);
+ FolderCreate("ZenCore",FILE_COMMON);
+ ResetLastError();
+ if(!FolderCreate(channel,FILE_COMMON)){Print("ZenCore: INIT_FOLDER_FAILED error=",GetLastError());return INIT_FAILED;}
+ ResetLastError();
  lockHandle=FileOpen(channel+"\\ea.lock",FILE_WRITE|FILE_BIN|FILE_COMMON);
- if(lockHandle==INVALID_HANDLE){Print("ZenCore: an EA is already attached for this account.");return INIT_FAILED;}
+ if(lockHandle==INVALID_HANDLE){Print("ZenCore: INIT_LOCK_FAILED error=",GetLastError(),". Another EA/terminal may hold the account lock, or Common Files is not writable.");return INIT_FAILED;}
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  MapSymbols();
  if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");}
- Heartbeat();if(!EventSetMillisecondTimer(250))return INIT_FAILED;return INIT_SUCCEEDED;
+ ResetLastError();if(!Heartbeat()){Print("ZenCore: INIT_HEARTBEAT_FAILED error=",GetLastError());return INIT_FAILED;}
+ ResetLastError();if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
+ Print("ZenCore: EA_READY version=1.26 mode=",AccountMode());return INIT_SUCCEEDED;
 }
 void OnTimer(){
  static ulong lastManagement=0,lastHeartbeat=0;
@@ -348,6 +354,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 1.25 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 1.26 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
 }
-void OnDeinit(const int reason){armed=false;EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);Comment("");}
+void OnDeinit(const int reason){armed=false;EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
