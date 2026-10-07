@@ -61,3 +61,18 @@ test('new TF2 policy blocks old executor entries but keeps management available'
  assert.deepEqual(await service.dispatchMarkets([market]),{queued:0});
  await assert.rejects(service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='TF2_EA_UPGRADE_REQUIRED');
 });
+
+test('news choice is independent of overnight session and survives validation',()=>{
+ const trade=Core.malaysiaTradingSchedule(true,false);
+ assert.equal(Core.tradingWindow(trade,my(20,30)).allowed,true);
+ assert.equal(Core.tradingWindow(trade,my(4)).allowed,false);
+ assert.equal(Core.tradingWindow(trade,my(20,29,58)).validUntil,my(24+3));
+ const skip=Core.malaysiaTradingSchedule(false,true);
+ assert.equal(Core.tradingWindow(skip,my(4)).allowed,true);
+ assert.equal(Core.tradingWindow(skip,my(20,30)).allowed,false);
+ assert.equal(Core.tradingWindow(skip,my(20,29,58)).validUntil,my(20,30));
+ const settings={capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],tradingSchedule:trade};
+ assert.equal(Core.validateSettings(settings).value.tradingSchedule.skipNews,false);
+ settings.tradingSchedule=skip;
+ assert.equal(Core.validateSettings(settings).value.tradingSchedule.skipNews,true);
+});

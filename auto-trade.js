@@ -221,31 +221,9 @@
     byId('capitalUsd').value = settings.capitalUsd ?? 100;
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
     byId('tradingScheduleEnabled').checked = settings.tradingSchedule?.enabled === true;
+    byId('newsTradingMode').value = (settings.tradingSchedule?.skipNews ?? (settings.tradingSchedule?.enabled === true)) ? 'skip' : 'trade';
     settingsHydrated = true;
     updateRiskPreview();
-  }
-
-  function renderExecutionScope(state) {
-    const allowed = Array.isArray(state.control?.executionSymbols)
-      ? state.control.executionSymbols : Core.SUPPORTED_MARKETS;
-    const options = byId('symbolOptions');
-    const localEa = state.pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL';
-    const selected = new Set(state.settings?.symbols || allowed);
-    const scopeKey = JSON.stringify([localEa, allowed, state.settings?.symbols]);
-    const scopeDomain = JSON.stringify([localEa, allowed]);
-    if (options && options.dataset.scopeKey !== scopeKey &&
-        !(settingsDirty && options.dataset.scopeDomain === scopeDomain)) {
-      options.dataset.scopeKey = scopeKey;
-      options.dataset.scopeDomain = scopeDomain;
-      options.innerHTML = allowed.length
-        ? allowed.map(symbol => localEa
-          ? `<label class="symbol-option"><input type="checkbox" name="executionPair" value="${escape(symbol)}" ${selected.has(symbol) ? 'checked' : ''}><span>${escape(symbol)}</span></label>`
-          : `<span class="symbol-option system"><span>${escape(symbol)}</span></span>`).join('')
-        : '<span class="symbol-scope-empty">Tunggu pair disahkan dulu.</span>';
-    }
-    setText('executionSymbolNotice', localEa
-      ? 'Pilih pair untuk EA daripada skop broker yang disahkan. Simpan untuk menghantar setting kepada EA.'
-      : `Skop automatik control plane: ${allowed.join(', ') || 'belum tersedia'}.`);
   }
 
   function renderSummary(state) {
@@ -320,7 +298,7 @@
     renderConnection(state);
     renderMaster(state);
     renderSettings(state);
-    renderExecutionScope(state);
+
     renderSummary(state);
     renderPositions(state);
     renderAudit(state);
@@ -363,14 +341,10 @@
   function selectedSettings() {
     if (!modeDraft) hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}}});
     storeModeFields();
-    const symbols = currentState?.pod?.ownershipMode === 'TRADER_OWNED_EA_LOCAL'
-      ? [...document.querySelectorAll('[name="executionPair"]:checked')].map(input => input.value)
-      : Array.isArray(currentState?.control?.executionSymbols) && currentState.control.executionSymbols.length
-      ? currentState.control.executionSymbols
-      : ['XAUUSD'];
+    const symbols = ['XAUUSD'];
     return {
       strategyMode: 'BOTH', modeSettings: modeDraft,
-      tradingSchedule: Core.malaysiaTradingSchedule(byId('tradingScheduleEnabled').checked),
+      tradingSchedule: Core.malaysiaTradingSchedule(byId('tradingScheduleEnabled').checked, byId('newsTradingMode').value === 'skip'),
       capitalUsd: byId('capitalUsd').value,
       lotPerLayer: (Object.values(modeDraft).find(m=>m.gold.enabled)?.gold.lotPerLayer) || 0.01,
       layers: (Object.values(modeDraft).find(m=>m.gold.enabled)?.gold.layers) || 1,

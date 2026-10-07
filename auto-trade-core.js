@@ -71,23 +71,25 @@
   const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF15_INTRA', 'BOTH']);
 
   const TRADE_SYMBOLS=Object.freeze(['XAUUSD']);
-  function malaysiaTradingSchedule(enabled = true) {
-    return {enabled: enabled === true, timeZone: 'Asia/Kuala_Lumpur',
+  function malaysiaTradingSchedule(enabled = true, skipNews = enabled) {
+    return {enabled: enabled === true, skipNews: skipNews === true, timeZone: 'Asia/Kuala_Lumpur',
       start: '07:00', end: '03:00', newsPauseMinutes: 30,
       newsTimes: ['20:30', '21:30', '22:00', '02:00']};
   }
 
   function tradingWindow(schedule, at = Date.now()) {
-    if (schedule?.enabled !== true) return {allowed:true, reason:'SCHEDULE_DISABLED', validUntil:null};
+    const sessionEnabled = schedule?.enabled === true;
+    const skipNews = schedule?.skipNews ?? sessionEnabled;
+    if (!sessionEnabled && !skipNews) return {allowed:true, reason:'SCHEDULE_DISABLED', validUntil:null};
     if (!Number.isFinite(at) || !Number.isFinite(new Date(at).getTime())) return {allowed:false, reason:'INVALID_CLOCK', validUntil:null};
     const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(at));
     const part=type=>Number(parts.find(p=>p.type===type).value);
     const minute=part('hour')*60+part('minute');
-    if (minute>=180 && minute<420) return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
-    const newsStarts=[1230,1290,1320,120];
+    if (sessionEnabled && minute>=180 && minute<420) return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
+    const newsStarts=skipNews ? [1230,1290,1320,120] : [];
     if (newsStarts.some(start=>minute>=start && minute<start+30))
       return {allowed:false,reason:'NEWS_PAUSE',validUntil:null};
-    const untilMinutes=Math.min(...[180,...newsStarts].map(stop=>(stop-minute+1440)%1440));
+    const untilMinutes=Math.min(...[...(sessionEnabled ? [180] : []),...newsStarts].map(stop=>(stop-minute+1440)%1440));
     const validUntil=at+(untilMinutes*60-part('second'))*1000-new Date(at).getUTCMilliseconds();
     return {allowed:true,reason:'SESSION_OPEN',validUntil};
   }
@@ -113,7 +115,8 @@
       .map(normaliseSymbol).filter(symbol => TRADE_SYMBOLS.includes(symbol)))];
     const errors = {};
     if (input.tradingSchedule != null && (typeof input.tradingSchedule !== 'object' || typeof input.tradingSchedule.enabled !== 'boolean')) errors.tradingSchedule = 'Status jadual trade mesti ON atau OFF.';
-    const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true);
+    if (input.tradingSchedule?.skipNews != null && typeof input.tradingSchedule.skipNews !== 'boolean') errors.tradingSchedule = 'Pilihan news mesti trade atau skip.';
+    const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true, input.tradingSchedule?.skipNews ?? (input.tradingSchedule?.enabled === true));
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
     const strategyExitPolicies = {
