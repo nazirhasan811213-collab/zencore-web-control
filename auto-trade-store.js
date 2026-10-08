@@ -17,6 +17,7 @@ function publicProfile(row) {
     modeSettings: {...((row.execution_settings ?? row).modeSettings||{}),TF15_INTRA:(row.execution_settings ?? row).modeSettings?.TF15_INTRA||(row.execution_settings ?? row).modeSettings?.TF10_LONG},
     tradingSchedule: (row.execution_settings ?? row).tradingSchedule || {enabled:false},
     strategyExitPolicies: (row.execution_settings ?? row).strategyExitPolicies || {},
+    manualExit: (row.execution_settings ?? row).manualExit || {enabled:false},
     userId: row.user_id || row.userId,
     capitalUsd: capital == null ? null : Number(capital),
     lotPerLayer: lot == null ? null : Number(lot),
@@ -40,6 +41,8 @@ function publicPod(row, includePrivate = false) {
     label: row.label,
     ownershipMode: row.ownership_mode || row.ownershipMode || 'INTERNAL_DEMO',
     accountFingerprint: row.account_fingerprint ?? row.accountFingerprint ?? null,
+    manualExitVersion:row.manual_exit_version ?? row.manualExitVersion ?? null,
+    manualExitEnabled:row.manual_exit_enabled ?? row.manualExitEnabled ?? false,
     accountMask: row.account_mask ?? row.accountMask ?? null,
     serverMask: row.server_mask ?? row.serverMask ?? null,
     brokerMask: row.broker_mask ?? row.brokerMask ?? null,
@@ -204,6 +207,8 @@ class PostgresAutoTradeStore {
         ADD COLUMN IF NOT EXISTS demo_execution_unlocked BOOLEAN NOT NULL DEFAULT FALSE;
 
       ALTER TABLE zencore_mt5_secure_pods ADD COLUMN IF NOT EXISTS account_fingerprint CHAR(64);
+      ALTER TABLE zencore_mt5_secure_pods ADD COLUMN IF NOT EXISTS manual_exit_version VARCHAR(32);
+      ALTER TABLE zencore_mt5_secure_pods ADD COLUMN IF NOT EXISTS manual_exit_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
       CREATE TABLE IF NOT EXISTS zencore_mt5_pairing_sessions (
         id UUID PRIMARY KEY,
@@ -402,7 +407,7 @@ class PostgresAutoTradeStore {
        RETURNING *`,
       [userId, settings.capitalUsd, settings.lotPerLayer, settings.layers,
         JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null,
-        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies})]
+        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies, manualExit:settings.manualExit})]
     );
     return publicProfile(result.rows[0]);
   }
@@ -766,6 +771,7 @@ class PostgresAutoTradeStore {
         modeSettings: row.execution_settings?.modeSettings || {},
         tradingSchedule: row.execution_settings?.tradingSchedule || {enabled:false},
         strategyExitPolicies: row.execution_settings?.strategyExitPolicies || {},
+        manualExit:row.execution_settings?.manualExit || {enabled:false},
         capitalUsd: Number(row.capital_usd),
         lotPerLayer: row.lot_per_layer == null ? null : Number(row.lot_per_layer),
         layers: row.layers == null ? null : Number(row.layers),
@@ -1131,7 +1137,7 @@ class PostgresAutoTradeStore {
         terminal_trade_allowed = $6, account_trade_allowed = $7,
         expert_trade_allowed = $8, demo_execution_unlocked = $9, symbol_specs = $10::jsonb,
         connector_version = $11, terminal_build = $12, last_seen_at = $13,
-        account_fingerprint = COALESCE(account_fingerprint, $14)
+        account_fingerprint = COALESCE(account_fingerprint, $14), manual_exit_version = $16, manual_exit_enabled=$17
        WHERE id = $1 AND revoked_at IS NULL
          AND (account_fingerprint IS NULL OR account_fingerprint = $14)
          AND ($15::text IS NULL OR token_hash = $15)
@@ -1140,7 +1146,7 @@ class PostgresAutoTradeStore {
         heartbeat.tradeMode, heartbeat.terminalTradeAllowed, heartbeat.accountTradeAllowed,
         heartbeat.expertTradeAllowed, heartbeat.demoExecutionUnlocked === true,
         JSON.stringify(heartbeat.symbolSpecs || {}), heartbeat.connectorVersion || null,
-        heartbeat.terminalBuild || null, new Date(now), heartbeat.accountFingerprint || null, expectedTokenHash]
+        heartbeat.terminalBuild || null, new Date(now), heartbeat.accountFingerprint || null, expectedTokenHash,heartbeat.manualExitVersion || null,heartbeat.manualExitEnabled===true]
     );
     return publicPod(result.rows[0]);
   }
@@ -1707,6 +1713,7 @@ class MemoryAutoTradeStore {
           modeSettings: profile.modeSettings || {},
           tradingSchedule: profile.tradingSchedule || {enabled:false},
           strategyExitPolicies: profile.strategyExitPolicies || {},
+          manualExit:profile.manualExit || {enabled:false},
           capitalUsd: profile.capitalUsd ?? null,
           lotPerLayer: profile.lotPerLayer ?? null,
           layers: profile.layers ?? null,

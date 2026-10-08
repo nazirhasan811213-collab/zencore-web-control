@@ -1,0 +1,16 @@
+ZENCORE 1.29 — AUTO EXIT ENTRY MANUAL TF2 (DRAFT, BELUM DEPLOY)
+
+Install Connector + EA 1.29 pada Windows MT5. Compile EA melalui installer/MetaEditor. Web perubahan ini belum live.
+
+1. Login akaun MT5 hedging dan pasang EA pada satu chart. Algo Trading ON.
+2. Web Auto Trade: ON Auto Exit Entry Manual TF2.
+3. Isi jarak harga TP1 < TP2 < TP3 dan SL. Jarak harga Gold, bukan nilai profit USD dan bukan pips.
+4. Simpan dan tunggu status EA AUTO EXIT ON. Jangan buka posisi ketika status menunggu/offline.
+5. Buka BUY/SELL XAUUSD manual di MT5 desktop atau mobile untuk akaun yang sama.
+6. EA mengesan transaksi terus, kemudian memasang SL/TP3 pada broker. Fallback scan setiap 250ms; latency broker sebenar belum diukur.
+7. TP1: SL ke entry; TP2: SL ke TP1; TP3: close. Close Separuh TF2: 50% sekali jika saiz volume broker sah. Opposite yellow TF2: close baki selepas close separuh berjaya.
+8. OFF Auto Exit berhenti mengambil posisi manual baharu. Posisi yang sudah diambil alih terus dilindungi. Stop entry automatik berasingan.
+
+Posisi sedia ada sebelum ON, simbol lain, EA lain, dan akaun netting tidak diambil alih. TP/SL sedia ada yang lebih ketat dikekalkan. Jika jarak tidak sah mengikut stop/freeze broker, sistem tidak membesarkan jarak; semak Experts untuk MANUAL_EXIT_BROKER_DISTANCE. SL tidak dijamin terpasang sehingga broker menerima modify.
+Lot 0.01 mungkin tidak boleh dibahagi 50%; kod MANUAL_HALF_VOLUME_TOO_SMALL, SL/TP terus berjalan.
+SL/TP broker kekal ketika PC offline. StepLock dan exit signal perlu EA berjalan; signal TF2 perlu feed fresh. Slippage/gap masih boleh menyebabkan loss melebihi sasaran.

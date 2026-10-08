@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '1.28'
-CONNECTOR_BUILD = '1.28'
+EA_VERSION = '1.29'
+CONNECTOR_BUILD = '1.29'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -104,7 +104,25 @@ def command_fields(command, identity):
               'server':identity['server'], 'tradeMode':identity.get('tradeMode','DEMO')}
     if identity.get('eaSession'):
         fields.update(podId=identity['podId'], eaSession=identity['eaSession'])
-    if kind == 'SYSTEM_ON':
+    if kind == 'MANUAL_EXIT_CONFIG':
+        cfg=payload['manualExit']
+        if cfg.get('version')!='MANUAL_TF2_EXIT_V1' or cfg.get('timeframeMinutes')!=2 or not isinstance(cfg.get('enabled'),bool):raise ValueError('EXIT_POLICY_REJECTED')
+        fields['manualEnabled']='1' if cfg['enabled'] else '0'
+        if cfg['enabled']:
+            distances=[float(number(cfg[k])) for k in ('tp1','tp2','tp3','sl')]
+            if not all(0<v<=1000 for v in distances) or not distances[0]<distances[1]<distances[2]:raise ValueError('EXIT_POLICY_REJECTED')
+            for k in ('tp1','tp2','tp3','sl'):fields['manual'+k]=number(cfg[k])
+    elif kind == 'MANUAL_EXIT_ACTION':
+        if payload.get('symbol')!='XAUUSD' or payload.get('side') not in ('BUY','SELL'):raise ValueError('SYMBOL_REJECTED')
+        for k in ('ticket','positionId'):
+            if not re.fullmatch(r'[1-9][0-9]{0,19}',str(payload[k])):raise ValueError('TYPE_REJECTED')
+            fields[k]=str(payload[k])
+        fields.update(symbol='XAUUSD',side=payload['side'],sourceAt=number(payload['sourceAt']),actions=len(payload['actions']))
+        if not 1<=len(payload['actions'])<=2:raise ValueError('ACTIONS_REJECTED')
+        for i,a in enumerate(payload['actions']):
+            if a.get('type')!='CLOSE_PERCENT' or (a.get('reason'),a.get('percent')) not in (('CLOSE_SEPARUH',50),('EXIT_REMAINING',100)):raise ValueError('ACTION_REJECTED')
+            fields[f'a{i}type']='CLOSE_PERCENT';fields[f'a{i}value']=a['percent'];fields[f'a{i}reason']=a['reason']
+    elif kind == 'SYSTEM_ON':
         if payload.get('mode') != identity.get('tradeMode','DEMO') or payload.get('mode') not in ('DEMO','REAL') or payload.get('strategy') != STRATEGY or payload.get('exitSchema') != SCHEMA:
             raise ValueError('SYSTEM_CONTRACT_REJECTED')
         settings = payload['settings']
@@ -170,7 +188,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':(VERSION if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1' else '1.3.0-ea-local') if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
-      'demoExecutionUnlocked':True, 'positions':[], 'symbolSpecs':[]
+      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[]
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
@@ -182,6 +200,8 @@ def heartbeat(fields, selected_identity, now_ms=None):
     for i in range(min(int(fields.get('positionCount',0)),50)):
         prefix = f'p{i}'
         position = {'strategyMode':fields.get(prefix+'strategyMode','TF2_SCALPING'),'ticket':fields[prefix+'ticket'], 'symbol':fields[prefix+'symbol'], 'side':fields[prefix+'side']}
+        position['origin']=fields.get(prefix+'origin','ZENCORE')
+        position['positionId']=fields.get(prefix+'positionId',position['ticket'])
         for key in ('volume','entry','currentPrice','activeSl','profitUsd','openedAt'):
             position[key] = float(fields[prefix+key])
         value['positions'].append(position)
