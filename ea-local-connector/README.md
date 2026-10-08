@@ -1,3 +1,7 @@
+## Connector 1.27 / EA 1.28 — ON handoff repair
+
+A verified SYSTEM_ON now refreshes its account/session-bound server lease before EA delivery. Periodic STOPPED heartbeats can no longer cause the next ON command to race a stale lease. Current STOP, signature, deadline, account/session changes remain fail closed. EA exposes precise permission/lease errors. Account discovery refreshes automatically while unpaired; email/password inputs are labelled. See PANDUAN_INSTALL_1.27.txt. Native MetaEditor/MT5 acceptance still required.
+
 ## Universal candidate — Connector 1.26 / EA 1.27
 
 Use PANDUAN_INSTALL_1.26.txt. One package is shared across clients, but each client pairs with their own ZenCore login. Any nonempty valid broker server identity can be paired; investor/read-only permissions cannot execute trades. XAUUSD only; GoldBrokerSymbol allows explicit broker naming. Netting keeps its one-symbol position guard.

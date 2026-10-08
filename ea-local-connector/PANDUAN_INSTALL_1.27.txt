@@ -1,0 +1,70 @@
+ZENCORE CONNECTOR 1.27 + EA 1.28 — PAKEJ UNIVERSAL WINDOWS
+
+Pakej sama untuk semua client. Jangan kongsi paired.dpapi atau folder konfigurasi.
+Setiap client login akaun ZenCore sendiri dan akaun broker sendiri dalam MT5.
+Password broker tidak diminta oleh Connector. Pautan mesin disimpan dengan Windows DPAPI.
+DEMO, REAL dan cent boleh dipautkan jika akaun MT5 memberi kebenaran trading.
+Broker dan nama server tidak lagi dihadkan kepada InterStellar.
+Sistem ini mengekalkan XAUUSD sahaja, dengan TF2 / TF15 mengikut setting web.
+
+INSTALL KALI PERTAMA
+1. Pasang MT5 broker dan login akaun anda. Pastikan MT5 benar-benar connected.
+2. Tutup Connector lama. Run ZenCoreSetup-1.27.exe sebagai Windows user biasa.
+3. Buka MT5 > File > Open Data Folder. Salin alamat folder.
+4. Dalam Connector, pilih folder tersebut dan klik Pasang / Kemas kini EA 1.28.
+   Installer membawa kod EA yang sama untuk semua client. MetaEditor MT5 compile
+   secara tempatan. Jika compile gagal, baca compile.log dan jangan guna EX5 lama.
+5. MT5 > Navigator > Expert Advisors > Refresh. Letak ZenCoreExecutor pada SATU chart.
+   Jika EA lama masih pada chart, remove dahulu lalu pasang versi baharu.
+6. Hidupkan Algo Trading. Semak tetapan EA: Allow Algo Trading.
+   DLL dan WebRequest tidak diperlukan.
+7. Connector > Cari akaun MT5. Pilih akaun yang betul.
+8. Login akaun WEB ZenCore anda (bukan password MT5), klik Login & pautkan akaun.
+9. Buka web ZenCore > Auto Trade. Semak akaun, connection READY, lot/layer TF2/TF15,
+   kemudian hidupkan ON untuk akaun yang memang anda mahu trade.
+10. Biarkan Connector, MT5 dan komputer berjalan. HP/tablet mengurus web;
+    executor tetap memerlukan MT5 Windows yang berjalan.
+
+TUKAR AKAUN MT5 TANPA INSTALL SEMULA
+1. OFF di web. Tunggu STOPPED. Selesaikan posisi ZenCore pada akaun lama.
+2. Dalam Connector klik Tukar akaun MT5 / pengguna ZenCore.
+3. Login akaun broker baharu dalam MT5. Semak EA masih pada chart dan Algo Trading ON.
+   EA memisahkan channel mengikut login, server dan mode akaun.
+4. Klik Cari akaun MT5. Pilih akaun baharu. Login dan pautkan semula di Connector.
+5. Jika OLD_CONNECTOR_ACTIVE, tunggu sehingga 2 minit selepas Connector lama berhenti,
+   kemudian cuba pairing semula. Ini tempoh keselamatan, bukan perlu installer lain.
+6. Semak web menunjukkan akaun baharu. Ia bermula OFF. Semak lot/layer sebelum ON.
+   Lot/layer setting web sedia ada kekal; jangan anggap ia sesuai untuk modal akaun baharu.
+
+TUKAR PENGGUNA ZENCORE PADA PC SAMA
+Gunakan langkah Tukar akaun. Login web pengguna baharu dalam Connector.
+Jangan salin token pairing pengguna pertama kepada client lain.
+Jika mahu beberapa akaun SERENTAK, gunakan Windows user/VM berasingan.
+Versi ini menjalankan satu akaun terpilih bagi satu proses Connector/Windows user.
+
+NAMA SYMBOL GOLD BERBEZA
+XAUUSD serta suffix/prefix boleh dipadankan jika hanya satu padanan tersedia.
+GOLD juga boleh dipadankan. Jika broker mempunyai beberapa jenis gold, buka setting
+EA > GoldBrokerSymbol dan masukkan nama symbol tepat seperti Market Watch.
+Lot minimum, lot step, stop distance, waktu market, permission dan filling mode
+masih mengikut broker. Akaun investor/read-only tidak boleh membuka order.
+Netting tidak membenarkan dua posisi strategi berasingan pada symbol sama;
+entry tambahan disekat jika symbol sudah mempunyai posisi. Hedging boleh memisahkan TF2/TF15.
+
+JIKA CONNECTION TERPUTUS
+Entry baharu disekat apabila lease tidak sah. Connector cuba sambung semula.
+SL yang telah diterima broker kekal; StepLock tempatan memerlukan MT5/EA connected.
+Pertukaran akaun ketika posisi lama masih terbuka tidak memindahkan posisi tersebut.
+Kembali ke akaun lama untuk urus posisi atau guna terminal broker.
+
+STATUS KANDIDAT
+Windows packaging/DPAPI dan protokol mesti diuji. EA mesti berjaya compile dalam
+MetaEditor dan disahkan pada MT5 DEMO sebelum digunakan dengan wang sebenar.
+Ujian protokol bukan bukti keuntungan atau jaminan tiada slippage/delay broker.
+
+JIKA WEB ERROR TETAPI MT5 READY
+Lihat mesej Connector dan MT5 > Experts. EA 1.28 membezakan Algo Trading OFF,
+permission broker dan lease tamat. Pasang semula EA pada chart selepas compile;
+menyalin fail baharu sahaja tidak menukar EA yang masih berjalan pada chart.
+Jika sambungan sudah pulih, semak akaun dan tekan ON semula. Connector tidak
+mengaktifkan trading sendiri selepas error. Senarai akaun dikesan setiap 2 saat.

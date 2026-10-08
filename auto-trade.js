@@ -15,6 +15,21 @@
   const timeText = value => Number.isFinite(Number(value))
     ? new Date(Number(value)).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' }) : '—';
 
+  const executionError = code => ({
+    ALGO_OR_ACCOUNT_NOT_READY: 'EA menolak ON walaupun sambungan READY. Kemas kini Connector 1.27 / EA 1.28, pasang EA baharu pada chart, kemudian ON semula.',
+    TERMINAL_OFFLINE: 'MT5 terputus dari broker. Tunggu sambungan pulih, kemudian ON semula.',
+    TERMINAL_ALGO_DISABLED: 'Hidupkan butang Algo Trading dalam MT5, kemudian ON semula.',
+    EA_ALGO_DISABLED: 'Buka Properties EA dan hidupkan Allow Algo Trading.',
+    ACCOUNT_TRADE_DISABLED: 'Broker menyekat trading pada akaun ini. Semak login investor atau permission akaun.',
+    ACCOUNT_EXPERT_DISABLED: 'Broker menyekat Expert Advisor pada akaun ini.',
+    LEASE_EXPIRED: 'Kebenaran Connector tamat. Tunggu sambungan pulih, kemudian ON semula.',
+    LEASE_STOPPED: 'Web sedang STOP; semak akaun dan tekan ON semula.',
+    LEASE_NOT_FOUND: 'Fail kebenaran Connector belum tersedia. Semak pemasangan dan folder MT5.',
+    LEASE_BINDING_CHANGED: 'Akaun atau sesi EA berubah. Pautkan semula akaun dalam Connector.',
+    ON_SETTINGS_INVALID: 'Isi lot dan layer yang sah, simpan setting dan ON semula.',
+    CONTROL_STOPPED: 'ON dibatalkan kerana sistem sudah STOP.'
+  }[code] || code);
+
   let currentState = null;
   let markets = [];
   let settingsHydrated = false;
@@ -168,7 +183,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', control.lastError || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar sesi 7 pagi–3 pagi Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', executionError(control.lastError) || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar sesi 7 pagi–3 pagi Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));

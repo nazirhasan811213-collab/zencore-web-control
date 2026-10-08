@@ -114,6 +114,23 @@ def install_app():
     # .url is a Windows shortcut, no shell/PowerShell invocation required.
     (desktop/'ZenCore Connector.url').write_text('[InternetShortcut]\nURL='+target.as_uri()+'\n',encoding='utf-8')
 
+def readiness_message(code):
+    messages={
+        'TERMINAL_OFFLINE':'MT5 terputus dari broker. Tunggu connection pulih, kemudian ON semula.',
+        'TERMINAL_ALGO_DISABLED':'Hidupkan butang Algo Trading MT5, kemudian ON semula.',
+        'EA_ALGO_DISABLED':'EA > Properties > Allow Algo Trading mesti ON.',
+        'ACCOUNT_TRADE_DISABLED':'Broker tidak memberi permission trading pada akaun ini.',
+        'ACCOUNT_EXPERT_DISABLED':'Broker tidak memberi permission Expert Advisor pada akaun ini.',
+        'LEASE_EXPIRED':'Kebenaran sambungan tamat. Tunggu Connector tersambung, kemudian ON semula.',
+        'LEASE_STOPPED':'Web sedang STOP. Semak akaun dan tekan ON semula.',
+        'LEASE_NOT_FOUND':'Fail kebenaran belum tersedia. Semak folder Common MT5.',
+        'LEASE_BINDING_CHANGED':'Sesi atau akaun berubah. Pautkan semula akaun yang dipilih.',
+        'ON_SETTINGS_INVALID':'Isi lot dan layer yang sah di web, kemudian ON semula.',
+        'CONTROL_STOPPED':'Arahan ON dibatalkan kerana web sudah STOP.',
+        'ALGO_OR_ACCOUNT_NOT_READY':'EA menolak ON. Pasang EA 1.28 dan semak permission MT5; lihat Experts.',
+    }
+    return messages.get(code,'Arahan ditolak: '+str(code or 'UNKNOWN')[:40])
+
 class Runner:
     def __init__(self,config,status):
         self.config=config; self.status=status; self.api=Api(); self.stop=threading.Event()
@@ -122,6 +139,7 @@ class Runner:
         self.next_heartbeat=0
         self.desired_state="STOPPED"
         self.delivered_at={}
+        self.last_result=None
     def timing(self, command_id, stage, **metrics):
         # Bounded local diagnostics: IDs and durations only, never account/auth/payload.
         try:
@@ -142,14 +160,7 @@ class Runner:
         if self.stop.is_set(): return
         # Poll commands quickly without multiplying database heartbeat writes.
         if time.monotonic()>=self.next_heartbeat:
-            response=self.api.request('/api/execution/heartbeat',report,self.config['podToken'])
-            if self.stop.is_set(): return
-            self.desired_state=response['desiredState']
-            # Only a successful server heartbeat renews permission to enter.
-            atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'], 'server':self.config['server'],
-              'expiresAt':int(time.time()*1000)+12000,'desiredState':self.desired_state,
-              'tradeMode':self.config.get('tradeMode','DEMO'),'podId':self.config['podId'],'eaSession':local['eaSession']}))
-            self.next_heartbeat=time.monotonic()+2
+            if not self.renew_lease(local): return
 
         for result_path in sorted(self.channel.glob('*.result')):
             result=read_fields(result_path)
@@ -164,6 +175,7 @@ class Runner:
             try:measurements['eaProcessingMs']=float(result.get('eaProcessingMs','nan'))
             except ValueError:pass
             self.timing(result['id'],'ACKNOWLEDGED',**measurements)
+            self.last_result=(result.get('status'),result.get('code'))
             result_path.unlink()
         if (self.channel/'command.tsv').exists(): return
         fetch_started=time.monotonic()
@@ -178,6 +190,11 @@ class Runner:
                 if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
+                # ON can be queued between the periodic heartbeat and this poll.
+                # Refresh server permission after verifying the command, before handing it to EA.
+                if signed['type']=='SYSTEM_ON':
+                    if not self.renew_lease(local): return
+                    if self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
                 if remaining_ms <= 0: raise ValueError('COMMAND_EXPIRED')
                 fields['expiresAt']=int(time.time()*1000+remaining_ms)
@@ -197,7 +214,26 @@ class Runner:
             if isinstance(result.get('serverTime'),(int,float)):
                 metrics['serverQueueAgeMs']=result['serverTime']-command['createdAt']
             self.timing(command['id'],'DELIVERED',**metrics)
-        self.status('MT5 '+self.config.get('tradeMode','DEMO')+' tersambung • '+self.desired_state)
+        message='MT5 '+self.config.get('tradeMode','DEMO')+' tersambung • '+self.desired_state
+        if self.last_result and self.last_result[0]!='EXECUTED':
+            message+=' • '+readiness_message(self.last_result[1])
+        self.status(message)
+    def renew_lease(self, local):
+        response=self.api.request('/api/execution/heartbeat',heartbeat(local,self.config),self.config['podToken'])
+        if self.stop.is_set(): return False
+        current=read_fields(self.channel/'heartbeat.tsv')
+        heartbeat(current,self.config)
+        if current.get('eaSession')!=local['eaSession']:
+            self.invalidate_lease();self.next_heartbeat=0
+            return False
+        state=response.get('desiredState')
+        if state not in ('ON','STOPPED'): raise ValueError('CONTROL_STATE_INVALID')
+        self.desired_state=state
+        atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'],'server':self.config['server'],
+            'expiresAt':int(time.time()*1000)+12000,'desiredState':state,'tradeMode':self.config.get('tradeMode','DEMO'),
+            'podId':self.config['podId'],'eaSession':current['eaSession']}))
+        self.next_heartbeat=time.monotonic()+2
+        return True
     def invalidate_lease(self):
         try:
             atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config.get('account',''),
@@ -244,7 +280,9 @@ class App:
         ttk.Label(box,text='Folder: MT5 → File → Open Data Folder. Selepas pemasangan,\nNavigator → Refresh → ZenCoreExecutor → letak pada satu chart.\nHidupkan Algo Trading; DLL dan WebRequest tidak diperlukan.').pack(anchor='w',pady=8)
         ttk.Label(box,text='2. Login akaun ZenCore (bukan password broker)').pack(anchor='w',pady=(12,4))
         self.email=tk.StringVar(); self.password=tk.StringVar();self.account=tk.StringVar()
+        ttk.Label(box,text='Email ZenCore').pack(anchor='w')
         ttk.Entry(box,textvariable=self.email).pack(fill='x',pady=3)
+        ttk.Label(box,text='Password ZenCore').pack(anchor='w')
         ttk.Entry(box,textvariable=self.password,show='•').pack(fill='x',pady=3)
         self.accounts=ttk.Combobox(box,textvariable=self.account,state='readonly');self.accounts.pack(fill='x',pady=4)
         ttk.Button(box,text='Cari akaun MT5',command=self.refresh).pack(anchor='w')
@@ -259,6 +297,7 @@ class App:
             if config:self.start(config)
         except Exception:self.status.set('Pautan perlu dibuat semula oleh Windows user ini.')
         root.protocol('WM_DELETE_WINDOW',self.close)
+        self.root.after(2000,self.watch_accounts)
         if '--background' in sys.argv:root.iconify()
     def update(self,value):self.root.after(0,lambda:self.status.set(value))
     def refresh(self):
@@ -273,6 +312,9 @@ class App:
             except Exception:pass
         self.accounts['values']=list(self.available)
         if len(self.available)==1:self.account.set(next(iter(self.available)))
+    def watch_accounts(self):
+        if not self.runner and not self.pairing and not self.switching:self.refresh()
+        self.root.after(2000,self.watch_accounts)
     def install(self):
         folder=self.folder.get()
         def task():
