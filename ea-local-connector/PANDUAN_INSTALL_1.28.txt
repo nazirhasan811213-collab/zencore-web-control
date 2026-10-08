@@ -1,0 +1,18 @@
+ZENCORE CONNECTOR 1.28 / EA 1.28
+
+1. Tutup Connector lama. MT5 boleh kekal terbuka.
+2. Run ZenCoreSetup-1.28.exe menggunakan Windows user yang menjalankan MT5.
+3. Pautan sedia ada kekal encrypted untuk Windows user yang sama.
+4. Buka Connector. EA 1.28 tidak berubah; jika belum dipasang, pilih folder MT5 melalui File > Open Data Folder, kemudian Pasang EA.
+5. Pastikan EA pada satu chart dan Algo Trading ON.
+6. Tunggu paparan MT5 tersambung. Semak akaun betul sebelum ON di web.
+
+Pemulihan internet/server automatik. Token tidak sah atau akaun berubah perlu tindakan pengguna; akaun tidak ditukar secara senyap.
+Jika masih offline, salin kod ralat pada Connector (tanpa password). Fail connector-health.json dalam Common\Files\ZenCore\<channel> menyimpan kod dan tahap sambungan sahaja.
+
+TRADINGVIEW TF2 DAN TF15
+Gunakan Pine realtime baru. Existing alert menyimpan snapshot lama: delete alert lama dan create semula.
+Bagi setiap TF, create satu alert channel Execution dan satu Dashboard. Pilih Any alert() function call dan webhook ZenCore sedia ada. Jangan gandakan alert lama dan baru.
+Dashboard setiap 30s, max 6/180s. Execution max 12/180s; perubahan trailing SL biasa max 8 dan coalesce 15s. Entry/protection stage diberi baki kuota. Tiada jaminan alert tidak pernah berhenti: outage TradingView/internet atau lebih 12 peristiwa penting/180s masih boleh menangguhkan penghantaran.
+Jangan reset alert untuk mengulang entry lama. Bootstrap tidak replay setup sejarah.
+SL broker kekal penting jika sambungan terputus. Profit tidak dijamin.

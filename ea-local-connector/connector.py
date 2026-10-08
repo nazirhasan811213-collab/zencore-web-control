@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -69,6 +70,8 @@ class Api:
             try: code = json.loads(error.read(2000)).get('code','HTTP_'+str(error.code))
             except Exception: code = 'HTTP_'+str(error.code)
             raise RuntimeError(code) from None
+        except (urllib.error.URLError, TimeoutError, socket.timeout):
+            raise RuntimeError('NETWORK_UNAVAILABLE') from None
         if value.get('ok') is False: raise RuntimeError(value.get('code','REQUEST_REJECTED'))
         return value
 
@@ -140,6 +143,9 @@ class Runner:
         self.desired_state="STOPPED"
         self.delivered_at={}
         self.last_result=None
+        self.connection_stage="EA_HEARTBEAT"
+        self.last_cloud_heartbeat_ms=0
+        self.failure_count=0
     def timing(self, command_id, stage, **metrics):
         # Bounded local diagnostics: IDs and durations only, never account/auth/payload.
         try:
@@ -152,7 +158,16 @@ class Runner:
                 target.replace(self.channel/'execution-timing.previous.jsonl')
             with target.open('a',encoding='utf-8') as log:log.write(json.dumps(row)+'\n')
         except (OSError,ValueError,TypeError):pass
+    def connection_health(self, code):
+        # Fixed codes only: no credentials, account identifiers or response bodies.
+        safe={'EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','ACCOUNT_BINDING_CHANGED','NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504','CONNECTION_PENDING','CONNECTED'}
+        code=code if code in safe else 'CONNECTION_PENDING'
+        try:
+            atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':self.connection_stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':self.failure_count}))
+        except OSError:pass
+        return code
     def cycle(self):
+        self.connection_stage='EA_HEARTBEAT'
         local=read_fields(self.channel/'heartbeat.tsv')
         report=heartbeat(local,self.config)
         if local.get('accountBindingVersion') != 'ACCOUNT_SESSION_V1': raise ValueError('EA_UPGRADE_REQUIRED')
@@ -162,6 +177,7 @@ class Runner:
         if time.monotonic()>=self.next_heartbeat:
             if not self.renew_lease(local): return
 
+        self.connection_stage='COMMAND_ACK'
         for result_path in sorted(self.channel.glob('*.result')):
             result=read_fields(result_path)
             try:
@@ -178,6 +194,7 @@ class Runner:
             self.last_result=(result.get('status'),result.get('code'))
             result_path.unlink()
         if (self.channel/'command.tsv').exists(): return
+        self.connection_stage='COMMAND_FETCH'
         fetch_started=time.monotonic()
         result=self.api.request('/api/execution/commands/next',token=self.config['podToken'])
         fetch_ms=(time.monotonic()-fetch_started)*1000
@@ -219,6 +236,7 @@ class Runner:
             message+=' • '+readiness_message(self.last_result[1])
         self.status(message)
     def renew_lease(self, local):
+        self.connection_stage='CLOUD_HEARTBEAT'
         response=self.api.request('/api/execution/heartbeat',heartbeat(local,self.config),self.config['podToken'])
         if self.stop.is_set(): return False
         current=read_fields(self.channel/'heartbeat.tsv')
@@ -232,6 +250,7 @@ class Runner:
         atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'],'server':self.config['server'],
             'expiresAt':int(time.time()*1000)+12000,'desiredState':state,'tradeMode':self.config.get('tradeMode','DEMO'),
             'podId':self.config['podId'],'eaSession':current['eaSession']}))
+        self.last_cloud_heartbeat_ms=int(time.time()*1000)
         self.next_heartbeat=time.monotonic()+2
         return True
     def invalidate_lease(self):
@@ -242,13 +261,27 @@ class Runner:
     def run(self):
         while not self.stop.is_set():
             delay=.5
-            try: self.cycle()
+            try:
+                self.cycle()
+                self.failure_count=0
+                if not self.stop.is_set():self.connection_health('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING')
             except Exception as error:
                 self.invalidate_lease()
-                # Never include response bodies, auth values or raw exceptions in logs/UI.
-                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','ACCOUNT_BINDING_CHANGED') else 'CONNECTION_PENDING'
-                self.status(('Pautan tidak sah. Tutup Connector dan pautkan semula akaun ZenCore.' if code=='INVALID_POD_TOKEN' else code+' — entry baharu menunggu sambungan.'))
-                delay=2
+                # A failed poll invalidates permission. Recovery MUST renew it even
+                # when the previous periodic heartbeat was not yet due.
+                self.next_heartbeat=0
+                self.failure_count+=1
+                raw='EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
+                code=self.connection_health(raw)
+                hints={
+                    'EA_HEARTBEAT_MISSING':'EA belum menghantar data. Buka MT5 dan pasang EA pada chart.',
+                    'EA_OFFLINE':'Heartbeat EA berhenti. Semak MT5 masih terbuka dan EA pada chart.',
+                    'NETWORK_UNAVAILABLE':'Internet atau server tidak dapat dicapai. Connector cuba sambung semula.',
+                    'INVALID_POD_TOKEN':'Pautan tidak sah. Pautkan semula akaun ZenCore.',
+                    'TRANSPORT_REPLACED':'Pautan diganti oleh Connector lain. Semak PC yang aktif.',
+                }
+                self.status(code+' — '+hints.get(code,'Entry baharu menunggu sambungan; Connector cuba semula.'))
+                delay=min(10,2**min(self.failure_count,4)) if code in ('NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504') else 2
             self.stop.wait(delay)
         self.invalidate_lease()
 

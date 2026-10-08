@@ -328,6 +328,9 @@ varip bool[] lastEligible=array.new_bool(3,false)
 varip bool realtimeStarted=false
 varip string lastSentManagementState=""
 string managementState=""
+string protectionState=""
+varip string lastSentProtectionState=""
+varip int lastManagementSentAt=0
 bool bootstrap=barstate.isrealtime and not realtimeStarted
 varip int lastFeedSentAt=0
 varip string lastSentGateState=""
@@ -406,6 +409,7 @@ if feedEnabled and correctTf
         bool entryEvent=barstate.isrealtime and not bootstrap and feedChannel=="Execution" and eligible and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent
             emitEntry:=true
+        protectionState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+";"
         managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
         string entryMeta="{\"version\":\"TF15_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
@@ -433,13 +437,19 @@ if feedEnabled and correctTf
             array.shift(recentFeedSends)
         int sentCount=array.size(recentFeedSends)
         bool dashboardDue=feedChannel=="Dashboard" and timenow-lastFeedSentAt>=30000 and sentCount<6
-        bool executionDue=feedChannel=="Execution" and (emitEntry or bootstrap or managementState!=lastSentManagementState) and sentCount<12
+        // Four slots remain available for entry or protection stage changes.
+        // Trailing SL price changes are coalesced; they cannot spend the reserve.
+        bool urgentDue=emitEntry or bootstrap or protectionState!=lastSentProtectionState
+        bool trailingDue=managementState!=lastSentManagementState and timenow-lastManagementSentAt>=15000
+        bool executionDue=feedChannel=="Execution" and sentCount<12 and (urgentDue or (trailingDue and sentCount<8))
         if dashboardDue or executionDue
             alert(payload,alert.freq_all)
             array.push(recentFeedSends,timenow)
             lastFeedSentAt:=timenow
             lastSentGateState:=gateState
             lastSentManagementState:=managementState
+            lastSentProtectionState:=protectionState
+            lastManagementSentAt:=timenow
             // Mark delivered only after the alert call; quota exhaustion must not lose entry.
             if emitEntry
                 for i=0 to array.size(symbols)-1
