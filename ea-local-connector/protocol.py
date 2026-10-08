@@ -165,7 +165,8 @@ def heartbeat(fields, selected_identity, now_ms=None):
     if fields['tradeMode'] != selected_identity.get('tradeMode','DEMO'): raise ValueError('ACCOUNT_MODE_CHANGED')
     if fields['tradeMode']=='REAL' and fields.get('accountExecutionVersion')!='REAL_DEMO_V1': raise ValueError('REAL_EA_UPGRADE_REQUIRED')
     value = {
-      'accountMask':'****'+fields['account'][-4:], 'serverMask':'****'+re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:],
+      'accountMask':'****'+fields['account'][-4:].zfill(2),
+      'serverMask':'****'+(re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:] if len(re.sub(r'[^A-Za-z0-9._-]','',fields['server']))>=2 else hashlib.sha256(fields['server'].encode()).hexdigest()[-8:]),
       'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':(VERSION if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1' else '1.3.0-ea-local') if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
