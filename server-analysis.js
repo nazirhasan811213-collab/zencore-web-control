@@ -1161,6 +1161,12 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
     if (req.method === 'GET' && pathname === '/api/auto-trade/state') {
       return sendJson(res, 200, await autoTradeState.service.state(userId));
     }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/reset-link') {
+      if (!requestOriginAllowed(req)) return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+      const limit=consumeAttempt(attemptKey(req,pathname,userId));
+      if(!limit.allowed) return sendJson(res,429,{ok:false,error:'Cuba semula sebentar lagi.'});
+      return sendJson(res,200,await autoTradeState.service.resetLocalEaLink(userId));
+    }
     if (req.method === 'POST' && pathname === '/api/auto-trade/ea-connect') {
       if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
       const key = attemptKey(req, pathname, userId);
@@ -1276,6 +1282,7 @@ async function handleExecutionApi(req, res, pathname) {
     return sendJson(res, 401, { ok: false, error: 'Secure Pod tidak dibenarkan.' });
   }
   try {
+    if (req.method === 'GET' && pathname === '/api/execution/link-status') return sendJson(res,200,await autoTradeState.service.executionLinkStatus(token));
     if (req.method === 'POST' && pathname === '/api/execution/heartbeat') {
       const body = await parseApiJson(req, res);
       if (body === null) return;

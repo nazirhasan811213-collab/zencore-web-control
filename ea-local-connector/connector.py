@@ -135,8 +135,9 @@ def readiness_message(code):
     return messages.get(code,'Arahan ditolak: '+str(code or 'UNKNOWN')[:40])
 
 class Runner:
-    def __init__(self,config,status):
-        self.config=config; self.status=status; self.api=Api(); self.stop=threading.Event()
+    def __init__(self,config,status,on_unpaired=None):
+        self.config=config; self.status=status; self.on_unpaired=on_unpaired; self.api=Api(); self.stop=threading.Event()
+        self.next_link_check=0
         self.channel=Path(config['channel'])
         self.last_verified=0
         self.next_heartbeat=0
@@ -272,7 +273,19 @@ class Runner:
                 self.next_heartbeat=0
                 self.failure_count+=1
                 raw='EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
+                # Even with no local EA heartbeat, a web reset must release the
+                # saved account link. Network failure alone never deletes it.
+                if raw in ('EA_HEARTBEAT_MISSING','EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED') and time.monotonic()>=self.next_link_check:
+                    self.next_link_check=time.monotonic()+10
+                    try: self.api.request('/api/execution/link-status',token=self.config['podToken'])
+                    except RuntimeError as link_error:
+                        if str(link_error)=='INVALID_POD_TOKEN': raw='INVALID_POD_TOKEN'
                 code=self.connection_health(raw)
+                if code in ('INVALID_POD_TOKEN','TRANSPORT_REPLACED'):
+                    self.stop.set()
+                    self.status('Link lama dibatalkan. Pilih akaun MT5 baharu dan pautkan semula.')
+                    if self.on_unpaired: self.on_unpaired()
+                    break
                 hints={
                     'EA_HEARTBEAT_MISSING':'EA belum menghantar data. Buka MT5 dan pasang EA pada chart.',
                     'EA_OFFLINE':'Heartbeat EA berhenti. Semak MT5 masih terbuka dan EA pada chart.',
@@ -404,14 +417,24 @@ class App:
                 self.root.after(0,lambda:self.start(config))
             except RuntimeError as e:
                 codes={'STOP_BEFORE_PAIRING':'Tekan OFF dalam web dan selesaikan posisi ZenCore dahulu.',
-                  'OLD_CONNECTOR_ACTIVE':'Tutup worker/Connector lama; tunggu 2 minit, kemudian pautkan semula.',
+                  'OLD_CONNECTOR_ACTIVE':'Tekan OFF dan Reset Link Akaun MT5 dalam web, kemudian pautkan semula.',
+                  'LINK_RESET_WAIT':'Tunggu 30 saat selepas reset link, kemudian pautkan semula.',
                   'EA_UPGRADE_REQUIRED':'Pasang EA '+EA_VERSION+' dahulu.', 'INVALID_LOGIN':'Login ZenCore tidak berjaya.', 'HTTP_404':'Web belum dipasang dengan sokongan EA Connector.'}
                 self.update(codes.get(str(e),'Pautan gagal. Semak login dan versi web ZenCore.'))
             except Exception:self.update('Pautan gagal. Semak internet dan akaun ZenCore.')
             finally:self.pairing=False
         threading.Thread(target=task,daemon=True).start()
+    def link_reset_received(self):
+        def finish():
+            try: (INSTALL/'paired.dpapi').unlink(missing_ok=True)
+            except OSError:
+                self.status.set('Link dibatalkan tetapi fail pautan belum boleh dipadam. Tutup Connector dan cuba semula.');return
+            self.runner=None;self.runner_thread=None
+            self.refresh()
+            self.status.set('Reset link berjaya. Login akaun baharu dalam MT5, Cari akaun dan pautkan semula selepas 30 saat.')
+        self.root.after(0,finish)
     def start(self,config):
-        self.runner=Runner(config,self.update)
+        self.runner=Runner(config,self.update,self.link_reset_received)
         self.runner_thread=threading.Thread(target=self.runner.run,daemon=True)
         self.runner_thread.start()
     def close(self):

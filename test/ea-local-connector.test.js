@@ -142,3 +142,32 @@ test('different ZenCore users cannot poll or acknowledge each other commands',as
  assert.equal((await service.nextCommand(c2.podToken)).command,null);
  await assert.rejects(service.acknowledgeCommand(c2.podToken,command.id,{status:'EXECUTED'}),e=>e.code==='COMMAND_NOT_FOUND');
 });
+
+test('web reset revokes only own link, preserves settings and drains old lease before pairing',async()=>{
+ const {store,service,advance}=setup();const old=await service.connectLocalEa(userId);
+ await service.saveSettings(userId,settings);
+ const other='22222222-2222-4222-8222-222222222222';const otherLink=await service.connectLocalEa(other);
+ const before=(await service.state(userId)).settings;
+ const reset=await service.resetLocalEaLink(userId);assert.equal(reset.code,'RESET');
+ assert.equal(await service.authenticatePod(old.podToken),null);
+ await assert.rejects(service.heartbeat(old.podToken,hb),e=>e.code==='INVALID_POD_TOKEN');
+ await assert.rejects(service.nextCommand(old.podToken),e=>e.code==='INVALID_POD_TOKEN');
+ assert.ok(await service.authenticatePod(otherLink.podToken));
+ assert.equal((await service.state(userId)).pod,null);
+ assert.deepEqual((await service.state(userId)).settings,before);
+ await assert.rejects(service.connectLocalEa(userId),e=>e.code==='LINK_RESET_WAIT');
+ advance(30000);const fresh=await service.connectLocalEa(userId);
+ assert.notEqual(fresh.podToken,old.podToken);
+ assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
+ assert.equal((await service.state(userId)).control.canEnter,false);
+});
+test('reset refuses running control and open positions without invalidating account',async()=>{
+ const {store,service}=setup();const old=await service.connectLocalEa(userId);
+ await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});
+ await assert.rejects(service.resetLocalEaLink(userId),e=>e.code==='STOP_BEFORE_RESET');
+ assert.ok(await service.authenticatePod(old.podToken));
+ await store.setControl(userId,{desiredState:'STOPPED',effectiveState:'STOPPED'});
+ await store.replacePositions(userId,[{ticket:'123',symbol:'XAUUSD',side:'BUY',volume:0.01}],Date.now());
+ await assert.rejects(service.resetLocalEaLink(userId),e=>e.code==='POSITIONS_OPEN');
+ assert.ok(await service.authenticatePod(old.podToken));
+});
