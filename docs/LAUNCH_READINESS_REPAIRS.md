@@ -10,6 +10,7 @@ These changes improve readiness. They do not certify production trading or profi
 - /ready checks an actual database query and a successful dispatcher heartbeat younger than 30 seconds. Failed/hung SQL is bounded. Probes coalesce and cache for one second. HTTP 503 indicates unavailable dependencies. Memory substitutes for SQL only in explicit test mode.
 - Auto trade ON rejects an unready Connector/EA before checking strategy upgrade compatibility.
 - Current TF2 SOP decisions now honor the existing explicit sideways/CHOP guard. Position protection and close decisions remain available.
+- The standard npm test command runs with bounded concurrency so the full suite completes in this constrained environment; the verified totals below come from the complete serial run.
 - Regression fixtures now use the current four-green SOP, current HEMA direction modes and XAUUSD execution scope. Historical TF10 research is not registered as a live strategy.
 
 ## Verification
