@@ -1015,11 +1015,11 @@ class PostgresAutoTradeStore {
     return result.rowCount === 1;
   }
 
-  async setControl(userId, update) {
+  async setControl(userId, update, expectedPod = null) {
     const result = await this.pool.query(
       `INSERT INTO zencore_autotrade_profiles
         (user_id, desired_state, effective_state, pending_command_id, last_error)
-       VALUES ($1, $2, $3, $4, $5)
+       SELECT $1, $2, $3, $4, $5 WHERE $6::text IS NULL OR EXISTS (SELECT 1 FROM zencore_mt5_secure_pods WHERE user_id=$1 AND token_hash=$6 AND revoked_at IS NULL FOR UPDATE)
        ON CONFLICT (user_id) DO UPDATE SET
          desired_state = EXCLUDED.desired_state,
          effective_state = EXCLUDED.effective_state,
@@ -1029,7 +1029,7 @@ class PostgresAutoTradeStore {
          updated_at = NOW()
        RETURNING *`,
       [userId, update.desiredState, update.effectiveState,
-        update.pendingCommandId || null, update.lastError || null]
+        update.pendingCommandId || null, update.lastError || null, expectedPod?.tokenHash || null]
     );
     return publicProfile(result.rows[0]);
   }
@@ -1151,10 +1151,17 @@ class PostgresAutoTradeStore {
     return publicPod(result.rows[0]);
   }
 
-  async replacePositions(userId, positions, now) {
+  async replacePositions(userId, positions, now, expectedPod = null) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      if (expectedPod) {
+        const bound=(await client.query(`SELECT id,token_hash,revoked_at FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE`,[userId])).rows[0];
+        if (!bound || bound.revoked_at || bound.id!==expectedPod.id || bound.token_hash!==expectedPod.tokenHash) {
+          await client.query('ROLLBACK'); return false;
+        }
+      }
+
       await client.query(`DELETE FROM zencore_mt5_positions WHERE user_id = $1`, [userId]);
       for (const position of positions) {
         await client.query(
@@ -1163,7 +1170,7 @@ class PostgresAutoTradeStore {
           [userId, position.ticket, JSON.stringify(position), new Date(now)]
         );
       }
-      await client.query('COMMIT');
+      await client.query('COMMIT'); return true;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -1252,20 +1259,23 @@ class PostgresAutoTradeStore {
     try {
       await client.query('BEGIN');
       const pod = (await client.query(`SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE`, [userId])).rows[0];
-      const profile = (await client.query(`SELECT * FROM zencore_autotrade_profiles WHERE user_id=$1 FOR UPDATE`, [userId])).rows[0];
-      const positions = await client.query(`SELECT ticket FROM zencore_mt5_positions WHERE user_id=$1 LIMIT 1`, [userId]);
-      if (!pod || pod.revoked_at) { await client.query('COMMIT'); return 'ALREADY_RESET'; }
-      if (pod.ownership_mode !== 'TRADER_OWNED_EA_LOCAL') { await client.query('ROLLBACK'); return 'LOCAL_EA_REQUIRED'; }
-      if (positions.rowCount) { await client.query('ROLLBACK'); return 'POSITIONS_OPEN'; }
-      if (profile && (profile.desired_state !== 'STOPPED' || !['STOPPED','ERROR','UNPROVISIONED'].includes(profile.effective_state))) {
-        await client.query('ROLLBACK'); return 'STOP_BEFORE_RESET';
+      if (pod && !pod.revoked_at && pod.ownership_mode !== 'TRADER_OWNED_EA_LOCAL') {
+        await client.query('ROLLBACK'); return 'LOCAL_EA_REQUIRED';
       }
-      await client.query(`UPDATE zencore_mt5_secure_pods SET revoked_at=$2 WHERE user_id=$1`, [userId, new Date(now)]);
+      // User reset deliberately abandons web management. Broker orders are
+      // untouched; the user closes any remaining positions directly in MT5.
+      if (pod && !pod.revoked_at) await client.query(`UPDATE zencore_mt5_secure_pods SET revoked_at=$2,account_mask=NULL,server_mask=NULL,broker_mask=NULL,account_fingerprint=NULL,trade_mode=NULL,last_seen_at=NULL,manual_exit_enabled=FALSE,terminal_trade_allowed=FALSE,account_trade_allowed=FALSE,expert_trade_allowed=FALSE,demo_execution_unlocked=FALSE WHERE user_id=$1`, [userId,new Date(now)]);
       for (const table of ['zencore_autotrade_commands','zencore_hosted_autotrade_commands']) {
         await client.query(`UPDATE ${table} SET status='CANCELLED', acknowledged_at=$2 WHERE user_id=$1 AND status IN ('PENDING','DELIVERED')`, [userId,new Date(now)]);
       }
-      await client.query(`UPDATE zencore_autotrade_profiles SET desired_state='STOPPED',effective_state='STOPPED',pending_command_id=NULL,last_error=NULL,state_version=state_version+1,updated_at=$2 WHERE user_id=$1`, [userId,new Date(now)]);
+      await client.query(`DELETE FROM zencore_mt5_positions WHERE user_id=$1`, [userId]);
+      const settings={strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}},manualExit:{enabled:false},tradingSchedule:{enabled:false}};
+      await client.query(`INSERT INTO zencore_autotrade_profiles (user_id,execution_settings) VALUES ($1,$3::jsonb)
+        ON CONFLICT(user_id) DO UPDATE SET capital_usd=NULL,lot_per_layer=NULL,layers=NULL,symbols='[]'::jsonb,risk_acknowledged_at=NULL,
+        execution_settings=$3::jsonb,desired_state='STOPPED',effective_state='STOPPED',pending_command_id=NULL,last_error=NULL,state_version=zencore_autotrade_profiles.state_version+1,updated_at=$2`, [userId,new Date(now),JSON.stringify(settings)]);
       await client.query(`UPDATE zencore_mt5_pairing_sessions SET consumed_at=$2 WHERE user_id=$1 AND consumed_at IS NULL`, [userId,new Date(now)]);
+      await client.query(`UPDATE zencore_mt5_worker_slots SET status='DISABLED',account_id=NULL,assigned_at=NULL,last_error=NULL,updated_at=$2 WHERE account_id IN (SELECT id FROM zencore_mt5_hosted_accounts WHERE user_id=$1)`, [userId,new Date(now)]);
+      await client.query(`DELETE FROM zencore_mt5_hosted_accounts WHERE user_id=$1`, [userId]);
       await client.query('COMMIT'); return 'RESET';
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
@@ -1924,7 +1934,8 @@ class MemoryAutoTradeStore {
     return true;
   }
 
-  async setControl(userId, update) {
+  async setControl(userId, update, expectedPod = null) {
+    if(expectedPod) {const pod=this.podsByUser.get(userId);if(!pod || pod.revokedAt || pod.tokenHash!==expectedPod.tokenHash)return null;}
     const current = this.profiles.get(userId) || {
       userId, symbols: [], desiredState: 'STOPPED', effectiveState: 'STOPPED', stateVersion: 0
     };
@@ -2006,8 +2017,13 @@ class MemoryAutoTradeStore {
     return publicPod(row);
   }
 
-  async replacePositions(userId, positions, now) {
+  async replacePositions(userId, positions, now, expectedPod = null) {
+    if(expectedPod) {
+      const pod=this.podsByUser.get(userId);
+      if(!pod || pod.revokedAt || pod.id!==expectedPod.id || pod.tokenHash!==expectedPod.tokenHash) return false;
+    }
     this.positions.set(userId, positions.map(position => ({ ...position, updatedAt: now })));
+    return true;
   }
 
   async listPositions(userId) { return (this.positions.get(userId) || []).map(item => ({ ...item })); }
@@ -2058,15 +2074,19 @@ class MemoryAutoTradeStore {
   async getLinkResetAt(userId) { return this.podsByUser.get(userId)?.revokedAt || null; }
 
   async resetLocalEaLink(userId, now) {
-    const pod=this.podsByUser.get(userId), profile=this.profiles.get(userId);
-    if (!pod || pod.revokedAt) return 'ALREADY_RESET';
-    if (pod.ownershipMode !== 'TRADER_OWNED_EA_LOCAL') return 'LOCAL_EA_REQUIRED';
-    if ((this.positions.get(userId)||[]).length) return 'POSITIONS_OPEN';
-    if (profile && (profile.desiredState !== 'STOPPED' || !['STOPPED','ERROR','UNPROVISIONED'].includes(profile.effectiveState))) return 'STOP_BEFORE_RESET';
-    pod.revokedAt=now; this.podsByToken.delete(pod.tokenHash);
+    const pod=this.podsByUser.get(userId);
+    if (pod && !pod.revokedAt && pod.ownershipMode !== 'TRADER_OWNED_EA_LOCAL') return 'LOCAL_EA_REQUIRED';
+    if (pod && !pod.revokedAt) {this.podsByToken.delete(pod.tokenHash);Object.assign(pod,{revokedAt:now,accountMask:null,serverMask:null,brokerMask:null,accountFingerprint:null,tradeMode:null,lastSeenAt:null,manualExitEnabled:false,terminalTradeAllowed:false,accountTradeAllowed:false,expertTradeAllowed:false,demoExecutionUnlocked:false});}
+    this.positions.set(userId,[]);
+    this.profiles.set(userId,{userId,capitalUsd:null,lotPerLayer:null,layers:null,symbols:[],riskAcknowledgedAt:null,
+      strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}},manualExit:{enabled:false},tradingSchedule:{enabled:false},
+      desiredState:'STOPPED',effectiveState:'STOPPED',pendingCommandId:null,lastError:null,stateVersion:(this.profiles.get(userId)?.stateVersion||0)+1,updatedAt:now});
     await this.retireExecutionCommands(userId);
-    await this.setControl(userId,{desiredState:'STOPPED',effectiveState:'STOPPED',pendingCommandId:null,lastError:null});
     const pairing=this.pairingsByUser.get(userId); if(pairing && !pairing.consumedAt) pairing.consumedAt=now;
+    const hosted=this.hostedAccounts.get(userId);
+    for(const slot of this.workerSlots.values()) if(hosted && slot.accountId===hosted.id) Object.assign(slot,{accountId:null,status:'DISABLED',assignedAt:null});
+    if(hosted) this.hostedCommands.delete(hosted.id);
+    this.hostedAccounts.delete(userId);
     return 'RESET';
   }
 
