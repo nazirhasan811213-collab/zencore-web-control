@@ -1,0 +1,17 @@
+ZENCORE 1.30 — ENTRY MANUAL / AUTO EXIT TF2 (DRAFT BELUM LIVE)
+
+TP1 2, TP2 4, TP3 6, SL 3 USD JARAK HARGA XAUUSD daripada harga fill setiap tiket. Ini bukan jumlah profit/loss akaun. BUY tambah TP/tolak SL; SELL tolak TP/tambah SL. Lot ikut order manual pengguna, EA tidak menambah lot/layer.
+
+1. Pasang Connector dan EA 1.30 pada PC MT5 akaun hedging. Algo Trading ON.
+2. Backend draf perlu tersedia dalam environment ujian. Web live lama belum mempunyai fungsi ini.
+3. Auto Exit Manual TF2 ON → Simpan → tunggu EA AUTO EXIT ON.
+4. Buka BUY/SELL XAUUSD di akaun sama melalui PC/HP. EA mesti hidup pada Windows.
+5. Event transaksi mengesan entry; fallback scan 250ms. TP/SL broker hanya sah selepas broker menerima modify.
+6. TP1 SL→entry; TP2 SL→TP1; TP3/SL tutup. Close Separuh TF2 sekali jika volume sah; opposite yellow TF2 tutup baki selepas partial berjaya.
+7. Maksimum sasaran 10 layer aktif, AMARAN SAHAJA mengikut pilihan pengguna. MT5 manual tidak disekat. Pada 10/lebih sistem memberi amaran. Layer tambahan tidak ditutup secara automatik dan masih dilindungi TP/SL.
+8. Satu tiket = satu layer; close separuh masih satu layer. Tutup sepenuhnya mengurangkan kiraan, pengguna boleh tambah entry semula. BUY dan SELL dikira bersama untuk posisi manual XAUUSD yang diambil alih.
+9. OFF berhenti mengambil posisi baharu; posisi yang diambil alih terus dilindungi.
+
+Posisi lama sebelum ON, EA lain, simbol lain dan akaun netting tidak diambil alih. SL/TP sedia ada yang lebih ketat dikekalkan. Tidak membesarkan SL jika broker menolak jarak stop/freeze. Semak Experts untuk MANUAL_EXIT_BROKER_DISTANCE/MODIFY_PENDING. Spread, slippage dan gap boleh menghasilkan loss lebih daripada jarak sasaran.
+
+Compile/load EA, fill dan latensi broker sebenar masih perlu ujian MT5. Installer smoke test tidak membuktikan EA telah compile atau trade berjaya.

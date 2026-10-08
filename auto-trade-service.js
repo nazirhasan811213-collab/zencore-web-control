@@ -821,7 +821,7 @@ function createAutoTradeService(options = {}) {
       throw serviceError('DEMO_SYMBOL_NOT_VALIDATED', 'Pilih pair daripada skop broker yang disahkan.', 400);
     }
     const manualPod=localEa ? await store.getPodForUser(userId) : null;
-    if(input.manualExit?.enabled===true && (!localEa || manualPod?.manualExitVersion!=='MANUAL_TF2_EXIT_V1'))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA 1.29.',409);
+    if(input.manualExit?.enabled===true && (!localEa || manualPod?.manualExitVersion!=='MANUAL_TF2_EXIT_V2'))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA 1.30.',409);
     const validation = Core.validateSettings({
       ...input,
       manualExit:input.manualExit ?? previous?.manualExit,
@@ -860,7 +860,7 @@ function createAutoTradeService(options = {}) {
         payload: { mode: pod.tradeMode, strategy: 'NORMAL_3M_SOP_V32', exitSchema: '32.3-EXIT-STEPLOCK', settings: validation.value } });
       await store.setControl(userId, { desiredState: 'ON', effectiveState: 'ARMING', pendingCommandId: issued.command.id, lastError: null });
     }
-    if(localEa && manualPod?.manualExitVersion==='MANUAL_TF2_EXIT_V1')await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:validation.value.manualExit},ttlMs:30000});
+    if(localEa && manualPod?.manualExitVersion==='MANUAL_TF2_EXIT_V2')await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:validation.value.manualExit},ttlMs:30000});
     return state(userId);
   }
 
@@ -1082,7 +1082,7 @@ function createAutoTradeService(options = {}) {
   async function queuedEntryIsCurrent(command){
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
-      return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl'].every(k=>queued[k]===current[k]));
+      return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
       const p=command.payload||{},positions=await store.listPositions(command.userId);
@@ -1367,7 +1367,7 @@ function createAutoTradeService(options = {}) {
         const management = Core.buildManagementCommand(market);
         if (!management) continue;
         const sourceAt=Number(market.signalObservedAt||market.receivedAt);
-        if(!hostedAccount&&pod?.manualExitVersion==='MANUAL_TF2_EXIT_V1'&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
+        if(!hostedAccount&&pod?.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
           const side=market.strategyNormal?.side;
           const actions=management.payload.actions.filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){

@@ -119,9 +119,8 @@
     const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true, input.tradingSchedule?.skipNews ?? (input.tradingSchedule?.enabled === true));
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
-    const manualExit={version:'MANUAL_TF2_EXIT_V1',enabled:input.manualExit?.enabled===true,timeframeMinutes:2};
-    for(const key of ['tp1','tp2','tp3','sl'])manualExit[key]=number(input.manualExit?.[key]);
-    if(manualExit.enabled && (['tp1','tp2','tp3','sl'].some(k=>manualExit[k]===null||manualExit[k]<=0||manualExit[k]>1000) || !(manualExit.tp1<manualExit.tp2&&manualExit.tp2<manualExit.tp3)))errors.manualExit='Isi jarak harga TP1 < TP2 < TP3 dan SL, lebih 0 hingga 1000.';
+    const manualExit={version:'MANUAL_TF2_EXIT_V2',enabled:input.manualExit?.enabled===true,timeframeMinutes:2,
+      tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'};
     const strategyExitPolicies = {
       ...(input.strategyExitPolicies || {}),
       TF2_SCALPING: { version: 'TF2_TIGHT_SL_3C_V1', timeframeMinutes: 2,
@@ -363,8 +362,8 @@
       value: {
         ...identity.value,
         accountFingerprint,
-        manualExitVersion:input.manualExitVersion==='MANUAL_TF2_EXIT_V1'?'MANUAL_TF2_EXIT_V1':null,
-        manualExitEnabled:input.manualExitVersion==='MANUAL_TF2_EXIT_V1'&&input.manualExitEnabled===true,
+        manualExitVersion:input.manualExitVersion==='MANUAL_TF2_EXIT_V2'?'MANUAL_TF2_EXIT_V2':null,
+        manualExitEnabled:input.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&input.manualExitEnabled===true,
         tradeMode,
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,

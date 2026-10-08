@@ -156,10 +156,10 @@
             <p class="tf-empty-note">Lot atau layer kosong = tiada entry selepas Simpan.</p>
             <div hidden><input id="fxLotPerLayer" value="0.01"><input id="fxLayers" value="1"><b id="totalLotPreview"></b><b id="fxTotalLotPreview"></b></div>
             <fieldset class="symbol-fieldset">
-              <legend>AUTO EXIT • ENTRY MANUAL TF2</legend><strong id="manualExitStatus">BELUM DISAHKAN EA</strong>
+              <legend>AUTO EXIT • ENTRY MANUAL TF2</legend><strong id="manualExitStatus">BELUM DISAHKAN EA</strong><p id="manualLayerStatus" role="status" aria-live="polite">Layer aktif: — / 10</p>
               <label class="risk-ack"><input id="manualExitEnabled" type="checkbox"><span>Saya buka BUY/SELL sendiri. ZenCore urus exit posisi manual XAUUSD baharu.</span></label>
-              <div class="tf-inputs"><label>TP1<input id="manualTp1" type="number" min="0.01" max="1000" step="0.01" placeholder="Jarak harga"></label><label>TP2<input id="manualTp2" type="number" min="0.01" max="1000" step="0.01" placeholder="Jarak harga"></label><label>TP3<input id="manualTp3" type="number" min="0.01" max="1000" step="0.01" placeholder="Jarak harga"></label><label>SL<input id="manualSl" type="number" min="0.01" max="1000" step="0.01" placeholder="Jarak harga"></label></div>
-              <small>Jarak harga Gold, bukan jumlah untung USD. Contoh jarak 1.00: BUY 4000 → TP 4001. Hanya akaun hedging; posisi lama dan EA lain tidak diambil alih. Tetapan berkuat kuasa selepas EA menerima arahan Simpan. SL sedia ada yang lebih ketat dikekalkan.</small>
+              <div class="tf-inputs"><label>TP1<input id="manualTp1" type="number" value="2" readonly></label><label>TP2<input id="manualTp2" type="number" value="4" readonly></label><label>TP3<input id="manualTp3" type="number" value="6" readonly></label><label>SL<input id="manualSl" type="number" value="3" readonly></label></div>
+              <small>Jarak harga Gold, bukan jumlah untung USD. Contoh jarak 1.00: BUY 4000 → TP 4001. Hanya akaun hedging; posisi lama dan EA lain tidak diambil alih. TP/SL dikira dari entry setiap tiket. Had 10 layer ialah amaran sahaja; posisi tambahan tetap dilindungi. Close separuh tidak mengosongkan slot. Saiz lot ikut entry anda. Tetapan berkuat kuasa selepas EA menerima arahan Simpan. SL sedia ada yang lebih ketat dikekalkan.</small>
             </fieldset>
             <fieldset class="symbol-fieldset">
               <legend>WAKTU TRADE MALAYSIA</legend>

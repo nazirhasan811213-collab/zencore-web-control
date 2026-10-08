@@ -230,13 +230,15 @@
   }
 
   function renderSettings(state) {
+    const manualCount=(state.positions||[]).filter(p=>p.origin==='MANUAL'&&p.symbol==='XAUUSD').length;
+    setText('manualLayerStatus',state.connection?.online===false?'Layer aktif: data MT5 offline':`Layer aktif: ${manualCount} / 10${manualCount>=10?' • HAD DICAPAI — berhenti tambah entry':''}${manualCount>10?' • layer tambahan tetap dilindungi':''}`);
     setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.pod?.manualExitEnabled?'EA AUTO EXIT ON':state.settings?.manualExit?.enabled?'MENUNGGU PENGESAHAN EA':'AUTO EXIT OFF • posisi diambil alih terus dilindungi');
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
     hydrateModeDraft(settings);
     byId('capitalUsd').value = settings.capitalUsd ?? 100;
     byId('manualExitEnabled').checked=settings.manualExit?.enabled===true;
-    for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=settings.manualExit?.[k]??'';
+    for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=({tp1:2,tp2:4,tp3:6,sl:3})[k];
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
     byId('tradingScheduleEnabled').checked = settings.tradingSchedule?.enabled === true;
     byId('newsTradingMode').value = (settings.tradingSchedule?.skipNews ?? (settings.tradingSchedule?.enabled === true)) ? 'skip' : 'trade';

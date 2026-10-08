@@ -1,5 +1,5 @@
 #property strict
-#property version "1.29"
+#property version "1.30"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -113,7 +113,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V1")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -309,7 +309,7 @@ void ManageLocalStepLock(){
  }
 }
 
-bool SaveManualConfig(){return WriteAtomic("manual-config.tsv",Row("podId",ownerPod)+Row("enabled",manualEnabled?"1":"0")+Row("since",(string)manualSince)+Row("tp1",Num(manualTp1))+Row("tp2",Num(manualTp2))+Row("tp3",Num(manualTp3))+Row("sl",Num(manualSl)));}
+bool SaveManualConfig(){return WriteAtomic("manual-config.tsv",Row("version","MANUAL_TF2_EXIT_V2")+Row("podId",ownerPod)+Row("enabled",manualEnabled?"1":"0")+Row("since",(string)manualSince)+Row("tp1",Num(manualTp1))+Row("tp2",Num(manualTp2))+Row("tp3",Num(manualTp3))+Row("sl",Num(manualSl)));}
 bool ManualLease(){
  if(!ReadFields("lease.tsv"))return false;
  return Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && Get("podId")==ownerPod && Get("eaSession")==eaSession && (long)StringToInteger(Get("expiresAt"))>UtcMs();
@@ -321,6 +321,9 @@ bool ExcludeExistingManual(){
   if(!WriteAtomic("manual-excluded-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done","existing"))return false;
  }
  return true;
+}
+int ManualLayerCount(){
+ int count=0;for(int i=0;i<PositionsTotal();i++){ulong ticket=PositionGetTicket(i);if(IsManual(ticket))count++;}return count;
 }
 void ManageManual(){
  if(!Permissions() || AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return;
@@ -373,6 +376,7 @@ void Process(){
  double lot=Val("lot"),entry=Val("entry"),sl=Val("sl"),tp1=Val("tp1"),tp2=Val("tp2"),tp3=Val("tp3");
  int layers=(int)StringToInteger(Get("layers")),actions=(int)StringToInteger(Get("actions"));
  long manualSourceAt=(long)Val("sourceAt");ulong manualTicket=(ulong)StringToInteger(Get("ticket"));string manualId=Get("positionId");
+ bool layerPolicyValid=Get("manualMaxLayers")=="10" && Get("manualLimitAction")=="WARN_ONLY";
  bool configEnabled=Get("manualEnabled")=="1";double cfgTp1=Val("manualtp1"),cfgTp2=Val("manualtp2"),cfgTp3=Val("manualtp3"),cfgSl=Val("manualsl");
  string actionReason[4];string actionType[4];double actionValue[4];
  for(int i=0;i<4;i++){actionType[i]=Get("a"+(string)i+"type");actionValue[i]=Val("a"+(string)i+"value");actionReason[i]=Get("a"+(string)i+"reason");}
@@ -392,7 +396,7 @@ void Process(){
  if(type=="MANUAL_EXIT_CONFIG"){
   // Signed by Connector; fresh lease binds even when auto entry is STOPPED.
   bool bound=ReadFields("lease.tsv") && Get("podId")==commandPod && Get("eaSession")==eaSession && Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && (long)Val("expiresAt")>UtcMs();
-  ok=bound && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && cfgTp1>0 && cfgTp1<cfgTp2 && cfgTp2<cfgTp3 && cfgTp3<=1000 && cfgSl>0 && cfgSl<=1000));
+  ok=bound && layerPolicyValid && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3));
   bool newlyEnabled=!manualEnabled || ownerPod!=commandPod;
   if(ok&&configEnabled&&newlyEnabled)ok=ExcludeExistingManual();
   if(ok){ownerPod=commandPod;manualEnabled=configEnabled;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
@@ -464,7 +468,7 @@ bool BindCurrentAccount(){
  if(eaSession==""){FileClose(lockHandle);lockHandle=INVALID_HANDLE;return false;}
  MapSymbols();
  if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");ownerPod=Get("ownerPod");}
- if(ReadFields("manual-config.tsv") && Get("podId")==ownerPod){manualEnabled=Get("enabled")=="1";manualSince=(long)Val("since");manualTp1=Val("tp1");manualTp2=Val("tp2");manualTp3=Val("tp3");manualSl=Val("sl");}
+ if(ReadFields("manual-config.tsv") && Get("podId")==ownerPod && Get("version")=="MANUAL_TF2_EXIT_V2" && Val("tp1")==2 && Val("tp2")==4 && Val("tp3")==6 && Val("sl")==3){manualEnabled=Get("enabled")=="1";manualSince=(long)Val("since");manualTp1=Val("tp1");manualTp2=Val("tp2");manualTp3=Val("tp3");manualSl=Val("sl");}
  // A restored ARMED state cannot enter until this session receives a fresh owner lease.
  if(ownerPod=="")armed=false;
  return Heartbeat();
@@ -473,18 +477,19 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=1.29 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=1.30 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 1.29 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 1.30 • menunggu login MT5 / channel tersedia");return;}
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  ManageManual();
+ int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 1.29 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 1.30 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

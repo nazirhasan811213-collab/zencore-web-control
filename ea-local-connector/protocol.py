@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '1.29'
-CONNECTOR_BUILD = '1.29'
+EA_VERSION = '1.30'
+CONNECTOR_BUILD = '1.30'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -106,11 +106,13 @@ def command_fields(command, identity):
         fields.update(podId=identity['podId'], eaSession=identity['eaSession'])
     if kind == 'MANUAL_EXIT_CONFIG':
         cfg=payload['manualExit']
-        if cfg.get('version')!='MANUAL_TF2_EXIT_V1' or cfg.get('timeframeMinutes')!=2 or not isinstance(cfg.get('enabled'),bool):raise ValueError('EXIT_POLICY_REJECTED')
+        if cfg.get('version')!='MANUAL_TF2_EXIT_V2' or cfg.get('timeframeMinutes')!=2 or not isinstance(cfg.get('enabled'),bool):raise ValueError('EXIT_POLICY_REJECTED')
+        if cfg.get('maxActiveLayers')!=10 or cfg.get('limitAction')!='WARN_ONLY':raise ValueError('EXIT_POLICY_REJECTED')
+        fields['manualMaxLayers']=10;fields['manualLimitAction']='WARN_ONLY'
         fields['manualEnabled']='1' if cfg['enabled'] else '0'
         if cfg['enabled']:
             distances=[float(number(cfg[k])) for k in ('tp1','tp2','tp3','sl')]
-            if not all(0<v<=1000 for v in distances) or not distances[0]<distances[1]<distances[2]:raise ValueError('EXIT_POLICY_REJECTED')
+            if distances != [2,4,6,3]:raise ValueError('EXIT_POLICY_REJECTED')
             for k in ('tp1','tp2','tp3','sl'):fields['manual'+k]=number(cfg[k])
     elif kind == 'MANUAL_EXIT_ACTION':
         if payload.get('symbol')!='XAUUSD' or payload.get('side') not in ('BUY','SELL'):raise ValueError('SYMBOL_REJECTED')
