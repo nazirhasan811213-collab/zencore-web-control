@@ -1,11 +1,12 @@
 #property strict
-#property version "1.26"
+#property version "1.27"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
 const ulong MAGIC=32603231;
 const ulong MAGIC15=32601545;
-string channel,account,server;
+input string GoldBrokerSymbol="";
+string channel,account,server,eaSession,ownerPod,boundMode;
 string keys[],values[];
 int lockHandle=INVALID_HANDLE;
 bool armed=false;
@@ -56,11 +57,12 @@ string Canonical(string symbol){for(int i=0;i<9;i++)if(brokerSymbols[i]==symbol)
 void MapSymbols(){
  for(int i=0;i<9;i++){
   brokerSymbols[i]="";
+  if(i==0 && GoldBrokerSymbol!=""){if(SymbolSelect(GoldBrokerSymbol,true))brokerSymbols[i]=GoldBrokerSymbol;continue;}
   if(SymbolSelect(canonical[i],true)){brokerSymbols[i]=canonical[i];continue;}
   string found="";int count=0;
   for(int j=0;j<SymbolsTotal(false);j++){
    string candidate=SymbolName(j,false),upper=candidate;StringToUpper(upper);
-   if(StringFind(upper,canonical[i])==0){found=candidate;count++;}
+   if(StringFind(upper,canonical[i])>=0 || (i==0 && upper=="GOLD")){found=candidate;count++;}
   }
   if(count==1 && SymbolSelect(found,true))brokerSymbols[i]=found;
  }
@@ -68,8 +70,8 @@ void MapSymbols(){
 bool IsOwn(ulong ticket){return PositionSelectByTicket(ticket) && ((ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC || (ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC15);}
 string AccountMode(){long mode=AccountInfoInteger(ACCOUNT_TRADE_MODE);return mode==ACCOUNT_TRADE_MODE_DEMO?"DEMO":mode==ACCOUNT_TRADE_MODE_REAL?"REAL":"UNSUPPORTED";}
 bool SupportedAccount(){return AccountMode()!="UNSUPPORTED";}
-bool AllowedServer(){string s=AccountInfoString(ACCOUNT_SERVER);return s=="InterStellarFinancial-Server" || s=="InterStellarFinancial-Demo";}
-bool Permissions(){return AllowedServer() && SupportedAccount() &&
+bool AllowedServer(){return AccountInfoInteger(ACCOUNT_LOGIN)>0 && StringLen(AccountInfoString(ACCOUNT_SERVER))>0;}
+bool Permissions(){return account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER) && AllowedServer() && SupportedAccount() &&
  TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
  MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
 bool BrokerDone(){uint r=trade.ResultRetcode();return r==TRADE_RETCODE_DONE || r==TRADE_RETCODE_DONE_PARTIAL || r==TRADE_RETCODE_NO_CHANGES;}
@@ -78,12 +80,12 @@ bool VolumeValid(string symbol,double value){
  double minv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN),maxv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MAX),step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
  return step>0 && value>=minv-1e-9 && value<=maxv+1e-9 && MathAbs(value/step-MathRound(value/step))<1e-6;
 }
-void SaveState(){WriteAtomic("state.tsv",Row("armed",armed?"1":"0")+Row("symbols",enabledSymbols));}
+void SaveState(){WriteAtomic("state.tsv",Row("armed",armed?"1":"0")+Row("symbols",enabledSymbols)+Row("ownerPod",ownerPod));}
 bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -110,7 +112,7 @@ bool Heartbeat(){
 }
 bool FreshLease(){
  if(!ReadFields("lease.tsv"))return false;
- return Get("account")==account && Get("server")==server && (long)StringToInteger(Get("expiresAt"))>UtcMs() && Get("desiredState")=="ON";
+ return Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && Get("podId")==ownerPod && Get("eaSession")==eaSession && (long)StringToInteger(Get("expiresAt"))>UtcMs() && Get("desiredState")=="ON";
 }
 bool CloseTicket(ulong ticket,double volume){
  if(!IsOwn(ticket))return false;
@@ -171,7 +173,7 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  return ok;
 }
 bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING"){
- if(c!="XAUUSD" && c!="GBPUSD" && c!="GBPJPY")return false;
+ if(c!="XAUUSD")return false;
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return false;
  if(strategyMode=="TF15_INTRA" && tightTf2)return false;
  ulong entryScope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
@@ -282,7 +284,8 @@ void Process(){
  if(!FileIsExist(channel+"\\command.tsv",FILE_COMMON))return;
  if(!ReadFields("command.tsv")){armed=false;return;}
  processingStarted=GetTickCount64();
- string id=Get("id"),type=Get("type"),c=Get("symbol"),symbol=Broker(c);
+ string id=Get("id"),type=Get("type"),c=Get("symbol"),symbol=Broker(c),commandPod=Get("podId");
+ bool sessionMatches=Get("eaSession")==eaSession && commandPod!="";
  string strategyMode=Get("strategyMode");if(strategyMode=="")strategyMode="TF2_SCALPING";
  ulong scope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
  string side=Get("side"),symbols=Get("symbols");
@@ -292,7 +295,7 @@ void Process(){
  string actionType[4];double actionValue[4];
  for(int i=0;i<4;i++){actionType[i]=Get("a"+(string)i+"type");actionValue[i]=Val("a"+(string)i+"value");}
  if(!ValidId(id)){armed=false;return;}
- if(Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
+ if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
  !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
  if((long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
@@ -306,8 +309,14 @@ void Process(){
  bool ok=false;string code="BROKER_REJECTED";
  if(type=="SYSTEM_STOP"){armed=false;SaveState();ok=true;code="STOPPED";}
  else if(type=="SYSTEM_ON"){
+  // ON must come from a fresh lease for this exact account, pod and EA instance.
   ok=Permissions() && layers>=1 && layers<=10 && lot>0 && symbols!="";
-  if(ok){armed=true;enabledSymbols=symbols;code="ARMED";}else{armed=false;code="ALGO_OR_ACCOUNT_NOT_READY";}
+  if(ok){
+   ok=ReadFields("lease.tsv") && Get("account")==account && Get("server")==server &&
+      Get("tradeMode")==AccountMode() && Get("podId")==commandPod && Get("eaSession")==eaSession &&
+      (long)StringToInteger(Get("expiresAt"))>UtcMs() && Get("desiredState")=="ON";
+  }
+  if(ok){ownerPod=commandPod;armed=true;enabledSymbols=symbols;code="ARMED";}else{armed=false;code="ALGO_OR_ACCOUNT_NOT_READY";}
   SaveState();
  }
  else if(type=="PLACE_SETUP"){
@@ -327,33 +336,45 @@ void Process(){
  }
  Result(id,ok?"EXECUTED":"FAILED",code);
 }
-int OnInit(){
- account=(string)AccountInfoInteger(ACCOUNT_LOGIN);server=AccountInfoString(ACCOUNT_SERVER);
- if(!AllowedServer()){Print("ZenCore: SERVER_NOT_ALLOWED. Use InterStellarFinancial-Server or InterStellarFinancial-Demo.");return INIT_FAILED;}
- if(!SupportedAccount()){Print("ZenCore: unsupported account mode.");return INIT_FAILED;}
- ResetLastError();
- string digest=Hash(server);if(digest==""){Print("ZenCore: INIT_HASH_FAILED error=",GetLastError());return INIT_FAILED;}
+bool BindCurrentAccount(){
+ string currentAccount=(string)AccountInfoInteger(ACCOUNT_LOGIN),currentServer=AccountInfoString(ACCOUNT_SERVER);
+ if(lockHandle!=INVALID_HANDLE && account==currentAccount && server==currentServer && boundMode==AccountMode())return true;
+ armed=false;
+ if(lockHandle!=INVALID_HANDLE){
+  SaveState();FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);
+  FileClose(lockHandle);lockHandle=INVALID_HANDLE;
+ }
+ if(!AllowedServer() || !SupportedAccount())return false;
+ account=currentAccount;server=currentServer;boundMode=AccountMode();ownerPod="";enabledSymbols="";
+ string digest=Hash(server+"|"+boundMode);if(digest=="")return false;
  channel="ZenCore\\"+account+"-"+StringSubstr(digest,0,16);
- FolderCreate("ZenCore",FILE_COMMON);
- ResetLastError();
- if(!FolderCreate(channel,FILE_COMMON)){Print("ZenCore: INIT_FOLDER_FAILED error=",GetLastError());return INIT_FAILED;}
- ResetLastError();
+ // Existing folders are valid. The exclusive file open proves writability/ownership.
+ FolderCreate("ZenCore",FILE_COMMON);FolderCreate(channel,FILE_COMMON);
  lockHandle=FileOpen(channel+"\\ea.lock",FILE_WRITE|FILE_BIN|FILE_COMMON);
- if(lockHandle==INVALID_HANDLE){Print("ZenCore: INIT_LOCK_FAILED error=",GetLastError(),". Another EA/terminal may hold the account lock, or Common Files is not writable.");return INIT_FAILED;}
- trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
+ if(lockHandle==INVALID_HANDLE)return false;
+ eaSession=StringSubstr(Hash(account+server+(string)GetMicrosecondCount()+(string)ChartID()),0,32);
+ if(eaSession==""){FileClose(lockHandle);lockHandle=INVALID_HANDLE;return false;}
  MapSymbols();
- if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");}
- ResetLastError();if(!Heartbeat()){Print("ZenCore: INIT_HEARTBEAT_FAILED error=",GetLastError());return INIT_FAILED;}
- ResetLastError();if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
- Print("ZenCore: EA_READY version=1.26 mode=",AccountMode());return INIT_SUCCEEDED;
+ if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");ownerPod=Get("ownerPod");}
+ // A restored ARMED state cannot enter until this session receives a fresh owner lease.
+ if(ownerPod=="")armed=false;
+ return Heartbeat();
+}
+int OnInit(){
+ trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
+ if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
+ if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
+ else Print("ZenCore: EA_READY version=1.27 mode=",AccountMode());
+ return INIT_SUCCEEDED;
 }
 void OnTimer(){
+ if(!BindCurrentAccount()){Comment("ZenCore 1.27 • menunggu login MT5 / channel tersedia");return;}
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 1.26 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 1.27 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
 }
-void OnDeinit(const int reason){armed=false;EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
+void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

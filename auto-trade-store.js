@@ -39,6 +39,7 @@ function publicPod(row, includePrivate = false) {
     userId: row.user_id || row.userId,
     label: row.label,
     ownershipMode: row.ownership_mode || row.ownershipMode || 'INTERNAL_DEMO',
+    accountFingerprint: row.account_fingerprint ?? row.accountFingerprint ?? null,
     accountMask: row.account_mask ?? row.accountMask ?? null,
     serverMask: row.server_mask ?? row.serverMask ?? null,
     brokerMask: row.broker_mask ?? row.brokerMask ?? null,
@@ -201,6 +202,8 @@ class PostgresAutoTradeStore {
 
       ALTER TABLE zencore_mt5_secure_pods
         ADD COLUMN IF NOT EXISTS demo_execution_unlocked BOOLEAN NOT NULL DEFAULT FALSE;
+
+      ALTER TABLE zencore_mt5_secure_pods ADD COLUMN IF NOT EXISTS account_fingerprint CHAR(64);
 
       CREATE TABLE IF NOT EXISTS zencore_mt5_pairing_sessions (
         id UUID PRIMARY KEY,
@@ -1048,7 +1051,7 @@ class PostgresAutoTradeStore {
        ON CONFLICT (user_id) DO UPDATE SET
          label = EXCLUDED.label, ownership_mode = EXCLUDED.ownership_mode,
          token_hash = EXCLUDED.token_hash,
-         account_mask = NULL, server_mask = NULL, broker_mask = NULL, trade_mode = NULL,
+         account_mask = NULL, server_mask = NULL, broker_mask = NULL, trade_mode = NULL, account_fingerprint = NULL,
          terminal_trade_allowed = FALSE, account_trade_allowed = FALSE,
          expert_trade_allowed = FALSE, demo_execution_unlocked = FALSE, symbol_specs = '{}'::jsonb,
          connector_version = NULL, terminal_build = NULL, last_seen_at = NULL,
@@ -1121,20 +1124,23 @@ class PostgresAutoTradeStore {
     return publicPod(result.rows[0]);
   }
 
-  async updatePodHeartbeat(podId, heartbeat, now) {
+  async updatePodHeartbeat(podId, heartbeat, now, expectedTokenHash = null) {
     const result = await this.pool.query(
       `UPDATE zencore_mt5_secure_pods SET
         account_mask = $2, server_mask = $3, broker_mask = $4, trade_mode = $5,
         terminal_trade_allowed = $6, account_trade_allowed = $7,
         expert_trade_allowed = $8, demo_execution_unlocked = $9, symbol_specs = $10::jsonb,
-        connector_version = $11, terminal_build = $12, last_seen_at = $13
+        connector_version = $11, terminal_build = $12, last_seen_at = $13,
+        account_fingerprint = COALESCE(account_fingerprint, $14)
        WHERE id = $1 AND revoked_at IS NULL
+         AND (account_fingerprint IS NULL OR account_fingerprint = $14)
+         AND ($15::text IS NULL OR token_hash = $15)
        RETURNING *`,
       [podId, heartbeat.accountMask, heartbeat.serverMask, heartbeat.brokerMask,
         heartbeat.tradeMode, heartbeat.terminalTradeAllowed, heartbeat.accountTradeAllowed,
         heartbeat.expertTradeAllowed, heartbeat.demoExecutionUnlocked === true,
         JSON.stringify(heartbeat.symbolSpecs || {}), heartbeat.connectorVersion || null,
-        heartbeat.terminalBuild || null, new Date(now)]
+        heartbeat.terminalBuild || null, new Date(now), heartbeat.accountFingerprint || null, expectedTokenHash]
     );
     return publicPod(result.rows[0]);
   }
@@ -1909,7 +1915,7 @@ class MemoryAutoTradeStore {
     if (old) this.podsByToken.delete(old.tokenHash);
     const row = {
       id: old?.id || id, userId, label, ownershipMode, tokenHash,
-      accountMask: null, serverMask: null,
+      accountFingerprint: null, accountMask: null, serverMask: null,
       brokerMask: null, tradeMode: null, terminalTradeAllowed: false,
       accountTradeAllowed: false, expertTradeAllowed: false,
       demoExecutionUnlocked: false, symbolSpecs: {},
@@ -1952,9 +1958,10 @@ class MemoryAutoTradeStore {
 
   async getPodForUser(userId) { return publicPod(this.podsByUser.get(userId)); }
 
-  async updatePodHeartbeat(podId, heartbeat, now) {
+  async updatePodHeartbeat(podId, heartbeat, now, expectedTokenHash = null) {
     const row = [...this.podsByUser.values()].find(item => item.id === podId && !item.revokedAt);
-    if (!row) return null;
+    if (!row || (expectedTokenHash && row.tokenHash !== expectedTokenHash) ||
+        (row.accountFingerprint && row.accountFingerprint !== heartbeat.accountFingerprint)) return null;
     Object.assign(row, heartbeat, { lastSeenAt: now });
     return publicPod(row);
   }

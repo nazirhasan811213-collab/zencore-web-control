@@ -9,7 +9,7 @@ class FastPollTests(unittest.TestCase):
  def test_fast_command_poll_does_not_renew_lease_without_server_heartbeat(self):
   with tempfile.TemporaryDirectory() as folder:
    channel=Path(folder);atomic_write(channel/'heartbeat.tsv',encode_fields(local_heartbeat()))
-   runner=Runner({**IDENTITY,'channel':folder,'podToken':'hidden'},lambda _:None);calls=[]
+   runner=Runner({**IDENTITY,'channel':folder,'podToken':'hidden','podId':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'},lambda _:None);calls=[]
    class Api:
     def request(self,url,data=None,token=None):
      calls.append(url)
@@ -26,7 +26,7 @@ class FastPollTests(unittest.TestCase):
  def test_stale_ea_blocks_fast_poll_even_between_cloud_heartbeats(self):
   with tempfile.TemporaryDirectory() as folder:
    channel=Path(folder);atomic_write(channel/'heartbeat.tsv',encode_fields(local_heartbeat()))
-   runner=Runner({**IDENTITY,'channel':folder,'podToken':'hidden'},lambda _:None)
+   runner=Runner({**IDENTITY,'channel':folder,'podToken':'hidden','podId':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'},lambda _:None)
    runner.next_heartbeat=999999
    class Api:
     def request(self,*args,**kwargs):raise AssertionError('stale EA must not fetch commands')

@@ -1,3 +1,15 @@
+## Universal candidate — Connector 1.26 / EA 1.27
+
+Use PANDUAN_INSTALL_1.26.txt. One package is shared across clients, but each client pairs with their own ZenCore login. Any nonempty valid broker server identity can be paired; investor/read-only permissions cannot execute trades. XAUUSD only; GoldBrokerSymbol allows explicit broker naming. Netting keeps its one-symbol position guard.
+
+The account binding hashes exact server, login and REAL/DEMO mode; masked suffixes are display only. Account changes require OFF, resolving the old account positions, stopping the old Connector and pairing again. Existing backend lease expiry safety is preserved (up to two minutes before re-pair). New pairing rotates tokens, retires old queues and starts OFF. One Connector per Windows user, one selected account at a time. Parallel accounts need separate Windows users/VMs.
+
+EA leases and commands carry pod ID plus an EA-instance session. Reattach changes the session, so a previously written command cannot execute. Local StepLock and broker SL remain the protection path during network failures. Windows packaging is separate from MetaEditor compilation: the installer ships the MQ5 and the installed client MetaEditor must compile it successfully before loading. This release does not claim broker acceptance until demo tested.
+
+Build: build-windows.ps1 on Windows with Python 3.12 and Inno Setup 6. GitHub Windows packaging runs protocol/DPAPI tests and the packaged self-test. No production credentials, pairing configuration, or broker orders are used in CI.
+
+### Historical releases
+
 # ZenCore EA + Local Connector — phase 1 DEMO
 
 ## Client setup

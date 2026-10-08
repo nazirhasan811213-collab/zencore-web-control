@@ -97,3 +97,48 @@ test('replaced hosted transport cannot poll or ACK to change this user control',
  await assert.rejects(service.acknowledgeHostedCommand({},'cccccccc-cccc-4ccc-8ccc-cccccccccccc',{...ids,status:'EXECUTED'}),e=>e.code==='TRANSPORT_REPLACED');
  assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
 });
+
+test('universal connector supports real accounts and binds signed commands to the full hashed identity',async()=>{
+ const {service}=setup(); const c=await service.connectLocalEa(userId);
+ const binding={...hb,tradeMode:'REAL',connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64)};
+ await service.heartbeat(c.podToken,binding); await service.saveSettings(userId,settings);
+ assert.equal((await service.state(userId)).connection.ready,true);
+ await service.turnOn(userId,{confirmation:'AKTIFKAN REAL'});
+ const {command}=await service.nextCommand(c.podToken);
+ assert.equal(command.payload.accountFingerprint,binding.accountFingerprint);
+ const signed=JSON.parse(Buffer.from(command.signedEnvelope,'base64url'));
+ assert.equal(signed.payload.accountFingerprint,binding.accountFingerprint);
+});
+
+test('same-mask account switch and protocol downgrade cannot replace bound positions',async()=>{
+ const {store,service}=setup();const c=await service.connectLocalEa(userId);
+ const binding={...hb,connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64)};
+ await service.heartbeat(c.podToken,{...binding,positions:[{ticket:'789',symbol:'XAUUSD',side:'BUY',volume:.01,entry:2500}]});
+ await assert.rejects(service.heartbeat(c.podToken,{...binding,accountFingerprint:'b'.repeat(64)}),e=>e.code==='ACCOUNT_BINDING_CHANGED');
+ await assert.rejects(service.heartbeat(c.podToken,hb),e=>e.code==='ACCOUNT_BINDING_CHANGED');
+ assert.equal((await store.listPositions(userId))[0].ticket,'789');
+});
+
+test('re-pair after OFF rotates token, clears old account binding and retires queued commands',async()=>{
+ const {store,service,advance}=setup();const c=await service.connectLocalEa(userId);
+ await service.heartbeat(c.podToken,{...hb,connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64)});
+ await service.saveSettings(userId,settings);
+ await store.setControl(userId,{desiredState:'STOPPED',effectiveState:'STOPPED'});
+ advance(120001);
+ const newer=await service.connectLocalEa(userId);
+ assert.notEqual(newer.podToken,c.podToken);
+ await assert.rejects(service.nextCommand(c.podToken),e=>e.code==='INVALID_POD_TOKEN');
+ await service.heartbeat(newer.podToken,{...hb,tradeMode:'REAL',connectorVersion:'1.4.0-ea-local',accountFingerprint:'b'.repeat(64)});
+ assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
+ assert.equal((await service.nextCommand(newer.podToken)).command,null);
+});
+
+test('different ZenCore users cannot poll or acknowledge each other commands',async()=>{
+ const {service}=setup();const c1=await service.connectLocalEa(userId);
+ const u2='22222222-2222-4222-8222-222222222222';const c2=await service.connectLocalEa(u2);
+ await service.heartbeat(c1.podToken,hb);await service.saveSettings(userId,settings);
+ await service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'});
+ const {command}=await service.nextCommand(c1.podToken);
+ assert.equal((await service.nextCommand(c2.podToken)).command,null);
+ await assert.rejects(service.acknowledgeCommand(c2.podToken,command.id,{status:'EXECUTED'}),e=>e.code==='COMMAND_NOT_FOUND');
+});

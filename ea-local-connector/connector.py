@@ -137,13 +137,18 @@ class Runner:
     def cycle(self):
         local=read_fields(self.channel/'heartbeat.tsv')
         report=heartbeat(local,self.config)
+        if local.get('accountBindingVersion') != 'ACCOUNT_SESSION_V1': raise ValueError('EA_UPGRADE_REQUIRED')
+        self.config['eaSession'] = local['eaSession']
+        if self.stop.is_set(): return
         # Poll commands quickly without multiplying database heartbeat writes.
         if time.monotonic()>=self.next_heartbeat:
             response=self.api.request('/api/execution/heartbeat',report,self.config['podToken'])
+            if self.stop.is_set(): return
             self.desired_state=response['desiredState']
             # Only a successful server heartbeat renews permission to enter.
             atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'], 'server':self.config['server'],
-              'expiresAt':int(time.time()*1000)+12000,'desiredState':self.desired_state}))
+              'expiresAt':int(time.time()*1000)+12000,'desiredState':self.desired_state,
+              'tradeMode':self.config.get('tradeMode','DEMO'),'podId':self.config['podId'],'eaSession':local['eaSession']}))
             self.next_heartbeat=time.monotonic()+2
 
         for result_path in sorted(self.channel.glob('*.result')):
@@ -182,6 +187,10 @@ class Runner:
                 self.api.request('/api/execution/commands/'+command['id']+'/ack',
                   {'status':'REJECTED','code':code},self.config['podToken'])
                 return
+            # Recheck after network I/O: do not deliver to a replaced EA/session.
+            current=read_fields(self.channel/'heartbeat.tsv')
+            heartbeat(current,self.config)
+            if self.stop.is_set() or current.get('eaSession') != local['eaSession']: return
             atomic_write(self.channel/'command.tsv',encode_fields(fields))
             self.delivered_at[command['id']]=time.monotonic()
             metrics={'commandFetchMs':fetch_ms}
@@ -189,21 +198,28 @@ class Runner:
                 metrics['serverQueueAgeMs']=result['serverTime']-command['createdAt']
             self.timing(command['id'],'DELIVERED',**metrics)
         self.status('MT5 '+self.config.get('tradeMode','DEMO')+' tersambung • '+self.desired_state)
+    def invalidate_lease(self):
+        try:
+            atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config.get('account',''),
+              'server':self.config.get('server',''),'expiresAt':0,'desiredState':'STOPPED'}))
+        except OSError: pass  # Existing lease still has a bounded 12-second expiry.
     def run(self):
         while not self.stop.is_set():
             delay=.5
             try: self.cycle()
             except Exception as error:
+                self.invalidate_lease()
                 # Never include response bodies, auth values or raw exceptions in logs/UI.
-                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','SERVER_NOT_ALLOWED') else 'CONNECTION_PENDING'
+                code=str(error) if str(error) in ('EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','ACCOUNT_BINDING_CHANGED') else 'CONNECTION_PENDING'
                 self.status(('Pautan tidak sah. Tutup Connector dan pautkan semula akaun ZenCore.' if code=='INVALID_POD_TOKEN' else code+' — entry baharu menunggu sambungan.'))
                 delay=2
             self.stop.wait(delay)
+        self.invalidate_lease()
 
 class App:
     def __init__(self,root):
         self.root=root; root.title('ZenCore Connector '+CONNECTOR_BUILD+' • EA '+EA_VERSION); root.geometry('640x590')
-        self.runner=None; self.pairing=False
+        self.runner=None; self.runner_thread=None; self.pairing=False; self.switching=False
         self.status=tk.StringVar(value='Login broker dalam MT5. Password MT5 tidak diperlukan di sini.')
         outer=ttk.Frame(root);outer.pack(fill='both',expand=True)
         canvas=tk.Canvas(outer,highlightthickness=0)
@@ -233,6 +249,7 @@ class App:
         self.accounts=ttk.Combobox(box,textvariable=self.account,state='readonly');self.accounts.pack(fill='x',pady=4)
         ttk.Button(box,text='Cari akaun MT5',command=self.refresh).pack(anchor='w')
         ttk.Button(box,text='Login & pautkan akaun',command=self.pair).pack(anchor='w',pady=6)
+        ttk.Button(box,text='Tukar akaun MT5 / pengguna ZenCore',command=self.change_account).pack(anchor='w',pady=6)
         ttk.Button(box,text='3. Buka ZenCore — setting & ON/OFF',command=lambda:webbrowser.open(BASE+'/auto-trade')).pack(anchor='w',pady=6)
         ttk.Label(box,textvariable=self.status,wraplength=580).pack(anchor='w',pady=12)
         ttk.Label(box,text='Biarkan Connector dan MT5 berjalan. Menutup aplikasi menghentikan\narahan baharu; SL yang diterima broker kekal aktif.').pack(anchor='w')
@@ -264,8 +281,37 @@ class App:
                 self.update('EA dipasang. Refresh Navigator, pasang pada satu chart dan hidupkan Algo Trading.')
             except Exception as e:self.update(str(e) if isinstance(e,RuntimeError) else 'Pemasangan gagal; semak folder MT5.')
         threading.Thread(target=task,daemon=True).start()
+    def change_account(self):
+        if self.pairing or self.switching: return
+        if not messagebox.askyesno('Tukar akaun MT5', 'OFF di web dan selesaikan posisi ZenCore pada akaun lama dahulu.\nConnector akan berhenti. Akaun baharu perlu dipautkan dan ON semula. Teruskan?'): return
+        self.switching=True
+        runner=self.runner
+        if runner: runner.stop.set()
+        self.status.set('Menghentikan sambungan lama...')
+        def task():
+            if self.runner_thread: self.runner_thread.join(timeout=25)
+            if self.runner_thread and self.runner_thread.is_alive():
+                self.update('Sambungan lama belum berhenti. Cuba semula; akaun baharu belum dipautkan.')
+                self.switching=False
+                return
+            try:
+                if runner:
+                    atomic_write(runner.channel/'lease.tsv',encode_fields({'account':runner.config['account'],'server':runner.config['server'],
+                        'expiresAt':0,'desiredState':'STOPPED'}))
+                # Remove the old auto-resume token only after the runner has stopped.
+                (INSTALL/'paired.dpapi').unlink(missing_ok=True)
+            except OSError:
+                self.switching=False
+                self.update('Fail pautan lama belum boleh dikemas kini. Pastikan folder boleh ditulis dan cuba semula.')
+                return
+            def finish():
+                self.runner=None; self.runner_thread=None; self.switching=False
+                self.refresh()
+                self.status.set('Login akaun baharu di MT5, pasang EA pada satu chart, Cari akaun dan pautkan semula. Tunggu 2 minit jika sambungan lama masih aktif di web.')
+            self.root.after(0,finish)
+        threading.Thread(target=task,daemon=True).start()
     def pair(self):
-        if self.pairing:return
+        if self.pairing or self.switching:return
         if self.runner:self.status.set('Connector sudah dipautkan. Gunakan web untuk setting dan ON/OFF.');return
         if self.account.get() not in self.available:self.status.set('Pasang EA, kemudian klik Cari akaun MT5.');return
         email=self.email.get();password=self.password.get();self.password.set('')
@@ -274,6 +320,9 @@ class App:
         def task():
             try:
                 api=Api();api.request('/auth/login',{'email':email,'password':password})
+                # A selection can become stale while the user logs in.
+                current=read_fields(channel/'heartbeat.tsv'); heartbeat(current,identity)
+                if current.get('accountBindingVersion')!='ACCOUNT_SESSION_V1': raise RuntimeError('EA_UPGRADE_REQUIRED')
                 config=api.request('/api/auto-trade/ea-connect',{})
                 config.update(account=identity['account'],server=identity['server'],tradeMode=identity['tradeMode'],channel=str(channel))
                 save_config(config);install_app()
@@ -281,14 +330,15 @@ class App:
             except RuntimeError as e:
                 codes={'STOP_BEFORE_PAIRING':'Tekan OFF dalam web dan selesaikan posisi ZenCore dahulu.',
                   'OLD_CONNECTOR_ACTIVE':'Tutup worker/Connector lama; tunggu 2 minit, kemudian pautkan semula.',
-                  'INVALID_LOGIN':'Login ZenCore tidak berjaya.', 'HTTP_404':'Web belum dipasang dengan sokongan EA Connector.'}
+                  'EA_UPGRADE_REQUIRED':'Pasang EA '+EA_VERSION+' dahulu.', 'INVALID_LOGIN':'Login ZenCore tidak berjaya.', 'HTTP_404':'Web belum dipasang dengan sokongan EA Connector.'}
                 self.update(codes.get(str(e),'Pautan gagal. Semak login dan versi web ZenCore.'))
             except Exception:self.update('Pautan gagal. Semak internet dan akaun ZenCore.')
             finally:self.pairing=False
         threading.Thread(target=task,daemon=True).start()
     def start(self,config):
         self.runner=Runner(config,self.update)
-        threading.Thread(target=self.runner.run,daemon=True).start()
+        self.runner_thread=threading.Thread(target=self.runner.run,daemon=True)
+        self.runner_thread.start()
     def close(self):
         if messagebox.askyesno('Tutup Connector?','Arahan entry dan close daripada web akan berhenti. Tutup?'):
             if self.runner:self.runner.stop.set()

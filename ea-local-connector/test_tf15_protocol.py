@@ -12,5 +12,6 @@ class TF15ProtocolTests(unittest.TestCase):
  def test_old_ea_cannot_advertise_tf15_capability(self):
   h={**local_heartbeat(),'exitPolicyVersion':'TF2_TIGHT_SL_3C_V1'}
   self.assertEqual(heartbeat(h,IDENTITY,NOW)['connectorVersion'],'1.1.0-ea-local')
+  h.pop('accountBindingVersion'); h.pop('eaSession')
   h['strategyExecutionVersion']='TF2_TF15_V1'
   self.assertEqual(heartbeat(h,IDENTITY,NOW)['connectorVersion'],'1.3.0-ea-local')

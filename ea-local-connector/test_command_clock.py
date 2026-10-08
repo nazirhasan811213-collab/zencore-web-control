@@ -18,7 +18,7 @@ class CommandClockTests(unittest.TestCase):
     if url.endswith('/heartbeat'):return {'desiredState':'ON'}
     if url.endswith('/next'):return {'command':cmd,'serverTime':server_time}
     acks.append(data);return {'ok':True}
-  runner=Runner({**IDENTITY,'channel':folder.name,'podToken':'hidden','commandSigningKey':KEY,'podId':POD},statuses.append);runner.api=Api()
+  runner=Runner({**IDENTITY,'channel':folder.name,'podToken':'hidden','podId':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','commandSigningKey':KEY,'podId':POD},statuses.append);runner.api=Api()
   with patch('protocol.time.time',return_value=(NOW+offset)/1000),patch('connector.time.monotonic',return_value=100):runner.cycle()
   return path,acks,statuses
  def test_live_tf2_and_tf15_ignore_vm_clock_offset_without_extending_validity(self):
