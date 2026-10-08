@@ -1,4 +1,4 @@
-#define AppVersion "1.27"
+#define AppVersion "1.28"
 [Setup]
 AppId=ZenCoreEAConnector
 AppName=ZenCore EA Connector
@@ -9,7 +9,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=ZenCoreSetup-1.27
+OutputBaseFilename=ZenCoreSetup-1.28
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -20,7 +20,7 @@ SetupLogging=yes
 [Files]
 Source: "..\dist\ZenCoreConnector.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ZenCoreExecutor.mq5"; DestDir: "{app}"; Flags: ignoreversion
-Source: "PANDUAN_INSTALL_1.27.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "PANDUAN_INSTALL_1.28.txt"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autodesktop}\ZenCore Connector"; Filename: "{app}\ZenCoreConnector.exe"
 Name: "{userprograms}\ZenCore Connector"; Filename: "{app}\ZenCoreConnector.exe"
