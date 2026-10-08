@@ -59,3 +59,11 @@ test('chart SL/TP exit is not copied onto a manual entry with its own smaller ta
  await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'EXIT_SL',slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:5000}}]);
  assert.equal([...store.commands.values()].flat().filter(c=>['MANUAL_EXIT_ACTION','MANAGE_POSITION'].includes(c.type)).length,0);
 });
+test('queued manual ON config is revoked after user saves OFF',async()=>{
+ const {service,podToken,store}=await setup();await service.saveSettings(userId,settings);
+ await service.saveSettings(userId,{...settings,manualExit:{enabled:false}});
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ const revoked=[...store.commands.values()].flat().find(c=>c.payload.manualExit.enabled===true);
+ assert.equal(revoked.status,'REJECTED');
+ const {command}=await service.nextCommand(podToken);assert.equal(command.payload.manualExit.enabled,false);
+});

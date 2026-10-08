@@ -1080,6 +1080,10 @@ function createAutoTradeService(options = {}) {
   }
 
   async function queuedEntryIsCurrent(command){
+    if(command.type==='MANUAL_EXIT_CONFIG'){
+      const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
+      return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl'].every(k=>queued[k]===current[k]));
+    }
     if(command.type==='MANUAL_EXIT_ACTION'){
       const p=command.payload||{},positions=await store.listPositions(command.userId);
       if(now()-p.sourceAt>30000||p.sourceAt>now()+5000||!positions.some(x=>x.origin==='MANUAL'&&x.ticket===p.ticket&&x.positionId===p.positionId&&x.side===p.side))return false;
@@ -1367,7 +1371,7 @@ function createAutoTradeService(options = {}) {
           const side=market.strategyNormal?.side;
           const actions=management.payload.actions.filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){
-            if(actions.length)await issueCommand({userId:profile.userId,podId:pod.id,type:'MANUAL_EXIT_ACTION',payload:{symbol,side,ticket:position.ticket,positionId:position.positionId,sourceAt,actions},dedupeKey:`MANUAL|${position.positionId}|${management.managementKey}`,ttlMs:15000,notAfterMs:sourceAt+30000});
+            if(actions.length){const issued=await issueCommand({userId:profile.userId,podId:pod.id,type:'MANUAL_EXIT_ACTION',payload:{symbol,side,ticket:position.ticket,positionId:position.positionId,sourceAt,actions},dedupeKey:`MANUAL|${position.positionId}|${management.managementKey}`,ttlMs:15000,notAfterMs:sourceAt+30000});if(issued.created)queued+=1;}
           }
         }
         if(!positions.some(p=>p.symbol===symbol&&p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode))continue;

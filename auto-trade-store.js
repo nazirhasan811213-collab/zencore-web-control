@@ -1280,6 +1280,8 @@ class PostgresAutoTradeStore {
            WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
            WHEN 'SYSTEM_STOP' THEN 1
            WHEN 'MANAGE_POSITION' THEN 2
+           WHEN 'MANUAL_EXIT_ACTION' THEN 2
+           WHEN 'MANUAL_EXIT_CONFIG' THEN 2
            WHEN 'SYSTEM_ON' THEN 3
            WHEN 'PLACE_SETUP' THEN 4
            ELSE 5 END,
@@ -1395,6 +1397,8 @@ class PostgresAutoTradeStore {
            WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
            WHEN 'SYSTEM_STOP' THEN 1
            WHEN 'MANAGE_POSITION' THEN 2
+           WHEN 'MANUAL_EXIT_ACTION' THEN 2
+           WHEN 'MANUAL_EXIT_CONFIG' THEN 2
            WHEN 'SYSTEM_ON' THEN 3
            WHEN 'PLACE_SETUP' THEN 4
            ELSE 5 END,
@@ -2057,6 +2061,8 @@ class MemoryAutoTradeStore {
       EMERGENCY_CLOSE_ALL: 0,
       SYSTEM_STOP: 1,
       MANAGE_POSITION: 2,
+      MANUAL_EXIT_ACTION: 2,
+      MANUAL_EXIT_CONFIG: 2,
       SYSTEM_ON: 3,
       PLACE_SETUP: 4
     };
