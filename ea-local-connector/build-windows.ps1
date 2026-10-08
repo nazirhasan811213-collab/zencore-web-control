@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
-python -m pip install pyinstaller==6.22.3
+python -m pip install pyinstaller==6.16.0
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller install failed' }
 python -m PyInstaller --noconfirm --clean --onefile --windowed --name ZenCoreConnector --paths ea-local-connector --add-data 'ea-local-connector/ZenCoreExecutor.mq5:.' ea-local-connector/connector.py
 if ($LASTEXITCODE -ne 0) { throw 'Connector build failed' }
