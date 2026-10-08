@@ -347,6 +347,9 @@
     const tradeMode = String(input.tradeMode || '').toUpperCase();
     const errors = { ...identity.errors };
     if (!['DEMO', 'REAL'].includes(tradeMode)) errors.tradeMode = 'Jenis akaun MT5 mesti DEMO atau REAL.';
+    const accountFingerprint = input.accountFingerprint == null ? null : String(input.accountFingerprint);
+    if (accountFingerprint !== null && !/^[a-f0-9]{64}$/.test(accountFingerprint)) errors.accountFingerprint = 'Account binding tidak sah.';
+    if (input.connectorVersion === '1.4.0-ea-local' && !accountFingerprint) errors.accountFingerprint = 'Account binding diperlukan.';
     const positions = (Array.isArray(input.positions) ? input.positions : [])
       .map(sanitisePosition).filter(Boolean).slice(0, 50);
     return {
@@ -354,6 +357,7 @@
       errors,
       value: {
         ...identity.value,
+        accountFingerprint,
         tradeMode,
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,

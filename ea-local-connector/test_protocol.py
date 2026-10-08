@@ -14,17 +14,17 @@ ID='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 POD='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 KEY='test-key-string-more-than-32-characters'
 NOW=1791000000000
-IDENTITY={'account':'12345678','server':'InterStellarFinancial-Demo'}
+IDENTITY={'account':'12345678','server':'InterStellarFinancial-Demo','podId':POD}
 
 def signed(kind='SYSTEM_STOP', payload=None):
-    raw={'id':ID,'podId':POD,'userId':'user','type':kind,'createdAt':NOW-1000,'expiresAt':NOW+10000,'payload':payload or {}}
+    raw={'id':ID,'podId':POD,'userId':'user','type':kind,'createdAt':NOW-1000,'expiresAt':NOW+10000,'payload':{'accountFingerprint':account_fingerprint(IDENTITY), **(payload or {})}}
     encoded=json.dumps(raw,separators=(',',':')).encode()
     return {**{k:raw[k] for k in ('id','type','payload','createdAt','expiresAt')},
       'signedEnvelope':base64.urlsafe_b64encode(encoded).decode().rstrip('='),
       'signature':hmac.new(KEY.encode(),encoded,hashlib.sha256).hexdigest()}
 
 def local_heartbeat():
-    return {**IDENTITY,'writtenAt':NOW,'tradeMode':'DEMO','terminalBuild':'6204',
+    return {**IDENTITY,'accountBindingVersion':'ACCOUNT_SESSION_V1','eaSession':'1'*32,'writtenAt':NOW,'tradeMode':'DEMO','terminalBuild':'6204',
        'terminalTradeAllowed':'1','accountTradeAllowed':'1','expertTradeAllowed':'1',
        'specCount':0,'positionCount':0}
 

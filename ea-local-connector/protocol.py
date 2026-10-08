@@ -9,14 +9,25 @@ import re
 import time
 from pathlib import Path
 
-VERSION = '1.3.0-ea-local'
-EA_VERSION = '1.26'
-CONNECTOR_BUILD = '1.25'
+VERSION = '1.4.0-ea-local'
+EA_VERSION = '1.27'
+CONNECTOR_BUILD = '1.26'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
-ALLOWED_SERVERS = ('InterStellarFinancial-Server','InterStellarFinancial-Demo')
+def valid_identity(identity):
+    account = str(identity.get('account', ''))
+    server = str(identity.get('server', ''))
+    return bool(re.fullmatch(r'[1-9][0-9]{0,19}', account) and server.strip() == server and
+                0 < len(server) <= 128 and not any(ord(c) < 32 or ord(c) == 127 for c in server))
+
+
+def account_fingerprint(identity):
+    if not valid_identity(identity): raise ValueError('INVALID_MT5_IDENTITY')
+    return hashlib.sha256(json.dumps([identity['server'], str(identity['account']), identity.get('tradeMode','DEMO')],
+                                   ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
+
 SUPPORTED = ('XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP')
 
 
@@ -79,9 +90,11 @@ def number(value):
 
 
 def command_fields(command, identity):
-    if identity.get('server') not in ALLOWED_SERVERS: raise ValueError('SERVER_NOT_ALLOWED')
+    if not valid_identity(identity): raise ValueError('INVALID_MT5_IDENTITY')
     kind = command['type']
     payload = command['payload']
+    if identity.get('eaSession') and payload.get('accountFingerprint') != account_fingerprint(identity):
+        raise ValueError('ACCOUNT_BINDING_CHANGED')
     mode=payload.get('strategyMode','TF2_SCALPING')
     if mode not in ('TF2_SCALPING','TF15_INTRA'):raise ValueError('STRATEGY_MODE_REJECTED')
     if mode=='TF15_INTRA' and kind in ('PLACE_SETUP','MANAGE_POSITION'):
@@ -89,6 +102,8 @@ def command_fields(command, identity):
     fields = {'strategyMode':mode,'protocol':1, 'id':command['id'], 'type':kind,
               'expiresAt':command['expiresAt'], 'account':identity['account'],
               'server':identity['server'], 'tradeMode':identity.get('tradeMode','DEMO')}
+    if identity.get('eaSession'):
+        fields.update(podId=identity['podId'], eaSession=identity['eaSession'])
     if kind == 'SYSTEM_ON':
         if payload.get('mode') != identity.get('tradeMode','DEMO') or payload.get('mode') not in ('DEMO','REAL') or payload.get('strategy') != STRATEGY or payload.get('exitSchema') != SCHEMA:
             raise ValueError('SYSTEM_CONTRACT_REJECTED')
@@ -142,20 +157,24 @@ def heartbeat(fields, selected_identity, now_ms=None):
     now_ms = int(time.time()*1000) if now_ms is None else now_ms
     if now_ms - int(fields['writtenAt']) > 15000 or int(fields['writtenAt']) > now_ms+30000:
         raise ValueError('EA_OFFLINE')
-    if fields.get('server') not in ALLOWED_SERVERS or selected_identity.get('server') not in ALLOWED_SERVERS:
-        raise ValueError('SERVER_NOT_ALLOWED')
+    if not valid_identity(fields) or not valid_identity(selected_identity):
+        raise ValueError('INVALID_MT5_IDENTITY')
     if fields['account'] != selected_identity['account'] or fields['server'] != selected_identity['server']:
         raise ValueError('ACCOUNT_CHANGED')
     if fields['tradeMode'] not in ('DEMO','REAL'): raise ValueError('ACCOUNT_MODE_REJECTED')
     if fields['tradeMode'] != selected_identity.get('tradeMode','DEMO'): raise ValueError('ACCOUNT_MODE_CHANGED')
     if fields['tradeMode']=='REAL' and fields.get('accountExecutionVersion')!='REAL_DEMO_V1': raise ValueError('REAL_EA_UPGRADE_REQUIRED')
     value = {
-      'accountMask':'****'+fields['account'][-4:], 'serverMask':'****'+re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:],
-      'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':VERSION if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
+      'accountMask':'****'+fields['account'][-4:].zfill(2),
+      'serverMask':'****'+(re.sub(r'[^A-Za-z0-9._-]','',fields['server'])[-8:] if len(re.sub(r'[^A-Za-z0-9._-]','',fields['server']))>=2 else hashlib.sha256(fields['server'].encode()).hexdigest()[-8:]),
+      'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':(VERSION if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1' else '1.3.0-ea-local') if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'positions':[], 'symbolSpecs':[]
     }
+    if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
+        if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
+        value['accountFingerprint'] = account_fingerprint(fields)
     for i in range(min(int(fields.get('specCount',0)),len(SUPPORTED))):
         prefix = f's{i}'
         value['symbolSpecs'].append({key:(fields[prefix+key] if key=='symbol' else float(fields[prefix+key]))
@@ -170,7 +189,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
 
 
 VALIDATION_CODES = frozenset((
- 'SERVER_NOT_ALLOWED','ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
+ 'ACCOUNT_BINDING_CHANGED','INVALID_MT5_IDENTITY','EA_SESSION_INVALID','ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
  'INVALID_COMMAND_ID','COMMAND_EXPIRED','CLOCK_SKEW','INVALID_NUMBER',
  'STRATEGY_MODE_REJECTED','TF15_SNAPSHOT_REQUIRED','SYSTEM_CONTRACT_REJECTED',
  'INVALID_SYMBOLS','ANALYSIS_CONTRACT_REJECTED','SYMBOL_REJECTED',

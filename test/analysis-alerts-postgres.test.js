@@ -1,3 +1,4 @@
+const {readyMarket}=require('./fixtures/current-market');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {Pool}=require('pg');
@@ -11,7 +12,7 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   const user='11111111-1111-4111-8111-111111111111';await pool.query("INSERT INTO zencore_users VALUES($1,'active','client')",[user]);
   a=new AnalysisAlerts({pool});await a.init();b=new AnalysisAlerts({pool});await b.init();
   await a.put(user,{popup:true,sound:true,telegramEnabled:true,telegramId:'123456789',verified:true});
-  const m={symbol:'XAUUSD',receivedAt:Date.now(),strategyNormal:{state:'READY',side:'BUY',plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}}};
+  const m=readyMarket({plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}});
   await Promise.all([a.record(m),b.record(m)]);await b.record({...m,receivedAt:m.receivedAt+1});
   assert.equal((await a.feed('0')).events.length,1);
   await a.record({...m,receivedAt:m.receivedAt+2,strategyNormal:{state:'WAIT'}});
@@ -33,7 +34,7 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   let notify;const sent=new Promise(resolve=>{notify=resolve;});
   a.telegram=async()=>{sends++;notify();};a.token='test';
   const now=Date.now();
-  await a.record({...m,symbol:'EURUSD',receivedAt:now,sourceBarTime:now-180000,price:2000,timeframe:'3',feedMode:'BAR-CLOSE'});
+  await a.record({...readyMarket({at:now,plan:{entry:2001,sl:1991,tp1:2011,tp2:2021,tp3:2031}}),sourceBarTime:now-120000,feedMode:'BAR-CLOSE'});
   await Promise.race([sent,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Immediate delivery did not run')),1500);timer.unref();})]);
   assert.equal(sends,2,'committed fresh entry triggers delivery without a polling timer');
   a.token='';
