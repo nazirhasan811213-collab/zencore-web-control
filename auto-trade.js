@@ -521,6 +521,15 @@
     if (!currentState?.hostedAccount && !currentState?.pod) openMt5ConnectDialog();
   });
 
+  byId('resetMt5LinkButton')?.addEventListener('click', async () => {
+    if (!window.confirm('Reset link akaun MT5 lama? Setting trade kekal. Selepas reset, pilih akaun baharu dalam Connector dan pautkan semula.')) return;
+    const button=byId('resetMt5LinkButton');button.disabled=true;
+    try {
+      const result=await api('/api/auto-trade/reset-link',{method:'POST',body:'{}'});
+      toast(result.message);await refreshState(true);
+    } catch(error) {toast(error.message,true);}
+    finally {button.disabled=false;}
+  });
   byId('connectMt5Button')?.addEventListener('click', openMt5ConnectDialog);
 
   byId('mt5ConnectDialog')?.addEventListener('close', () => {

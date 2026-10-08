@@ -26,6 +26,20 @@ test('PostgreSQL atomically binds concurrent account identities and rejects rota
   await store.provisionPod({id:crypto.randomUUID(),userId:user,label:'test-new',tokenHash:'new-test-token-hash',ownershipMode:'TRADER_OWNED_EA_LOCAL'});
   assert.equal(await store.updatePodHeartbeat(podId,{...h,accountFingerprint:binding},Date.now(),oldToken),null,'old in-flight token cannot bind successor');
   assert.ok(await store.updatePodHeartbeat(podId,{...h,tradeMode:'REAL',accountFingerprint:'c'.repeat(64)},Date.now(),'new-test-token-hash'));
+  await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+  assert.equal(await store.resetLocalEaLink(user,Date.now()),'STOP_BEFORE_RESET');
+  assert.ok(await store.findPodByTokenHash('new-test-token-hash'));
+  await store.setControl(user,{desiredState:'STOPPED',effectiveState:'STOPPED'});
+  await store.replacePositions(user,[{ticket:'123',symbol:'XAUUSD',side:'BUY'}],Date.now());
+  assert.equal(await store.resetLocalEaLink(user,Date.now()),'POSITIONS_OPEN');
+  await store.replacePositions(user,[],Date.now());
+  const resetAt=Date.now();assert.equal(await store.resetLocalEaLink(user,resetAt),'RESET');
+  assert.equal(await store.findPodByTokenHash('new-test-token-hash'),null);
+  assert.equal(await store.getPodForUser(user),null);
+  assert.equal(await store.getLinkResetAt(user),resetAt);
+  assert.equal(await store.updatePodHeartbeat(podId,{...h,accountFingerprint:'c'.repeat(64)},Date.now(),'new-test-token-hash'),null);
+  assert.equal((await store.getProfile(user)).desiredState,'STOPPED');
+
  }finally{
   await store?.close();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end();
  }

@@ -44,3 +44,15 @@ class RecoveryTests(unittest.TestCase):
    self.assertEqual(waits,[2,4,8,10,10])
    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
    self.assertEqual(json.loads((Path(folder)/'connector-health.json').read_text())['consecutiveFailures'],5)
+
+ def test_revoked_token_stops_runner_and_releases_account(self):
+  with tempfile.TemporaryDirectory() as folder:
+   released=[];runner=Runner({'channel':folder},lambda _:None,lambda:released.append(True))
+   with patch.object(runner,'cycle',side_effect=RuntimeError('INVALID_POD_TOKEN')):runner.run()
+   self.assertTrue(runner.stop.is_set());self.assertEqual(released,[True])
+   self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
+ def test_missing_heartbeat_still_receives_web_reset(self):
+  with tempfile.TemporaryDirectory() as folder:
+   released=[];runner=Runner({'channel':folder,'podToken':'private'},lambda _:None,lambda:released.append(True))
+   with patch.object(runner.api,'request',side_effect=RuntimeError('INVALID_POD_TOKEN')) as remote:runner.run()
+   self.assertEqual(released,[True]);remote.assert_called_once_with('/api/execution/link-status',token='private')

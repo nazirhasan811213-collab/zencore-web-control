@@ -1,0 +1,15 @@
+ZENCORE CONNECTOR 1.31 / EA 1.30
+
+TUKAR AKAUN MT5
+1. Dalam web Auto Trade, tekan OFF. Tunggu STOPPED.
+2. Selesaikan posisi akaun lama. Reset tidak menutup order broker.
+3. Klik RESET LINK AKAUN MT5 dan sahkan.
+4. Connector 1.31 kembali ke pilihan akaun secara automatik apabila server membatalkan token lama.
+5. Login akaun baharu dalam MT5. Pasang EA pada satu chart, hidupkan Algo Trading.
+6. Tunggu 30 saat selepas reset, klik Cari akaun MT5, pilih akaun baharu dan pautkan dengan login ZenCore.
+7. Semak akaun dan server dalam web sebelum tekan ON semula. Setting lot dan layer kekal.
+
+Connector lama: gunakan Tukar akaun MT5 selepas reset di web, atau kemas kini ke 1.31.
+Password broker kekal dalam MT5. Jangan kongsi fail paired.dpapi.
+Reset disekat jika posisi direkodkan masih terbuka atau kawalan belum STOPPED.
+EA 1.30 dikekalkan; strategi fully auto dan manual exit tidak diubah oleh versi ini.

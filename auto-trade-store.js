@@ -1242,6 +1242,35 @@ class PostgresAutoTradeStore {
     return result.rows[0]?.ownership_mode === 'TRADER_OWNED_EA_LOCAL';
   }
 
+  async getLinkResetAt(userId) {
+    const result = await this.pool.query(`SELECT revoked_at FROM zencore_mt5_secure_pods WHERE user_id=$1`, [userId]);
+    return timestamp(result.rows[0]?.revoked_at);
+  }
+
+  async resetLocalEaLink(userId, now) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const pod = (await client.query(`SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE`, [userId])).rows[0];
+      const profile = (await client.query(`SELECT * FROM zencore_autotrade_profiles WHERE user_id=$1 FOR UPDATE`, [userId])).rows[0];
+      const positions = await client.query(`SELECT ticket FROM zencore_mt5_positions WHERE user_id=$1 LIMIT 1`, [userId]);
+      if (!pod || pod.revoked_at) { await client.query('COMMIT'); return 'ALREADY_RESET'; }
+      if (pod.ownership_mode !== 'TRADER_OWNED_EA_LOCAL') { await client.query('ROLLBACK'); return 'LOCAL_EA_REQUIRED'; }
+      if (positions.rowCount) { await client.query('ROLLBACK'); return 'POSITIONS_OPEN'; }
+      if (profile && (profile.desired_state !== 'STOPPED' || !['STOPPED','ERROR','UNPROVISIONED'].includes(profile.effective_state))) {
+        await client.query('ROLLBACK'); return 'STOP_BEFORE_RESET';
+      }
+      await client.query(`UPDATE zencore_mt5_secure_pods SET revoked_at=$2 WHERE user_id=$1`, [userId, new Date(now)]);
+      for (const table of ['zencore_autotrade_commands','zencore_hosted_autotrade_commands']) {
+        await client.query(`UPDATE ${table} SET status='CANCELLED', acknowledged_at=$2 WHERE user_id=$1 AND status IN ('PENDING','DELIVERED')`, [userId,new Date(now)]);
+      }
+      await client.query(`UPDATE zencore_autotrade_profiles SET desired_state='STOPPED',effective_state='STOPPED',pending_command_id=NULL,last_error=NULL,state_version=state_version+1,updated_at=$2 WHERE user_id=$1`, [userId,new Date(now)]);
+      await client.query(`UPDATE zencore_mt5_pairing_sessions SET consumed_at=$2 WHERE user_id=$1 AND consumed_at IS NULL`, [userId,new Date(now)]);
+      await client.query('COMMIT'); return 'RESET';
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   async retireExecutionCommands(userId) {
     await this.pool.query(`UPDATE zencore_autotrade_commands SET status = 'CANCELLED', acknowledged_at = NOW()
       WHERE user_id = $1 AND status IN ('PENDING','DELIVERED')`, [userId]);
@@ -1967,7 +1996,7 @@ class MemoryAutoTradeStore {
     return publicPod(this.podsByToken.get(tokenHash), true);
   }
 
-  async getPodForUser(userId) { return publicPod(this.podsByUser.get(userId)); }
+  async getPodForUser(userId) { const pod=this.podsByUser.get(userId); return pod?.revokedAt ? null : publicPod(pod); }
 
   async updatePodHeartbeat(podId, heartbeat, now, expectedTokenHash = null) {
     const row = [...this.podsByUser.values()].find(item => item.id === podId && !item.revokedAt);
@@ -2024,6 +2053,21 @@ class MemoryAutoTradeStore {
   async isHostedTransportReplaced(accountId) {
     const account = [...this.hostedAccounts.values()].find(item => item.id === accountId);
     return this.podsByUser.get(account?.userId)?.ownershipMode === 'TRADER_OWNED_EA_LOCAL';
+  }
+
+  async getLinkResetAt(userId) { return this.podsByUser.get(userId)?.revokedAt || null; }
+
+  async resetLocalEaLink(userId, now) {
+    const pod=this.podsByUser.get(userId), profile=this.profiles.get(userId);
+    if (!pod || pod.revokedAt) return 'ALREADY_RESET';
+    if (pod.ownershipMode !== 'TRADER_OWNED_EA_LOCAL') return 'LOCAL_EA_REQUIRED';
+    if ((this.positions.get(userId)||[]).length) return 'POSITIONS_OPEN';
+    if (profile && (profile.desiredState !== 'STOPPED' || !['STOPPED','ERROR','UNPROVISIONED'].includes(profile.effectiveState))) return 'STOP_BEFORE_RESET';
+    pod.revokedAt=now; this.podsByToken.delete(pod.tokenHash);
+    await this.retireExecutionCommands(userId);
+    await this.setControl(userId,{desiredState:'STOPPED',effectiveState:'STOPPED',pendingCommandId:null,lastError:null});
+    const pairing=this.pairingsByUser.get(userId); if(pairing && !pairing.consumedAt) pairing.consumedAt=now;
+    return 'RESET';
   }
 
   async retireExecutionCommands(userId) {

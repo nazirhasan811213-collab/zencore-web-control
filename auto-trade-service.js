@@ -155,7 +155,22 @@ function createAutoTradeService(options = {}) {
       throw serviceError('TRANSPORT_REPLACED', 'Akaun ini menggunakan EA tempatan.', 409);
     }
   }
+  async function resetLocalEaLink(userId) {
+    const code=await store.resetLocalEaLink(userId,now());
+    const errors={POSITIONS_OPEN:'Masih ada posisi. Selesaikan posisi akaun lama sebelum reset link.',
+      STOP_BEFORE_RESET:'Tekan OFF dahulu dan tunggu status STOPPED sebelum reset link.',
+      LOCAL_EA_REQUIRED:'Reset ini untuk pautan EA + Connector Windows sahaja.'};
+    if(errors[code]) throw serviceError(code,errors[code],409);
+    await store.appendAudit(userId,'EA_LOCAL_LINK_RESET',{result:code});
+    return {ok:true,code,reconnectAfterSeconds:30,message:'Link lama dibatalkan. Tunggu 30 saat, pilih akaun baharu dalam Connector dan pautkan semula. Setting trade kekal; ON semula selepas akaun disahkan.'};
+  }
+  async function executionLinkStatus(rawToken) {
+    if(!await authenticatePod(rawToken)) throw serviceError('INVALID_POD_TOKEN','Pautan MT5 telah dibatalkan. Pautkan semula.',401);
+    return {ok:true};
+  }
   async function connectLocalEa(userId) {
+    const resetAt=await store.getLinkResetAt(userId);
+    if(resetAt && now()-resetAt<30000) throw serviceError('LINK_RESET_WAIT','Tunggu 30 saat selepas reset untuk tamatkan kebenaran entry akaun lama.',409);
     const [profile, positions, oldPod, hosted] = await Promise.all([
       store.getProfile(userId), store.listPositions(userId), store.getPodForUser(userId),
       typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null
@@ -1407,6 +1422,8 @@ function createAutoTradeService(options = {}) {
     connectHostedAccount,
     listHostedAssignments,
     connectLocalEa,
+    resetLocalEaLink,
+    executionLinkStatus,
     leaseHostedAccount,
     hostedHeartbeat,
     nextHostedCommand,

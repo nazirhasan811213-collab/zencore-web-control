@@ -29,5 +29,10 @@ test('desktop login cookie can pair EA, origin and unauthenticated requests rema
   assert.match(response.headers.get('content-type'),/json/, 'State URL: '+response.url+' status '+response.status+' body '+(await response.clone().text()).slice(0,250));
   const state=await response.json();assert.equal(state.pod.ownershipMode,'TRADER_OWNED_EA_LOCAL');
   assert.equal(state.connection.ready,false);assert.equal(JSON.stringify(state).includes(paired.podToken),false);
+  response=await fetch(base+'/api/auto-trade/reset-link',{method:'POST',headers:{Accept:'application/json',Origin:base}});assert.equal(response.status,401);
+  response=await fetch(base+'/api/auto-trade/reset-link',{method:'POST',headers:{Accept:'application/json',Cookie:cookie,Origin:'https://untrusted.example'}});assert.equal(response.status,403);
+  response=await fetch(base+'/api/auto-trade/reset-link',{method:'POST',headers:{Accept:'application/json',Cookie:cookie,Origin:base},body:'{}'});assert.equal(response.status,200);
+  response=await fetch(base+'/api/execution/link-status',{headers:{Authorization:'Bearer '+paired.podToken}});assert.equal(response.status,401);assert.equal((await response.json()).code,'INVALID_POD_TOKEN');
+
  }finally{child.kill();await new Promise(resolve=>{if(child.exitCode!==null)resolve();else child.once('exit',resolve);});}
 });
