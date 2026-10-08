@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const { guardPool } = require('./database-recovery');
 
 function timestamp(value) {
   if (!value) return null;
@@ -151,6 +152,7 @@ class PostgresAutoTradeStore {
       connectionTimeoutMillis: 10000,
       ssl: local || sslDisabled ? undefined : { rejectUnauthorized: false }
     });
+    guardPool(this.pool, 'Auto Trade');
   }
 
   async init() {

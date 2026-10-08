@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const { guardPool, initializeWithRetry, safeCode } = require('./database-recovery');
 const MarketRetention=require('./market-retention');
 
 const PORT = process.env.PORT || 8080;
@@ -29,6 +30,7 @@ const pool = DATABASE_URL ? new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000
 }) : null;
+if (pool) guardPool(pool, 'Analysis');
 
 const NUMERIC_FIELDS = [
   'time','barIndex','open','high','low','close','volume','ema9','ema20','ema50',
@@ -529,7 +531,7 @@ async function initDb(){
     }));
     console.log(`[DB] ready • ${history.length} snapshots • ${performanceTrades.length} trades loaded`);
   }catch(e){
-    console.error('[DB init]',e.message);
+    throw e;
   }
 }
 
@@ -655,6 +657,6 @@ const server=http.createServer(async(req,res)=>{
   return send(res,404,JSON.stringify({ok:false,error:'Not found',path:pathname}));
 });
 
-initDb().finally(()=>{
-  server.listen(PORT,'127.0.0.1',()=>console.log(`ZenCore V9 Analysis Intelligence + Performance running on port ${PORT}`));
+initializeWithRetry(initDb, {onError(error, {retry}) { console.error(`[DB init] ${safeCode(error)}; ${retry ? 'retry scheduled' : 'configuration requires repair'}`); }}).then(() => {
+server.listen(PORT,'127.0.0.1',()=>console.log(`ZenCore V9 Analysis Intelligence + Performance running on port ${PORT}`));
 });

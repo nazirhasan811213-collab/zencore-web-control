@@ -1,3 +1,4 @@
+const { initializeWithRetry, safeCode } = require('./database-recovery');
 const http = require('http');
 const { listConnectionMonitor } = require('./connection-monitor');
 const {AnalysisAIService}=require('./analysis-ai-service');
@@ -100,12 +101,15 @@ const adminHealthWatchdog=require('./admin-health-watchdog').createHealthWatchdo
 adminHealthWatchdog.start();
 
 if (AUTH_ENABLED) {
-  Promise.resolve().then(async () => {
+  let bootstrapStore;
+  let bootstrapAutoStore;
+  initializeWithRetry(async () => {
     const usingMemory = !process.env.DATABASE_URL;
-    const store = createAuthStore({
+    const store = bootstrapStore ||= createAuthStore({
       databaseUrl: process.env.DATABASE_URL,
       allowMemory: AUTH_MEMORY && process.env.NODE_ENV !== 'production'
     });
+    if (!authState.ready) {
     await store.init();
     if (ADMIN_EMAILS.length && typeof store.promoteAdminsByEmail === 'function') {
       const promoted = await store.promoteAdminsByEmail(ADMIN_EMAILS);
@@ -168,12 +172,14 @@ if (AUTH_ENABLED) {
     }
     authState.ready = true;
     console.log(`ZenCore authentication ready (${usingMemory ? 'development memory store' : 'PostgreSQL'})`);
+    authState.error = null;
+    }
 
     if (AUTOTRADE_ENABLED) {
       if (process.env.NODE_ENV === 'production' && Buffer.byteLength(POD_PROVISIONING_SECRET) < 32) {
         throw new Error('ZENCORE_POD_PROVISIONING_SECRET must be at least 32 bytes in production.');
       }
-      const autoStore = createAutoTradeStore({
+      const autoStore = bootstrapAutoStore ||= createAutoTradeStore({
         databaseUrl: process.env.DATABASE_URL,
         allowMemory: AUTOTRADE_MEMORY && process.env.NODE_ENV !== 'production'
       });
@@ -242,21 +248,18 @@ if (AUTH_ENABLED) {
         credentialKeyId: MT5_CREDENTIAL_KEY_ID,
         credentialPublicKey: MT5_CREDENTIAL_PUBLIC_KEY
       });
+      autoTradeState.error = null;
       autoTradeState.ready = true;
       console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'} • GCP worker ${GCP_HOSTED_WORKER_ENABLED ? 'IDENTITY ENABLED' : 'LOCKED'}`);
       startAutoTradeDispatcher();
     }
-  }).catch(error => {
-    if (!authState.ready) {
-      authState.error = error;
-      authState.ready = false;
-      console.error('ZenCore authentication failed to initialize:', error.message);
-      return;
-    }
-    autoTradeState.error = error;
-    autoTradeState.ready = false;
-    console.error('ZenCore Auto Trade failed to initialize:', error.message);
-  });
+  }, {onError(error, {retry}) {
+    const state = authState.ready ? autoTradeState : authState;
+    state.error = error;
+    state.ready = false;
+    console.error(`ZenCore initialization unavailable (${safeCode(error)}); ${retry ? 'retry scheduled' : 'configuration requires repair'}.`);
+  }});
+
 }
 
 const AUTH_CSP = [

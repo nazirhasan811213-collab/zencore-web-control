@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const { guardPool } = require('./database-recovery');
 
 const DEFAULT_IB_CODE = 'nazir';
 const DEFAULT_IB_NAME = 'Nazir (Admin)';
@@ -78,6 +79,7 @@ class PostgresAuthStore {
       connectionTimeoutMillis: 10000,
       ssl: local || sslDisabled ? undefined : { rejectUnauthorized: false }
     });
+    guardPool(this.pool, 'Auth');
   }
 
   async init() {
