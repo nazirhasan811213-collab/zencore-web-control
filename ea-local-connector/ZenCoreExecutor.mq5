@@ -1,5 +1,5 @@
 #property strict
-#property version "1.27"
+#property version "1.28"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -74,6 +74,24 @@ bool AllowedServer(){return AccountInfoInteger(ACCOUNT_LOGIN)>0 && StringLen(Acc
 bool Permissions(){return account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER) && AllowedServer() && SupportedAccount() &&
  TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
  MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
+string PermissionReason(){
+ if(account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER))return "ACCOUNT_BINDING_CHANGED";
+ if(!AllowedServer() || !SupportedAccount())return "ACCOUNT_MODE_REJECTED";
+ if(!TerminalInfoInteger(TERMINAL_CONNECTED))return "TERMINAL_OFFLINE";
+ if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))return "TERMINAL_ALGO_DISABLED";
+ if(!MQLInfoInteger(MQL_TRADE_ALLOWED))return "EA_ALGO_DISABLED";
+ if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))return "ACCOUNT_TRADE_DISABLED";
+ if(!AccountInfoInteger(ACCOUNT_TRADE_EXPERT))return "ACCOUNT_EXPERT_DISABLED";
+ return "READY";
+}
+string LeaseReason(string pod){
+ if(!ReadFields("lease.tsv"))return "LEASE_NOT_FOUND";
+ if(Get("account")!=account || Get("server")!=server || Get("tradeMode")!=AccountMode() ||
+    Get("podId")!=pod || Get("eaSession")!=eaSession)return "LEASE_BINDING_CHANGED";
+ if((long)StringToInteger(Get("expiresAt"))<=UtcMs())return "LEASE_EXPIRED";
+ if(Get("desiredState")!="ON")return "LEASE_STOPPED";
+ return "READY";
+}
 bool BrokerDone(){uint r=trade.ResultRetcode();return r==TRADE_RETCODE_DONE || r==TRADE_RETCODE_DONE_PARTIAL || r==TRADE_RETCODE_NO_CHANGES;}
 double Price(string symbol,double value){double tick=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);if(tick<=0)return 0;return NormalizeDouble(MathRound(value/tick)*tick,(int)SymbolInfoInteger(symbol,SYMBOL_DIGITS));}
 bool VolumeValid(string symbol,double value){
@@ -310,13 +328,12 @@ void Process(){
  if(type=="SYSTEM_STOP"){armed=false;SaveState();ok=true;code="STOPPED";}
  else if(type=="SYSTEM_ON"){
   // ON must come from a fresh lease for this exact account, pod and EA instance.
-  ok=Permissions() && layers>=1 && layers<=10 && lot>0 && symbols!="";
-  if(ok){
-   ok=ReadFields("lease.tsv") && Get("account")==account && Get("server")==server &&
-      Get("tradeMode")==AccountMode() && Get("podId")==commandPod && Get("eaSession")==eaSession &&
-      (long)StringToInteger(Get("expiresAt"))>UtcMs() && Get("desiredState")=="ON";
-  }
-  if(ok){ownerPod=commandPod;armed=true;enabledSymbols=symbols;code="ARMED";}else{armed=false;code="ALGO_OR_ACCOUNT_NOT_READY";}
+  code=PermissionReason();
+  if(code=="READY" && !(layers>=1 && layers<=10 && lot>0 && symbols!=""))code="ON_SETTINGS_INVALID";
+  if(code=="READY")code=LeaseReason(commandPod);
+  ok=code=="READY";
+  if(ok){ownerPod=commandPod;armed=true;enabledSymbols=symbols;code="ARMED";}else{armed=false;}
+  if(!ok)Print("ZenCore SYSTEM_ON rejected: ",code);
   SaveState();
  }
  else if(type=="PLACE_SETUP"){
@@ -364,17 +381,17 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=1.27 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=1.28 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 1.27 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 1.28 • menunggu login MT5 / channel tersedia");return;}
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 1.27 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 1.28 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

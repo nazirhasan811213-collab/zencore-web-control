@@ -9,6 +9,7 @@ name: Auto Trade control plane checks
       - "viewer-mode.css"
       - "scripts/check-analysis-alert-ui.cjs"
       - "auto-trade-*.js"
+      - "auto-trade.js"
       - "gcp-instance-identity.js"
       - "server-analysis.js"
       - "test/**"
