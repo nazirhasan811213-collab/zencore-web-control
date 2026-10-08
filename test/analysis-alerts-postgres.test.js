@@ -34,7 +34,7 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   let notify;const sent=new Promise(resolve=>{notify=resolve;});
   a.telegram=async()=>{sends++;notify();};a.token='test';
   const now=Date.now();
-  await a.record({...m,symbol:'XAUUSD',receivedAt:now,signalObservedAt:now,sourceBarTime:now-120000,price:2000,timeframe:'2',feedMode:'BAR-CLOSE'});
+  await a.record({...readyMarket({at:now,plan:{entry:2001,sl:1991,tp1:2011,tp2:2021,tp3:2031}}),sourceBarTime:now-120000,feedMode:'BAR-CLOSE'});
   await Promise.race([sent,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Immediate delivery did not run')),1500);timer.unref();})]);
   assert.equal(sends,2,'committed fresh entry triggers delivery without a polling timer');
   a.token='';
