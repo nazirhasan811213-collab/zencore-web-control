@@ -236,7 +236,7 @@
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
     hydrateModeDraft(settings);
-    byId('capitalUsd').value = settings.capitalUsd ?? 100;
+    byId('capitalUsd').value = settings.capitalUsd ?? '';
     byId('manualExitEnabled').checked=settings.manualExit?.enabled===true;
     for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=({tp1:2,tp2:4,tp3:6,sl:3})[k];
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
@@ -522,10 +522,11 @@
   });
 
   byId('resetMt5LinkButton')?.addEventListener('click', async () => {
-    if (!window.confirm('Reset link akaun MT5 lama? Setting trade kekal. Selepas reset, pilih akaun baharu dalam Connector dan pautkan semula.')) return;
+    if (!window.confirm('Reset semua setting Auto Trade dan putus link akaun lama? Posisi broker TIDAK ditutup oleh reset. Jika masih ada posisi, tutup sendiri dalam MT5.')) return;
     const button=byId('resetMt5LinkButton');button.disabled=true;
     try {
       const result=await api('/api/auto-trade/reset-link',{method:'POST',body:'{}'});
+      settingsHydrated=false;settingsDirty=false;workspaceOptedIn=true;
       toast(result.message);await refreshState(true);
     } catch(error) {toast(error.message,true);}
     finally {button.disabled=false;}

@@ -157,12 +157,9 @@ function createAutoTradeService(options = {}) {
   }
   async function resetLocalEaLink(userId) {
     const code=await store.resetLocalEaLink(userId,now());
-    const errors={POSITIONS_OPEN:'Masih ada posisi. Selesaikan posisi akaun lama sebelum reset link.',
-      STOP_BEFORE_RESET:'Tekan OFF dahulu dan tunggu status STOPPED sebelum reset link.',
-      LOCAL_EA_REQUIRED:'Reset ini untuk pautan EA + Connector Windows sahaja.'};
-    if(errors[code]) throw serviceError(code,errors[code],409);
+    if(code==='LOCAL_EA_REQUIRED') throw serviceError(code,'Reset ini untuk pautan EA + Connector Windows sahaja.',409);
     await store.appendAudit(userId,'EA_LOCAL_LINK_RESET',{result:code});
-    return {ok:true,code,reconnectAfterSeconds:30,message:'Link lama dibatalkan. Tunggu 30 saat, pilih akaun baharu dalam Connector dan pautkan semula. Setting trade kekal; ON semula selepas akaun disahkan.'};
+    return {ok:true,code,reconnectAfterSeconds:30,message:'Reset selesai. Semua setting dan rekod posisi web dikosongkan. Pilih akaun MT5 baharu dalam Connector. Posisi broker masih kekal: tutup sendiri di MT5.'};
   }
   async function executionLinkStatus(rawToken) {
     if(!await authenticatePod(rawToken)) throw serviceError('INVALID_POD_TOKEN','Pautan MT5 telah dibatalkan. Pautkan semula.',401);
@@ -1085,7 +1082,7 @@ function createAutoTradeService(options = {}) {
     const seenAt = now();
     const updated = await store.updatePodHeartbeat(pod.id, heartbeatValidation.value, seenAt, pod.tokenHash);
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
-    await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt);
+    if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
     return {
       ok: true,
       podState: connectionState(updated),
@@ -1170,14 +1167,14 @@ function createAutoTradeService(options = {}) {
       } : {
         desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
         lastError: result.message || result.code || 'Secure Pod menolak arahan ON.'
-      });
+      }, {id:pod.id,tokenHash:pod.tokenHash});
     } else if (command.type === 'SYSTEM_STOP' || command.type === 'EMERGENCY_CLOSE_ALL') {
       await store.setControl(pod.userId, status === 'EXECUTED' ? {
         desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null
       } : {
         desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
         lastError: result.message || 'Secure Pod gagal melaksanakan arahan.'
-      });
+      }, {id:pod.id,tokenHash:pod.tokenHash});
     }
     await store.appendAudit(pod.userId, 'COMMAND_ACKNOWLEDGED', {
       commandId: command.id, commandType: command.type, status, code: result.code

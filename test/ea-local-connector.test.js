@@ -143,7 +143,7 @@ test('different ZenCore users cannot poll or acknowledge each other commands',as
  await assert.rejects(service.acknowledgeCommand(c2.podToken,command.id,{status:'EXECUTED'}),e=>e.code==='COMMAND_NOT_FOUND');
 });
 
-test('web reset revokes only own link, preserves settings and drains old lease before pairing',async()=>{
+test('web reset revokes only own link, clears settings and drains old lease before pairing',async()=>{
  const {store,service,advance}=setup();const old=await service.connectLocalEa(userId);
  await service.saveSettings(userId,settings);
  const other='22222222-2222-4222-8222-222222222222';const otherLink=await service.connectLocalEa(other);
@@ -154,20 +154,33 @@ test('web reset revokes only own link, preserves settings and drains old lease b
  await assert.rejects(service.nextCommand(old.podToken),e=>e.code==='INVALID_POD_TOKEN');
  assert.ok(await service.authenticatePod(otherLink.podToken));
  assert.equal((await service.state(userId)).pod,null);
- assert.deepEqual((await service.state(userId)).settings,before);
+ const cleared=(await service.state(userId)).settings;assert.equal(cleared.capitalUsd,null);assert.equal(cleared.lotPerLayer,null);assert.equal(cleared.layers,null);assert.equal(cleared.riskAcknowledgedAt,null);assert.deepEqual(cleared.symbols,[]);assert.equal(cleared.manualExit.enabled,false);
  await assert.rejects(service.connectLocalEa(userId),e=>e.code==='LINK_RESET_WAIT');
  advance(30000);const fresh=await service.connectLocalEa(userId);
  assert.notEqual(fresh.podToken,old.podToken);
  assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
  assert.equal((await service.state(userId)).control.canEnter,false);
 });
-test('reset refuses running control and open positions without invalidating account',async()=>{
+test('one reset clears running control and stale positions without broker close commands',async()=>{
  const {store,service}=setup();const old=await service.connectLocalEa(userId);
- await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});
- await assert.rejects(service.resetLocalEaLink(userId),e=>e.code==='STOP_BEFORE_RESET');
- assert.ok(await service.authenticatePod(old.podToken));
- await store.setControl(userId,{desiredState:'STOPPED',effectiveState:'STOPPED'});
+ await store.setControl(userId,{desiredState:'STOPPED',effectiveState:'EMERGENCY_CLOSING'});
  await store.replacePositions(userId,[{ticket:'123',symbol:'XAUUSD',side:'BUY',volume:0.01}],Date.now());
- await assert.rejects(service.resetLocalEaLink(userId),e=>e.code==='POSITIONS_OPEN');
- assert.ok(await service.authenticatePod(old.podToken));
+ const result=await service.resetLocalEaLink(userId);assert.equal(result.code,'RESET');
+ assert.equal(await service.authenticatePod(old.podToken),null);
+ const state=await service.state(userId);assert.deepEqual(state.positions,[]);assert.equal(state.control.desiredState,'STOPPED');assert.equal(state.summary.openPositions,0);
+ assert.equal((await store.listAudit(userId,30)).some(a=>a.type==='EMERGENCY_CLOSE_REQUESTED'),false);
+ await service.resetLocalEaLink(userId);assert.deepEqual((await service.state(userId)).positions,[]);
+});
+test('in-flight revoked heartbeat cannot restore cleared positions',async()=>{
+ const {store,service}=setup();const old=await service.connectLocalEa(userId);
+ const update=store.updatePodHeartbeat.bind(store);
+ store.updatePodHeartbeat=async(...args)=>{const value=await update(...args);await service.resetLocalEaLink(userId);return value;};
+ await assert.rejects(service.heartbeat(old.podToken,hb),e=>e.code==='INVALID_POD_TOKEN');
+ assert.deepEqual(await store.listPositions(userId),[]);
+});
+test('late old control acknowledgement cannot re-enable a reset account',async()=>{
+ const {store,service}=setup();const old=await service.connectLocalEa(userId);const pod=await service.authenticatePod(old.podToken);
+ await service.resetLocalEaLink(userId);
+ assert.equal(await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'},pod),null);
+ assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
 });
