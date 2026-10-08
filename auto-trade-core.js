@@ -16,7 +16,7 @@
     'EMERGENCY_CLOSING', 'ERROR'
   ];
   const COMMAND_TYPES = [
-    'SYSTEM_ON', 'SYSTEM_STOP', 'EMERGENCY_CLOSE_ALL', 'PLACE_SETUP', 'MANAGE_POSITION'
+    'MANUAL_EXIT_CONFIG', 'MANUAL_EXIT_ACTION', 'SYSTEM_ON', 'SYSTEM_STOP', 'EMERGENCY_CLOSE_ALL', 'PLACE_SETUP', 'MANAGE_POSITION'
   ];
   const POD_OWNERSHIP_MODES = [
     'TRADER_OWNED_WINDOWS_PC', 'TRADER_OWNED_AZURE', 'TRADER_OWNED_EA_LOCAL'
@@ -119,6 +119,8 @@
     const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true, input.tradingSchedule?.skipNews ?? (input.tradingSchedule?.enabled === true));
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
+    const manualExit={version:'MANUAL_TF2_EXIT_V2',enabled:input.manualExit?.enabled===true,timeframeMinutes:2,
+      tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'};
     const strategyExitPolicies = {
       ...(input.strategyExitPolicies || {}),
       TF2_SCALPING: { version: 'TF2_TIGHT_SL_3C_V1', timeframeMinutes: 2,
@@ -155,7 +157,7 @@
       ok: Object.keys(errors).length === 0,
       errors,
       value: {
-        strategyMode, modeSettings, tradingSchedule, strategyExitPolicies,
+        strategyMode, modeSettings, tradingSchedule, strategyExitPolicies, manualExit,
         capitalUsd: capitalUsd === null ? null : round(capitalUsd),
         lotPerLayer: lotPerLayer === null ? null : round(lotPerLayer, 5),
         layers,
@@ -320,6 +322,8 @@
     const lock = String(raw.slLock || 'INITIAL').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
     return {
       ticket,
+      origin:raw.origin==='MANUAL'?'MANUAL':'ZENCORE',
+      positionId:String(raw.positionId||ticket).replace(/[^0-9]/g,'').slice(0,20),
       strategyMode: raw.strategyMode==='TF15_INTRA'?'TF15_INTRA':'TF2_SCALPING',
       symbol,
       side,
@@ -358,6 +362,8 @@
       value: {
         ...identity.value,
         accountFingerprint,
+        manualExitVersion:input.manualExitVersion==='MANUAL_TF2_EXIT_V2'?'MANUAL_TF2_EXIT_V2':null,
+        manualExitEnabled:input.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&input.manualExitEnabled===true,
         tradeMode,
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,

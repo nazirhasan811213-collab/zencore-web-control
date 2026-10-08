@@ -209,9 +209,9 @@ class Runner:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
                 # ON can be queued between the periodic heartbeat and this poll.
                 # Refresh server permission after verifying the command, before handing it to EA.
-                if signed['type']=='SYSTEM_ON':
+                if signed['type'] in ('SYSTEM_ON','MANUAL_EXIT_CONFIG'):
                     if not self.renew_lease(local): return
-                    if self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
+                    if signed['type']=='SYSTEM_ON' and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
                 if remaining_ms <= 0: raise ValueError('COMMAND_EXPIRED')
                 fields['expiresAt']=int(time.time()*1000+remaining_ms)
