@@ -7,6 +7,7 @@ import {prepareCampaign,AGENT_ROLES} from './orchestrator.mjs';
 import {createEditorialSchedule,generateDailyQueue} from './editorial.mjs';
 import {renderPoster} from './poster.mjs';
 import {storyboard,renderInstructions} from './video.mjs';
+import {makeGrant,verifyGrant} from './publishing-guard.mjs';
 
 const port=Number(process.env.MARKETING_PORT||8099);
 const storePath=process.env.MARKETING_STORE||path.resolve('marketing-control-data.json');
@@ -14,13 +15,13 @@ const founderKey=process.env.MARKETING_FOUNDER_KEY||'';
 const agentKey=process.env.MARKETING_AGENT_KEY||'';
 const MAX_BODY=256*1024;
 const validChannels=new Set(['facebook','instagram','tiktok']);
-let state={items:[],audit:[],settings:{publishingEnabled:false}};
+let state={items:[],audit:[],grants:[],settings:{publishingEnabled:false}};
 let queue=Promise.resolve();
 const now=()=>new Date().toISOString();
 const id=()=>crypto.randomUUID();
 function safeEq(a,b){if(!a||!b)return false;const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&crypto.timingSafeEqual(x,y);}
 const role=req=>{const h=req.headers.authorization||'';const token=h.startsWith('Bearer ')?h.slice(7):'';return safeEq(token,founderKey)?'founder':safeEq(token,agentKey)?'agent':null;};
-async function initialize(){try{const obj=JSON.parse(await fs.readFile(storePath,'utf8'));if(Array.isArray(obj.items)&&Array.isArray(obj.audit))state={...state,...obj,settings:{publishingEnabled:false}};}catch(e){if(e.code!=='ENOENT')throw e;}}
+async function initialize(){try{const obj=JSON.parse(await fs.readFile(storePath,'utf8'));if(Array.isArray(obj.items)&&Array.isArray(obj.audit))state={...state,...obj,grants:[],settings:{publishingEnabled:false}};}catch(e){if(e.code!=='ENOENT')throw e;}}
 async function persist(){const temp=storePath+'.tmp';await fs.mkdir(path.dirname(storePath),{recursive:true});await fs.writeFile(temp,JSON.stringify(state,null,2),{mode:0o600});await fs.rename(temp,storePath);}
 function transaction(fn){const p=queue.then(async()=>{const result=fn();await persist();return result;});queue=p.catch(()=>{});return p;}
 function send(res,status,data){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(data));}
@@ -69,6 +70,17 @@ export function createApp(){return http.createServer(async(req,res)=>{
    if(!title||!caption||!validChannels.has(channel))return send(res,400,{error:'title, caption and valid channel required'});
    const item=await transaction(()=>{const x={id:id(),title,caption,channel,assetUrl:cleanText(b.assetUrl,1500),status:'DRAFT',createdAt:now(),updatedAt:now(),approvedBy:null,approvedAt:null};state.items.push(x);audit('DRAFT_CREATED',actor,x.id);return x;});
    return send(res,201,{item});
+  }
+  const grantPath=url.pathname.match(/^\/api\/marketing\/items\/([0-9a-f-]+)\/release-grant$/);
+  if(req.method==='POST'&&grantPath){
+   requireFounder(actor);
+   const b=await body(req);
+   const result=await transaction(()=>{
+    const item=state.items.find(x=>x.id===grantPath[1]);if(!item)throw Object.assign(new Error('Not found'),{status:404});
+    let grant;try{grant=makeGrant(item,actor,{destination:b.destination});}catch(e){throw Object.assign(e,{status:409});}
+    state.grants.push(grant);audit('FOUNDER_RELEASE_GRANT_CREATED',actor,item.id);
+    return {grantId:grant.grantId,itemId:item.id,expiresAt:grant.expiresAt,valid:verifyGrant(grant,item,b.destination),published:false};
+   });return send(res,201,{result});
   }
   const match=url.pathname.match(/^\/api\/marketing\/items\/([0-9a-f-]+)\/(submit|approve|reject|publish)$/);
   if(req.method==='POST'&&match){
