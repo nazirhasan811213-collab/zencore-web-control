@@ -37,3 +37,15 @@ test('Campaign planning remains draft-only and requires approval',async()=>{
  assert.equal(calendar.length,11);
  assert.ok(calendar.every(x=>x.approvalRequired&&x.status==='PLAN_ONLY'));
 });
+
+test('Poster escapes injected markup and storyboard stays draft',async()=>{
+ const {renderPoster}=await import('./poster.mjs');
+ const {storyboard}=await import('./video.mjs');
+ const image=renderPoster({headline:'<script>alert(1)</script>'});
+ assert.equal(image.includes('<script>'),false);
+ assert.ok(image.includes('&lt;script&gt;'));
+ const video=storyboard({theme:'Test launch'});
+ assert.equal(video.status,'DRAFT');
+ assert.equal(video.approvalRequired,true);
+ assert.equal(video.scenes.length,5);
+});
