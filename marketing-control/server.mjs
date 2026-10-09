@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {generateDraft} from './agents.mjs';
 
 const port=Number(process.env.MARKETING_PORT||8099);
 const storePath=process.env.MARKETING_STORE||path.resolve('marketing-control-data.json');
@@ -33,6 +34,12 @@ export function createApp(){return http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/api/marketing/items')return send(res,200,{items:state.items});
   if(req.method==='GET'&&url.pathname==='/api/marketing/audit'){requireFounder(actor);return send(res,200,{audit:state.audit});}
   if(req.method==='GET'&&url.pathname==='/api/marketing/settings')return send(res,200,{publishingEnabled:false,requiresFounderApproval:true,publisherConnected:false});
+  if(req.method==='POST'&&url.pathname==='/api/marketing/ai-draft'){
+   const b=await body(req);
+   const generated=await generateDraft({theme:b.theme,channel:b.channel,language:b.language||'ms'});
+   const item=await transaction(()=>{const x={id:id(),title:generated.title,caption:generated.caption,channel:generated.channel,assetUrl:'',status:'DRAFT',createdAt:now(),updatedAt:now(),approvedBy:null,approvedAt:null,source:'AI'};state.items.push(x);audit('AI_DRAFT_CREATED',actor,x.id);return x;});
+   return send(res,201,{item});
+  }
   if(req.method==='POST'&&url.pathname==='/api/marketing/drafts'){
    const b=await body(req);const title=cleanText(b.title,160),caption=cleanText(b.caption,5000),channel=cleanText(b.channel,30);
    if(!title||!caption||!validChannels.has(channel))return send(res,400,{error:'title, caption and valid channel required'});
