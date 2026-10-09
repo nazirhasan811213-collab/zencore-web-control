@@ -29,7 +29,8 @@ function hemaMode(r={},side){
 function evaluateEntrySop(d={},timeframe='2'){
   const atrPullback=d.normal3SetupPolicy==='SEQUENTIAL_ATR40_V1';
   const sequential=atrPullback||String(timeframe)==='2'&&d.normal3SetupPolicy==='TF2_SEQUENTIAL_V1';
-  const solid=sequential?d.normal3SetupArmed===true:d.normal3Solid===true;
+  const entryExpired=d.normal3EntryExpired===true;
+  const solid=!entryExpired&&(sequential?d.normal3SetupArmed===true:d.normal3Solid===true);
   const version=atrPullback?`NORMAL_20261001_TF${timeframe}_SEQ_ATR40_V4`:sequential?'NORMAL_20261001_TF2_SEQ_V3':`NORMAL_20261001_TF${timeframe}_V2`;
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
@@ -49,7 +50,7 @@ function evaluateEntrySop(d={},timeframe='2'){
   const ownHema=hemaMode(currentHema?.['tf'+timeframe],side);
   const higherHema=hemaMode(currentHema?.['tf'+higherTf],side);
   const gates=[
-    {key:'solid',label:sequential?'SOLID setup dipegang':'Solid Entry Signal',pass:solid},
+    {key:'solid',label:entryExpired?'TP1 dah disentuh — tunggu SOLID baharu':sequential?'SOLID setup dipegang':'Solid Entry Signal',pass:solid},
     {key:'entry',label:'Price Lepas Entry Line',pass:pricePast},
     {key:'sop',label:'SOP Dashboard ≥4/5 Green',pass:green>=4,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},

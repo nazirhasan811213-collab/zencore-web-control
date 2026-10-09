@@ -9,17 +9,25 @@ function createEntrySetupTracker(){
   const meta=d.setupMeta||d.tf2SetupMeta;
   // Alert snapshots are versioned separately from the server deploy. Preserve
   // the original six gates until that TF's Pine explicitly supplies ATR40 data.
-  if(meta?.policy!==POLICY)return d;
+  const atrPolicy=meta?.policy===POLICY;
   const side=String(d.normal3Side||'').toUpperCase(),sign=side==='BUY'?1:side==='SELL'?-1:0;
   const entry=num(d.normal3Entry),sl=num(d.initialSl),price=num(d.normal3Close);
-  const key=sign&&entry!==null&&sl!==null?[side,d.setupKey||'',entry,sl,d.tp1,d.tp2,d.tp3].join('|'):null;
+  // Target/SL updates do not make an exhausted setup a new SOLID signal.
+  const key=sign&&entry!==null&&sl!==null?(d.setupKey?[side,d.setupKey].join('|'):[side,entry,sl,d.tp1,d.tp2,d.tp3].join('|')):null;
   const id=String(d.symbol||'')+'|'+tf,old=states.get(id);
-  const state=old&&old.key===key?old:{key,armed:false,cancelled:false,impulse:null};
+  const state=old&&old.key===key?old:{key,armed:false,cancelled:false,expired:false,impulse:null};
+  const tp1=num(d.tp1),quote=num(d.close??d.normal3Close);
+  const targetTouched=d.tp1Hit===true||d.tp2Hit===true||d.tp3Hit===true||num(d.slLockStage)>=1||meta?.entryExpired===true||
+   (sign&&tp1!==null&&((price!==null&&sign*(price-tp1)>=0)||(quote!==null&&sign*(quote-tp1)>=0)));
+  if(key&&targetTouched)state.expired=true;
   const ended=d.tradeActive===false||d.slHit===true||d.positionExitStage==='CLOSED'||
    ['EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(d.positionExitAction)||
    (sign&&price!==null&&sl!==null&&sign*(price-sl)<=0);
-  if(!key||ended){state.armed=false;state.cancelled=true;state.impulse=null;}
+  if(!key||ended||state.expired){state.armed=false;state.cancelled=true;state.impulse=null;}
   else if(!state.cancelled&&(d.normal3Solid===true||meta?.policy===POLICY&&meta.solidLatched===true))state.armed=true;
+  states.set(id,state);
+  // Apply TP1 expiry to older alerts too, without changing their six SOP gates.
+  if(!atrPolicy)return state.expired?{...d,normal3EntryExpired:true,normal3EntryExpiryReason:'TP1_TOUCHED_WAIT_NEW_SOLID'}:d;
   const bar=num(d.time??d.sourceBarOpenAt),open=num(d.open),extreme=num(sign>0?d.high:d.low);
   const atr=num(meta?.atrBeforeBar??d.atrBeforeBar);
   // Restore frozen impulse data carried by the Pine latch after server restart.
@@ -45,10 +53,11 @@ function createEntrySetupTracker(){
   const hasAtr=atr!==null&&atr>0;
   const missingImpulse=invalidImpulseMeta;
   const pass=state.armed&&hasAtr&&!missingImpulse&&(!required||fraction!==null&&fraction>=.4-1e-9);
-  const pullback={required:required||missingImpulse,pass,state:!state.armed?'WAIT_SOLID':!hasAtr?'WAIT_ATR':missingImpulse?'WAIT_IMPULSE_DATA':required?(pass?'PULLBACK_READY':'WAIT_PULLBACK'):'NORMAL_CANDLE',
+  const pullback={required:required||missingImpulse,pass,state:state.expired?'TP1_TOUCHED_WAIT_NEW_SOLID':!state.armed?'WAIT_SOLID':!hasAtr?'WAIT_ATR':missingImpulse?'WAIT_IMPULSE_DATA':required?(pass?'PULLBACK_READY':'WAIT_PULLBACK'):'NORMAL_CANDLE',
    atrBeforeBar:atr,atrMultiplier:1.5,retracement:.4,level,fraction,distance,...(impulse?{impulse:{...impulse}}:{})};
   states.set(id,state);
-  return {...d,normal3SetupPolicy:POLICY,normal3SetupArmed:state.armed,normal3SetupCancelled:state.cancelled,pullback};
+  return {...d,normal3SetupPolicy:POLICY,normal3SetupArmed:state.armed,normal3SetupCancelled:state.cancelled,normal3EntryExpired:state.expired,
+   normal3EntryExpiryReason:state.expired?'TP1_TOUCHED_WAIT_NEW_SOLID':null,pullback};
  }
  return {update};
 }
