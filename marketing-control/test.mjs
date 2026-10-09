@@ -49,3 +49,15 @@ test('Poster escapes injected markup and storyboard stays draft',async()=>{
  assert.equal(video.approvalRequired,true);
  assert.equal(video.scenes.length,5);
 });
+
+test('Founder release grants require exact immutable approved content',async()=>{
+ const {makeGrant,verifyGrant}=await import('./publishing-guard.mjs');
+ const item={id:'item-1',title:'ZenCore',caption:'Trading has risk',channel:'facebook',status:'APPROVED',approvedBy:'founder'};
+ assert.throws(()=>makeGrant(item,'agent',{destination:'facebook'}));
+ const grant=makeGrant(item,'founder',{destination:'facebook'});
+ assert.equal(verifyGrant(grant,item,'facebook'),true);
+ assert.equal(verifyGrant(grant,{...item,caption:'Different caption'},'facebook'),false);
+ assert.equal(verifyGrant(grant,item,'instagram'),false);
+ grant.used=true;
+ assert.equal(verifyGrant(grant,item,'facebook'),false);
+});
