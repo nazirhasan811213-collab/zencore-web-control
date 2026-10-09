@@ -1,0 +1,180 @@
+{
+  "version": "1.0-draft",
+  "brand": {
+    "name": "ZenCore",
+    "tagline": [
+      "TRADER, ENJOY YOUR LIFE. YOU'RE THE BOSS.",
+      "BIAR ZENCORE TRADE UNTUK ANDA."
+    ],
+    "launchDate": "2026-10-19",
+    "targetUsers": 200
+  },
+  "policy": {
+    "approval": "REQUIRED_FOR_EVERY_EXTERNAL_ACTION",
+    "autoApprove": false,
+    "autoPublish": false,
+    "adsEnabled": false,
+    "dmsEnabled": false,
+    "externalMessagingEnabled": false,
+    "requireFounderFor": [
+      "all_posts",
+      "all_videos",
+      "all_images",
+      "all_reels",
+      "all_stories",
+      "all_comments",
+      "all_dms",
+      "all_ad_spend",
+      "all_campaign_launches"
+    ],
+    "forbiddenClaims": [
+      "guaranteed_profit",
+      "risk_free_trading",
+      "unverified_win_rate",
+      "fabricated_testimonials",
+      "fabricated_live_results"
+    ]
+  },
+  "agents": [
+    {
+      "id": "director",
+      "role": "Campaign orchestration and work allocation",
+      "externalPermissions": []
+    },
+    {
+      "id": "strategy",
+      "role": "Plan editorial calendar and audience campaigns",
+      "externalPermissions": []
+    },
+    {
+      "id": "copywriter",
+      "role": "Draft Malay/English scripts, titles and captions",
+      "externalPermissions": []
+    },
+    {
+      "id": "designer",
+      "role": "Prepare design briefs and image assets",
+      "externalPermissions": []
+    },
+    {
+      "id": "video",
+      "role": "Prepare 9:16 storyboard and edit directions from authentic product captures",
+      "externalPermissions": []
+    },
+    {
+      "id": "social",
+      "role": "Prepare proposed per-platform schedule and metadata",
+      "externalPermissions": []
+    },
+    {
+      "id": "community",
+      "role": "Draft FAQ and prospect replies for review",
+      "externalPermissions": []
+    },
+    {
+      "id": "analytics",
+      "role": "Analyze permitted aggregate metrics, flag unsupported claims",
+      "externalPermissions": []
+    }
+  ],
+  "campaign": [
+    {
+      "date": "2026-10-09",
+      "theme": "Brand reveal preparation",
+      "outputs": [
+        "brand-kit",
+        "launch-content-plan"
+      ]
+    },
+    {
+      "date": "2026-10-10",
+      "theme": "System capture",
+      "outputs": [
+        "real-ui-screenshots",
+        "30s-storyboard"
+      ]
+    },
+    {
+      "date": "2026-10-11",
+      "theme": "Teaser 1",
+      "outputs": [
+        "9x16-video-draft",
+        "poster-draft"
+      ]
+    },
+    {
+      "date": "2026-10-12",
+      "theme": "Teaser 2",
+      "outputs": [
+        "feature-hook-script",
+        "caption-drafts"
+      ]
+    },
+    {
+      "date": "2026-10-13",
+      "theme": "Product preview",
+      "outputs": [
+        "dashboard-walkthrough-draft"
+      ]
+    },
+    {
+      "date": "2026-10-14",
+      "theme": "AI analysis",
+      "outputs": [
+        "explanation-reel-draft"
+      ]
+    },
+    {
+      "date": "2026-10-15",
+      "theme": "Auto trade workflow",
+      "outputs": [
+        "supervised-demo-script"
+      ]
+    },
+    {
+      "date": "2026-10-16",
+      "theme": "Risk and FAQ",
+      "outputs": [
+        "risk-faq-carousel"
+      ]
+    },
+    {
+      "date": "2026-10-17",
+      "theme": "48 hour countdown",
+      "outputs": [
+        "countdown-draft"
+      ]
+    },
+    {
+      "date": "2026-10-18",
+      "theme": "24 hour countdown",
+      "outputs": [
+        "launch-checklist"
+      ]
+    },
+    {
+      "date": "2026-10-19",
+      "theme": "Official launch",
+      "outputs": [
+        "hero-launch-video",
+        "founder-live-runbook",
+        "approved-posts-only"
+      ]
+    }
+  ],
+  "platforms": {
+    "facebook": {
+      "enabled": false
+    },
+    "instagram": {
+      "enabled": false
+    },
+    "tiktok": {
+      "enabled": false
+    }
+  },
+  "budget": {
+    "monthlyApiLimitMYR": 75,
+    "monthlyAdsLimitMYR": 0
+  }
+}
