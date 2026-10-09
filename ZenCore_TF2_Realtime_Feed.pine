@@ -320,6 +320,8 @@ string marketsJson=""
 varip string[] emittedSetupKeys=array.new_string(3,"")
 varip string[] armedSetupKeys=array.new_string(3,"")
 varip bool[] solidArmed=array.new_bool(3,false)
+// Entry eligibility ends at TP1; position protection continues independently.
+varip bool[] entryExpired=array.new_bool(3,false)
 varip int[] impulseBars=array.new_int(3,0)
 varip float[] impulseOpens=array.new_float(3,na)
 varip float[] impulseExtremes=array.new_float(3,na)
@@ -361,13 +363,18 @@ if feedEnabled and correctTf
         if array.get(armedSetupKeys,i)!=setupKey
             array.set(armedSetupKeys,i,setupKey)
             array.set(solidArmed,i,false)
+            array.set(entryExpired,i,false)
             array.set(impulseBars,i,0)
             array.set(impulseOpens,i,na)
             array.set(impulseExtremes,i,na)
             array.set(impulseAtrs,i,na)
         bool previouslyArmed=array.get(solidArmed,i)
+        bool targetTouched=hit1 or hit2 or hit3 or lockStage>=1 or (direction and not na(tp1) and (buy?c>=tp1:c<=tp1))
+        if targetTouched
+            array.set(entryExpired,i,true)
+        bool setupExpired=array.get(entryExpired,i)
         bool setupEnded=not active or slHit or exitStage=="CLOSED" or (buy?c<=initialSl:c>=initialSl)
-        if setupEnded
+        if setupEnded or setupExpired
             array.set(solidArmed,i,false)
             array.set(impulseBars,i,0)
         else if solid
@@ -412,7 +419,7 @@ if feedEnabled and correctTf
         protectionState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+";"
         managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","
