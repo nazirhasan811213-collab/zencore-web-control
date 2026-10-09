@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {generateDraft} from './agents.mjs';
+import {prepareCampaign,AGENT_ROLES} from './orchestrator.mjs';
 
 const port=Number(process.env.MARKETING_PORT||8099);
 const storePath=process.env.MARKETING_STORE||path.resolve('marketing-control-data.json');
@@ -33,6 +34,10 @@ export function createApp(){return http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/health')return send(res,200,{ok:true,mode:'DRAFT_ONLY',publisherConnected:false});
   if(req.method==='GET'&&url.pathname==='/api/marketing/items')return send(res,200,{items:state.items});
   if(req.method==='GET'&&url.pathname==='/api/marketing/audit'){requireFounder(actor);return send(res,200,{audit:state.audit});}
+  if(req.method==='GET'&&url.pathname==='/api/marketing/agents')return send(res,200,{agents:AGENT_ROLES});
+  if(req.method==='POST'&&url.pathname==='/api/marketing/campaign-preview'){
+   const b=await body(req);return send(res,200,{campaign:prepareCampaign(b)});
+  }
   if(req.method==='GET'&&url.pathname==='/api/marketing/settings')return send(res,200,{publishingEnabled:false,requiresFounderApproval:true,publisherConnected:false});
   if(req.method==='POST'&&url.pathname==='/api/marketing/ai-draft'){
    const b=await body(req);
