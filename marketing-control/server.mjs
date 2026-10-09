@@ -26,6 +26,7 @@ function cleanText(x,max){return typeof x==='string'?x.trim().slice(0,max):'';}
 export function createApp(){return http.createServer(async(req,res)=>{
  try{
   if(!founderKey||!agentKey||founderKey===agentKey){return send(res,503,{error:'Set distinct MARKETING_FOUNDER_KEY and MARKETING_AGENT_KEY'});}
+  if(req.method==='GET'&&(req.url==='/'||req.url==='/dashboard')){const html=await fs.readFile(new URL('./dashboard.html',import.meta.url));res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'",'x-frame-options':'DENY','x-content-type-options':'nosniff'});return res.end(html);}
   const actor=role(req);if(!actor)return send(res,401,{error:'Unauthorized'});
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/health')return send(res,200,{ok:true,mode:'DRAFT_ONLY',publisherConnected:false});
