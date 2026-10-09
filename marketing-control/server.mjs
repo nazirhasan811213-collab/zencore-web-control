@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {generateDraft} from './agents.mjs';
 import {prepareCampaign,AGENT_ROLES} from './orchestrator.mjs';
+import {createEditorialSchedule,generateDailyQueue} from './editorial.mjs';
 
 const port=Number(process.env.MARKETING_PORT||8099);
 const storePath=process.env.MARKETING_STORE||path.resolve('marketing-control-data.json');
@@ -34,6 +35,16 @@ export function createApp(){return http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/health')return send(res,200,{ok:true,mode:'DRAFT_ONLY',publisherConnected:false});
   if(req.method==='GET'&&url.pathname==='/api/marketing/items')return send(res,200,{items:state.items});
   if(req.method==='GET'&&url.pathname==='/api/marketing/audit'){requireFounder(actor);return send(res,200,{audit:state.audit});}
+  if(req.method==='GET'&&url.pathname==='/api/marketing/calendar')return send(res,200,{schedule:createEditorialSchedule()});
+  if(req.method==='POST'&&url.pathname==='/api/marketing/daily-drafts'){
+   requireFounder(actor);
+   const b=await body(req);if(typeof b.theme!=='string'||!b.theme.trim()||b.theme.length>300)return send(res,400,{error:'Invalid theme'});
+   const day=b.date||now().slice(0,10);if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(day))return send(res,400,{error:'Invalid date'});
+   const result=await generateDailyQueue({date:day,theme:b.theme,modelEnabled:b.useAI===true,save:async draft=>transaction(()=>{
+     const x={id:id(),title:draft.title,caption:draft.caption,channel:draft.channel,assetUrl:'',status:'DRAFT',createdAt:now(),updatedAt:now(),approvedBy:null,approvedAt:null,source:draft.source||'template'};
+     state.items.push(x);audit('DAILY_DRAFT_CREATED',actor,x.id);return x;
+   })});return send(res,201,{result});
+  }
   if(req.method==='GET'&&url.pathname==='/api/marketing/agents')return send(res,200,{agents:AGENT_ROLES});
   if(req.method==='POST'&&url.pathname==='/api/marketing/campaign-preview'){
    const b=await body(req);return send(res,200,{campaign:prepareCampaign(b)});
