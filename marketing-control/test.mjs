@@ -24,3 +24,16 @@ test('Founder approval gates and no publisher',async()=>{
   assert.equal(settings.requiresFounderApproval,true);
  } finally {child.kill();await rm(tmp,{recursive:true,force:true});}
 });
+
+test('Campaign planning remains draft-only and requires approval',async()=>{
+ const {prepareCampaign}=await import('./orchestrator.mjs');
+ const {createEditorialSchedule}=await import('./editorial.mjs');
+ const p=prepareCampaign({theme:'Launch ZenCore',date:'2026-10-19'});
+ assert.equal(p.status,'DRAFT');
+ assert.equal(p.approvalRequired,true);
+ assert.equal(p.publishingAllowed,false);
+ assert.equal(p.tasks.length,8);
+ const calendar=createEditorialSchedule();
+ assert.equal(calendar.length,11);
+ assert.ok(calendar.every(x=>x.approvalRequired&&x.status==='PLAN_ONLY'));
+});
