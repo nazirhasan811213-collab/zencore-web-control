@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import {generateDraft} from './agents.mjs';
 import {prepareCampaign,AGENT_ROLES} from './orchestrator.mjs';
 import {createEditorialSchedule,generateDailyQueue} from './editorial.mjs';
+import {renderPoster} from './poster.mjs';
+import {storyboard,renderInstructions} from './video.mjs';
 
 const port=Number(process.env.MARKETING_PORT||8099);
 const storePath=process.env.MARKETING_STORE||path.resolve('marketing-control-data.json');
@@ -35,6 +37,12 @@ export function createApp(){return http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/health')return send(res,200,{ok:true,mode:'DRAFT_ONLY',publisherConnected:false});
   if(req.method==='GET'&&url.pathname==='/api/marketing/items')return send(res,200,{items:state.items});
   if(req.method==='GET'&&url.pathname==='/api/marketing/audit'){requireFounder(actor);return send(res,200,{audit:state.audit});}
+  if(req.method==='POST'&&url.pathname==='/api/marketing/poster-preview'){
+   const b=await body(req);const svg=renderPoster(b);res.writeHead(200,{'content-type':'image/svg+xml','cache-control':'no-store','content-security-policy':"default-src 'none'; sandbox",'x-content-type-options':'nosniff'});return res.end(svg);
+  }
+  if(req.method==='POST'&&url.pathname==='/api/marketing/video-storyboard'){
+   const b=await body(req);return send(res,200,{storyboard:storyboard(b),render:renderInstructions()});
+  }
   if(req.method==='GET'&&url.pathname==='/api/marketing/calendar')return send(res,200,{schedule:createEditorialSchedule()});
   if(req.method==='POST'&&url.pathname==='/api/marketing/daily-drafts'){
    requireFounder(actor);
