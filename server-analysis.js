@@ -45,6 +45,9 @@ const PUBLIC_VIEWER_PASSWORD = String(process.env.ZENCORE_PUBLIC_VIEWER_PASSWORD
 const PUBLIC_VIEWER_NAME = String(process.env.ZENCORE_PUBLIC_VIEWER_NAME || 'ZenCore Public Viewer').trim();
 const AUTOTRADE_ENABLED = AUTH_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_ENABLED || ''));
 const AUTOTRADE_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_EXECUTION_ENABLED || ''));
+// Client EA transport supports REAL/DEMO independently of the legacy hosted gate.
+// Trader ON/confirmation, account binding and MT5 permissions still gate orders.
+const LOCAL_EA_EXECUTION_ENABLED = AUTOTRADE_ENABLED && /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_LOCAL_EA_EXECUTION_ENABLED ?? 'true'));
 const AUTOTRADE_MEMORY = /^(?:1|true|yes|on)$/i.test(String(process.env.ZENCORE_AUTOTRADE_MEMORY || ''));
 const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECRET || '');
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
@@ -237,6 +240,7 @@ if (AUTH_ENABLED) {
         store: autoStore,
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
+        allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
         localEaExecutionUserIds,
         getLatestMarket:(symbol,tf)=>autoTradeState.realtimeDispatcher?.getLatestMarket(symbol,tf),
         onDispatchDiagnostic: report => console.log('ZenCore pair dispatch:', JSON.stringify(report)),

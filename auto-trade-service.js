@@ -93,9 +93,10 @@ function createAutoTradeService(options = {}) {
   const signingKey = String(options.commandSigningKey || '');
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const allowDemoExecution = options.allowDemoExecution === true;
+  const allowLocalEaExecution = options.allowLocalEaExecution === true;
   const localEaExecutionUserIds = new Set(Array.isArray(options.localEaExecutionUserIds) ? options.localEaExecutionUserIds : []);
   function executionAllowed(userId, pod) {
-    return allowDemoExecution || (localEaExecutionUserIds.has(userId) && isLocalEa(pod));
+    return allowDemoExecution || ((allowLocalEaExecution || localEaExecutionUserIds.has(userId)) && isLocalEa(pod));
   }
   const hostedMt5Enabled = options.hostedMt5Enabled === true;
   const hostedWorkerEnabled = hostedMt5Enabled && options.hostedWorkerEnabled === true;
@@ -199,11 +200,11 @@ function createAutoTradeService(options = {}) {
 
   function connectionState(pod) {
     if (pod && !executionAllowed(pod.userId, pod)) pod = { ...pod, demoExecutionUnlocked: false };
-    return Core.podConnectionState(pod, now(), executionAllowed(pod?.userId, pod) ? {
+    return Core.podConnectionState(pod, now(), {
       connectorVersion: isLocalEa(pod) ? (['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion)?pod.connectorVersion:LOCAL_EA_VERSION) : requiredDemoConnectorVersion,
       realAccountAllowed: isLocalEa(pod) && ['1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion),
       ownershipModes: isLocalEa(pod) ? ['TRADER_OWNED_EA_LOCAL'] : allowedDemoOwnershipModes
-    } : {});
+    });
   }
 
   function hostedConnectionState(hostedAccount) {
@@ -1264,7 +1265,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
-    const profiles = (allowDemoExecution || localEaExecutionUserIds.size) ? await store.listOnProfiles() : [];
+    const profiles = (allowDemoExecution || allowLocalEaExecution || localEaExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
