@@ -119,15 +119,66 @@
     tbody.innerHTML = ibs.map(item => {
       const isAdmin = item.code === 'nazir';
       const link = `${window.location.origin}/u/${encodeURIComponent(item.code)}`;
+      const promoLink = `https://zencore-terminal.magicpeony2.chatgpt.site/?ib=${encodeURIComponent(item.code)}`;
       return `<tr>
         <td><a class="table-link" href="/admin/ib/${encodeURIComponent(item.code)}"><strong>${esc(item.displayName)}</strong><small>${isAdmin ? 'Default owner' : 'IB Partner'}</small></a></td>
-        <td><span class="link-code">${esc(item.code.toUpperCase())}</span><small>${esc(link)} <button class="copy-inline" type="button" data-copy-link="${esc(link)}" title="Copy registration link">⧉</button></small></td>
+        <td><span class="link-code">${esc(item.code.toUpperCase())}</span><small>${esc(link)} <button class="copy-inline" type="button" data-copy-link="${esc(link)}" title="Copy registration link">⧉</button></small><small><a href="${esc(promoLink)}" target="_blank" rel="noopener">Landing page ↗</a> <button class="copy-inline" type="button" data-copy-link="${esc(promoLink)}" title="Copy landing page IB">⧉</button></small></td>
         <td><strong>${esc(item.clientCount)}</strong><small>clients</small></td>
         <td>${statusPill(item.active ? 'active' : 'disabled')}</td>
         <td>${isAdmin ? '<span class="status-pill active">SYSTEM</span>' : `<button class="table-action ${item.active ? 'danger' : 'good'}" type="button" data-ib-status="${esc(item.id)}" data-active="${item.active ? 'false' : 'true'}">${item.active ? 'DISABLE' : 'ACTIVATE'}</button>`}</td>
       </tr>`;
     }).join('');
   }
+
+  let promotion = null;
+  let promotionRequest = 0;
+  function promotionEndpoint() {
+    const code = role === 'admin' ? byId('promotionIbSelect')?.value || 'nazir' : '';
+    return `/api/${role}/promotion${code ? '/' + encodeURIComponent(code) : ''}`;
+  }
+  function renderPromotion(value) {
+    promotion = value;
+    const landing = byId('promotionLanding');
+    if (!landing) return;
+    landing.textContent = value?.landingUrl || 'Pautan tidak tersedia';
+    byId('promotionCopy').disabled = !value?.landingUrl;
+    byId('promotionWaCopy').disabled = !value?.whatsappRegisterUrl;
+    byId('promotionPhone').value = value?.phone || '';
+    for (const [id, key] of [['promotionOpen','landingUrl'], ['promotionWaRegister','whatsappRegisterUrl'], ['promotionWaEnquiry','whatsappEnquiryUrl']]) {
+      const a = byId(id); a.hidden = !value?.[key];
+      if (value?.[key]) a.href = value[key]; else a.removeAttribute('href');
+    }
+    byId('promotionStatus').textContent = value ? `${value.displayName} • ${value.whatsappReady ? 'WhatsApp ready' : 'Isi nombor WhatsApp untuk aktifkan contact'}` : 'Maklumat contact tidak tersedia.';
+  }
+  async function loadPromotion() {
+    const request = ++promotionRequest;
+    renderPromotion(null);
+    try {
+      const body = await api(promotionEndpoint());
+      if (request === promotionRequest) renderPromotion(body.promotion);
+    } catch (error) { if (request === promotionRequest) byId('promotionStatus').textContent = error.message; }
+  }
+  async function copyPromotion(value) {
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); byId('promotionStatus').textContent = 'Link berjaya disalin.'; }
+    catch (_) { window.prompt('Copy link:', value); }
+  }
+  byId('promotionCopy')?.addEventListener('click', () => copyPromotion(promotion?.landingUrl));
+  byId('promotionWaCopy')?.addEventListener('click', () => copyPromotion(promotion?.whatsappRegisterUrl));
+  byId('promotionIbSelect')?.addEventListener('change', loadPromotion);
+  byId('promotionPhoneForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button');
+    const select = byId('promotionIbSelect');
+    const endpoint = promotionEndpoint();
+    button.disabled = true; if (select) select.disabled = true;
+    try {
+      const body = await api(endpoint, { method:'PATCH', body:JSON.stringify({ phone:byId('promotionPhone').value }) });
+      renderPromotion(body.promotion);
+      byId('promotionStatus').textContent = 'WhatsApp disimpan. Link landing page terus ikut contact ini.';
+    } catch (error) { byId('promotionStatus').textContent = error.message; }
+    finally { button.disabled = false; if (select) select.disabled = false; }
+  });
 
   async function loadAdmin() {
     const [body, systemBody, mt5Body] = await Promise.all([
@@ -195,6 +246,13 @@
     }
 
     renderIbTable(body.ibs || []);
+    const promotionSelect = byId('promotionIbSelect');
+    if (promotionSelect) {
+      const previous = promotionSelect.value;
+      promotionSelect.innerHTML = (body.ibs || []).filter(item => item.active).map(item => `<option value="${esc(item.code)}">${esc(item.displayName)} (${esc(item.code)})</option>`).join('');
+      if ([...promotionSelect.options].some(item => item.value === previous)) promotionSelect.value = previous;
+    }
+    await loadPromotion();
     const ibLinkSelect = byId('ibLinkSelect');
     if (ibLinkSelect) {
       const linkItems = (body.ibs || []).map(item =>
@@ -235,6 +293,7 @@
     const link = code ? `${window.location.origin}/u/${encodeURIComponent(code)}` : '';
     if (byId('referralLink')) byId('referralLink').textContent = link || 'Link unavailable';
     renderIbClients(clients);
+    await loadPromotion();
   }
 
   function filterClients() {

@@ -1,3 +1,4 @@
+const { whatsappNumber, promotionLinks } = require('./promotion-links');
 const {
   normalizeEmail,
   normalizeDisplayName,
@@ -128,6 +129,34 @@ function createAuthService(options = {}) {
     }
     if (phone && !/^\+?\d{8,15}$/.test(phone)) errors.phone = 'Masukkan nombor telefon yang sah.';
     return { ok: Object.keys(errors).length === 0, errors, value: { displayName, code, email, password, phone } };
+  }
+
+  async function publicPromotion(code) {
+    const normalized = String(code || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(normalized)) throw authError('IB_NOT_FOUND', 'Pautan IB tidak sah.', 404);
+    const links = promotionLinks(await store.getPromotionContact(normalized));
+    if (!links) throw authError('IB_NOT_FOUND', 'Pautan IB tidak sah atau tidak aktif.', 404);
+    return links;
+  }
+
+  async function promotionForUser(user, requestedCode = '') {
+    if (!user || !['admin', 'ib'].includes(user.role)) throw authError('FORBIDDEN', 'Akses tidak dibenarkan.', 403);
+    let code = defaultIbCode;
+    if (user.role === ROLE_IB) {
+      const own = await store.ibOverview(user.id);
+      code = own?.referrer?.code;
+      if (!code || (requestedCode && String(requestedCode).toLowerCase() !== code)) throw authError('FORBIDDEN', 'Pautan ini bukan milik IB anda.', 403);
+    } else if (requestedCode) code = String(requestedCode).trim().toLowerCase();
+    return publicPromotion(code);
+  }
+
+  async function updatePromotionPhone(user, input = {}, requestedCode = '') {
+    const current = await promotionForUser(user, requestedCode);
+    const raw = String(input.phone || '').trim();
+    const phone = whatsappNumber(raw);
+    if (raw && !phone) throw authError('VALIDATION_ERROR', 'Masukkan nombor WhatsApp yang sah, contoh 0123456789 atau +60123456789.', 400);
+    await store.setPromotionPhone(current.code, phone);
+    return publicPromotion(current.code);
   }
 
   async function adminOverview(user) {
@@ -521,6 +550,9 @@ function createAuthService(options = {}) {
   return {
     register,
     resolveReferrer,
+    publicPromotion,
+    promotionForUser,
+    updatePromotionPhone,
     adminOverview,
     adminClients,
     adminIbDetail,
