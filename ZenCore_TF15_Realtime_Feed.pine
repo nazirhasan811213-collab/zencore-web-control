@@ -404,7 +404,7 @@ if feedEnabled and correctTf
         float pullbackLevel=impulseRequired?impulseExtreme+(buy?-1:1)*0.4*impulseDistance:na
         bool pullbackReady=not na(previousAtr) and previousAtr>0 and (not impulseRequired or (buy?c<=pullbackLevel:c>=pullbackLevel))
         bool entryRange=buy?(c>entry and c<tp1):(c<entry and c>tp1)
-        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=4 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt)
+        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=4 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt) and power>=0 and power<=100
         if eligible!=array.get(lastEligible,i)
             emitSetup:=true
             array.set(lastEligible,i,eligible)
