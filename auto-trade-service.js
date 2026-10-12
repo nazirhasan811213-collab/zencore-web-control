@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const Core = require('./auto-trade-core');
+const {rebasedManagement}=require('./live-entry-management');
 
 function serviceError(code, message, status = 400, fields = null) {
   const error = new Error(message);
@@ -1093,6 +1094,10 @@ function createAutoTradeService(options = {}) {
   }
 
   async function queuedEntryIsCurrent(command){
+    if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
+      const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
+      if(latest?.payload?.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1')return p.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&p.analysisSnapshot.entryCommandId===latest.id;
+    }
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
       return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
@@ -1117,7 +1122,10 @@ function createAutoTradeService(options = {}) {
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
     return !!m && now()-(Number(m.signalObservedAt)||m.receivedAt)<=30000 && (Number(m.signalObservedAt)||m.receivedAt)<=now()+5000 &&
       Core.entryConfirmationsPass(m) && n.side===p.side && (!snap.setupKey||m.setupKey===snap.setupKey) &&
-      ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.[key]===p[key]);
+      (snap.entryAnchor==='LIVE_SIGNAL_PRICE_V1'
+        ? ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.sourceChartPlan?.[key]===snap.sourceChartPlan?.[key])&&
+          (p.side==='BUY'?m.price>snap.sourceChartPlan.entry&&m.price<snap.sourceChartPlan.tp1:m.price<snap.sourceChartPlan.entry&&m.price>snap.sourceChartPlan.tp1)
+        : ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.[key]===p[key]));
   }
   async function nextCommand(rawToken) {
     const pod = await authenticatePod(rawToken);
@@ -1335,6 +1343,7 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || !isCurrent(market)) continue;
+        if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
@@ -1378,17 +1387,20 @@ function createAutoTradeService(options = {}) {
         const mode=String(market.timeframe||market.strategyNormal?.tf||'2').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
         if(!positions.some(p=>p.symbol===symbol&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
-        const management = Core.buildManagementCommand(market);
-        if (!management) continue;
+        const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
+        const rebased=rebasedManagement(market,positions,latest);
+        const management = Core.buildManagementCommand(rebased.market||{});
+        const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
+        if (!management&&!manualManagement) continue;
         const sourceAt=Number(market.signalObservedAt||market.receivedAt);
         if(!hostedAccount&&pod?.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
           const side=market.strategyNormal?.side;
-          const actions=management.payload.actions.filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
+          const actions=(manualManagement?.payload.actions||[]).filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){
-            if(actions.length){const issued=await issueCommand({userId:profile.userId,podId:pod.id,type:'MANUAL_EXIT_ACTION',payload:{symbol,side,ticket:position.ticket,positionId:position.positionId,sourceAt,actions},dedupeKey:`MANUAL|${position.positionId}|${management.managementKey}`,ttlMs:15000,notAfterMs:sourceAt+30000});if(issued.created)queued+=1;}
+            if(actions.length){const issued=await issueCommand({userId:profile.userId,podId:pod.id,type:'MANUAL_EXIT_ACTION',payload:{symbol,side,ticket:position.ticket,positionId:position.positionId,sourceAt,actions},dedupeKey:`MANUAL|${position.positionId}|${manualManagement.managementKey}`,ttlMs:15000,notAfterMs:sourceAt+30000});if(issued.created)queued+=1;}
           }
         }
-        if(!positions.some(p=>p.symbol===symbol&&p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
+        if(!management||!positions.some(p=>p.symbol===symbol&&p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,

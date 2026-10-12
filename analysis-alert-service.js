@@ -132,7 +132,7 @@ class AnalysisAlerts {
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
-        pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
+        entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
         m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},
       telegramMarket:{signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
     }:e).map(e=>({...e,notificationKey:notificationKey(e,prev)}));

@@ -320,7 +320,7 @@ string marketsJson=""
 varip string[] emittedSetupKeys=array.new_string(3,"")
 varip string[] armedSetupKeys=array.new_string(3,"")
 varip bool[] solidArmed=array.new_bool(3,false)
-// Entry eligibility ends at TP1; position protection continues independently.
+// Unfilled setup survives chart TP/StepLock; original SL or a new setup invalidates it.
 varip bool[] entryExpired=array.new_bool(3,false)
 varip int[] impulseBars=array.new_int(3,0)
 varip float[] impulseOpens=array.new_float(3,na)
@@ -355,9 +355,9 @@ if feedEnabled and correctTf
         int greens=(sop1?1:0)+(sop2?1:0)+(sop3?1:0)+(sop4?1:0)+(sop5?1:0)
         bool buy=side=="BUY"
         bool direction=buy or side=="SELL"
-        bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
-        bool ownHema=buy?h20>h40:h20<h40
-        bool higherHema=buy?f3>s3:f3<s3
+        bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>40)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>40))
+        bool ownHema=(buy?h20>h40:h20<h40) and not na(a14) and a14>0 and math.abs(h20-h40)>a14*0.10
+        bool higherHema=(buy?f3>s3:f3<s3) and not na(a14) and a14>0 and math.abs(f3-s3)>a14*0.10
         // SOLID is held across candles; confirmations and pullback use current values.
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
         if array.get(armedSetupKeys,i)!=setupKey
@@ -369,11 +369,11 @@ if feedEnabled and correctTf
             array.set(impulseExtremes,i,na)
             array.set(impulseAtrs,i,na)
         bool previouslyArmed=array.get(solidArmed,i)
-        bool targetTouched=hit1 or hit2 or hit3 or lockStage>=1 or (direction and not na(tp1) and (buy?c>=tp1:c<=tp1))
+        bool targetTouched=false // Unfilled setup waits for return even after TP2.
         if targetTouched
             array.set(entryExpired,i,true)
         bool setupExpired=array.get(entryExpired,i)
-        bool setupEnded=not active or slHit or exitStage=="CLOSED" or (buy?c<=initialSl:c>=initialSl)
+        bool setupEnded=not direction or (buy?c<=initialSl:c>=initialSl)
         if setupEnded or setupExpired
             array.set(solidArmed,i,false)
             array.set(impulseBars,i,0)
@@ -404,7 +404,9 @@ if feedEnabled and correctTf
         float pullbackLevel=impulseRequired?impulseExtreme+(buy?-1:1)*0.4*impulseDistance:na
         bool pullbackReady=not na(previousAtr) and previousAtr>0 and (not impulseRequired or (buy?c<=pullbackLevel:c>=pullbackLevel))
         bool entryRange=buy?(c>entry and c<tp1):(c<entry and c>tp1)
-        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=4 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt)
+        // Unchanged EA still refuses execution after TP1. Do not emit an impossible entry.
+        bool eaEntryWindow=buy?c<tp1:c>tp1
+        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=3 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt) and power>=0 and power<=100 and not na(ch) and ch<61.8
         if eligible!=array.get(lastEligible,i)
             emitSetup:=true
             array.set(lastEligible,i,eligible)
@@ -413,13 +415,13 @@ if feedEnabled and correctTf
         // A recreated alert must never replay a setup reconstructed from history.
         if bootstrap
             array.set(emittedSetupKeys,i,setupKey)
-        bool entryEvent=barstate.isrealtime and not bootstrap and feedChannel=="Execution" and eligible and array.get(emittedSetupKeys,i)!=setupKey
+        bool entryEvent=barstate.isrealtime and not bootstrap and feedChannel=="Execution" and eligible and eaEntryWindow and array.get(emittedSetupKeys,i)!=setupKey
         if entryEvent
             emitEntry:=true
         protectionState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+";"
         managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryRuleVersion\":\"TF2_3GREEN_TP1_HEMAGAP_V1\",\"entryExpiryTarget\":0,\"pendingEntryReturn\":true,\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","

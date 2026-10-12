@@ -5,6 +5,7 @@ const {acceptsSnapshot,acceptsFeedSource,effectiveReceivedAt}=require('./market-
 const {normalEntrySop}=require('./normal-entry-sop');
 const tf2SetupTracker=require('./entry-setup-state').createEntrySetupTracker();
 const {chartTradePlan}=require('./chart-trade-plan');
+const {levelsAtFill:levelsAtLivePrice}=require('./live-entry-levels');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
 const V16_PORT=Number(process.env.ZENCORE_INTERNAL_V16_PORT||(process.env.NODE_ENV==='test'?PUBLIC_PORT-1:PUBLIC_PORT===10001?10002:10001));
@@ -391,31 +392,38 @@ function fastTradeStrategy(symbol,d){
 }
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
-  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
+  const meta=d.setupMeta||d.tf2SetupMeta;
+  const pendingReturn=String(d.timeframe)==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
+  // Chart protection may finish a virtual position that this user never opened.
+  // Actual user positions, queued commands and replay guards remain in dispatch.
+  if(life?.stage==='COOLDOWN'&&!pendingReturn)return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
   if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — perlukan SOLID, entry line, checklist 4/5, forecast dan HEMA2/3 semasa daripada Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
   const x=normalEntrySop({...d,sidewaysGuard:sidewaysGuardBySymbol.get(symbol)?.active===true});
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
   const sopReady=(x.sequential?x.solid:d.entryEvent!==false)&&(reentry?x.reentryReady:x.standardReady);
   const pinePlan=chartTradePlan(d,side);
+  const displayTarget=x.entryExpiryTarget==='TP2'?pinePlan?.tp2:pinePlan?.tp1;
   const entryWindowOpen=!!pinePlan && (side==='BUY'
-    ? N(d.close)>pinePlan.sl && N(d.close)<pinePlan.tp1
-    : N(d.close)<pinePlan.sl && N(d.close)>pinePlan.tp1);
-  const ready=sopReady&&!!pinePlan&&entryWindowOpen;
+    ? N(d.close)>pinePlan.sl && N(d.close)<displayTarget
+    : N(d.close)<pinePlan.sl && N(d.close)>displayTarget);
+  const eaEntryCompatible=!!pinePlan&&(side==='BUY'?N(d.close)<pinePlan.tp1:N(d.close)>pinePlan.tp1);
+  const ready=sopReady&&!!pinePlan&&entryWindowOpen&&eaEntryCompatible;
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
-  const reason=x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} SETUP — pengesahan semasa lulus: entry line + 4/5 checklist + forecast + HEMA2/3 searah.`):
+  const reason=sopReady&&entryWindowOpen&&!eaEntryCompatible?'SOP TP2 lulus, tetapi EA sedia ada mengehadkan entry sebelum TP1. Tiada order dihantar.':x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} SETUP — pengesahan semasa lulus: entry line + ${x.minimumGreen}/5 checklist + forecast + HEMA2/3 ${x.version.includes('HEMAGAP')?'tidak nipis':'searah'}.`):
     sopReady&&pinePlan&&!entryWindowOpen?'WAIT PULLBACK — harga di luar julat entry hingga TP1; semak semula SOP semasa.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  const plan=ready?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
+  const basePlan=ready&&pendingReturn?{...pinePlan,...levelsAtLivePrice(pinePlan,N(d.close)),entryAnchor:'LIVE_SIGNAL_PRICE_V1',sourceChartPlan:{side:pinePlan.side,entry:pinePlan.entry,sl:pinePlan.sl,tp1:pinePlan.tp1,tp2:pinePlan.tp2,tp3:pinePlan.tp3}}:pinePlan;
+  const plan=(ready||sopReady&&entryWindowOpen)?{...basePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
     mode:'NORMAL',entrySopVersion:x.version,tf:`${d.timeframe||'2'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:x.solid,pullback:x.pullback,triggerPolicy:x.sequential?'SOLID_LATCH_CURRENT_CONFIRMATIONS':'SIMULTANEOUS',plan,
     confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
     sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
-      marketRegime:x.marketRegime,hema2:x.hema2,hema3:x.hema3,solid:x.solid,pullback:x.pullback,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
+      atrReference:x.atrReference,entryExpiryTarget:x.entryExpiryTarget,minimumGreen:x.minimumGreen,eaEntryCompatible,marketRegime:x.marketRegime,hema2:x.hema2,hema3:x.hema3,solid:x.solid,pullback:x.pullback,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
       sop1:x.flags[0],sop2:x.flags[1],sop3:x.flags[2],sop4:x.flags[3],sop5:x.flags[4],
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
@@ -646,7 +654,7 @@ function proxyPairHtml(req,res,symbol){
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
-  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'NORMAL_20261006_DUAL_ATR40_V4',feedRefreshVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',analysisFreshness:'PINE_EMITTED_AT',entryReplayProtection:'FRESH_EXECUTION_EVENT_V2',telegramDedupVersion:'SETUP_AND_CHAT_V2',analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,plannedHeartbeatMs:30000,executionAlertCap:12,dashboardAlertCap:6,baselineCommit:'284b98d',baselineDate:'2026-10-01',timeframes:['2','15'],checklistMinimum:4,hemaTimeframes:{TF2:['2','3'],TF15:['15','30']},baselineHemaTimeframe:'5',hemaMode:'CURRENT_RIBBON_DIRECTION',entryTiming:'INTRABAR_EVENT',setupPolicy:'SEQUENTIAL_ATR40_V1',impulseAtrMultiplier:1.5,pullbackFraction:.4,atrReference:'PREVIOUS_BAR_ATR14',entryRange:'BETWEEN_ENTRY_AND_TP1',pricePastEntryRequired:true,forecastBuyAbove:50,forecastSellNeutralBelow:50,forecastSellBearishAbove:50,minimumGrade:'C+',exitPolicy:'PINE_STEPLOCK_ORIGINAL',telegramFollowsSop:true,requiresNewPineFeed:true}));
+  if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({version:'NORMAL_20261012_TF2_LIVE_ENTRY_RETURN_V5',observedGoldFeed:{timeframe:latestBySymbol.get('XAUUSD')?.timeframe||null,rule:(latestBySymbol.get('XAUUSD')?.setupMeta||latestBySymbol.get('XAUUSD')?.tf2SetupMeta)?.entryRuleVersion||null,pendingEntryReturn:(latestBySymbol.get('XAUUSD')?.setupMeta||latestBySymbol.get('XAUUSD')?.tf2SetupMeta)?.pendingEntryReturn===true,receivedAt:latestBySymbol.get('XAUUSD')?.receivedAt||null},tf2Policy:{feedRule:'TF2_3GREEN_TP1_HEMAGAP_V1',requiresPendingEntryReturn:true,checklistMinimum:3,forecastBuyNeutralAbove:50,forecastBuyBullishAbove:40,forecastSellNeutralBelow:50,forecastSellBearishAbove:40,hemaGapAtrMinimum:.10,pendingSetupSurvivesChartTp2:true,entryZone:'ORIGINAL_ENTRY_TO_TP1',targetAnchor:'LIVE_SIGNAL_PRICE_V1',unchangedEaSlFactor:.8},legacyChecklistMinimum:4,tf15ChecklistMinimum:4,feedRefreshVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',analysisFreshness:'PINE_EMITTED_AT',entryReplayProtection:'FRESH_EXECUTION_EVENT_V2',telegramDedupVersion:'SETUP_AND_CHAT_V2',analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,plannedHeartbeatMs:30000,executionAlertCap:12,dashboardAlertCap:6,baselineCommit:'284b98d',baselineDate:'2026-10-01',timeframes:['2','15'],checklistMinimum:4,hemaTimeframes:{TF2:['2','3'],TF15:['15','30']},baselineHemaTimeframe:'5',hemaMode:'CURRENT_RIBBON_DIRECTION',entryTiming:'INTRABAR_EVENT',setupPolicy:'SEQUENTIAL_ATR40_V1',impulseAtrMultiplier:1.5,pullbackFraction:.4,atrReference:'PREVIOUS_BAR_ATR14',entryRange:'BETWEEN_ENTRY_AND_TP1',pricePastEntryRequired:true,forecastBuyAbove:50,forecastSellNeutralBelow:50,forecastSellBearishAbove:50,minimumGrade:'C+',exitPolicy:'PINE_STEPLOCK_ORIGINAL',telegramFollowsSop:true,requiresNewPineFeed:true}));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);
     try{captureBody(body)}catch(error){console.error('ZenCore webhook snapshot failed:',error);return send(res,500,JSON.stringify({ok:false,error:'Snapshot processing failed'}));}
