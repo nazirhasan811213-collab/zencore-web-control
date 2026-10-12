@@ -15,7 +15,7 @@ function prepareTelegram(previous, next, events) {
     // Adopt a key for an already-announced legacy position without announcing it again.
     if(position&&!position.setupKey&&entry.setupKey&&anchor===position.anchor)position.setupKey=entry.setupKey;
     const freshReentry=/^(NORMAL|HIGH)_REENTRY$/.test(entry.entryType)&&Number.isFinite(entry.sourceBarTime)&&entry.sourceBarTime>0;
-    if(eventExists && (distinctSetup || freshReentry || entry.authorizedEvent || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
+    if(eventExists && (distinctSetup || freshReentry || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
       position={side:entry.side,anchor,setupKey:entry.setupKey||null,closed:false,idle:false};newEntry=true;
     }
   }
@@ -35,7 +35,7 @@ function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
   const s=e.telegramSop;
-  const revised=['NORMAL_20261001_TF2_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP2_HEMAGAP_V5'].includes(s?.version);
+  const revised=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(s?.version);
   if(revised){
     if(s.version.includes('_SEQ_ATR40_')&&(s.gates?.length!==7||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
     if(e.telegramMarket?.timeframe!=null&&String(e.telegramMarket.timeframe)!=='2')return false;
@@ -83,7 +83,7 @@ function telegramMessage(e){
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI TF${e.timeframe||'2'}\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')||['NORMAL_20261001_TF2_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP2_HEMAGAP_V5'].includes(e.telegramSop?.version)){
+  if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')||['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(e.telegramSop?.version)){
     const s=e.telegramSop,tf=s.tf.replace('m','');
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     return `ZENCORE | SOLID ENTRY TF${tf} • ${tf==='15'?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\nSOP 1/10/2026\n\n`+

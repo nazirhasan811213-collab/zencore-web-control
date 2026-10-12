@@ -11,8 +11,7 @@ function signals(m, now = Date.now()) {
   const items = [];
   const entryType=String(m.strategyNormal?.entryType||'');
   const reentry=/^(NORMAL|HIGH)_REENTRY$/.test(entryType);
-  const authorizedEvent=/HEMAGAP_V5$/.test(m.strategyNormal?.entrySopVersion||'')&&Number.isFinite(m.entryAuthorizedAt)&&m.entryAuthorizedAt>0?m.entryAuthorizedAt:null;
-  if (entry) items.push({kind:'ENTRY', authorizedEvent, signature:`${entry.side}|${entry.entry}|${entry.sl}${reentry?`|${entryType}|${m.sourceBarTime||''}`:''}${m.setupKey?`|SETUP:${m.setupKey}`:''}${authorizedEvent?`|EVENT:${authorizedEvent}`:''}`, side:entry.side,
+  if (entry) items.push({kind:'ENTRY', signature:`${entry.side}|${entry.entry}|${entry.sl}${reentry?`|${entryType}|${m.sourceBarTime||''}`:''}${m.setupKey?`|SETUP:${m.setupKey}`:''}`, side:entry.side,
     setupKey:entry.setupKey||m.setupKey||null,entryType:reentry?entryType:'SOLID_ENTRY',sourceBarTime:m.sourceBarTime||null,
     message:`${m.symbol} • TF${tf} • ${String(m.strategyNormal?.entryType||'').includes('REENTRY')?'RE-ENTRY':'ENTRY'} ${entry.side}\nEntry: ${entry.entry} | SL: ${entry.sl}\nTP1: ${entry.tp1} | TP2: ${entry.tp2} | TP3: ${entry.tp3}`});
   if (close) items.push({kind:'CLOSE', setupKey:m.setupKey||null,signature:close.reason, percent:close.percent,

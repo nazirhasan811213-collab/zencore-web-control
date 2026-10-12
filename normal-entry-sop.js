@@ -40,8 +40,8 @@ function evaluateEntrySop(d={},timeframe='2'){
   const sequential=atrPullback||String(timeframe)==='2'&&d.normal3SetupPolicy==='TF2_SEQUENTIAL_V1';
   const entryExpired=d.normal3EntryExpired===true;
   const solid=!entryExpired&&(sequential?d.normal3SetupArmed===true:d.normal3Solid===true);
-  const revisedTf2=String(timeframe)==='2'&&(d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion==='TF2_3GREEN_TP2_HEMAGAP_V1';
-  const version=revisedTf2?(atrPullback?'NORMAL_20261001_TF2_SEQ_ATR40_TP2_HEMAGAP_V5':sequential?'NORMAL_20261001_TF2_SEQ_TP2_HEMAGAP_V5':'NORMAL_20261001_TF2_TP2_HEMAGAP_V5'):(atrPullback?`NORMAL_20261001_TF${timeframe}_SEQ_ATR40_V4`:sequential?'NORMAL_20261001_TF2_SEQ_V3':`NORMAL_20261001_TF${timeframe}_V2`);
+  const revisedTf2=String(timeframe)==='2'&&(d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1';
+  const version=revisedTf2?(atrPullback?'NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5':sequential?'NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5':'NORMAL_20261001_TF2_TP1_HEMAGAP_V5'):(atrPullback?`NORMAL_20261001_TF${timeframe}_SEQ_ATR40_V4`:sequential?'NORMAL_20261001_TF2_SEQ_V3':`NORMAL_20261001_TF${timeframe}_V2`);
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
@@ -60,12 +60,12 @@ function evaluateEntrySop(d={},timeframe='2'){
   const ownHema=revisedTf2?hemaWidthMode(currentHema?.tf2,side,atr):hemaMode(currentHema?.['tf'+timeframe],side);
   const higherHema=revisedTf2?hemaWidthMode(currentHema?.tf3,side,atr):hemaMode(currentHema?.['tf'+higherTf],side);
   const minimumGreen=revisedTf2?3:4;
-  const entryLimit=num(d[revisedTf2?'tp2':'tp1']);
+  const entryLimit=num(d.tp1);
   const sign=side==='BUY'?1:side==='SELL'?-1:0;
   const entryWindowPass=!revisedTf2||entryLimit===null||close!==null&&sign*(entryLimit-close)>0;
   const gates=[
-    {key:'solid',label:entryExpired?(revisedTf2?'TP2 dah disentuh — tunggu SOLID baharu':'TP1 dah disentuh — tunggu SOLID baharu'):sequential?'SOLID setup dipegang':'Solid Entry Signal',pass:solid},
-    {key:'entry',label:revisedTf2?'Harga lepas Entry, sebelum TP2':'Price Lepas Entry Line',pass:pricePast&&entryWindowPass},
+    {key:'solid',label:entryExpired?'TP1 dah disentuh — tunggu SOLID baharu':sequential?'SOLID setup dipegang':'Solid Entry Signal',pass:solid},
+    {key:'entry',label:revisedTf2?'Harga lepas Entry, sebelum TP1':'Price Lepas Entry Line',pass:pricePast&&entryWindowPass},
     {key:'sop',label:`SOP Dashboard ≥${minimumGreen}/5 Green`,pass:green>=minimumGreen,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
     {key:'hema'+timeframe,label:'HEMA TF'+timeframe+(revisedTf2?' searah, ribbon tidak nipis':' searah entry'),pass:ownHema.pass,detail:ownHema.state},
@@ -75,7 +75,7 @@ function evaluateEntrySop(d={},timeframe='2'){
   // Friday 25 Sep Normal entry has no separate re-entry route.
   const reentryType='NONE',reentrySide='WAIT',reentryGates=[],reentryReady=false;
   const standardReady=String(d.timeframe)===String(timeframe)&&['BUY','SELL'].includes(side)&&gates.every(g=>g.pass)&&entry!==null&&close!==null&&atr!==null&&atr>0;
-  return {version,minimumGreen,entryExpiryTarget:revisedTf2?'TP2':'TP1',entryLimit,atrReference:atr,solid,sequential,pullback:atrPullback?d.pullback:null,['hema'+timeframe]:ownHema,['hema'+higherTf]:higherHema,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
+  return {version,minimumGreen,entryExpiryTarget:'TP1',entryLimit,atrReference:atr,solid,sequential,pullback:atrPullback?d.pullback:null,['hema'+timeframe]:ownHema,['hema'+higherTf]:higherHema,side,entry,close,atr,flags,green,forecast,power,forecastPass,cross,pricePast,m5Pass,gates,
     standardReady,reentryType,reentrySide,reentryGates,reentryReady};
 }
 

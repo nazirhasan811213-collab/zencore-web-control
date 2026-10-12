@@ -1,13 +1,13 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const {evaluateEntrySop}=require('../normal-entry-sop');const {createEntrySetupTracker}=require('../entry-setup-state');const C=require('../analysis-execution-contract');const T=require('../analysis-telegram');
-const RULE='TF2_3GREEN_TP2_HEMAGAP_V1';
+const RULE='TF2_3GREEN_TP1_HEMAGAP_V1';
 function frame(side='BUY'){
  const sign=side==='BUY'?1:-1;
  return {symbol:'XAUUSD',timeframe:'2',time:Date.now()-120000,setupKey:'fixture-'+side,open:100,high:100.3,low:99.7,tradeActive:true,normal3Side:side,normal3Entry:100,initialSl:100-sign,tp1:100+sign,tp2:100+sign*2,tp3:100+sign*3,normal3Close:100+sign*.2,normal3Atr:1,normal3Solid:true,normal3PricePastEntry:true,normal3Forecast:side==='BUY'?'BULLISH':'BEARISH',normal3MarketPower:60,
   normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:false,normal3Sop5:false,
   hemaConfirmation:{version:'HEMA23_LIVE_V1',tf2:side==='BUY'?{fast:102,slow:101}:{fast:98,slow:99},tf3:side==='BUY'?{fast:103,slow:102}:{fast:97,slow:98}},
-  setupMeta:{policy:'SEQUENTIAL_ATR40_V1',atrBeforeBar:1,entryRuleVersion:RULE,entryExpiryTarget:2}};
+  setupMeta:{policy:'SEQUENTIAL_ATR40_V1',atrBeforeBar:1,entryRuleVersion:RULE,entryExpiryTarget:1}};
 }
 function market(d,x){return {symbol:'XAUUSD',timeframe:'2',receivedAt:Date.now(),price:d.normal3Close,chopIndex:40,entryEvent:true,strategyNormal:{state:x.standardReady?'READY':'WATCH',tf:'2m',side:x.side,solid:x.solid,entrySopVersion:x.version,plan:{entry:100,sl:d.initialSl,tp1:d.tp1,tp2:d.tp2,tp3:d.tp3},sop:{atrReference:x.atrReference,gates:x.gates,sopGreen:x.green,forecast:x.forecast,marketPower:x.power,hema2:x.hema2,hema3:x.hema3,pullback:x.pullback,eaEntryCompatible:d.normal3Side==='BUY'?d.normal3Close<d.tp1:d.normal3Close>d.tp1}}};}
 test('new TF2 minimum is three; unversioned feeds and TF15 retain original four',()=>{
@@ -29,32 +29,22 @@ test('narrow ribbon blocks independently on either TF, regardless of raw BUY/SEL
  assert.equal(evaluateEntrySop(createEntrySetupTracker().update(d),'2').standardReady,false,'exact 10% ATR boundary is blocked');
  d.normal3Atr=0;assert.equal(evaluateEntrySop(createEntrySetupTracker().update(d),'2').standardReady,false);
 });
-test('TP1 keeps new TF2 setup; TP2 permanently expires it; TF15 remains TP1',()=>{
- for(const side of ['BUY','SELL']){
-  const d=frame(side),tracker=createEntrySetupTracker();tracker.update(d);
-  const after=tracker.update({...d,tp1Hit:true,slLockStage:1,normal3Close:100+(side==='BUY'?1.2:-1.2),normal3Solid:false});
-  assert.equal(after.normal3EntryExpired,false);assert.equal(after.normal3SetupArmed,true);
-  const end=tracker.update({...d,tp2Hit:true,slLockStage:2});assert.equal(end.normal3EntryExpired,true);assert.equal(end.normal3EntryExpiryReason,'TP2_TOUCHED_WAIT_NEW_SOLID');
-  assert.equal(tracker.update(d).normal3EntryExpired,true);
- }
- const d=frame();d.timeframe='15';assert.equal(createEntrySetupTracker().update({...d,tp1Hit:true}).normal3EntryExpired,true);
-});
 test('valid 3-green entry authorizes below TP1, but TP2 analysis cannot bypass unchanged EA limit',()=>{
  for(const side of ['BUY','SELL']){
   const d=frame(side),tracked=createEntrySetupTracker().update(d),x=evaluateEntrySop(tracked,'2'),m=market(d,x);
   assert.equal(x.standardReady,true);assert.ok(C.createEntryDecision(m));assert.equal(C.entryQuality(m).grade,'C+');
   const event={kind:'ENTRY',id:'GAP',time:Date.now(),symbol:'XAUUSD',side,timeframe:'2',telegramSop:{version:x.version,tf:'2m',solid:true,green:3,gates:x.gates,forecast:x.forecast,power:x.power,hema2:x.hema2,hema3:x.hema3,atrReference:x.atrReference,pullback:x.pullback,eaEntryCompatible:true},telegramQuality:C.entryQuality(m),telegramPlan:m.strategyNormal.plan};
   assert.equal(T.entrySopAllowed(event),true);assert.match(T.telegramMessage(event),/SOLID ENTRY TF2/);
-  const later={...d,tp1Hit:true,normal3Close:100+(side==='BUY'?1.2:-1.2)},n=createEntrySetupTracker().update(later),y=evaluateEntrySop(n,'2');assert.equal(y.standardReady,true);
+  const later={...d,tp1Hit:true,normal3Close:100+(side==='BUY'?1.2:-1.2)},n=createEntrySetupTracker().update(later),y=evaluateEntrySop(n,'2');assert.equal(y.standardReady,false);
   const lateMarket=market(later,y);assert.equal(C.createEntryDecision(lateMarket),null);
   assert.equal(T.entrySopAllowed({...event,telegramSop:{...event.telegramSop,eaEntryCompatible:false}}),false);
   const forged=structuredClone(m);forged.strategyNormal.sop.hema3.fast=forged.strategyNormal.sop.hema3.slow+(side==='BUY'?.01:-.01);forged.strategyNormal.sop.hema3.gapAtr=999;assert.equal(C.createEntryDecision(forged),null);
  }
 });
-test('canonical Pine and generated chart use same three-green, width, TP2 and EA compatibility rules',()=>{
+test('canonical Pine and generated chart use same three-green, width, TP1 and EA compatibility rules',()=>{
  const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
  assert.match(pine,/greens>=3/);assert.match(pine,/math.abs\(h20-h40\)>a14\*0.10/);assert.match(pine,/math.abs\(f3-s3\)>a14\*0.10/);
- assert.match(pine,/bool targetTouched=hit2 or hit3 or lockStage>=2/);assert.match(pine,/c>entry and c<tp2/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_3GREEN_TP2_HEMAGAP_V1/);
+ assert.match(pine,/bool targetTouched=hit1 or hit2 or hit3 or lockStage>=1/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_3GREEN_TP1_HEMAGAP_V1/);
  const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/tick.ask>=tp1/);assert.match(ea,/tick.bid<=tp1/);
 });
 test('directional forecast must exceed 40; neutral still uses strict 50 boundary',()=>{
@@ -72,27 +62,14 @@ test('directional forecast must exceed 40; neutral still uses strict 50 boundary
   }
  }
 });
-test('TP1 excursion waits; return inside entry-to-TP1 zone rechecks SOP and preserves replay dedupe',()=>{
+
+test('TP1 touch permanently expires TF2 setup even after pullback',()=>{
  for(const side of ['BUY','SELL']){
   const d=frame(side),tracker=createEntrySetupTracker();tracker.update(d);
-  const beyond={...d,normal3Close:100+(side==='BUY'?1.2:-1.2),tp1Hit:true};
-  assert.equal(C.createEntryDecision(market(beyond,evaluateEntrySop(tracker.update(beyond),'2'))),null);
-  const back={...beyond,normal3Close:100+(side==='BUY'?.5:-.5)};
-  const m=market(back,evaluateEntrySop(tracker.update(back),'2'));m.entryAuthorizedAt=Date.now();m.setupKey='same-setup';
-  const a=C.createEntryDecision(m);assert.ok(a);assert.equal(C.createEntryDecision(m).signalKey,a.signalKey);
-  assert.notEqual(C.createEntryDecision({...m,entryAuthorizedAt:m.entryAuthorizedAt+1}).signalKey,a.signalKey);
-  m.strategyNormal.sop.hema3.fast=m.strategyNormal.sop.hema3.slow;assert.equal(C.createEntryDecision(m),null);
-  const expired=tracker.update({...back,tp2Hit:true});assert.equal(evaluateEntrySop(expired,'2').standardReady,false);
+  const hit=tracker.update({...d,tp1Hit:true,slLockStage:1,normal3Close:100+(side==='BUY'?1.1:-1.1)});
+  assert.equal(hit.normal3EntryExpired,true);assert.equal(hit.normal3EntryExpiryReason,'TP1_TOUCHED_WAIT_NEW_SOLID');
+  const returned=tracker.update(d);assert.equal(returned.normal3EntryExpired,true);
+  const x=evaluateEntrySop(returned,'2');assert.equal(x.standardReady,false);assert.equal(x.entryExpiryTarget,'TP1');
+  assert.equal(C.createEntryDecision(market(d,x)),null);
  }
- const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
- assert.match(pine,/tp1ReturnPending/);assert.match(pine,/not bootstrap and array.get\(tp1ReturnPending,i\) and eaEntryWindow and entryRange/);
-});
-test('Telegram distinguishes fresh return events and suppresses an identical replay',()=>{
- const A=require('../analysis-alert-core'),d=frame(),m=market(d,evaluateEntrySop(createEntrySetupTracker().update(d),'2'));
- m.entryAuthorizedAt=Date.now();m.setupKey='same-setup';
- const first=A.signals(m);const firstEvents=T.prepareTelegram(null,first,A.transitions(null,first));assert.equal(firstEvents[0].telegramDuplicate,false);
- const replay=A.signals({...m,receivedAt:m.receivedAt+1});assert.equal(A.transitions(first,replay).length,0);
- replay.telegramPosition=first.telegramPosition;
- const fresh=A.signals({...m,receivedAt:m.receivedAt+2,entryAuthorizedAt:m.entryAuthorizedAt+2});
- const freshEvents=T.prepareTelegram(replay,fresh,A.transitions(replay,fresh));assert.equal(freshEvents[0].telegramDuplicate,false);
 });

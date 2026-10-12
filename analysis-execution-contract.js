@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP2_HEMAGAP_V5'];
+  const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'];
   const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
   const SCHEMA_VERSION = '32.3-EXIT-STEPLOCK';
@@ -192,7 +192,7 @@
       ...((solidSop||restored)?{analysisSopVersion:normal.entrySopVersion}:{})
     };
     return deepFreeze({
-      signalKey: [CONTRACT_VERSION,market.timeframe||normal.tf||'2', symbol, side, prices.entry, market.setupKey||receivedAt,...(revisedTf2(normal)?[market.entryAuthorizedAt]:[])].join('|'),
+      signalKey: [CONTRACT_VERSION,market.timeframe||normal.tf||'2', symbol, side, prices.entry, market.setupKey||receivedAt].join('|'),
       snapshot
     });
   }

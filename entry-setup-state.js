@@ -16,7 +16,7 @@ function createEntrySetupTracker(){
   const key=sign&&entry!==null&&sl!==null?(d.setupKey?[side,d.setupKey].join('|'):[side,entry,sl,d.tp1,d.tp2,d.tp3].join('|')):null;
   const id=String(d.symbol||'')+'|'+tf,old=states.get(id);
   const state=old&&old.key===key?old:{key,armed:false,cancelled:false,expired:false,impulse:null};
-  const expiryTarget=tf==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP2_HEMAGAP_V1'?2:1;
+  const expiryTarget=1;
   const target=num(d[expiryTarget===2?'tp2':'tp1']),quote=num(d.close??d.normal3Close);
   const metaExpired=meta?.entryExpired===true&&(expiryTarget===1||Number(meta.entryExpiryTarget)===2);
   const targetTouched=(expiryTarget===2?d.tp2Hit===true||d.tp3Hit===true:d.tp1Hit===true||d.tp2Hit===true||d.tp3Hit===true)||num(d.slLockStage)>=expiryTarget||metaExpired||
