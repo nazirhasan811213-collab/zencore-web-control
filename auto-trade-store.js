@@ -1229,6 +1229,11 @@ class PostgresAutoTradeStore {
     return result.rows.map(publicCommand);
   }
 
+  async latestSetupForMode(userId,symbol,mode) {
+    const result=await this.pool.query(`SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND command_type='PLACE_SETUP' AND payload->>'symbol'=$2 AND payload->>'strategyMode'=$3 ORDER BY created_at DESC LIMIT 1`,[userId,symbol,mode]);
+    return result.rows[0]?publicCommand(result.rows[0]):null;
+  }
+
   async hasRecentEntryCommand(userId, symbol, since, strategyMode = null) {
     const result = await this.pool.query(
       `SELECT 1 FROM zencore_autotrade_commands
@@ -2049,6 +2054,11 @@ class MemoryAutoTradeStore {
   async listRecentCommands(userId, limit = 10) {
     return [...this.commands.values()].flat().filter(row => row.userId === userId)
       .sort((a,b) => b.createdAt-a.createdAt).slice(0, Math.max(1, Math.min(20, Number(limit) || 10))).map(publicCommand);
+  }
+
+  async latestSetupForMode(userId,symbol,mode) {
+    const row=[...this.commands.values()].flat().filter(c=>c.userId===userId&&c.type==='PLACE_SETUP'&&c.payload?.symbol===symbol&&c.payload?.strategyMode===mode).sort((a,b)=>b.createdAt-a.createdAt)[0];
+    return row?publicCommand(row):null;
   }
 
   async hasRecentEntryCommand(userId, symbol, since, strategyMode = null) {

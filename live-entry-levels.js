@@ -1,6 +1,6 @@
 'use strict';
-// Reviewed target specification only. Not wired to live dispatch: exact fill
-// anchoring requires EA support and matching position management.
+// Translate signed distances to the supplied price. The server supplies a live
+// signal price, not a guaranteed MT5 fill; the unchanged EA keeps its own rules.
 function levelsAtFill(plan,fill){
  const keys=['entry','sl','tp1','tp2','tp3'];
  if(!plan||keys.some(k=>typeof plan[k]!=='number'||!Number.isFinite(plan[k]))||typeof fill!=='number'||!Number.isFinite(fill)||fill<=0)throw new Error('INVALID_PRICE');

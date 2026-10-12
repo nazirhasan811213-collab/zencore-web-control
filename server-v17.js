@@ -5,6 +5,7 @@ const {acceptsSnapshot,acceptsFeedSource,effectiveReceivedAt}=require('./market-
 const {normalEntrySop}=require('./normal-entry-sop');
 const tf2SetupTracker=require('./entry-setup-state').createEntrySetupTracker();
 const {chartTradePlan}=require('./chart-trade-plan');
+const {levelsAtFill:levelsAtLivePrice}=require('./live-entry-levels');
 
 const PUBLIC_PORT=Number(process.env.PORT||8080);
 const V16_PORT=Number(process.env.ZENCORE_INTERNAL_V16_PORT||(process.env.NODE_ENV==='test'?PUBLIC_PORT-1:PUBLIC_PORT===10001?10002:10001));
@@ -415,7 +416,8 @@ function normalScalpStrategy(symbol,d){
     sopReady&&pinePlan&&!entryWindowOpen?'WAIT PULLBACK — harga di luar julat entry hingga TP1; semak semula SOP semasa.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  const plan=(ready||sopReady&&entryWindowOpen)?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
+  const basePlan=ready&&pendingReturn?{...pinePlan,...levelsAtLivePrice(pinePlan,N(d.close)),entryAnchor:'LIVE_SIGNAL_PRICE_V1',sourceChartPlan:{side:pinePlan.side,entry:pinePlan.entry,sl:pinePlan.sl,tp1:pinePlan.tp1,tp2:pinePlan.tp2,tp3:pinePlan.tp3}}:pinePlan;
+  const plan=(ready||sopReady&&entryWindowOpen)?{...basePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
     mode:'NORMAL',entrySopVersion:x.version,tf:`${d.timeframe||'2'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:x.solid,pullback:x.pullback,triggerPolicy:x.sequential?'SOLID_LATCH_CURRENT_CONFIRMATIONS':'SIMULTANEOUS',plan,

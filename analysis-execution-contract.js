@@ -158,6 +158,13 @@
       tp3: number(plan.tp3)
     };
     const livePrice = number(market.price);
+    if(plan.entryAnchor==='LIVE_SIGNAL_PRICE_V1'){
+      const original=plan.sourceChartPlan||{},sign=side==='BUY'?1:side==='SELL'?-1:0;
+      if(!revisedTf2(normal)||!sign||livePrice===null||original.side!==side||['entry','sl','tp1','tp2','tp3'].some(k=>number(original[k])===null)||
+        sign*(livePrice-original.entry)<=0||sign*(original.tp1-livePrice)<=0||
+        sign*(original.entry-original.sl)<=0||sign*(original.tp2-original.tp1)<=0||sign*(original.tp3-original.tp2)<=0||
+        prices.entry!==livePrice||['sl','tp1','tp2','tp3'].some(k=>Math.abs((prices[k]-prices.entry)-(original[k]-original.entry))>1e-8))return null;
+    }
     if (livePrice !== null && (side === 'BUY'
         ? livePrice >= prices.tp1 || livePrice <= prices.sl
         : side === 'SELL' && (livePrice <= prices.tp1 || livePrice >= prices.sl))) return null;
@@ -176,6 +183,7 @@
       side,
       executionTimeframe: String(market.timeframe || normal.tf || '3'),
       ...prices,
+      ...(plan.entryAnchor==='LIVE_SIGNAL_PRICE_V1'?{entryAnchor:plan.entryAnchor,sourceChartPlan:plan.sourceChartPlan}:{}),
       ...(market.setupKey?{setupKey:market.setupKey}:{}),
       ...(market.signalObservedAt?{signalObservedAt:market.signalObservedAt}:{}),
       sourceReceivedAt: receivedAt,
@@ -241,6 +249,7 @@
         schemaVersion: SCHEMA_VERSION,
         symbol,
         executionTimeframe:String(market.timeframe||market.strategyNormal?.tf||'2'),
+        ...(management.entryAnchor==='LIVE_SIGNAL_PRICE_V1'?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
         actions,
         reason: String(management.reason || '').slice(0, 180),
         sourceReceivedAt: receivedAt
