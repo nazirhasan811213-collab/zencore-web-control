@@ -44,7 +44,7 @@ test('valid 3-green entry authorizes below TP1, but TP2 analysis cannot bypass u
 test('canonical Pine and generated chart use same three-green, width, TP1 and EA compatibility rules',()=>{
  const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
  assert.match(pine,/greens>=3/);assert.match(pine,/math.abs\(h20-h40\)>a14\*0.10/);assert.match(pine,/math.abs\(f3-s3\)>a14\*0.10/);
- assert.match(pine,/bool targetTouched=hit1 or hit2 or hit3 or lockStage>=1/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_3GREEN_TP1_HEMAGAP_V1/);
+ assert.match(pine,/bool targetTouched=false/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_3GREEN_TP1_HEMAGAP_V1/);
  const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/tick.ask>=tp1/);assert.match(ea,/tick.bid<=tp1/);
 });
 test('directional forecast must exceed 40; neutral still uses strict 50 boundary',()=>{
@@ -72,4 +72,28 @@ test('TP1 touch permanently expires TF2 setup even after pullback',()=>{
   const x=evaluateEntrySop(returned,'2');assert.equal(x.standardReady,false);assert.equal(x.entryExpiryTarget,'TP1');
   assert.equal(C.createEntryDecision(market(d,x)),null);
  }
+});
+test('unfilled return policy survives TP2 and chart StepLock exit, rechecks all gates inside TP1',()=>{
+ for(const side of ['BUY','SELL']){
+  const d=frame(side);d.setupMeta.pendingEntryReturn=true;d.setupMeta.entryExpiryTarget=0;
+  const tracker=createEntrySetupTracker();tracker.update(d);const sign=side==='BUY'?1:-1;
+  const beyond={...d,tp1Hit:true,tp2Hit:true,slLockStage:2,normal3Close:100+sign*2.2};
+  const waiting=tracker.update(beyond);assert.equal(waiting.normal3SetupArmed,true);assert.equal(waiting.normal3EntryExpired,false);
+  assert.equal(evaluateEntrySop(waiting,'2').standardReady,false);
+  const back={...beyond,normal3Close:100+sign*.5,tradeActive:false,slHit:true,positionExitStage:'CLOSED',positionExitAction:'EXIT_SL'};
+  const returned=tracker.update(back),x=evaluateEntrySop(returned,'2');assert.equal(x.standardReady,true);assert.ok(C.createEntryDecision(market(back,x)));
+  const thin={...back,hemaConfirmation:{...back.hemaConfirmation,tf3:{fast:100,slow:100}}};
+  assert.equal(evaluateEntrySop(tracker.update(thin),'2').standardReady,false);
+  const invalid=tracker.update({...back,normal3Close:d.initialSl});assert.equal(invalid.normal3SetupArmed,false);
+ }
+});
+test('fill-anchor specification preserves each TP and SL distance for BUY and SELL',()=>{
+ const {levelsAtFill}=require('../live-entry-levels');
+ for(const side of ['BUY','SELL']){
+  const sign=side==='BUY'?1:-1,plan={side,entry:4000,sl:4000-sign*3,tp1:4000+sign*2,tp2:4000+sign*4,tp3:4000+sign*6};
+  const levels=levelsAtFill(plan,4001.37);assert.equal(levels.entry,4001.37);
+  for(const key of ['sl','tp1','tp2','tp3'])assert.ok(Math.abs((levels[key]-levels.entry)-(plan[key]-plan.entry))<1e-9);
+  assert.equal(plan.entry,4000);
+ }
+ assert.throws(()=>levelsAtFill({side:'BUY',entry:100,sl:101,tp1:102,tp2:103,tp3:104},100));
 });

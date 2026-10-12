@@ -7,6 +7,7 @@ function createEntrySetupTracker(){
  function update(d={}){
   const tf=String(d.timeframe);if(!['2','15'].includes(tf))return d;
   const meta=d.setupMeta||d.tf2SetupMeta;
+  const pendingReturn=tf==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
   // Alert snapshots are versioned separately from the server deploy. Preserve
   // the original six gates until that TF's Pine explicitly supplies ATR40 data.
   const atrPolicy=meta?.policy===POLICY;
@@ -22,9 +23,9 @@ function createEntrySetupTracker(){
   const targetTouched=(expiryTarget===2?d.tp2Hit===true||d.tp3Hit===true:d.tp1Hit===true||d.tp2Hit===true||d.tp3Hit===true)||num(d.slLockStage)>=expiryTarget||metaExpired||
    (sign&&target!==null&&((price!==null&&sign*(price-target)>=0)||(quote!==null&&sign*(quote-target)>=0)));
   const expiryReason=expiryTarget===2?'TP2_TOUCHED_WAIT_NEW_SOLID':'TP1_TOUCHED_WAIT_NEW_SOLID';
-  if(key&&targetTouched)state.expired=true;
-  const ended=d.tradeActive===false||d.slHit===true||d.positionExitStage==='CLOSED'||
-   ['EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(d.positionExitAction)||
+  if(key&&targetTouched&&!pendingReturn)state.expired=true;
+  const ended=(!pendingReturn&&(d.tradeActive===false||d.slHit===true||d.positionExitStage==='CLOSED'||
+   ['EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(d.positionExitAction)))||
    (sign&&price!==null&&sl!==null&&sign*(price-sl)<=0);
   if(!key||ended||state.expired){state.armed=false;state.cancelled=true;state.impulse=null;}
   else if(!state.cancelled&&(d.normal3Solid===true||meta?.policy===POLICY&&meta.solidLatched===true))state.armed=true;

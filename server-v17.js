@@ -391,7 +391,11 @@ function fastTradeStrategy(symbol,d){
 }
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
-  if(life?.stage==='COOLDOWN')return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
+  const meta=d.setupMeta||d.tf2SetupMeta;
+  const pendingReturn=String(d.timeframe)==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
+  // Chart protection may finish a virtual position that this user never opened.
+  // Actual user positions, queued commands and replay guards remain in dispatch.
+  if(life?.stage==='COOLDOWN'&&!pendingReturn)return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
   if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — perlukan SOLID, entry line, checklist 4/5, forecast dan HEMA2/3 semasa daripada Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
   const x=normalEntrySop({...d,sidewaysGuard:sidewaysGuardBySymbol.get(symbol)?.active===true});
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
