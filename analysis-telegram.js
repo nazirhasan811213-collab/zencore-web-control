@@ -86,9 +86,9 @@ function telegramMessage(e){
   if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')||['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(e.telegramSop?.version)){
     const s=e.telegramSop,tf=s.tf.replace('m','');
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF${tf} • ${tf==='15'?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\nSOP 1/10/2026\n\n`+
+    return `ZENCORE | SOLID ENTRY TF${tf} • ${tf==='15'?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\n${s.version.includes('HEMAGAP')?'SOP TF2 • Kemas kini 12/10/2026':'SOP 1/10/2026'}\n\n`+
       `SOLID: ${s.version.includes('_SEQ_')?'SETUP DIPEGANG':'PASS'}\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\n${s.pullback?`Pullback: ${s.pullback.required?'40% • PASS':'Candle biasa'}\n`:''}HEMA TF${tf}: ${s['hema'+tf]?.mode||'WAIT_DATA'}\nHEMA TF${tf==='15'?'30':'3'}: ${s['hema'+(tf==='15'?'30':'3')]?.mode||'WAIT_DATA'}\n${s.version.includes('HEMAGAP')?'Ribbon HEMA: melepasi had minimum\n':''}Gred: ${q.grade} (${q.score}/100)\n\n`+
-      `Entry SOP: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
+      `${s.entryAnchor==='LIVE_SIGNAL_PRICE_V1'?'Entry rujukan harga live':'Entry SOP'}: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
   }
   if([SOP_VERSION,'SOLID_TF15_3GREEN_HEMA1545_2L_V1'].includes(e.telegramSop?.version)){
     const tf15=e.telegramSop.tf==='15m',tf=tf15?'15':'2',higher=tf15?'45':'3';
