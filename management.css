@@ -636,3 +636,5 @@ body.admin-v4 .copy-inline:hover{color:#54e2eb;text-shadow:0 0 8px rgba(84,226,2
   .admin-client-form-actions{grid-column:auto;align-items:stretch;flex-direction:column}
   .admin-client-form-actions .mg-form-status{margin-right:0}
 }
+
+.promotion-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.promotion-actions [hidden]{display:none}.promotion-form{display:flex;align-items:end;gap:12px;margin:20px 0 10px}.promotion-form label,.promotion-select{display:grid;gap:8px;color:#bad1da;font-size:14px}.promotion-form input,.promotion-select select{padding:12px;background:#061720;color:#e7f7fa;border:1px solid #376270;border-radius:7px;font-size:16px;min-width:250px}.promotion-select{margin-bottom:20px}.promotion-form button,.promotion-actions a,.promotion-actions button{font-size:13px!important}#promotionStatus{font-size:14px;color:#a4dfcf}.promotion-form button:disabled{opacity:.6}.promotion-actions a{display:inline-block}@media(max-width:720px){.promotion-form{flex-direction:column;align-items:stretch}.promotion-form input,.promotion-select select{min-width:0;width:100%}}

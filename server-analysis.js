@@ -550,6 +550,19 @@ async function effectiveRegistrationSetting() {
 async function handleManagementApi(req, res, pathname, session) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
   try {
+    const promotionMatch = pathname.match(/^\/api\/(admin|ib)\/promotion(?:\/([a-z0-9_-]{1,48}))?$/i);
+    if (promotionMatch) {
+      if (session.user.role !== promotionMatch[1]) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
+      res.setHeader('Cache-Control', 'no-store');
+      if (req.method === 'GET') return sendJson(res, 200, { ok: true, promotion: await authState.service.promotionForUser(session.user, promotionMatch[2] || '') });
+      if (req.method === 'PATCH') {
+        if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        return sendJson(res, 200, { ok: true, promotion: await authState.service.updatePromotionPhone(session.user, body, promotionMatch[2] || '') });
+      }
+      return sendJson(res, 405, { ok: false, error: 'Method tidak dibenarkan.' });
+    }
     if (req.method === 'GET' && ['/api/admin/connections', '/api/ib/connections'].includes(pathname)) {
       const expectedRole = pathname.startsWith('/api/admin/') ? 'admin' : 'ib';
       if (session.user.role !== expectedRole) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
@@ -879,6 +892,15 @@ async function handleAccountApi(req, res, pathname, session) {
 
 async function handleAuthApi(req, res, pathname) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
+
+  const promotionMatch = pathname.match(/^\/auth\/promotion\/([a-z0-9_-]{1,48})$/i);
+  if (req.method === 'GET' && promotionMatch) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'Origin');
+    if (req.headers.origin === 'https://zencore-terminal.magicpeony2.chatgpt.site') res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+    try { return sendJson(res, 200, { ok: true, promotion: await authState.service.publicPromotion(promotionMatch[1]) }); }
+    catch (error) { return sendJson(res, error.status || 503, { ok: false, error: error.status ? error.message : 'Maklumat IB belum tersedia.' }); }
+  }
 
   const referrerMatch = pathname.match(/^\/auth\/referrer\/([a-z0-9_-]{1,48})$/i);
   if (req.method === 'GET' && referrerMatch) {

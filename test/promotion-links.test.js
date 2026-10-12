@@ -1,0 +1,42 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { whatsappNumber, promotionLinks } = require('../promotion-links');
+const { MemoryAuthStore } = require('../auth-store');
+const { createAuthService } = require('../auth-service');
+test('WhatsApp normalizes Malaysian and international formats and rejects unsafe values', () => {
+  assert.equal(whatsappNumber('012-345 6789'), '60123456789');
+  assert.equal(whatsappNumber('+60 (12) 3456789'), '60123456789');
+  assert.equal(whatsappNumber('006512345678'), '6512345678');
+  assert.equal(whatsappNumber('https://evil.test'), '');
+  assert.equal(whatsappNumber('123'), '');
+});
+test('promotion preserves IB assignment, separates messages and never fabricates a number', () => {
+  const p = promotionLinks({ code:'azman', displayName:'Azman', active:true, phone:'0123456789' });
+  assert.equal(new URL(p.landingUrl).searchParams.get('ib'),'azman');
+  assert.equal(p.registrationUrl.endsWith('/u/azman'),true);
+  assert.equal(new URL(p.whatsappRegisterUrl).searchParams.get('text').includes('nak daftar'),true);
+  assert.equal(new URL(p.whatsappEnquiryUrl).searchParams.get('text').includes('lebih lanjut'),true);
+  assert.equal(promotionLinks({code:'x',active:true}).whatsappRegisterUrl,'');
+  assert.equal(promotionLinks({code:'x',active:false}),null);
+  assert.equal(promotionLinks({code:'x',active:true,userStatus:'disabled'}),null);
+});
+test('IB contact isolation, disabled referral rejection, public data minimization and saved override', async () => {
+  const store = new MemoryAuthStore(); await store.init();
+  const a = await store.createIbAccount({displayName:'A',code:'aaa',email:'a@example.test',passwordHash:'secret',phone:'0123456789'});
+  const b = await store.createIbAccount({displayName:'B',code:'bbb',email:'b@example.test',passwordHash:'secret',phone:'0133456789'});
+  const user = {id:a.user.id,role:'ib'};
+  const service = createAuthService({store});
+  const p = await service.promotionForUser(user);
+  assert.equal(p.code,'aaa'); assert.equal(p.phone,'60123456789');
+  assert.equal('email' in p,false); assert.equal('userId' in p,false); assert.equal('passwordHash' in p,false);
+  await assert.rejects(()=>service.promotionForUser(user,'bbb'),e=>e.status===403);
+  await assert.rejects(()=>service.updatePromotionPhone({id:b.user.id,role:'client'},{phone:'0123456789'}),e=>e.status===403);
+  await assert.rejects(()=>service.publicPromotion('missing'),e=>e.status===404);
+  await assert.rejects(()=>service.updatePromotionPhone(user,{phone:'javascript:bad'}),e=>e.status===400);
+  assert.equal((await service.updatePromotionPhone(user,{phone:'+601112345678'})).phone,'601112345678');
+  assert.equal((await service.updatePromotionPhone(user,{phone:''})).whatsappReady,false);
+  await store.setIbActive(b.referrer.id,false);
+  await assert.rejects(()=>service.publicPromotion('bbb'),e=>e.status===404);
+  await service.updatePromotionPhone({role:'admin'},{phone:'0123456789'},'nazir');
+  assert.equal((await service.publicPromotion('nazir')).phone,'60123456789');
+});

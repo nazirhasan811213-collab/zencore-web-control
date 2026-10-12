@@ -99,6 +99,8 @@ class PostgresAuthStore {
         display_name = EXCLUDED.display_name,
         active = TRUE;
 
+      ALTER TABLE zencore_ib_referrers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(24);
+
       CREATE TABLE IF NOT EXISTS zencore_users (
         id UUID PRIMARY KEY,
         display_name VARCHAR(60) NOT NULL,
@@ -297,6 +299,23 @@ class PostgresAuthStore {
       [crypto.randomUUID(), displayName, normalizedEmail, passwordHash]
     );
     return publicUser(result.rows[0]);
+  }
+
+  async getPromotionContact(code) {
+    const result = await this.pool.query(
+      `SELECT ref.code, ref.display_name, ref.active, u.status AS user_status,
+              COALESCE(ref.whatsapp_phone, u.phone) AS phone
+       FROM zencore_ib_referrers ref LEFT JOIN zencore_users u ON u.id = ref.user_id
+       WHERE ref.code = $1 LIMIT 1`, [code]);
+    const row = result.rows[0];
+    return row ? { code: row.code, displayName: row.display_name, active: row.active,
+      userStatus: row.user_status, phone: row.phone || '' } : null;
+  }
+
+  async setPromotionPhone(code, phone) {
+    const result = await this.pool.query(
+      'UPDATE zencore_ib_referrers SET whatsapp_phone = $2 WHERE code = $1 RETURNING code', [code, phone]);
+    return result.rowCount > 0;
   }
 
   async resolveReferrer(code, defaultCode = DEFAULT_IB_CODE) {
@@ -993,6 +1012,21 @@ class MemoryAuthStore {
       passwordHash,
       role: 'viewer'
     });
+  }
+
+  async getPromotionContact(code) {
+    const ref = this.referrersByCode.get(code);
+    if (!ref) return null;
+    const user = this.usersById.get(ref.user_id);
+    return { code: ref.code, displayName: ref.display_name, active: ref.active,
+      userStatus: user?.status, phone: ref.whatsapp_phone ?? user?.phone ?? '' };
+  }
+
+  async setPromotionPhone(code, phone) {
+    const ref = this.referrersByCode.get(code);
+    if (!ref) return false;
+    ref.whatsapp_phone = phone;
+    return true;
   }
 
   async resolveReferrer(code, defaultCode = DEFAULT_IB_CODE) {
