@@ -114,6 +114,20 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
 
+    response = await fetch(`${BASE}/auth/promotion/nazir`, { headers:{Origin:'https://zencore-terminal.magicpeony2.chatgpt.site'} });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('access-control-allow-origin'), 'https://zencore-terminal.magicpeony2.chatgpt.site');
+    const promotion = (await response.json()).promotion;
+    assert.equal(promotion.code, 'nazir');
+    assert.equal(promotion.whatsappReady, false);
+    assert.equal('email' in promotion, false);
+    response = await fetch(`${BASE}/auth/promotion/missing`, { headers:{Origin:'https://zencore-terminal.magicpeony2.chatgpt.site'} });
+    assert.equal(response.status,404);
+    response = await fetch(`${BASE}/auth/promotion/nazir`, { headers:{Origin:'https://untrusted.test'} });
+    assert.equal(response.headers.get('access-control-allow-origin'),null);
+    response = await fetch(`${BASE}/api/ib/promotion`);
+    assert.equal(response.status,401);
+
     response = await fetch(`${BASE}/auth/referrer/nazir`);
     assert.equal(response.status, 200);
     const defaultIb = await response.json();
