@@ -1115,7 +1115,7 @@ function createAutoTradeService(options = {}) {
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
     return !!m && now()-(Number(m.signalObservedAt)||m.receivedAt)<=30000 && (Number(m.signalObservedAt)||m.receivedAt)<=now()+5000 &&
-      n?.state==='READY' && n.side===p.side && (!snap.setupKey||m.setupKey===snap.setupKey) &&
+      Core.entryConfirmationsPass(m) && n.side===p.side && (!snap.setupKey||m.setupKey===snap.setupKey) &&
       ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.[key]===p[key]);
   }
   async function nextCommand(rawToken) {
@@ -1355,6 +1355,7 @@ function createAutoTradeService(options = {}) {
             riskLevel: setup.payload.risk.level,
             riskBlocksOrder: false,
             timeframe: String(market.timeframe||''),
+            confirmationEvidence: setup.payload.analysisSnapshot.confirmationEvidence || null,
             signalToQueueMs: Math.max(0,now()-(Number(market.signalObservedAt)||market.receivedAt))
           });
         }

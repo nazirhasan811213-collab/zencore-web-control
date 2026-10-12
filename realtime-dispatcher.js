@@ -1,6 +1,6 @@
 'use strict';
 const {createCoalescingDispatcher}=require('./coalescing-dispatcher');
-const {createEntryDecision}=require('./analysis-execution-contract');
+const {createEntryDecision,entryConfirmationsPass}=require('./analysis-execution-contract');
 // A webhook event already contains the analyzed market: no local HTTP reread.
 // Only matching current dashboard confirmations may preserve a queued trigger.
 function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
@@ -17,7 +17,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
   if(markets)for(const m of markets){const k=key(m),old=latest.get(k);if(!old||Number(m.signalObservedAt||m.receivedAt)>=Number(old.signalObservedAt||old.receivedAt))latest.set(k,m);}
   await dispatch(markets,m=>latest.get(key(m))===m || sameConfirmation(m,latest.get(key(m))));
  },onError);
- function sameConfirmation(entry,current){return current?.feedChannel==='DASHBOARD'&&current.strategyNormal?.state==='READY'&&
+ function sameConfirmation(entry,current){return current?.feedChannel==='DASHBOARD'&&entryConfirmationsPass(current)&&
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
   if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','15'].includes(String(m.timeframe)))return;

@@ -7,6 +7,7 @@ const {createAutoTradeService}=require('../auto-trade-service');
 const {AnalysisAlerts}=require('../analysis-alert-service');
 const {entrySopAllowed,telegramMessage}=require('../analysis-telegram');
 const {signals}=require('../analysis-alert-core');
+const Contract=require('../analysis-execution-contract');
 function market(tf,side='BUY',at=Date.now()){
  const ribbon=side==='BUY'?{fast:102,slow:101}:{fast:98,slow:99};
  const x=evaluateEntrySop({timeframe:tf,normal3Side:side,normal3Entry:100,normal3Close:100.1,normal3Atr:1,
@@ -80,4 +81,36 @@ test('delivery rejects queued entry when same-TF direction changes, preserving o
  assert.equal((await guarded.nextCommand(token)).command,null);
  assert.equal(store.commands.get('pod')[0].result.code,'ENTRY_CONFIRMATION_CHANGED');
  assert.equal((await guarded.nextCommand(token)).command.payload.side,'SELL');
+});
+
+test('restored SOP independently rejects forecast and HEMA contradictions despite stale READY gates',()=>{
+ for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
+  const m=market(tf,side),s=m.strategyNormal.sop;
+  assert.ok(Contract.createEntryDecision(m));
+  const bad=[{forecast:'NEUTRAL',marketPower:side==='SELL'?69:45},
+   {['hema'+(tf==='15'?'30':'3')]:{mode:side==='SELL'?'BUY':'SELL'}},
+   {sopGreen:3},{forecast:'NEUTRAL',marketPower:50}];
+  for(const edit of bad){
+   const changed={...m,strategyNormal:{...m.strategyNormal,sop:{...s,...edit}}};
+   assert.equal(Contract.createEntryDecision(changed),null);
+   assert.equal(Core.entryConfirmationsPass(changed),false);
+  }
+  const evidence=Contract.createEntryDecision(m).snapshot.confirmationEvidence;
+  assert.equal(evidence.hemaHigher,side);assert.equal(evidence.forecast,s.forecast);
+  assert.equal(Object.isFrozen(evidence),true);
+ }
+});
+
+test('delivery revokes SELL when forecast or HEMA changes even if state, plan and gates remain READY',async()=>{
+ for(const edit of [{forecast:'NEUTRAL',marketPower:69},{hema3:{mode:'BUY'}}]){
+  const {svc,store,at}=await setup(),m=market('2','SELL',at);
+  assert.equal((await svc.dispatchMarkets([m])).queued,1);
+  const current={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,...edit}}};
+  const token='zcpod_'+'t'.repeat(48),hash=require('../auto-trade-service').tokenHash(token);
+  store.podsByToken.set(hash,{...store.podsByUser.get('owner'),tokenHash:hash});
+  const guarded=createAutoTradeService({store,now:()=>at,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:()=>current});
+  assert.equal((await guarded.nextCommand(token)).command,null);
+  assert.equal(store.commands.get('pod')[0].result.code,'ENTRY_CONFIRMATION_CHANGED');
+  assert.ok(Contract.createManagementDecision({...current,positionManagement:{action:'EXIT_ALL'}}));
+ }
 });
