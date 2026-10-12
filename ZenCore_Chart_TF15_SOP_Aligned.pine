@@ -349,6 +349,7 @@ float zcFast=na
 float zcSlow=na
 bool zcSolid=false
 bool zcReady=false
+bool zcEaCompatible=false
 bool zcExpired=false
 string zcSide="WAIT"
 string zcForecast="WAIT"
@@ -438,6 +439,7 @@ if correctTf
         zcSlow:=h40
         zcSolid:=solidLatched
         zcReady:=eligible
+        zcEaCompatible:=entryRange
         zcExpired:=setupExpired
         zcSide:=side
         zcForecast:=forecast
@@ -561,4 +563,4 @@ if barstate.islast
     table.cell(zcSopTable,0,11,"SOP chart",text_color=color.gray)
     table.cell(zcSopTable,1,11,zcReady?"READY":"TUNGGU",text_color=zcReady?color.lime:color.orange)
     table.cell(zcSopTable,0,12,"Order MT5",text_color=color.gray)
-    table.cell(zcSopTable,1,12,"Semak feed, setting & broker",text_color=color.white)
+    table.cell(zcSopTable,1,12,zcReady and not zcEaCompatible?"WAIT — EA had TP1":"Semak feed, setting & broker",text_color=zcReady and not zcEaCompatible?color.orange:color.white)

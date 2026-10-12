@@ -16,9 +16,12 @@ function createEntrySetupTracker(){
   const key=sign&&entry!==null&&sl!==null?(d.setupKey?[side,d.setupKey].join('|'):[side,entry,sl,d.tp1,d.tp2,d.tp3].join('|')):null;
   const id=String(d.symbol||'')+'|'+tf,old=states.get(id);
   const state=old&&old.key===key?old:{key,armed:false,cancelled:false,expired:false,impulse:null};
-  const tp1=num(d.tp1),quote=num(d.close??d.normal3Close);
-  const targetTouched=d.tp1Hit===true||d.tp2Hit===true||d.tp3Hit===true||num(d.slLockStage)>=1||meta?.entryExpired===true||
-   (sign&&tp1!==null&&((price!==null&&sign*(price-tp1)>=0)||(quote!==null&&sign*(quote-tp1)>=0)));
+  const expiryTarget=tf==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP2_HEMAGAP_V1'?2:1;
+  const target=num(d[expiryTarget===2?'tp2':'tp1']),quote=num(d.close??d.normal3Close);
+  const metaExpired=meta?.entryExpired===true&&(expiryTarget===1||Number(meta.entryExpiryTarget)===2);
+  const targetTouched=(expiryTarget===2?d.tp2Hit===true||d.tp3Hit===true:d.tp1Hit===true||d.tp2Hit===true||d.tp3Hit===true)||num(d.slLockStage)>=expiryTarget||metaExpired||
+   (sign&&target!==null&&((price!==null&&sign*(price-target)>=0)||(quote!==null&&sign*(quote-target)>=0)));
+  const expiryReason=expiryTarget===2?'TP2_TOUCHED_WAIT_NEW_SOLID':'TP1_TOUCHED_WAIT_NEW_SOLID';
   if(key&&targetTouched)state.expired=true;
   const ended=d.tradeActive===false||d.slHit===true||d.positionExitStage==='CLOSED'||
    ['EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(d.positionExitAction)||
@@ -27,7 +30,7 @@ function createEntrySetupTracker(){
   else if(!state.cancelled&&(d.normal3Solid===true||meta?.policy===POLICY&&meta.solidLatched===true))state.armed=true;
   states.set(id,state);
   // Apply TP1 expiry to older alerts too, without changing their six SOP gates.
-  if(!atrPolicy)return state.expired?{...d,normal3EntryExpired:true,normal3EntryExpiryReason:'TP1_TOUCHED_WAIT_NEW_SOLID'}:d;
+  if(!atrPolicy)return state.expired?{...d,normal3EntryExpired:true,normal3EntryExpiryReason:expiryReason}:d;
   const bar=num(d.time??d.sourceBarOpenAt),open=num(d.open),extreme=num(sign>0?d.high:d.low);
   const atr=num(meta?.atrBeforeBar??d.atrBeforeBar);
   // Restore frozen impulse data carried by the Pine latch after server restart.
@@ -53,11 +56,11 @@ function createEntrySetupTracker(){
   const hasAtr=atr!==null&&atr>0;
   const missingImpulse=invalidImpulseMeta;
   const pass=state.armed&&hasAtr&&!missingImpulse&&(!required||fraction!==null&&fraction>=.4-1e-9);
-  const pullback={required:required||missingImpulse,pass,state:state.expired?'TP1_TOUCHED_WAIT_NEW_SOLID':!state.armed?'WAIT_SOLID':!hasAtr?'WAIT_ATR':missingImpulse?'WAIT_IMPULSE_DATA':required?(pass?'PULLBACK_READY':'WAIT_PULLBACK'):'NORMAL_CANDLE',
+  const pullback={required:required||missingImpulse,pass,state:state.expired?expiryReason:!state.armed?'WAIT_SOLID':!hasAtr?'WAIT_ATR':missingImpulse?'WAIT_IMPULSE_DATA':required?(pass?'PULLBACK_READY':'WAIT_PULLBACK'):'NORMAL_CANDLE',
    atrBeforeBar:atr,atrMultiplier:1.5,retracement:.4,level,fraction,distance,...(impulse?{impulse:{...impulse}}:{})};
   states.set(id,state);
   return {...d,normal3SetupPolicy:POLICY,normal3SetupArmed:state.armed,normal3SetupCancelled:state.cancelled,normal3EntryExpired:state.expired,
-   normal3EntryExpiryReason:state.expired?'TP1_TOUCHED_WAIT_NEW_SOLID':null,pullback};
+   normal3EntryExpiryReason:state.expired?expiryReason:null,pullback};
  }
  return {update};
 }

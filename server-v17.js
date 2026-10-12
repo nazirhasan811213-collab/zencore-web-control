@@ -398,24 +398,26 @@ function normalScalpStrategy(symbol,d){
   const side=reentry?x.reentrySide:x.side;
   const sopReady=(x.sequential?x.solid:d.entryEvent!==false)&&(reentry?x.reentryReady:x.standardReady);
   const pinePlan=chartTradePlan(d,side);
+  const displayTarget=x.entryExpiryTarget==='TP2'?pinePlan?.tp2:pinePlan?.tp1;
   const entryWindowOpen=!!pinePlan && (side==='BUY'
-    ? N(d.close)>pinePlan.sl && N(d.close)<pinePlan.tp1
-    : N(d.close)<pinePlan.sl && N(d.close)>pinePlan.tp1);
-  const ready=sopReady&&!!pinePlan&&entryWindowOpen;
+    ? N(d.close)>pinePlan.sl && N(d.close)<displayTarget
+    : N(d.close)<pinePlan.sl && N(d.close)>displayTarget);
+  const eaEntryCompatible=!!pinePlan&&(side==='BUY'?N(d.close)<pinePlan.tp1:N(d.close)>pinePlan.tp1);
+  const ready=sopReady&&!!pinePlan&&entryWindowOpen&&eaEntryCompatible;
   const gates=reentry?x.reentryGates:x.gates;
   const failed=gates.filter(g=>!g.pass).map(g=>g.label);
   const state=ready?'READY':sopReady?'WATCH':gates.filter(g=>g.pass).length>=Math.ceil(gates.length/2)?'WATCH':'WAIT';
-  const reason=x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} SETUP — pengesahan semasa lulus: entry line + 4/5 checklist + forecast + HEMA2/3 searah.`):
+  const reason=sopReady&&entryWindowOpen&&!eaEntryCompatible?'SOP TP2 lulus, tetapi EA sedia ada mengehadkan entry sebelum TP1. Tiada order dihantar.':x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} SETUP — pengesahan semasa lulus: entry line + ${x.minimumGreen}/5 checklist + forecast + HEMA2/3 ${x.version.includes('HEMAGAP')?'tidak nipis':'searah'}.`):
     sopReady&&pinePlan&&!entryWindowOpen?'WAIT PULLBACK — harga di luar julat entry hingga TP1; semak semula SOP semasa.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  const plan=ready?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
+  const plan=(ready||sopReady&&entryWindowOpen)?{...pinePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
     mode:'NORMAL',entrySopVersion:x.version,tf:`${d.timeframe||'2'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason,solid:x.solid,pullback:x.pullback,triggerPolicy:x.sequential?'SOLID_LATCH_CURRENT_CONFIRMATIONS':'SIMULTANEOUS',plan,
     confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
     sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
-      marketRegime:x.marketRegime,hema2:x.hema2,hema3:x.hema3,solid:x.solid,pullback:x.pullback,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
+      atrReference:x.atrReference,entryExpiryTarget:x.entryExpiryTarget,minimumGreen:x.minimumGreen,eaEntryCompatible,marketRegime:x.marketRegime,hema2:x.hema2,hema3:x.hema3,solid:x.solid,pullback:x.pullback,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
       sop1:x.flags[0],sop2:x.flags[1],sop3:x.flags[2],sop4:x.flags[3],sop5:x.flags[4],
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,

@@ -5,6 +5,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP2_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP2_HEMAGAP_V5'];
+  const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
   const SCHEMA_VERSION = '32.3-EXIT-STEPLOCK';
   const STRATEGY = 'NORMAL_3M_SOP_V32';
@@ -56,7 +58,7 @@
     const neutral = forecast === 'NEUTRAL' && power !== null &&
       ((side === 'BUY' && power > 50) || (side === 'SELL' && power < 50));
     const score = (gates.length >= 2 && passed === gates.length ? 25 : 0) +
-      (green >= 5 ? 15 : green >= 4 ? 10 : 0) + (directional ? 15 : neutral ? 6 : 0) +
+      (green >= 5 ? 15 : green >= 4 || revisedTf2(n) && green >= 3 ? 10 : 0) + (directional ? 15 : neutral ? 6 : 0) +
       (market.sidewaysGuard ? 0 : 10) + (confidence >= 80 ? 10 : confidence >= 70 ? 6 : 0) +
       (stability >= 75 ? 10 : stability >= 65 ? 5 : 0) +
       (stars >= 4 ? 5 : stars >= 3 ? 3 : 0) +
@@ -95,8 +97,17 @@
     const forecastPass = power !== null && power >= 0 && power <= 100 && (side === 'BUY'
       ? ['NEUTRAL', 'BULLISH'].includes(forecast) && power > 50
       : side === 'SELL' && (forecast === 'NEUTRAL' && power < 50 || forecast === 'BEARISH' && power > 50));
+    if(revisedTf2(n)){
+      const atr=number(s.atrReference??s.hema2?.atrReference);
+      if(atr===null||atr<=0)return false;
+      for(const key of ['hema2','hema3']){
+        const r=s[key]||{},fast=number(r.fast),slow=number(r.slow);
+        if(fast===null||slow===null||Math.abs(fast-slow)<=atr*.10||
+          (side==='BUY'?fast<=slow:side==='SELL'?fast>=slow:true))return false;
+      }
+    }
     return ['2','15'].includes(tf) && n.tf === tf + 'm' && n.solid === true &&
-      number(s.sopGreen) >= 4 && forecastPass &&
+      number(s.sopGreen) >= (revisedTf2(n)?3:4) && forecastPass &&
       s['hema'+tf]?.mode === side && s['hema'+higher]?.mode === side &&
       Array.isArray(s.gates) && [6,7].includes(s.gates.length) && s.gates.every(g => g.pass === true) &&
       (!String(n.entrySopVersion).includes('_SEQ_ATR40_') || s.pullback?.pass === true);
@@ -106,7 +117,7 @@
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
-    const restoredTf2=['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
+    const restoredTf2=revisedTf2(normal)||['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restoredTf15=['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restored=restoredTf2||restoredTf15;
     if(String(normal.entrySopVersion||'').includes('_SEQ_ATR40_')&&
