@@ -5,7 +5,9 @@ test('generated chart keeps canonical scan function, eligibility, targets and la
   const source=fs.readFileSync(path.join(root,`ZenCore_TF${tf}_Realtime_Feed.pine`),'utf8'),chart=fs.readFileSync(path.join(root,`ZenCore_Chart_TF${tf}_SOP_Aligned.pine`),'utf8');
   assert.equal(chart,build(tf));
   const scan=s=>s.slice(s.indexOf('f_scan3()=>'),s.indexOf('var string[] symbols='));
+  assert.ok(source.includes('f_scan3()=>'));
   assert.equal(scan(chart),scan(source));
+  assert.match(chart,/syminfo.tickerid=="OANDA:XAUUSD"/);
   assert.equal(chart.match(/bool eligible=[^\n]+/)[0],source.match(/bool eligible=[^\n]+/)[0]);
   assert.match(chart,/zcReady:=eligible/);assert.match(chart,/feedEnabled=input.bool\(false/);
   assert.match(chart,/if barstate.isrealtime and feedEnabled/);
