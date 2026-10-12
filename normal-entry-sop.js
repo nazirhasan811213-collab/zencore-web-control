@@ -48,8 +48,8 @@ function evaluateEntrySop(d={},timeframe='2'){
   const green=flags.filter(Boolean).length;
   const forecast=upper(d.normal3Forecast),power=num(d.normal3MarketPower);
   const forecastFor=direction=>power!==null&&(direction==='BUY'
-    ? (forecast==='NEUTRAL'||forecast==='BULLISH')&&power>50
-    : direction==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>50));
+    ? (forecast==='NEUTRAL'&&power>50||forecast==='BULLISH'&&power>(revisedTf2?40:50))
+    : direction==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>(revisedTf2?40:50)));
   const forecastPass=forecastFor(side);
   const cross=d.normal3PriceCrossEntry===true;
   const pricePast=sequential&&entry!==null&&close!==null?(side==='BUY'?close>entry:side==='SELL'&&close<entry):d.normal3PricePastEntry===true;

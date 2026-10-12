@@ -57,3 +57,42 @@ test('canonical Pine and generated chart use same three-green, width, TP2 and EA
  assert.match(pine,/bool targetTouched=hit2 or hit3 or lockStage>=2/);assert.match(pine,/c>entry and c<tp2/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_3GREEN_TP2_HEMAGAP_V1/);
  const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/tick.ask>=tp1/);assert.match(ea,/tick.bid<=tp1/);
 });
+test('directional forecast must exceed 40; neutral still uses strict 50 boundary',()=>{
+ for(const side of ['BUY','SELL']){
+  for(const power of [40,40.01,49,50,51]){
+   const d=frame(side);d.normal3MarketPower=power;
+   const x=evaluateEntrySop(createEntrySetupTracker().update(d),'2');assert.equal(x.forecastPass,power>40);
+   assert.equal(C.entryConfirmationsPass(market(d,x)),power>40);
+   if(power>40)assert.ok(C.createEntryDecision(market(d,x)));
+   d.setupMeta.entryRuleVersion=undefined;assert.equal(evaluateEntrySop(createEntrySetupTracker().update(d),'2').forecastPass,power>50);
+  }
+  for(const power of [49,50,51]){
+   const d=frame(side);d.normal3Forecast='NEUTRAL';d.normal3MarketPower=power;
+   assert.equal(evaluateEntrySop(createEntrySetupTracker().update(d),'2').forecastPass,side==='BUY'?power>50:power<50);
+  }
+ }
+});
+test('TP1 excursion waits; return inside entry-to-TP1 zone rechecks SOP and preserves replay dedupe',()=>{
+ for(const side of ['BUY','SELL']){
+  const d=frame(side),tracker=createEntrySetupTracker();tracker.update(d);
+  const beyond={...d,normal3Close:100+(side==='BUY'?1.2:-1.2),tp1Hit:true};
+  assert.equal(C.createEntryDecision(market(beyond,evaluateEntrySop(tracker.update(beyond),'2'))),null);
+  const back={...beyond,normal3Close:100+(side==='BUY'?.5:-.5)};
+  const m=market(back,evaluateEntrySop(tracker.update(back),'2'));m.entryAuthorizedAt=Date.now();m.setupKey='same-setup';
+  const a=C.createEntryDecision(m);assert.ok(a);assert.equal(C.createEntryDecision(m).signalKey,a.signalKey);
+  assert.notEqual(C.createEntryDecision({...m,entryAuthorizedAt:m.entryAuthorizedAt+1}).signalKey,a.signalKey);
+  m.strategyNormal.sop.hema3.fast=m.strategyNormal.sop.hema3.slow;assert.equal(C.createEntryDecision(m),null);
+  const expired=tracker.update({...back,tp2Hit:true});assert.equal(evaluateEntrySop(expired,'2').standardReady,false);
+ }
+ const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
+ assert.match(pine,/tp1ReturnPending/);assert.match(pine,/not bootstrap and array.get\(tp1ReturnPending,i\) and eaEntryWindow and entryRange/);
+});
+test('Telegram distinguishes fresh return events and suppresses an identical replay',()=>{
+ const A=require('../analysis-alert-core'),d=frame(),m=market(d,evaluateEntrySop(createEntrySetupTracker().update(d),'2'));
+ m.entryAuthorizedAt=Date.now();m.setupKey='same-setup';
+ const first=A.signals(m);const firstEvents=T.prepareTelegram(null,first,A.transitions(null,first));assert.equal(firstEvents[0].telegramDuplicate,false);
+ const replay=A.signals({...m,receivedAt:m.receivedAt+1});assert.equal(A.transitions(first,replay).length,0);
+ replay.telegramPosition=first.telegramPosition;
+ const fresh=A.signals({...m,receivedAt:m.receivedAt+2,entryAuthorizedAt:m.entryAuthorizedAt+2});
+ const freshEvents=T.prepareTelegram(replay,fresh,A.transitions(replay,fresh));assert.equal(freshEvents[0].telegramDuplicate,false);
+});

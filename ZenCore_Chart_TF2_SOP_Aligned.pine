@@ -319,9 +319,10 @@ var string[] aliases=array.from("XAUUSD")
 bool correctTf=timeframe.period=="2" and syminfo.tickerid=="OANDA:XAUUSD"
 string marketsJson=""
 varip string[] emittedSetupKeys=array.new_string(3,"")
+varip bool[] tp1ReturnPending=array.new_bool(3,false)
 varip string[] armedSetupKeys=array.new_string(3,"")
 varip bool[] solidArmed=array.new_bool(3,false)
-// Entry eligibility ends at TP1; position protection continues independently.
+// Setup expires at TP2; execution waits for price inside the entry-to-TP1 zone.
 varip bool[] entryExpired=array.new_bool(3,false)
 varip int[] impulseBars=array.new_int(3,0)
 varip float[] impulseOpens=array.new_float(3,na)
@@ -379,12 +380,13 @@ if correctTf
         int greens=(sop1?1:0)+(sop2?1:0)+(sop3?1:0)+(sop4?1:0)+(sop5?1:0)
         bool buy=side=="BUY"
         bool direction=buy or side=="SELL"
-        bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
+        bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>40)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>40))
         bool ownHema=(buy?h20>h40:h20<h40) and not na(a14) and a14>0 and math.abs(h20-h40)>a14*0.10
         bool higherHema=(buy?f3>s3:f3<s3) and not na(a14) and a14>0 and math.abs(f3-s3)>a14*0.10
         // SOLID is held across candles; confirmations and pullback use current values.
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
         if array.get(armedSetupKeys,i)!=setupKey
+            array.set(tp1ReturnPending,i,false)
             array.set(armedSetupKeys,i,setupKey)
             array.set(solidArmed,i,false)
             array.set(entryExpired,i,false)
@@ -430,6 +432,12 @@ if correctTf
         bool entryRange=buy?(c>entry and c<tp2):(c<entry and c>tp2)
         // Unchanged EA still refuses execution after TP1. Do not emit an impossible entry.
         bool eaEntryWindow=buy?c<tp1:c>tp1
+        // Rearm only after a realtime excursion beyond TP1 and a return inside it.
+        if barstate.isrealtime and not bootstrap and direction and not setupExpired and not setupEnded and not eaEntryWindow
+            array.set(tp1ReturnPending,i,true)
+        if barstate.isrealtime and not bootstrap and array.get(tp1ReturnPending,i) and eaEntryWindow and entryRange
+            array.set(emittedSetupKeys,i,"")
+            array.set(tp1ReturnPending,i,false)
         bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=3 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt) and power>=0 and power<=100 and not na(ch) and ch<61.8
         zcEntry:=entry
         zcInitialSl:=initialSl

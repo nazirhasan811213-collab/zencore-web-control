@@ -95,8 +95,8 @@
     const side = String(n.side || '').toUpperCase(), power = number(s.marketPower);
     const forecast = String(s.forecast || '').toUpperCase();
     const forecastPass = power !== null && power >= 0 && power <= 100 && (side === 'BUY'
-      ? ['NEUTRAL', 'BULLISH'].includes(forecast) && power > 50
-      : side === 'SELL' && (forecast === 'NEUTRAL' && power < 50 || forecast === 'BEARISH' && power > 50));
+      ? (forecast === 'NEUTRAL' && power > 50 || forecast === 'BULLISH' && power > (revisedTf2(n)?40:50))
+      : side === 'SELL' && (forecast === 'NEUTRAL' && power < 50 || forecast === 'BEARISH' && power > (revisedTf2(n)?40:50)));
     if(revisedTf2(n)){
       const atr=number(s.atrReference??s.hema2?.atrReference);
       if(atr===null||atr<=0)return false;
@@ -192,7 +192,7 @@
       ...((solidSop||restored)?{analysisSopVersion:normal.entrySopVersion}:{})
     };
     return deepFreeze({
-      signalKey: [CONTRACT_VERSION,market.timeframe||normal.tf||'2', symbol, side, prices.entry, market.setupKey||receivedAt].join('|'),
+      signalKey: [CONTRACT_VERSION,market.timeframe||normal.tf||'2', symbol, side, prices.entry, market.setupKey||receivedAt,...(revisedTf2(normal)?[market.entryAuthorizedAt]:[])].join('|'),
       snapshot
     });
   }

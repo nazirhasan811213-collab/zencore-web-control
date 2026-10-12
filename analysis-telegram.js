@@ -15,7 +15,7 @@ function prepareTelegram(previous, next, events) {
     // Adopt a key for an already-announced legacy position without announcing it again.
     if(position&&!position.setupKey&&entry.setupKey&&anchor===position.anchor)position.setupKey=entry.setupKey;
     const freshReentry=/^(NORMAL|HIGH)_REENTRY$/.test(entry.entryType)&&Number.isFinite(entry.sourceBarTime)&&entry.sourceBarTime>0;
-    if(eventExists && (distinctSetup || freshReentry || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
+    if(eventExists && (distinctSetup || freshReentry || entry.authorizedEvent || !position || position.side!==entry.side || (position.closed && (position.idle || anchor!==position.anchor)))){
       position={side:entry.side,anchor,setupKey:entry.setupKey||null,closed:false,idle:false};newEntry=true;
     }
   }
@@ -39,6 +39,8 @@ function entrySopAllowed(e){
   if(revised){
     if(s.version.includes('_SEQ_ATR40_')&&(s.gates?.length!==7||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
     if(e.telegramMarket?.timeframe!=null&&String(e.telegramMarket.timeframe)!=='2')return false;
+    const power=numeric(s.power),forecast=String(s.forecast||'').toUpperCase();
+    if(power===null||power<0||power>100||!(e.side==='BUY'?(forecast==='NEUTRAL'&&power>50||forecast==='BULLISH'&&power>40):e.side==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>40)))return false;
     if(e.timeframe!=='2'||s.tf!=='2m'||e.symbol!=='XAUUSD'||s.solid!==true||s.green<3||numeric(e.telegramQuality?.score)<50||
       !Array.isArray(s.gates)||![6,7].includes(s.gates.length)||!s.gates.every(g=>g.pass===true))return false;
     const atr=numeric(s.atrReference??s.hema2?.atrReference);
