@@ -83,6 +83,25 @@
     return { pass: reason === null, reason: reason || 'MARKET_CLEAR', chop, threshold: 61.8 };
   }
 
+  // Recheck actual confirmation values, not just a cached READY/pass flag.
+  // Dashboard receipts may confirm an existing event but never create one.
+  function entryConfirmationsPass(market = {}) {
+    const n = market.strategyNormal || {}, s = n.sop || {};
+    if (n.state !== 'READY') return false;
+    if (!String(n.entrySopVersion || '').startsWith('NORMAL_20261001_')) return true;
+    const tf = String(market.timeframe), higher = tf === '15' ? '30' : '3';
+    const side = String(n.side || '').toUpperCase(), power = number(s.marketPower);
+    const forecast = String(s.forecast || '').toUpperCase();
+    const forecastPass = power !== null && power >= 0 && power <= 100 && (side === 'BUY'
+      ? ['NEUTRAL', 'BULLISH'].includes(forecast) && power > 50
+      : side === 'SELL' && (forecast === 'NEUTRAL' && power < 50 || forecast === 'BEARISH' && power > 50));
+    return ['2','15'].includes(tf) && n.tf === tf + 'm' && n.solid === true &&
+      number(s.sopGreen) >= 4 && forecastPass &&
+      s['hema'+tf]?.mode === side && s['hema'+higher]?.mode === side &&
+      Array.isArray(s.gates) && [6,7].includes(s.gates.length) && s.gates.every(g => g.pass === true) &&
+      (!String(n.entrySopVersion).includes('_SEQ_ATR40_') || s.pullback?.pass === true);
+  }
+
   // READY remains the Pine SOP decision; entry quality is an additional filter.
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
@@ -102,6 +121,7 @@
         !received||received-authorized>30000||authorized>received+5000)return null;
     }
     if(restored){
+      if (!entryConfirmationsPass(market)) return null;
       const expected=restoredTf15?'15':'2';
       if(normal.tf!==expected+'m'||String(market.timeframe)!==expected||normal.solid!==true||
         !Array.isArray(normal.sop?.gates)||![6,7].includes(normal.sop.gates.length)||!normal.sop.gates.every(g=>g.pass===true))return null;
@@ -148,6 +168,16 @@
       ...(market.setupKey?{setupKey:market.setupKey}:{}),
       ...(market.signalObservedAt?{signalObservedAt:market.signalObservedAt}:{}),
       sourceReceivedAt: receivedAt,
+      ...(restored ? {confirmationEvidence: {
+        feedChannel: market.feedChannel || null,
+        signalObservedAt: number(market.signalObservedAt),
+        sopGreen: normal.sop.sopGreen,
+        forecast: normal.sop.forecast,
+        marketPower: normal.sop.marketPower,
+        hemaOwn: normal.sop['hema'+String(market.timeframe)].mode,
+        hemaHigher: normal.sop['hema'+(restoredTf15?'30':'3')].mode,
+        gates: normal.sop.gates.map(g => ({key:g.key || null,passed:g.pass === true,detail:g.detail ?? null}))
+      }} : {}),
       ...((solidSop||restored)?{analysisSopVersion:normal.entrySopVersion}:{})
     };
     return deepFreeze({
@@ -216,6 +246,7 @@
     normaliseSymbol,
     entryQuality,
     tf2MarketRegime,
+    entryConfirmationsPass,
     createEntryDecision,
     createManagementDecision
   };

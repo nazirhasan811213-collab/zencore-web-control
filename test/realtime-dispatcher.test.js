@@ -70,3 +70,14 @@ test('older delivery cannot roll direction back',async()=>{
  await d.onMarket({...m,signalObservedAt:100,strategyNormal:{state:'READY',side:'SELL'}});
  assert.equal(seen.length,1);assert.equal(d.getLatestMarket('XAUUSD','2').strategyNormal.side,'BUY');
 });
+
+test('dashboard contradicting forecast revokes an in-flight event even with stale READY flags',async()=>{
+ let release,allowed;const wait=new Promise(r=>release=r);
+ const d=createRealtimeDispatcher({dispatch:async(batch,isCurrent)=>{
+  if(allowed===undefined){await wait;allowed=isCurrent(batch[0]);}
+ },fetchMarkets:async()=>[]});
+ const m={...ready(),setupKey:'same-setup'},first=d.onMarket(m);
+ d.onMarket({...m,receivedAt:m.receivedAt+1,feedChannel:'DASHBOARD',
+  strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,forecast:'NEUTRAL',marketPower:45}}});
+ release();await first;assert.equal(allowed,false);
+});
