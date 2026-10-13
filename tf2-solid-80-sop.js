@@ -1,21 +1,21 @@
 'use strict';
-const RULE='TF2_SOLID_80PCT_V1',VERSION='NORMAL_20261001_TF2_SOLID_80PCT_V12';
-const POLICY=Object.freeze({feedRule:RULE,version:VERSION,trigger:'NATIVE_SOLID_FIRST',confirmationCount:6,minimumPassed:5,minimumPercent:80,checklistMinimum:3,forecastThreshold:45,hemaGapAtrMinimum:null,ribbonDirectionRequired:false,hema40SlopeAtrMinimum:.05,slopeLookbackBars:2,mtfBuy:[1,5],mtfSell:[-5,-1],waitCandles:0,reentry:false,targetAnchor:'SOP_COMPLETION_PRICE_V1'});
+const RULE='TF2_SOLID_80PCT_LIVE_V2',VERSION='NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13';
+const POLICY=Object.freeze({feedRule:RULE,version:VERSION,trigger:'NATIVE_SOLID_FIRST',confirmationCount:6,minimumPassed:5,minimumPercent:80,checklistMinimum:3,forecastThreshold:45,hemaGapAtrMinimum:null,ribbonDirectionRequired:false,hema40SlopeAtrMinimum:.05,slopeLookbackBars:1,slopeTiming:'LIVE_CURRENT_VS_PREVIOUS_BAR',mtfBuy:[1,5],mtfSell:[-5,-1],waitCandles:0,reentry:false,targetAnchor:'SOP_COMPLETION_PRICE_V1'});
 const num=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
 function confirmations(side,s={}){
- const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||{},a=num(s.atrReference),fast=num(h.fast),slow=num(h.slow),f2=num(h.fastTwoBarsAgo),s2=num(h.slowTwoBarsAgo),w1=num(h.waveTrend1),w2=num(h.waveTrend2),p=num(s.marketPower),m=num(s.mtfScore),e=num(s.sourceEntry),price=num(s.price),green=num(s.sopGreen);
+ const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||{},a=num(s.atrReference),fast=num(h.fast),slow=num(h.slow),f2=num(h.fastPreviousBar),s2=num(h.slowPreviousBar),w1=num(h.waveTrend1),w2=num(h.waveTrend2),p=num(s.marketPower),m=num(s.mtfScore),e=num(s.sourceEntry),price=num(s.price),green=num(s.sopGreen);
  const dataReady=!!sign&&a>0&&[fast,slow,f2,s2,w1,w2,p,m,e,price,green].every(x=>x!==null)&&Number.isInteger(m)&&Number.isInteger(green)&&green>=0&&green<=5&&p>=0&&p<=100;
  const hema40=dataReady&&sign*(slow-s2)>=.05*a;
- const gates=[{key:'entry',label:'Harga melepasi entry asal',pass:dataReady&&sign*(price-e)>0},{key:'wt',label:'Momentum WT searah',pass:dataReady&&sign*(w1-w2)>0},{key:'slope',label:'HEMA20/40 condong ≥0.05 ATR / 2 candle',pass:hema40&&sign*(fast-f2)>=.05*a},{key:'sop',label:'Checklist minimum 3/5 hijau',pass:dataReady&&green>=3},{key:'forecast',label:'Forecast mengikut arah — had 45',pass:dataReady&&(sign===1?(s.forecast==='NEUTRAL'||s.forecast==='BULLISH')&&p>45:(s.forecast==='NEUTRAL'&&p<45||s.forecast==='BEARISH'&&p>45))},{key:'mtf',label:'MTF BUY +1…+5 / SELL −1…−5',pass:dataReady&&sign*m>=1&&sign*m<=5}];
+ const gates=[{key:'entry',label:'Harga melepasi entry asal',pass:dataReady&&sign*(price-e)>0},{key:'wt',label:'Momentum WT searah',pass:dataReady&&sign*(w1-w2)>0},{key:'slope',label:'HEMA20/40 condong ≥0.05 ATR / candle semasa vs sebelumnya',pass:hema40&&sign*(fast-f2)>=.05*a},{key:'sop',label:'Checklist minimum 3/5 hijau',pass:dataReady&&green>=3},{key:'forecast',label:'Forecast mengikut arah — had 45',pass:dataReady&&(sign===1?(s.forecast==='NEUTRAL'||s.forecast==='BULLISH')&&p>45:(s.forecast==='NEUTRAL'&&p<45||s.forecast==='BEARISH'&&p>45))},{key:'mtf',label:'MTF BUY +1…+5 / SELL −1…−5',pass:dataReady&&sign*m>=1&&sign*m<=5}];
  const passed=gates.filter(g=>g.pass).length;
  return {dataReady,hema40,passed,total:6,percent:passed/6*100,gates,pass:dataReady&&hema40&&passed>=5};
 }
 function evaluate(d={}){
  const meta=d.setupMeta||d.tf2SetupMeta||{},side=meta.solidSide,ai=meta.dashboardAi||{},r=d.hemaConfirmation?.tf2||{};
  const t=num(meta.solidTriggeredAt),complete=num(meta.completedAt),observed=num(d.signalObservedAt??d.receivedAt),now=Date.now();
- const solid=meta.solidEligible===true&&t!==null&&complete===t&&observed!==null&&observed>=t&&observed-t<=30000&&now-t>=-5000&&now-t<=30000;
+ const solid=meta.entryRuleVersion===RULE&&meta.solidEligible===true&&t!==null&&complete===t&&observed!==null&&observed>=t&&observed-t<=30000&&now-t>=-5000&&now-t<=30000;
  const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
- const s={solid,sourceEntry:num(meta.sourceEntry),price:num(d.normal3Close??d.close),atrReference:num(d.normal3Atr??d.atr),mtfScore:num(ai.mtfScore),sopGreen:flags.filter(Boolean).length,forecast:String(d.normal3Forecast||'').toUpperCase(),marketPower:num(d.normal3MarketPower),hema2:{fast:num(r.fast),slow:num(r.slow),fastTwoBarsAgo:num(r.fastTwoBarsAgo),slowTwoBarsAgo:num(r.slowTwoBarsAgo),waveTrend1:num(d.waveTrend1),waveTrend2:num(d.waveTrend2)}};
+ const s={solid,sourceEntry:num(meta.sourceEntry),price:num(d.normal3Close??d.close),atrReference:num(d.normal3Atr??d.atr),mtfScore:num(ai.mtfScore),sopGreen:flags.filter(Boolean).length,forecast:String(d.normal3Forecast||'').toUpperCase(),marketPower:num(d.normal3MarketPower),hema2:{fast:num(r.fast),slow:num(r.slow),fastPreviousBar:num(r.fastPreviousBar),slowPreviousBar:num(r.slowPreviousBar),waveTrend1:num(d.waveTrend1),waveTrend2:num(d.waveTrend2)}};
  const c=confirmations(side,s),sign=side==='BUY'?1:side==='SELL'?-1:0;
  s.hema2.mode=s.hema2.fast===null||s.hema2.slow===null?'WAIT_DATA':s.hema2.fast>s.hema2.slow?'BUY':s.hema2.fast<s.hema2.slow?'SELL':'NEUTRAL';
  s.hema2.state=c.hema40?'HEMA40_'+side:'HEMA40_FLAT_OR_OPPOSITE';
