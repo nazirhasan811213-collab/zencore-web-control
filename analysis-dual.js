@@ -9,7 +9,7 @@
  const price=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(pair.value==='GBPUSD'?5:3):'—';
  for(const tf of [2,15]){
   const card=el('article',undefined,'tf-card');card.dataset.timeframe=String(tf);
-  const header=el('header'),title=el('div');title.append(el('span','XAUUSD / HEMA '+(tf===2?'2 / 3':'15 / 30'),'eyebrow'),el('h2','TF'+tf+' • '+(tf===2?'Scalping':'Intraday')));
+  const header=el('header'),title=el('div');title.append(el('span','XAUUSD / HEMA '+(tf===2?'2':'15 / 30'),'eyebrow'),el('h2','TF'+tf+' • '+(tf===2?'Scalping':'Intraday')));
   const badge=el('span','WAITING','feed-pill');header.append(title,badge);
   const content=el('div'),chartButton=el('button','Buka chart '+tf+' min'),chart=el('div',undefined,'chart-host');chartButton.type='button';
   chartButton.onclick=()=>{if(chart.children.length){chart.replaceChildren();chartButton.textContent='Buka chart '+tf+' min';return;}chartButton.textContent='Tutup chart '+tf+' min';const script=document.createElement('script');script.src='https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';script.async=true;script.textContent=JSON.stringify({autosize:true,symbol:'OANDA:'+pair.value,interval:String(tf),timezone:'Asia/Kuala_Lumpur',theme:'dark',style:'1',locale:'en',allow_symbol_change:false,support_host:'https://www.tradingview.com'});chart.append(el('div',undefined,'tradingview-widget-container__widget'),script);};
@@ -27,7 +27,7 @@
    const open=new Set([...c.content.querySelectorAll('details[open]')].map(d=>d.dataset.section));
    const nodes=[el('div',live?(n.state==='READY'?'SOLID '+n.side:label(n.state||'WAIT')+' • '+(n.side||'WAIT')):'TUNGGU DATA TF'+tf,'signal'+(live&&n.state==='READY'?' ready '+(n.side==='SELL'?'sell':'buy'):'')),el('p',live?n.reason||'':m?'Ini data terakhir sahaja. Signal tak aktif sampai data fresh masuk.':'Feed TF'+tf+' belum diterima untuk '+pair.value+'.')];
    const metrics=el('div',undefined,'metrics primary-metrics');metrics.append(metric(live?'HARGA XAUUSD':'HARGA TERAKHIR',price(m?.price)),metric('FORECAST • 10 CANDLE',s.forecast||'—'),metric('POWER MARKET',s.marketPower==null?'—':s.marketPower+'%'),metric('SOP HIJAU',s.sopGreen==null?'—':s.sopGreen+'/5'),metric('SOLID SETUP',n.solid==null?'—':n.solid?'AKTIF':'BELUM'));nodes.push(metrics);
-   nodes.push(el('h3','Arah HEMA'));const hema=el('div',undefined,'hema');for(const h of [tf,tf===2?3:30])hema.append(metric('HEMA TF'+h,label(s['hema'+h]?.mode||'WAIT_DATA')));nodes.push(hema);
+   nodes.push(el('h3',s.hema2?.state==='ABOVE'||s.hema2?.state==='BELOW'||s.hema2?.state==='INSIDE'?'Harga vs HEMA':'Arah HEMA'));const hema=el('div',undefined,'hema');for(const h of tf===2?[2]:[15,30])hema.append(metric('HEMA TF'+h,label(s['hema'+h]?.state||s['hema'+h]?.mode||'WAIT_DATA')));nodes.push(hema);
    if(s.hemaShape)nodes.push(el('div','Bentuk HEMA: '+s.hemaShape.state+(live&&s.hemaShape.pass?' • LULUS':''),'hema-shape'+(live&&s.hemaShape.pass?' pass':'')));
    nodes.push(el('h3',(live?'Plan trade':'Plan terakhir')+' • '+(n.side||'WAIT')+(!live&&m?' • DATA LAMA':'')));
    const levels=el('div',undefined,'levels');for(const [k,name] of [['entry','ENTRY'],['sl','SL'],['tp1','TP1'],['tp2','TP2'],['tp3','TP3']])levels.append(metric(name,price(n.plan?.[k])));nodes.push(levels);

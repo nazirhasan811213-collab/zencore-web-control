@@ -6,6 +6,7 @@
   'use strict';
 
   const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'];
+  const currentTf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
   const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
   const SCHEMA_VERSION = '32.3-EXIT-STEPLOCK';
@@ -58,8 +59,8 @@
     const neutral = forecast === 'NEUTRAL' && power !== null &&
       ((side === 'BUY' && power > 50) || (side === 'SELL' && power < 50));
     const score = (gates.length >= 2 && passed === gates.length ? 25 : 0) +
-      (green >= 5 ? 15 : green >= 4 || revisedTf2(n) && green >= 3 ? 10 : 0) + (directional ? 15 : neutral ? 6 : 0) +
-      (market.sidewaysGuard ? 0 : 10) + (confidence >= 80 ? 10 : confidence >= 70 ? 6 : 0) +
+      (green >= 5 ? 15 : green >= 4 || (revisedTf2(n)||currentTf2(n)) && green >= 3 ? 10 : 0) + (directional ? 15 : neutral ? 6 : 0) +
+      (market.sidewaysGuard && !currentTf2(n) ? 0 : 10) + (confidence >= 80 ? 10 : confidence >= 70 ? 6 : 0) +
       (stability >= 75 ? 10 : stability >= 65 ? 5 : 0) +
       (stars >= 4 ? 5 : stars >= 3 ? 3 : 0) +
       (probability >= 70 ? 5 : probability >= 60 ? 3 : 0) + (rr !== null && rr >= 2 ? 5 : 0);
@@ -91,6 +92,7 @@
     const n = market.strategyNormal || {}, s = n.sop || {};
     if (n.state !== 'READY') return false;
     if (!String(n.entrySopVersion || '').startsWith('NORMAL_20261001_')) return true;
+    if(currentTf2(n))return currentSolidTf2Confirmations({side:n.side,solid:n.solid,green:s.sopGreen,forecast:s.forecast,power:s.marketPower,price:market.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&String(market.timeframe)==='2'&&n.tf==='2m';
     const tf = String(market.timeframe), higher = tf === '15' ? '30' : '3';
     const side = String(n.side || '').toUpperCase(), power = number(s.marketPower);
     const forecast = String(s.forecast || '').toUpperCase();
@@ -113,11 +115,21 @@
       (!String(n.entrySopVersion).includes('_SEQ_ATR40_') || s.pullback?.pass === true);
   }
 
+  function currentSolidTf2Confirmations(x={}) {
+    const side=String(x.side||'').toUpperCase(),price=number(x.price),fast=number(x.fast),slow=number(x.slow),power=number(x.power),green=number(x.green);
+    const forecast=String(x.forecast||'').toUpperCase();
+    const keys=['solid','entry','sop','forecast','hema2'];
+    return x.solid===true&&green!==null&&green>=3&&green<=5&&price!==null&&fast!==null&&slow!==null&&power!==null&&power>=0&&power<=100&&
+      (side==='BUY'?price>Math.max(fast,slow)&&(forecast==='NEUTRAL'||forecast==='BULLISH')&&power>50:
+       side==='SELL'&&price<Math.min(fast,slow)&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>50))&&
+      Array.isArray(x.gates)&&x.gates.length===5&&keys.every(k=>x.gates.filter(g=>g.key===k&&g.pass===true).length===1);
+  }
+
   // READY remains the Pine SOP decision; entry quality is an additional filter.
   function createEntryDecision(market = {}) {
     const normal = market.strategyNormal || {};
     const plan = normal.plan || {};
-    const restoredTf2=revisedTf2(normal)||['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
+    const restoredTf2=currentTf2(normal)||revisedTf2(normal)||['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restoredTf15=['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restored=restoredTf2||restoredTf15;
     if(String(normal.entrySopVersion||'').includes('_SEQ_ATR40_')&&
@@ -143,7 +155,7 @@
     const solidTf15=normal.entrySopVersion==='SOLID_TF15_3GREEN_HEMA1545_2L_V1';
     if(String(normal.entrySopVersion||'').startsWith('SOLID_TF15_')&&!solidTf15)return null;
     const solidSop=solidTf2||solidTf15;
-    if((solidTf2 || restoredTf2) && !tf2MarketRegime(market).pass)return null;
+    if((solidTf2 || restoredTf2) && !currentTf2(normal) && !tf2MarketRegime(market).pass)return null;
     const expectedTf=solidTf15?'15m':'2m';
     if(solidSop && (normal.tf!==expectedTf || (market.timeframe!=null && String(market.timeframe).replace(/m$/, '')!==expectedTf.replace(/m$/, '')) || normal.solid!==true || !Array.isArray(normal.sop?.gates) || normal.sop.gates.length!==6 || !normal.sop.gates.every(g=>g.pass===true)))return null;
     const symbol = normaliseSymbol(market.symbol);
@@ -160,7 +172,7 @@
     const livePrice = number(market.price);
     if(plan.entryAnchor==='LIVE_SIGNAL_PRICE_V1'){
       const original=plan.sourceChartPlan||{},sign=side==='BUY'?1:side==='SELL'?-1:0;
-      if(!revisedTf2(normal)||!sign||livePrice===null||original.side!==side||['entry','sl','tp1','tp2','tp3'].some(k=>number(original[k])===null)||
+      if(!(revisedTf2(normal)||currentTf2(normal))||!sign||livePrice===null||original.side!==side||['entry','sl','tp1','tp2','tp3'].some(k=>number(original[k])===null)||
         sign*(livePrice-original.entry)<=0||sign*(original.tp1-livePrice)<=0||
         sign*(original.entry-original.sl)<=0||sign*(original.tp2-original.tp1)<=0||sign*(original.tp3-original.tp2)<=0||
         prices.entry!==livePrice||['sl','tp1','tp2','tp3'].some(k=>Math.abs((prices[k]-prices.entry)-(original[k]-original.entry))>1e-8))return null;
@@ -259,6 +271,7 @@
   }
 
   return {
+    currentSolidTf2Confirmations,
     CONTRACT_VERSION,
     SCHEMA_VERSION,
     STRATEGY,
