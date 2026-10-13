@@ -55,3 +55,12 @@ class V2ConnectorTests(unittest.TestCase):
   self.assertEqual(status_cards(local,{**cloud,'entryBlockedReason':'GLOBAL_ENTRY_PAUSED'},NOW,True)['entry'][0],'SERVER PAUSED')
   self.assertNotEqual(status_cards(local,cloud,NOW+16000,True)['entry'][1],'good')
   self.assertNotEqual(status_cards({**local,'terminalTradeAllowed':False},cloud,NOW,True)['entry'][1],'good')
+
+ def test_old_ea_never_gets_an_on_lease_during_upgrade(self):
+  with tempfile.TemporaryDirectory() as folder:
+   path=Path(folder);local=local_heartbeat();local.pop('executorPolicyVersion');atomic_write(path/'heartbeat.tsv',encode_fields(local));r=Runner({**IDENTITY,'channel':folder,'podToken':'test'},lambda _:None)
+   class API:
+    def request(self,*args,**kwargs):return {'desiredState':'ON'}
+   r.api=API()
+   with patch('protocol.time.time',return_value=NOW/1000):r.renew_lease(local)
+   self.assertEqual(read_fields(path/'lease.tsv')['desiredState'],'STOPPED')

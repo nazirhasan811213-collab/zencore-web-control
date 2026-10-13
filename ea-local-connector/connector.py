@@ -263,6 +263,8 @@ class Runner:
         state=response.get('desiredState')
         self.entry_blocked_reason=response.get('entryBlockedReason')
         if self.entry_blocked_reason in ('GLOBAL_ENTRY_PAUSED','EXECUTION_ROLLOUT_LOCKED'):state='STOPPED'
+        if local.get('executorPolicyVersion')!='EXACT_ANALYSIS_V2':
+            state='STOPPED';self.entry_blocked_reason='EA_POLICY_UPGRADE_REQUIRED'
         if state not in ('ON','STOPPED'): raise ValueError('CONTROL_STATE_INVALID')
         self.desired_state=state
         atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config['account'],'server':self.config['server'],
@@ -319,7 +321,9 @@ class App:
     def __init__(self,root,test_mode=False):
         self.root=root;self.ui_queue=queue.Queue();self.session_api=None
         self.runner=None;self.runner_thread=None;self.pairing=False;self.switching=False
-        root.title('ZenCore Connect 2.0 • EA '+EA_VERSION);root.geometry('880x830');root.minsize(760,680)
+        root.title('ZenCore Connect 2.0 • EA '+EA_VERSION)
+        height=min(830,max(620,root.winfo_screenheight()-120))
+        root.geometry('880x'+str(height)+'+40+20');root.minsize(760,620)
         bg='#07111d';panel='#101e30';muted='#a9bed3';root.configure(bg=bg)
         style=ttk.Style(root);style.theme_use('clam')
         style.configure('.',font=('Segoe UI',12),background=panel,foreground='#edf5ff')
@@ -345,7 +349,7 @@ class App:
             ttk.Label(card,text=title,style='Muted.TLabel').pack(anchor='w')
             label=ttk.Label(card,text='MENUNGGU',font=('Segoe UI',12,'bold'));label.pack(anchor='w',pady=(8,0));self.health_labels[key]=label
         outer=ttk.Frame(shell,style='Shell.TFrame');outer.pack(fill='both',expand=True)
-        canvas=tk.Canvas(outer,bg=bg,highlightthickness=0);scrollbar=ttk.Scrollbar(outer,orient='vertical',command=canvas.yview)
+        canvas=tk.Canvas(outer,bg=bg,highlightthickness=0);self.canvas=canvas;scrollbar=ttk.Scrollbar(outer,orient='vertical',command=canvas.yview)
         scrollbar.pack(side='right',fill='y');canvas.pack(side='left',fill='both',expand=True);canvas.configure(yscrollcommand=scrollbar.set)
         box=ttk.Frame(canvas,style='Shell.TFrame');window=canvas.create_window((0,0),window=box,anchor='nw')
         box.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
@@ -390,12 +394,12 @@ class App:
         if '--background' in sys.argv:root.iconify()
     def health_tick(self):
         local={};cloud={};runner=self.runner
+        raw=runner.latest_local if runner else self.available.get(self.account.get(),(None,{}))[1]
+        for key in ('terminalConnected','terminalTradeAllowed','accountTradeAllowed','expertTradeAllowed'):local[key]=raw.get(key)=='1'
+        try:local['writtenAt']=int(raw.get('writtenAt',0))
+        except (ValueError,TypeError):local['writtenAt']=0
+        local['executorPolicyVersion']=raw.get('executorPolicyVersion')
         if runner:
-            raw=runner.latest_local
-            for key in ('terminalConnected','terminalTradeAllowed','accountTradeAllowed','expertTradeAllowed'):local[key]=raw.get(key)=='1'
-            try:local['writtenAt']=int(raw.get('writtenAt',0))
-            except (ValueError,TypeError):local['writtenAt']=0
-            local['executorPolicyVersion']=raw.get('executorPolicyVersion')
             cloud={'lastCloudHeartbeatMs':runner.last_cloud_heartbeat_ms,'consecutiveFailures':runner.failure_count,'desiredState':'STOPPED' if runner.stop.is_set() else runner.desired_state,'entryBlockedReason':runner.entry_blocked_reason}
         cards=status_cards(local,cloud,int(time.time()*1000),bool(runner))
         for key,(text,tone) in cards.items():self.health_labels[key].configure(text=text,foreground={'good':'#4ce3ad','warn':'#f3c76a','bad':'#ff8691'}[tone])
@@ -548,7 +552,10 @@ if __name__=='__main__':
             preview=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--preview=')),None)
             if preview:
                 from PIL import ImageGrab
-                ImageGrab.grab(bbox=(gui.winfo_rootx(),gui.winfo_rooty(),gui.winfo_rootx()+gui.winfo_width(),gui.winfo_rooty()+gui.winfo_height())).save(preview)
+                bbox=(gui.winfo_rootx(),gui.winfo_rooty(),gui.winfo_rootx()+gui.winfo_width(),gui.winfo_rooty()+gui.winfo_height())
+                ImageGrab.grab(bbox=bbox).save(preview)
+                app.canvas.yview_moveto(1);gui.update()
+                ImageGrab.grab(bbox=bbox).save(str(Path(preview).with_name(Path(preview).stem+'-Account.png')))
             gui.destroy()
             output=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--output=')),None)
             if output:Path(output).write_text(json.dumps({'ok':True,'version':VERSION,'eaVersion':EA_VERSION,'connectorBuild':CONNECTOR_BUILD,'eaResource':True,'dpapi':True,'tkGui':True}))
