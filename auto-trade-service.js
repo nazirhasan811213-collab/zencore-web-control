@@ -1094,6 +1094,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function queuedEntryIsCurrent(command){
+    if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
       if(latest?.payload?.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1')return p.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&p.analysisSnapshot.entryCommandId===latest.id;
