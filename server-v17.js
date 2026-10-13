@@ -394,7 +394,8 @@ function fastTradeStrategy(symbol,d){
 function normalScalpStrategy(symbol,d){
   const life=signalCoreBySymbol.get(symbol);
   const meta=d.setupMeta||d.tf2SetupMeta;
-  const currentSolidOnly=String(d.timeframe)==='2'&&['TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1','TF2_SEP24_4GREEN_HEMA5_V1'].includes(meta?.entryRuleVersion);
+  const currentSolidOnly=String(d.timeframe)==='2'&&['TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1','TF2_SEP24_4GREEN_HEMA5_V1','TF2_SEP24_NATIVE_CHART_V1'].includes(meta?.entryRuleVersion);
+  const nativeChartPolicy=meta?.entryRuleVersion==='TF2_SEP24_NATIVE_CHART_V1';
   const pendingReturn=String(d.timeframe)==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
   // Chart protection may finish a virtual position that this user never opened.
   // Actual user positions, queued commands and replay guards remain in dispatch.
@@ -418,7 +419,7 @@ function normalScalpStrategy(symbol,d){
     sopReady&&pinePlan&&!entryWindowOpen?'WAIT PULLBACK — harga di luar julat entry hingga TP1; semak semula SOP semasa.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
     `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
-  const basePlan=ready&&(pendingReturn||currentSolidOnly)?{...pinePlan,...levelsAtLivePrice(pinePlan,N(d.close)),entryAnchor:'LIVE_SIGNAL_PRICE_V1',sourceChartPlan:{side:pinePlan.side,entry:pinePlan.entry,sl:pinePlan.sl,tp1:pinePlan.tp1,tp2:pinePlan.tp2,tp3:pinePlan.tp3}}:pinePlan;
+  const basePlan=ready&&!nativeChartPolicy&&(pendingReturn||currentSolidOnly)?{...pinePlan,...levelsAtLivePrice(pinePlan,N(d.close)),entryAnchor:'LIVE_SIGNAL_PRICE_V1',sourceChartPlan:{side:pinePlan.side,entry:pinePlan.entry,sl:pinePlan.sl,tp1:pinePlan.tp1,tp2:pinePlan.tp2,tp3:pinePlan.tp3}}:pinePlan;
   const plan=(ready||sopReady&&entryWindowOpen)?{...basePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{

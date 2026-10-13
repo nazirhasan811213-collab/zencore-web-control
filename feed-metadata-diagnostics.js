@@ -1,6 +1,7 @@
 'use strict';
 const RULE='TF2_3GREEN_TP1_HEMAGAP_V1';
 const SEPT='TF2_SEP24_4GREEN_HEMA5_V1';
+const NATIVE='TF2_SEP24_NATIVE_CHART_V1';
 const CURRENT='TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1';
 // Bounded, account-free ingress evidence. Never retain the raw webhook body.
 function createFeedMetadataDiagnostics({now=Date.now}={}){
@@ -12,7 +13,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
   const row=batch.markets.find(r=>Array.isArray(r)&&r[0]==='XAUUSD');
   if(!row)return;
   const meta=row[66],key=`TF${tf}_${channel}`,previous=channels.get(key);
-  const current=[CURRENT,SEPT].includes(meta?.entryRuleVersion)&&meta?.currentSolidOnly===true;
+  const current=[CURRENT,SEPT,NATIVE].includes(meta?.entryRuleVersion)&&meta?.currentSolidOnly===true;
   const revised=current||meta?.entryRuleVersion===RULE&&meta?.pendingEntryReturn===true;
   const observedAt=now(),emittedAt=Number(batch.emittedAt);
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
