@@ -33,7 +33,7 @@ function hemaWidthMode(r={},side,atrReference){
 }
 
 // Verified production snapshot: 284b98d, 2026-10-01 21:43 MYT.
-// October 1 baseline plus current-direction HEMA2/3 or HEMA15/30; no candle-close/slope gate.
+// TF2 requires HEMA2 only (13 Oct); TF15 retains HEMA15/30. No close/slope gate.
 // TF2 and TF15 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
 function evaluateEntrySop(d={},timeframe='2'){
   const atrPullback=d.normal3SetupPolicy==='SEQUENTIAL_ATR40_V1';
@@ -69,7 +69,7 @@ function evaluateEntrySop(d={},timeframe='2'){
     {key:'sop',label:`SOP Dashboard ≥${minimumGreen}/5 Green`,pass:green>=minimumGreen,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
     {key:'hema'+timeframe,label:'HEMA TF'+timeframe+(revisedTf2?' searah, ribbon tidak nipis':' searah entry'),pass:ownHema.pass,detail:ownHema.state},
-    {key:'hema'+higherTf,label:'HEMA TF'+higherTf+(revisedTf2?' searah, ribbon tidak nipis':' searah entry'),pass:higherHema.pass,detail:higherHema.state}
+    ...(String(timeframe)==='15'?[{key:'hema'+higherTf,label:'HEMA TF'+higherTf+(revisedTf2?' searah, ribbon tidak nipis':' searah entry'),pass:higherHema.pass,detail:higherHema.state}]:[])
   ];
   if(atrPullback)gates.splice(1,0,{key:'pullback',label:'Candle besar: pullback 40%',pass:d.pullback?.pass===true,detail:d.pullback?.state||'WAIT_ATR'});
   // Friday 25 Sep Normal entry has no separate re-entry route.

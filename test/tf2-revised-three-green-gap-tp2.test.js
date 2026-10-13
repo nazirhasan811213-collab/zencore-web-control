@@ -19,8 +19,8 @@ test('new TF2 minimum is three; unversioned feeds and TF15 retain original four'
  const d=frame();d.timeframe='15';d.hemaConfirmation={version:'HEMA1530_V1',tf15:{fast:102,slow:101},tf30:{fast:102,slow:101}};
  assert.equal(evaluateEntrySop(createEntrySetupTracker().update(d),'15').standardReady,false);
 });
-test('narrow ribbon blocks independently on either TF, regardless of raw BUY/SELL mode',()=>{
- for(const side of ['BUY','SELL'])for(const key of ['tf2','tf3']){
+test('narrow TF2 ribbon still blocks regardless of raw BUY/SELL mode',()=>{
+ for(const side of ['BUY','SELL'])for(const key of ['tf2']){
   const d=frame(side),sign=side==='BUY'?1:-1;
   d.hemaConfirmation[key]={fast:100+sign*.05,slow:100};
   const x=evaluateEntrySop(createEntrySetupTracker().update(d),'2');assert.equal(x.standardReady,false);assert.equal(x['hema'+key.slice(2)].state,'SIDEWAYS');
@@ -38,12 +38,12 @@ test('valid 3-green entry authorizes below TP1, but TP2 analysis cannot bypass u
   const later={...d,tp1Hit:true,normal3Close:100+(side==='BUY'?1.2:-1.2)},n=createEntrySetupTracker().update(later),y=evaluateEntrySop(n,'2');assert.equal(y.standardReady,false);
   const lateMarket=market(later,y);assert.equal(C.createEntryDecision(lateMarket),null);
   assert.equal(T.entrySopAllowed({...event,telegramSop:{...event.telegramSop,eaEntryCompatible:false}}),false);
-  const forged=structuredClone(m);forged.strategyNormal.sop.hema3.fast=forged.strategyNormal.sop.hema3.slow+(side==='BUY'?.01:-.01);forged.strategyNormal.sop.hema3.gapAtr=999;assert.equal(C.createEntryDecision(forged),null);
+  const forged=structuredClone(m);forged.strategyNormal.sop.hema2.fast=forged.strategyNormal.sop.hema2.slow+(side==='BUY'?.01:-.01);forged.strategyNormal.sop.hema2.gapAtr=999;assert.equal(C.createEntryDecision(forged),null);
  }
 });
 test('canonical Pine and generated chart use same three-green, width, TP1 and EA compatibility rules',()=>{
  const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
- assert.match(pine,/greens>=3/);assert.match(pine,/math.abs\(h20-h40\)>a14\*0.10/);assert.match(pine,/math.abs\(f3-s3\)>a14\*0.10/);
+ assert.match(pine,/greens>=3/);assert.match(pine,/math.abs\(h20-h40\)>a14\*0.10/);assert.doesNotMatch(pine.match(/bool eligible=.*$/m)[0],/higherHema/);
  assert.match(pine,/bool targetTouched=false/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_3GREEN_TP1_HEMAGAP_V1/);
  const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/tick.ask>=tp1/);assert.match(ea,/tick.bid<=tp1/);
 });
@@ -82,7 +82,7 @@ test('unfilled return policy survives TP2 and chart StepLock exit, rechecks all 
   assert.equal(evaluateEntrySop(waiting,'2').standardReady,false);
   const back={...beyond,normal3Close:100+sign*.5,tradeActive:false,slHit:true,positionExitStage:'CLOSED',positionExitAction:'EXIT_SL'};
   const returned=tracker.update(back),x=evaluateEntrySop(returned,'2');assert.equal(x.standardReady,true);assert.ok(C.createEntryDecision(market(back,x)));
-  const thin={...back,hemaConfirmation:{...back.hemaConfirmation,tf3:{fast:100,slow:100}}};
+  const thin={...back,hemaConfirmation:{...back.hemaConfirmation,tf2:{fast:100,slow:100}}};
   assert.equal(evaluateEntrySop(tracker.update(thin),'2').standardReady,false);
   const invalid=tracker.update({...back,normal3Close:d.initialSl});assert.equal(invalid.normal3SetupArmed,false);
  }

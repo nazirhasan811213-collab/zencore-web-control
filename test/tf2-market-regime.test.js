@@ -16,7 +16,7 @@ test('TF2 pauses immediately at CHOP threshold, explicit sideways, missing/inval
 test('unclear or conflicting direction cannot open; directional NEUTRAL is retained',()=>{
  assert.equal(normalEntrySop(feed).standardReady,true);
  for(const edit of [{normal3MarketPower:50},{normal3Side:'WAIT'},
-  {hemaConfirmation:{version:'HEMA23_LIVE_V1',tf2:h,tf3:{...h,confirmed:true,fast:100}}}])
+  {hemaConfirmation:{version:'HEMA23_LIVE_V1',tf2:{...h,fast:100},tf3:h}}])
   assert.equal(normalEntrySop({...feed,...edit}).standardReady,false);
 });
 test('contract blocks stale READY under sideways and CHOP; resumes only when clean',()=>{

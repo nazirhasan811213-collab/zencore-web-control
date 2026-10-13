@@ -430,7 +430,7 @@ if correctTf
         bool entryRange=buy?(c>entry and c<tp1):(c<entry and c>tp1)
         // Unchanged EA still refuses execution after TP1. Do not emit an impossible entry.
         bool eaEntryWindow=buy?c<tp1:c>tp1
-        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=3 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt) and power>=0 and power<=100 and not na(ch) and ch<61.8
+        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=3 and forecastOk and ownHema and entryRange and not na(setupAt) and power>=0 and power<=100 and not na(ch) and ch<61.8
         zcEntry:=entry
         zcInitialSl:=initialSl
         zcActiveSl:=activeSl
@@ -467,7 +467,7 @@ if correctTf
         protectionState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+";"
         managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryRuleVersion\":\"TF2_3GREEN_TP1_HEMAGAP_V1\",\"entryExpiryTarget\":0,\"pendingEntryReturn\":true,\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryRuleVersion\":\"TF2_3GREEN_TP1_HEMAGAP_V1\",\"hemaRequiredTfs\":[2],\"entryExpiryTarget\":0,\"pendingEntryReturn\":true,\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","
@@ -538,7 +538,7 @@ zcRibbonSlow=plot(zcSlow,title="HEMA40",color=color.new(color.orange,30))
 fill(zcRibbonFast,zcRibbonSlow,color=color.new(zcFast>zcSlow?color.teal:color.red,85))
 plotshape(zcSolid and not zcSolid[1],title="SOLID trigger — tunggu pengesahan",style=shape.circle,location=location.belowbar,color=color.orange,text="SOLID",textcolor=color.orange,size=size.tiny)
 plotshape(zcReady and not zcReady[1],title="SOP READY — semak execution sistem",style=shape.labelup,location=location.belowbar,color=color.lime,text="SOP READY",textcolor=color.black,size=size.tiny)
-var table zcSopTable=table.new(position.bottom_right,2,13,bgcolor=color.new(#091720,5),border_width=1)
+var table zcSopTable=table.new(position.bottom_right,2,12,bgcolor=color.new(#091720,5),border_width=1)
 if barstate.islast
     table.cell(zcSopTable,0,0,"ZENCORE TF2",text_color=color.aqua)
     table.cell(zcSopTable,1,0,"SOP CHART / BRIDGE",text_color=color.aqua)
@@ -554,15 +554,13 @@ if barstate.islast
     table.cell(zcSopTable,1,5,zcForecast+" "+str.tostring(zcPower)+"%",text_color=color.white)
     table.cell(zcSopTable,0,6,"HEMA TF2",text_color=color.gray)
     table.cell(zcSopTable,1,6,zcOwn?"PASS":"WAIT",text_color=zcOwn?color.lime:color.orange)
-    table.cell(zcSopTable,0,7,"HEMA TF3",text_color=color.gray)
-    table.cell(zcSopTable,1,7,zcHigher?"PASS":"WAIT",text_color=zcHigher?color.lime:color.orange)
-    table.cell(zcSopTable,0,8,"Pullback 40% candle besar",text_color=color.gray)
-    table.cell(zcSopTable,1,8,zcPullback?"PASS":"WAIT",text_color=zcPullback?color.lime:color.orange)
-    table.cell(zcSopTable,0,9,"Julat entry — TP1",text_color=color.gray)
-    table.cell(zcSopTable,1,9,zcExpired?"EXPIRED":zcRange?"PASS":"WAIT",text_color=zcExpired?color.red:zcRange?color.lime:color.orange)
-    table.cell(zcSopTable,0,10,"Chop / plan ATR",text_color=color.gray)
-    table.cell(zcSopTable,1,10,str.tostring(zcChop,"#.0")+" / "+str.tostring(goldAtrMultiplier),text_color=color.white)
-    table.cell(zcSopTable,0,11,"SOP chart",text_color=color.gray)
-    table.cell(zcSopTable,1,11,zcReady?"READY":"TUNGGU",text_color=zcReady?color.lime:color.orange)
-    table.cell(zcSopTable,0,12,"Order MT5",text_color=color.gray)
-    table.cell(zcSopTable,1,12,zcReady and not zcEaCompatible?"WAIT — EA had TP1":"Semak feed, setting & broker",text_color=zcReady and not zcEaCompatible?color.orange:color.white)
+    table.cell(zcSopTable,0,7,"Pullback 40% candle besar",text_color=color.gray)
+    table.cell(zcSopTable,1,7,zcPullback?"PASS":"WAIT",text_color=zcPullback?color.lime:color.orange)
+    table.cell(zcSopTable,0,8,"Julat entry — TP1",text_color=color.gray)
+    table.cell(zcSopTable,1,8,zcExpired?"EXPIRED":zcRange?"PASS":"WAIT",text_color=zcExpired?color.red:zcRange?color.lime:color.orange)
+    table.cell(zcSopTable,0,9,"Chop / plan ATR",text_color=color.gray)
+    table.cell(zcSopTable,1,9,str.tostring(zcChop,"#.0")+" / "+str.tostring(goldAtrMultiplier),text_color=color.white)
+    table.cell(zcSopTable,0,10,"SOP chart",text_color=color.gray)
+    table.cell(zcSopTable,1,10,zcReady?"READY":"TUNGGU",text_color=zcReady?color.lime:color.orange)
+    table.cell(zcSopTable,0,11,"Order MT5",text_color=color.gray)
+    table.cell(zcSopTable,1,11,zcReady and not zcEaCompatible?"WAIT — EA had TP1":"Semak feed, setting & broker",text_color=zcReady and not zcEaCompatible?color.orange:color.white)

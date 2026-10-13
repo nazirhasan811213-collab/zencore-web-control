@@ -33,7 +33,7 @@ test('contract follows explicit SOP with current quality and HEMA metadata but r
 });
 test('HEMA mode rejects missing/equal/opposite ribbons and accepts intrabar direction',()=>{
  assert.equal(normalEntrySop({...base,hemaConfirmation:undefined}).standardReady,false);
- for(const bad of [{fast:100,slow:100},{fast:99,slow:100},{}])assert.equal(normalEntrySop({...base,hemaConfirmation:{...base.hemaConfirmation,tf3:bad}}).standardReady,false);
+ for(const bad of [{fast:100,slow:100},{fast:99,slow:100},{}])assert.equal(normalEntrySop({...base,hemaConfirmation:{...base.hemaConfirmation,tf2:bad}}).standardReady,false);
  assert.equal(normalEntrySop({...base,hemaConfirmation:{...base.hemaConfirmation,tf3:{fast:102,slow:101,confirmed:false}}}).standardReady,true);
  assert.equal(hemaStrength(base.hemaConfirmation.tf3,'BUY',true).state,'STRONG');
 });

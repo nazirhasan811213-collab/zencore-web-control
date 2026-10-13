@@ -406,7 +406,7 @@ if feedEnabled and correctTf
         bool entryRange=buy?(c>entry and c<tp1):(c<entry and c>tp1)
         // Unchanged EA still refuses execution after TP1. Do not emit an impossible entry.
         bool eaEntryWindow=buy?c<tp1:c>tp1
-        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=3 and forecastOk and ownHema and higherHema and entryRange and not na(setupAt) and power>=0 and power<=100 and not na(ch) and ch<61.8
+        bool eligible=direction and solidLatched and pullbackReady and pricePast and greens>=3 and forecastOk and ownHema and entryRange and not na(setupAt) and power>=0 and power<=100 and not na(ch) and ch<61.8
         if eligible!=array.get(lastEligible,i)
             emitSetup:=true
             array.set(lastEligible,i,eligible)
@@ -421,7 +421,7 @@ if feedEnabled and correctTf
         protectionState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+";"
         managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryRuleVersion\":\"TF2_3GREEN_TP1_HEMAGAP_V1\",\"entryExpiryTarget\":0,\"pendingEntryReturn\":true,\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"SEQUENTIAL_ATR40_V1\",\"solidLatched\":"+f_bool(solidLatched)+",\"entryRuleVersion\":\"TF2_3GREEN_TP1_HEMAGAP_V1\",\"hemaRequiredTfs\":[2],\"entryExpiryTarget\":0,\"pendingEntryReturn\":true,\"entryExpired\":"+f_bool(setupExpired)+",\"atrBeforeBar\":"+f_num(previousAtr)+",\"impulseRequired\":"+f_bool(impulseRequired)+",\"impulseBar\":"+f_int(impulseBar)+",\"impulseOpen\":"+f_num(impulseOpen)+",\"impulseExtreme\":"+f_num(impulseExtreme)+",\"impulseAtr\":"+f_num(impulseAtr)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","

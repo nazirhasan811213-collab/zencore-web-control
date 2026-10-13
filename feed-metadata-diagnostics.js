@@ -15,6 +15,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
    transportLagMs:Number.isFinite(emittedAt)?observedAt-emittedAt:null,rowLength:row.length,
    rule:meta?.entryRuleVersion===RULE?RULE:null,pendingEntryReturn:meta?.pendingEntryReturn===true,
+   hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&meta.hemaRequiredTfs[0]===2?['2']:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
    hasLiveHema:row[65]?.version===(tf==='2'?'HEMA23_LIVE_V1':'HEMA1530_V1'),
    entryEvent:meta?.entryEvent===true,accepted:acceptedSymbols.includes('XAUUSD')};
