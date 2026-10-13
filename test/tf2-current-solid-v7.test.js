@@ -60,8 +60,8 @@ test('canonical Pine scanner including existing exit behavior is byte-identical 
  const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
  const scan=pine.slice(pine.indexOf('f_scan3()=>'),pine.indexOf('var string[] symbols='));
  assert.equal(crypto.createHash('sha256').update(scan).digest('hex'),'6bc43afea0109de33fc207e9fee2edb02b792eca13efb6fff18307e7102d5466');
- assert.match(pine,/power>50/);assert.match(pine,/bool solidLatched=solid/);assert.match(pine,/c>math.max\(h20,h40\)/);
- assert.match(pine,/TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1/);assert.doesNotMatch(pine.match(/bool eligible=.*$/m)[0],/pullbackReady|solidLatched|higherHema|ch<|entryRange/);
+ assert.match(pine,/power>50/);assert.match(pine,/bool solidLatched=solid/);assert.match(pine,/m5close>math.max\(m5h20,m5h40\)/);
+ assert.match(pine,/TF2_SEP24_4GREEN_HEMA5_V1/);assert.doesNotMatch(pine.match(/bool eligible=.*$/m)[0],/pullbackReady|solidLatched|higherHema|ch<|entryRange/);
 });
 test('Analysis builds the live-anchored plan from raw current SOLID while execution still requires its fresh event',()=>{
  const vm=require('node:vm'),code=fs.readFileSync(require.resolve('../server-v17'),'utf8');

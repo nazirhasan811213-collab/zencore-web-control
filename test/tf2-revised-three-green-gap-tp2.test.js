@@ -43,8 +43,8 @@ test('valid 3-green entry authorizes below TP1, but TP2 analysis cannot bypass u
 });
 test('current Pine uses five current gates while unchanged EA still enforces TP1 compatibility',()=>{
  const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
- assert.match(pine,/greens>=3/);assert.match(pine,/c>math.max\(h20,h40\)/);assert.doesNotMatch(pine.match(/bool eligible=.*$/m)[0],/higherHema/);
- assert.match(pine,/bool solidLatched=solid/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1/);
+ assert.match(pine,/greens>=4/);assert.match(pine,/m5close>math.max\(m5h20,m5h40\)/);assert.doesNotMatch(pine.match(/bool eligible=.*$/m)[0],/higherHema/);
+ assert.match(pine,/bool solidLatched=solid/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_SEP24_4GREEN_HEMA5_V1/);
  const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/tick.ask>=tp1/);assert.match(ea,/tick.bid<=tp1/);
 });
 test('directional forecast must exceed 40; neutral still uses strict 50 boundary',()=>{

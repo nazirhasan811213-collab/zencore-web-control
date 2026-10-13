@@ -35,9 +35,9 @@ function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
   const s=e.telegramSop;
-  if(s?.version==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
+  if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
     require('./analysis-execution-contract').currentSolidTf2Confirmations({side:e.side,solid:s.solid,green:s.green,forecast:s.forecast,power:s.power,
-      price:e.telegramMarket?.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&numeric(e.telegramQuality?.score)>=50&&s.eaEntryCompatible!==false;
+      minimumGreen:s.version.includes('SEP24')?4:3,price:s.version.includes('SEP24')?s.hema2?.price:e.telegramMarket?.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&numeric(e.telegramQuality?.score)>=50&&s.eaEntryCompatible!==false;
 
   const revised=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(s?.version);
   if(revised){
@@ -87,10 +87,10 @@ function telegramMessage(e){
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI TF${e.timeframe||'2'}\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(e.telegramSop?.version==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7'){
+  if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF2 • SCALPING\n${e.symbol} • ${e.side}\nSOP TF2 V7 • SOLID semasa\n\nSOLID: AKTIF\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\nHarga TF2 vs HEMA20/40: ${s.hema2.state}\nGred: ${q.grade} (${q.score}/100)\n\nEntry rujukan harga live: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
+    return `ZENCORE | SOLID ENTRY TF2 • SCALPING\n${e.symbol} • ${e.side}\n${s.version.includes('SEP24')?'SOP 24/9 → TF2 V8':'SOP TF2 V7'} • SOLID semasa\n\nSOLID: AKTIF\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\nHarga TF${s.version.includes('SEP24')?5:2} vs HEMA20/40: ${s.hema2.state}\nGred: ${q.grade} (${q.score}/100)\n\nEntry rujukan harga live: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
   }
 
   if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')||['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(e.telegramSop?.version)){

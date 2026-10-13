@@ -1,5 +1,5 @@
 //@version=6
-indicator("ZenCore TF2 Current SOLID V7", shorttitle="ZC RT 2M V7", overlay=false, dynamic_requests=true, max_bars_back=650)
+indicator("ZenCore TF2 SOP 24 Sep V8", shorttitle="ZC RT 2M V8", overlay=false, dynamic_requests=true, max_bars_back=650)
 
 // One permanent alert feeds all supported markets to ZenCore Web Control.
 // CANDIDATE: intrabar SOLID can disappear before close. Not Pine-compiled or live-tested.
@@ -356,7 +356,7 @@ if feedEnabled and correctTf
         bool buy=side=="BUY"
         bool direction=buy or side=="SELL"
         bool forecastOk=buy?((forecast=="NEUTRAL" and power>50) or (forecast=="BULLISH" and power>50)):((forecast=="NEUTRAL" and power<50) or (forecast=="BEARISH" and power>50))
-        bool ownHema=not na(h20) and not na(h40) and (buy?c>math.max(h20,h40):c<math.min(h20,h40))
+        bool ownHema=not na(m5close) and not na(m5h20) and not na(m5h40) and (buy?m5close>math.max(m5h20,m5h40):m5close<math.min(m5h20,m5h40))
         // Five current-value entry rules; no SOLID latch or ATR40 entry gate.
         bool higherHema=false
         string setupKey=alias+"|"+side+"|"+str.tostring(setupAt)
@@ -366,7 +366,7 @@ if feedEnabled and correctTf
         bool entryRange=buy?(c>entry and c<tp1):(c<entry and c>tp1)
         // Unchanged EA still refuses execution after TP1. Do not emit an impossible entry.
         bool eaEntryWindow=buy?c<tp1:c>tp1
-        bool eligible=direction and solid and pricePast and greens>=3 and forecastOk and ownHema and not na(setupAt) and power>=0 and power<=100
+        bool eligible=direction and solid and pricePast and greens>=4 and forecastOk and ownHema and not na(setupAt) and power>=0 and power<=100
         if eligible!=array.get(lastEligible,i)
             emitSetup:=true
             array.set(lastEligible,i,eligible)
@@ -381,7 +381,7 @@ if feedEnabled and correctTf
         protectionState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+";"
         managementState+=alias+"|"+setupKey+"|"+exitStage+"|"+exitAction+"|"+str.tostring(lockStage)+"|"+f_num(activeSl)+";"
         // This event is latched intrabar; a later false SOLID cannot emit it twice.
-        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"CURRENT_SOLID_TF2_V1\",\"currentSolidOnly\":true,\"entryRuleVersion\":\"TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1\",\"hemaRequiredTfs\":[2],\"pendingEntryReturn\":false,\"solidActive\":"+f_bool(solid)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
+        string entryMeta="{\"version\":\"TF2_ENTRY_EVENT_V1\",\"policy\":\"CURRENT_SOLID_TF2_V1\",\"currentSolidOnly\":true,\"entryRuleVersion\":\"TF2_SEP24_4GREEN_HEMA5_V1\",\"hemaRequiredTfs\":[5],\"pendingEntryReturn\":false,\"solidActive\":"+f_bool(solid)+",\"entryEvent\":"+f_bool(entryEvent)+",\"entryAuthorizedAt\":"+(entryEvent?str.tostring(timenow):"null")+",\"setupAt\":"+f_int(setupAt)+"}"
         string row="["
         row+=f_quote(alias)+","+f_int(bt)+","+f_int(bi)+","
         row+=f_num(o)+","+f_num(h)+","+f_num(l)+","+f_num(c)+","

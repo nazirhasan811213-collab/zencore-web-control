@@ -6,7 +6,8 @@
   'use strict';
 
   const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'];
-  const currentTf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
+  const septTf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_SEP24_HEMA5_V8';
+  const currentTf2=n=>septTf2(n)||n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
   const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
   const SCHEMA_VERSION = '32.3-EXIT-STEPLOCK';
@@ -92,7 +93,7 @@
     const n = market.strategyNormal || {}, s = n.sop || {};
     if (n.state !== 'READY') return false;
     if (!String(n.entrySopVersion || '').startsWith('NORMAL_20261001_')) return true;
-    if(currentTf2(n))return currentSolidTf2Confirmations({side:n.side,solid:n.solid,green:s.sopGreen,forecast:s.forecast,power:s.marketPower,price:market.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&String(market.timeframe)==='2'&&n.tf==='2m';
+    if(currentTf2(n))return currentSolidTf2Confirmations({side:n.side,solid:n.solid,green:s.sopGreen,forecast:s.forecast,power:s.marketPower,minimumGreen:septTf2(n)?4:3,price:septTf2(n)?s.hema2?.price:market.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&String(market.timeframe)==='2'&&n.tf==='2m';
     const tf = String(market.timeframe), higher = tf === '15' ? '30' : '3';
     const side = String(n.side || '').toUpperCase(), power = number(s.marketPower);
     const forecast = String(s.forecast || '').toUpperCase();
@@ -119,7 +120,7 @@
     const side=String(x.side||'').toUpperCase(),price=number(x.price),fast=number(x.fast),slow=number(x.slow),power=number(x.power),green=number(x.green);
     const forecast=String(x.forecast||'').toUpperCase();
     const keys=['solid','entry','sop','forecast','hema2'];
-    return x.solid===true&&green!==null&&green>=3&&green<=5&&price!==null&&fast!==null&&slow!==null&&power!==null&&power>=0&&power<=100&&
+    return x.solid===true&&green!==null&&green>=(x.minimumGreen??3)&&green<=5&&price!==null&&fast!==null&&slow!==null&&power!==null&&power>=0&&power<=100&&
       (side==='BUY'?price>Math.max(fast,slow)&&(forecast==='NEUTRAL'||forecast==='BULLISH')&&power>50:
        side==='SELL'&&price<Math.min(fast,slow)&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>50))&&
       Array.isArray(x.gates)&&x.gates.length===5&&keys.every(k=>x.gates.filter(g=>g.key===k&&g.pass===true).length===1);
@@ -207,7 +208,7 @@
         marketPower: normal.sop.marketPower,
         hemaOwn: normal.sop['hema'+String(market.timeframe)].mode,
         hemaHigher: restoredTf15?normal.sop.hema30.mode:null,
-        hemaRequiredTimeframes: restoredTf15?['15','30']:['2'],
+        hemaRequiredTimeframes: restoredTf15?['15','30']:septTf2(normal)?['5']:['2'],
         gates: normal.sop.gates.map(g => ({key:g.key || null,passed:g.pass === true,detail:g.detail ?? null}))
       }} : {}),
       ...((solidSop||restored)?{analysisSopVersion:normal.entrySopVersion}:{})
