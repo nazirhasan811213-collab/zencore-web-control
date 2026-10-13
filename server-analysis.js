@@ -1477,7 +1477,7 @@ const server = http.createServer(async (req, res) => {
   }
   if(req.method==='GET'&&pathname==='/ready'){
     const status=await readiness.snapshot();
-    return sendJson(res,status.ok?200:503,status);
+    return sendJson(res,status.ok?200:503,{...status,autoEntry:{enabled:AUTOTRADE_EXECUTION_ENABLED||LOCAL_EA_EXECUTION_ENABLED||!!String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS||'').trim(),signalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')}});
   }
 
   if (SITE_MODE === 'closed') {
