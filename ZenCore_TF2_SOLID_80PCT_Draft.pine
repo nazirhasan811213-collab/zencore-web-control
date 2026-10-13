@@ -1218,9 +1218,9 @@ bool zc_seq_s4 = zc24_buy ? is_bar_bullish : is_bar_bearish
 bool zc_seq_mtf = zc24_buy ? mtf_total >= 1 and mtf_total <= 5 : mtf_total <= -1 and mtf_total >= -5
 int zc24_greens = (zc_seq_s1 ? 1 : 0) + (zc_seq_s2 ? 1 : 0) + (zc_seq_s3 ? 1 : 0) + (zc_seq_s4 ? 1 : 0) + (zc_seq_mtf ? 1 : 0)
 bool zc24_forecast = zc24_buy ? ((forecast_direction == "NEUTRAL 💤" or forecast_direction == "BULLISH 🚀") and market_power > 45) : ((forecast_direction == "NEUTRAL 💤" and market_power < 45) or (forecast_direction == "BEARISH 🩸" and market_power > 45))
-bool zc80_data = atr > 0 and not na(he1[2]) and not na(he2[2]) and not na(wt1) and not na(wt2) and not na(market_power)
-bool zc80_hema40 = zc80_data and (zc24_buy ? he2-he2[2] >= .05*atr : he2[2]-he2 >= .05*atr)
-bool zc_seq_shape = zc80_hema40 and (zc24_buy ? he1-he1[2] >= .05*atr : he1[2]-he1 >= .05*atr)
+bool zc80_data = atr > 0 and not na(he1[1]) and not na(he2[1]) and not na(wt1) and not na(wt2) and not na(market_power)
+bool zc80_hema40 = zc80_data and (zc24_buy ? he2-he2[1] >= .05*atr : he2[1]-he2 >= .05*atr)
+bool zc_seq_shape = zc80_hema40 and (zc24_buy ? he1-he1[1] >= .05*atr : he1[1]-he1 >= .05*atr)
 int zc80_passed = (zc24_price_past ? 1 : 0) + (zc_seq_s1 ? 1 : 0) + (zc_seq_shape ? 1 : 0) + (zc24_greens >= 3 ? 1 : 0) + (zc24_forecast ? 1 : 0) + (zc_seq_mtf ? 1 : 0)
 if zc80_new_solid and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed >= 5
     zc80_eligible := true
@@ -1315,9 +1315,9 @@ if zc24_bootstrap
 bool zc24_entry_window = not na(zc_seq_completed) and zc24_ready
 bool zc24_event = zc24_ready and zc24_entry_window and not zc24_bootstrap and not na(zc24_setup_at) and (na(zc24_emitted_setup) or zc24_emitted_setup != zc24_setup_at)
 string zc24_protection = str.tostring(zc24_setup_at) + "|" + zc24_exit_stage + "|" + zc24_exit_action + "|" + str.tostring(zc24_lock_stage) + "|" + str.tostring(barstate.isconfirmed)
-string zc24_hema_json = "{\"version\":\"HEMA23_LIVE_V1\",\"tf2\":{\"fast\":" + f_num(he1) + ",\"slow\":" + f_num(he2) + ",\"fastTwoBarsAgo\":" + f_num(he1[2]) + ",\"slowTwoBarsAgo\":" + f_num(he2[2]) + "}}"
+string zc24_hema_json = "{\"version\":\"HEMA23_LIVE_V1\",\"tf2\":{\"fast\":" + f_num(he1) + ",\"slow\":" + f_num(he2) + ",\"fastPreviousBar\":" + f_num(he1[1]) + ",\"slowPreviousBar\":" + f_num(he2[1]) + "}}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(conf_stars >= 4 ? "SETUP CANTIK" : "SETUP KURANG PADU") + ",\"aiCoach\":" + f_quote(ai_coach) + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF2_SOLID_80PCT_V1\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF2_SOLID_80PCT_LIVE_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
