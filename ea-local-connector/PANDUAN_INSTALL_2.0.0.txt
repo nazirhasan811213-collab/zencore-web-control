@@ -1,0 +1,45 @@
+ZENCORE CONNECT 2.0 / EA 2.00
+REAL + DEMO. Satu installer untuk semua client; setiap client pautkan login sendiri.
+
+1. Stop auto entry dalam web. Jangan update ketika order sedang dihantar.
+2. Buka ZenCoreSetup-2.0.0.exe sebagai Windows user yang sama dengan MT5.
+3. Dalam MT5: File > Open Data Folder. Pilih folder itu dalam Connector.
+4. Tekan Pasang / kemas kini EA 2.00. Jika compile gagal, jangan guna EX5 lama.
+5. MT5 Navigator > Refresh > Expert Advisors > ZenCore > ZenCoreExecutor.
+6. Buang EA lama dari chart dan letakkan EA baharu pada SATU chart XAUUSD.
+7. Hidupkan Algo Trading dan Allow Algo Trading. Tidak perlu DLL atau WebRequest.
+8. Isi email/password ZenCore. Password broker hanya dimasukkan dalam MT5.
+9. Cari akaun, semak REAL/DEMO dan server yang betul, kemudian Pautkan akaun.
+10. Semak kad Terminal, Cloud dan Entry. SERVER PAUSED bermaksud sistem pusat
+    mengunci entry, bukan installer rosak. Jangan cuba bypass lock itu.
+11. Lot/layer dan ON/OFF dibuat di web. Installer tidak mengaktifkan trading.
+
+TUKAR AKAUN:
+Tekan Reset link / tukar akaun. Ini STOP dan kosongkan setting web.
+Posisi broker tidak ditutup automatik. Tutup sendiri dalam MT5 jika diperlukan.
+Login akaun baharu dalam MT5, tunggu EA membaca akaun itu, kemudian pautkan
+semula selepas 30 saat. Tiada installer baharu untuk akaun yang berbeza.
+Jika baru membuka Connector, login ZenCore diperlukan sekali untuk reset.
+
+TINGKAP:
+Butang X hanya minimize. Gunakan Keluar Connector untuk menghentikannya.
+PC/VM dan MT5 mesti hidup. Android boleh kawal web, tetapi tidak menjalankan EA.
+
+TP/SL:
+EA 2.00 menggunakan SL daripada plan Analysis secara lalai. Pengurangan 80%
+hanya untuk preset legacy yang dinyatakan secara eksplisit dalam arahan signed.
+TP1 -> SL entry sebenar; TP2 -> SL TP1; TP3 -> SL TP2. Tiada broker TP3 close-all.
+Tahap yang pernah dicapai disimpan; jika pemasangan SL tertunda dan harga sudah
+melintasi tahap perlindungan itu, EA cuba tutup posisi ZenCore berkenaan sahaja.
+Close separuh/Bj exit datang daripada Analysis. Tanpa feed/cloud, signal exit
+berasaskan indikator tidak dapat diterima; broker SL dan StepLock tempatan kekal.
+
+JANGAN ANGGAP ONLINE = ENTRY DIBENARKAN.
+Order boleh ditolak kerana Algo, akaun read-only, price sudah lepas TP1,
+jarak SL broker, lot tidak sah atau server PAUSED. Semak mesej kod sebenar.
+Entry separa/gagal mungkin meninggalkan beberapa layer: semak MT5, jangan replay.
+
+STATUS UJIAN:
+Windows installer/protokol boleh diuji tanpa broker. MQ5 masih perlu berjaya
+compile dalam MetaEditor dan diuji pada DEMO. Ujian installer bukan bukti profit,
+latensi broker atau pelaksanaan trade sebenar. Live rollout kekal PAUSED.

@@ -24,7 +24,7 @@ def signed(kind='SYSTEM_STOP', payload=None):
       'signature':hmac.new(KEY.encode(),encoded,hashlib.sha256).hexdigest()}
 
 def local_heartbeat():
-    return {**IDENTITY,'accountBindingVersion':'ACCOUNT_SESSION_V1','eaSession':'1'*32,'writtenAt':NOW,'tradeMode':'DEMO','terminalBuild':'6204',
+    return {**IDENTITY,'executorPolicyVersion':'EXACT_ANALYSIS_V2','eaVersion':'2.00','terminalConnected':'1','accountBindingVersion':'ACCOUNT_SESSION_V1','eaSession':'1'*32,'writtenAt':NOW,'tradeMode':'DEMO','terminalBuild':'6204',
        'terminalTradeAllowed':'1','accountTradeAllowed':'1','expertTradeAllowed':'1',
        'specCount':0,'positionCount':0}
 
@@ -78,7 +78,7 @@ class TransportTests(unittest.TestCase):
                     return {'ok':True}
             runner.api=FakeApi()
             with patch('protocol.time.time',return_value=NOW/1000),patch('connector.time.time',return_value=NOW/1000):runner.cycle()
-            self.assertEqual(calls[1],'/api/execution/commands/'+ID+'/ack')
+            self.assertEqual(calls[0],'/api/execution/commands/'+ID+'/ack')
             self.assertEqual(read_fields(path/'command.tsv')['account'],IDENTITY['account'])
             self.assertFalse((path/(ID+'.result')).exists())
             self.assertEqual(read_fields(path/'lease.tsv')['desiredState'],'STOPPED')
