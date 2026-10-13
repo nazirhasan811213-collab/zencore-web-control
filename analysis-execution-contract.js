@@ -7,7 +7,8 @@
 
   const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'];
   const septTf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_SEP24_HEMA5_V8';
-  const currentTf2=n=>septTf2(n)||n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
+  const solid80Tf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_SOLID_80PCT_V12';
+  const currentTf2=n=>solid80Tf2(n)||septTf2(n)||n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
   const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
   const SCHEMA_VERSION = '32.3-EXIT-STEPLOCK';
@@ -92,6 +93,7 @@
   function entryConfirmationsPass(market = {}) {
     const n = market.strategyNormal || {}, s = n.sop || {};
     if (n.state !== 'READY') return false;
+    if(solid80Tf2(n))return solid80Tf2Confirmations(n.side,s)&&String(market.timeframe)==='2'&&n.tf==='2m';
     if (!String(n.entrySopVersion || '').startsWith('NORMAL_20261001_')) return true;
     if(currentTf2(n))return currentSolidTf2Confirmations({side:n.side,solid:n.solid,green:s.sopGreen,forecast:s.forecast,power:s.marketPower,minimumGreen:septTf2(n)?4:3,price:septTf2(n)?s.hema2?.price:market.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&String(market.timeframe)==='2'&&n.tf==='2m';
     const tf = String(market.timeframe), higher = tf === '15' ? '30' : '3';
@@ -126,6 +128,14 @@
       Array.isArray(x.gates)&&x.gates.length===5&&keys.every(k=>x.gates.filter(g=>g.key===k&&g.pass===true).length===1);
   }
 
+  function solid80Tf2Confirmations(side,s={}){
+    const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||{},a=number(s.atrReference),f=number(h.fast),sl=number(h.slow),f2=number(h.fastTwoBarsAgo),s2=number(h.slowTwoBarsAgo),w1=number(h.waveTrend1),w2=number(h.waveTrend2),p=number(s.marketPower),m=number(s.mtfScore),e=number(s.sourceEntry),q=number(s.price),g=number(s.sopGreen),t=number(s.triggerAt);
+    if(!sign||s.solid!==true||t===null||s.qualifiedAt!==t||Date.now()-t>30000||Date.now()-t< -5000||a===null||a<=0||[f,sl,f2,s2,w1,w2,p,m,e,q,g].some(v=>v===null)||!Number.isInteger(m)||!Number.isInteger(g)||g<0||g>5||p<0||p>100)return false;
+    const h40=sign*(sl-s2)>=.05*a;
+    const values={entry:sign*(q-e)>0,wt:sign*(w1-w2)>0,slope:h40&&sign*(f-f2)>=.05*a,sop:g>=3,forecast:sign===1?(s.forecast==='NEUTRAL'||s.forecast==='BULLISH')&&p>45:(s.forecast==='NEUTRAL'&&p<45||s.forecast==='BEARISH'&&p>45),mtf:sign*m>=1&&sign*m<=5};
+    return h40&&Object.values(values).filter(Boolean).length>=5&&Array.isArray(s.gates)&&s.gates.length===6&&Object.entries(values).every(([k,v])=>s.gates.filter(g=>g.key===k&&g.pass===v).length===1);
+  }
+
   // READY remains the Pine SOP decision; entry quality is an additional filter.
   function createEntryDecision(market = {}) {
     if(typeof process!=='undefined'&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return null;
@@ -149,9 +159,9 @@
       if (!entryConfirmationsPass(market)) return null;
       const expected=restoredTf15?'15':'2';
       if(normal.tf!==expected+'m'||String(market.timeframe)!==expected||normal.solid!==true||
-        !Array.isArray(normal.sop?.gates)||!(expected==='2'?[5,6,7]:[6,7]).includes(normal.sop.gates.length)||!normal.sop.gates.every(g=>g.pass===true))return null;
+        !Array.isArray(normal.sop?.gates)||!(expected==='2'?[5,6,7]:[6,7]).includes(normal.sop.gates.length)||!solid80Tf2(normal)&&!normal.sop.gates.every(g=>g.pass===true))return null;
       const side=String(normal.side||'').toUpperCase(),higher=expected==='15'?'30':'3';
-      if(normal.sop?.['hema'+expected]?.mode!==side||expected==='15'&&normal.sop?.['hema'+higher]?.mode!==side)return null;
+      if(!solid80Tf2(normal)&&normal.sop?.['hema'+expected]?.mode!==side||expected==='15'&&normal.sop?.['hema'+higher]?.mode!==side)return null;
     }
     const solidTf2=normal.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2';
     const solidTf15=normal.entrySopVersion==='SOLID_TF15_3GREEN_HEMA1545_2L_V1';
@@ -183,7 +193,7 @@
         ? livePrice >= prices.tp1 || livePrice <= prices.sl
         : side === 'SELL' && (livePrice <= prices.tp1 || livePrice >= prices.sl))) return null;
     if (!SUPPORTED_MARKETS.includes(symbol) || String(normal.state || '').toUpperCase() !== 'READY' ||
-        (!solidSop && !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade)) ||
+        (!solidSop && !solid80Tf2(normal) && !['C+', 'B', 'B+', 'A', 'A+'].includes(entryQuality(market).grade)) ||
         !['BUY', 'SELL'].includes(side) || !receivedAt || Object.values(prices).some(value => value === null)) {
       return null;
     }
@@ -274,6 +284,7 @@
 
   return {
     currentSolidTf2Confirmations,
+    solid80Tf2Confirmations,
     CONTRACT_VERSION,
     SCHEMA_VERSION,
     STRATEGY,
