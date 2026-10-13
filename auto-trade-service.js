@@ -1088,7 +1088,8 @@ function createAutoTradeService(options = {}) {
     return {
       ok: true,
       podState: connectionState(updated),
-      desiredState: (await store.getProfile(pod.userId))?.desiredState || 'STOPPED',
+      desiredState: executionAllowed(pod.userId,pod)&&!/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
+      entryBlockedReason: /^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?'GLOBAL_ENTRY_PAUSED':executionAllowed(pod.userId,pod)?null:'EXECUTION_ROLLOUT_LOCKED',
       serverTime: seenAt
     };
   }

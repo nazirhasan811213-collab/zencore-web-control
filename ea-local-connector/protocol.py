@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '1.30'
-CONNECTOR_BUILD = '1.31'
+EA_VERSION = '2.00'
+CONNECTOR_BUILD = '2.0.0'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -146,6 +146,7 @@ def command_fields(command, identity):
                 if snap.get(key) != payload.get(key): raise ValueError('ANALYSIS_PRICE_MISMATCH')
             if payload['side'] not in ('BUY','SELL'): raise ValueError('SIDE_REJECTED')
             fields['side'] = payload['side']
+            fields['slPolicy']='EXACT_ANALYSIS_V2'
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
             fields['lot'] = number(payload['lotPerLayer'])
             fields['layers'] = int(payload['layers'])
@@ -154,7 +155,8 @@ def command_fields(command, identity):
                 if (payload.get('strategyMode')!='TF2_SCALPING' or policy.get('version')!='TF2_TIGHT_SL_3C_V1' or
                     policy.get('slDistanceFactor')!=.8 or policy.get('maxCompletedCandlesWithoutTp1')!=3 or policy.get('timeframeMinutes')!=2):
                     raise ValueError('EXIT_POLICY_REJECTED')
-                fields['exitPolicyVersion']='TF2_TIGHT_SL_3C_V1' 
+                fields['exitPolicyVersion']='TF2_TIGHT_SL_3C_V1'
+                fields['slPolicy']='LEGACY_TIGHT_SL_80'
         else:
             actions = payload.get('actions')
             if actions != snap.get('actions') or not actions or len(actions)>4: raise ValueError('ACTIONS_REJECTED')
