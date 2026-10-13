@@ -100,7 +100,7 @@
     if(revisedTf2(n)){
       const atr=number(s.atrReference??s.hema2?.atrReference);
       if(atr===null||atr<=0)return false;
-      for(const key of ['hema2','hema3']){
+      for(const key of ['hema2']){
         const r=s[key]||{},fast=number(r.fast),slow=number(r.slow);
         if(fast===null||slow===null||Math.abs(fast-slow)<=atr*.10||
           (side==='BUY'?fast<=slow:side==='SELL'?fast>=slow:true))return false;
@@ -108,8 +108,8 @@
     }
     return ['2','15'].includes(tf) && n.tf === tf + 'm' && n.solid === true &&
       number(s.sopGreen) >= (revisedTf2(n)?3:4) && forecastPass &&
-      s['hema'+tf]?.mode === side && s['hema'+higher]?.mode === side &&
-      Array.isArray(s.gates) && [6,7].includes(s.gates.length) && s.gates.every(g => g.pass === true) &&
+      s['hema'+tf]?.mode === side && (tf==='2'||s['hema'+higher]?.mode === side) &&
+      Array.isArray(s.gates) && (tf==='2'?[5,6,7]:[6,7]).includes(s.gates.length) && s.gates.every(g => g.pass === true) &&
       (!String(n.entrySopVersion).includes('_SEQ_ATR40_') || s.pullback?.pass === true);
   }
 
@@ -121,7 +121,7 @@
     const restoredTf15=['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restored=restoredTf2||restoredTf15;
     if(String(normal.entrySopVersion||'').includes('_SEQ_ATR40_')&&
-      (normal.sop?.gates?.length!==7||normal.sop?.pullback?.pass!==true||
+      (!(normal.tf==='2m'?[6,7]:[7]).includes(normal.sop?.gates?.length)||normal.sop?.pullback?.pass!==true||
        !normal.sop.gates.some(g=>g.key==='pullback'&&g.pass===true)))return null;
     if(String(normal.entrySopVersion||'').startsWith('NORMAL_20261001_')&&!restored)return null;
     // A fresh receipt/heartbeat cannot authorize an old latched setup.
@@ -135,9 +135,9 @@
       if (!entryConfirmationsPass(market)) return null;
       const expected=restoredTf15?'15':'2';
       if(normal.tf!==expected+'m'||String(market.timeframe)!==expected||normal.solid!==true||
-        !Array.isArray(normal.sop?.gates)||![6,7].includes(normal.sop.gates.length)||!normal.sop.gates.every(g=>g.pass===true))return null;
+        !Array.isArray(normal.sop?.gates)||!(expected==='2'?[5,6,7]:[6,7]).includes(normal.sop.gates.length)||!normal.sop.gates.every(g=>g.pass===true))return null;
       const side=String(normal.side||'').toUpperCase(),higher=expected==='15'?'30':'3';
-      if(normal.sop?.['hema'+expected]?.mode!==side||normal.sop?.['hema'+higher]?.mode!==side)return null;
+      if(normal.sop?.['hema'+expected]?.mode!==side||expected==='15'&&normal.sop?.['hema'+higher]?.mode!==side)return null;
     }
     const solidTf2=normal.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2';
     const solidTf15=normal.entrySopVersion==='SOLID_TF15_3GREEN_HEMA1545_2L_V1';
@@ -194,7 +194,8 @@
         forecast: normal.sop.forecast,
         marketPower: normal.sop.marketPower,
         hemaOwn: normal.sop['hema'+String(market.timeframe)].mode,
-        hemaHigher: normal.sop['hema'+(restoredTf15?'30':'3')].mode,
+        hemaHigher: restoredTf15?normal.sop.hema30.mode:null,
+        hemaRequiredTimeframes: restoredTf15?['15','30']:['2'],
         gates: normal.sop.gates.map(g => ({key:g.key || null,passed:g.pass === true,detail:g.detail ?? null}))
       }} : {}),
       ...((solidSop||restored)?{analysisSopVersion:normal.entrySopVersion}:{})

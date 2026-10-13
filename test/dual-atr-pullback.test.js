@@ -4,17 +4,17 @@ const {createEntrySetupTracker,POLICY}=require('../entry-setup-state');
 const {evaluateEntrySop}=require('../normal-entry-sop');
 const Contract=require('../analysis-execution-contract'),Core=require('../auto-trade-core');
 const {entrySopAllowed,telegramMessage}=require('../analysis-telegram');
-test('legacy alerts retain original six gates until each TF upgrades its Pine policy',()=>{
+test('TF2 omits HEMA3 while TF15 retains two HEMA gates, with independent ATR policy',()=>{
  const tracker=createEntrySetupTracker();
  for(const tf of ['2','15']){
   const d={...fixture(tf),normal3PricePastEntry:true,setupMeta:{entryEvent:true}};
   const legacy=tracker.update(d);
   assert.equal(legacy,d);
   assert.equal(evaluateEntrySop(legacy,tf).version,`NORMAL_20261001_TF${tf}_V2`);
-  assert.equal(evaluateEntrySop(legacy,tf).gates.length,6);
+  assert.equal(evaluateEntrySop(legacy,tf).gates.length,tf==='2'?5:6);
   assert.equal(evaluateEntrySop(legacy,tf).standardReady,true);
   const upgraded=tracker.update({...d,setupMeta:{policy:POLICY,atrBeforeBar:1}});
-  assert.equal(evaluateEntrySop(upgraded,tf).gates.length,7);
+  assert.equal(evaluateEntrySop(upgraded,tf).gates.length,tf==='2'?6:7);
   assert.equal(upgraded.pullback.state,'WAIT_PULLBACK');
  }
 });
@@ -31,7 +31,7 @@ test('ATR40 preserves every original SOP gate for both TFs and directions',()=>{
    ['hema'+tf,{hemaConfirmation:{...d.hemaConfirmation,['tf'+tf]:{fast:100,slow:100}}}],
    ['hema'+higher,{hemaConfirmation:{...d.hemaConfirmation,['tf'+higher]:{fast:100,slow:100}}}]
   ];
-  for(const [key,change] of mutations){
+  for(const [key,change] of mutations.filter(([key])=>tf==='15'||key!=='hema3')){
    const result=evaluateEntrySop({...d,...change},tf);
    assert.equal(result.standardReady,false,`${tf} ${side} cannot bypass ${key}`);
    assert.equal(result.gates.find(g=>g.key===key).pass,false);

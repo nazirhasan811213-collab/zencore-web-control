@@ -36,14 +36,14 @@ test('sequential TF2 pending entry is revoked when a later feed no longer confir
  release();await first;
  assert.equal(seen[1][0].strategyNormal.state,'WATCH');
 });
-test('HEMA mode requires both ribbons to match BUY or SELL; equality/missing/opposite reject, slopes/confirmation not required',()=>{
+test('TF2 requires its own ribbon, TF15 requires both; equality/missing/opposite reject',()=>{
  for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
   const m=ready(tf),higher=tf==='15'?'30':'3',r=side==='BUY'?{fast:102,slow:101,previousFast:110,previousSlow:109}:{fast:98,slow:99,previousFast:90,previousSlow:91};
   const d={timeframe:tf,normal3Side:side,normal3Entry:100,normal3Close:100.1,normal3Atr:1,normal3Solid:true,normal3PricePastEntry:true,
    normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Forecast:side==='BUY'?'BULLISH':'BEARISH',normal3MarketPower:60,
    normal5Position:side==='BUY'?'ABOVE':'BELOW',hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1',['tf'+tf]:r,['tf'+higher]:{...r,confirmed:false}}};
   assert.equal(evaluateEntrySop(d,tf).standardReady,true);
-  for(const key of ['tf'+tf,'tf'+higher])for(const bad of [undefined,{fast:100,slow:100},{fast:r.slow,slow:r.fast}])
+  for(const key of tf==='2'?['tf2']:['tf'+tf,'tf'+higher])for(const bad of [undefined,{fast:100,slow:100},{fast:r.slow,slow:r.fast}])
    assert.equal(evaluateEntrySop({...d,hemaConfirmation:{...d.hemaConfirmation,[key]:bad}},tf).standardReady,false);
  }
 });

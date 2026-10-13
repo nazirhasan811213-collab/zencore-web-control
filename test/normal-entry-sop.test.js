@@ -7,10 +7,10 @@ const base={timeframe:'2',normal3Side:'BUY',normal3Entry:100,normal3Close:100.1,
  normal3Solid:true,normal3PricePastEntry:true,normal3Forecast:'NEUTRAL',normal3MarketPower:51,normal5Position:'ABOVE',
  hemaConfirmation:{version:'HEMA23_LIVE_V1',tf2:{fast:102,slow:101},tf3:{fast:102,slow:101},tf15:{fast:102,slow:101},tf30:{fast:102,slow:101}},
  normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Sop5:false};
-test('October 1 gates are extended by two directional HEMA gates, without slope or close gates',()=>{
+test('TF2 uses one directional HEMA gate and TF15 uses two, without slope or close gates',()=>{
  for(const tf of ['2','15']){
   const d={...base,timeframe:tf,chopIndex:90,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1'}};
-  const x=evaluateEntrySop(d,tf);assert.equal(x.standardReady,true);assert.equal(x.gates.length,6);
+  const x=evaluateEntrySop(d,tf);assert.equal(x.standardReady,true);assert.equal(x.gates.length,tf==='2'?5:6);
   for(const edit of [{normal3Solid:false},{normal3PricePastEntry:false},{normal3Sop4:false},{normal3MarketPower:50},{normal3Atr:0},{timeframe:'3'}])
    assert.equal(evaluateEntrySop({...d,...edit},tf).standardReady,false,JSON.stringify(edit));
  }

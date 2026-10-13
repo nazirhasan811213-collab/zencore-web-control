@@ -57,7 +57,7 @@ function connectPredictionStream(){
   }catch(_){}
 }
 function clearPairView(){
-  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine TF2 + HEMA23 untuk '+activePair,plan:null}});
+  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine TF2 + HEMA2 untuk '+activePair,plan:null}});
   renderPerformance({summary:{resolved:0,wins:0,losses:0,winRate:null,maturity:'EARLY',recent:[]}});
   nativeChartPoints=[];drawZenCoreChart(nativeChartPoints);
 }

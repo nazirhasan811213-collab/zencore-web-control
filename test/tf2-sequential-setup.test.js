@@ -24,7 +24,7 @@ test('SOLID in one candle is held until current confirmations pass in a later ca
 });
 test('historical confirmation passes are not accumulated; opposite HEMA or forecast blocks until current recovery',()=>{
  const tracker=createTf2SetupTracker();tracker.update(base);
- for(const edit of [{normal3MarketPower:40},{normal3Sop4:false},{hemaConfirmation:{...base.hemaConfirmation,tf3:{fast:100,slow:101}}}])
+ for(const edit of [{normal3MarketPower:40},{normal3Sop4:false},{hemaConfirmation:{...base.hemaConfirmation,tf2:{fast:100,slow:101}}}])
   assert.equal(normalEntrySop(tracker.update({...base,normal3Solid:false,...edit})).standardReady,false);
  assert.equal(normalEntrySop(tracker.update({...base,normal3Solid:false})).standardReady,true);
 });

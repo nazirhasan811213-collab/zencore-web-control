@@ -61,7 +61,7 @@ test('legacy six-gate alerts also expire without changing their SOP or exit payl
  for(const tf of ['2','15']){
   const tracker=createEntrySetupTracker(),d={...fixture(tf,'SELL'),setupMeta:{},
    positionExitAction:'HOLD',activeSl:100,slMoveTriggered:true,slMoveAction:'MOVE_SL_ENTRY'};
-  assert.equal(evaluateEntrySop(tracker.update(d),tf).gates.length,6);
+  assert.equal(evaluateEntrySop(tracker.update(d),tf).gates.length,tf==='2'?5:6);
   const expired=tracker.update({...d,tp1Hit:true});
   assert.equal(evaluateEntrySop(expired,tf).standardReady,false);
   assert.equal(expired.positionExitAction,d.positionExitAction);

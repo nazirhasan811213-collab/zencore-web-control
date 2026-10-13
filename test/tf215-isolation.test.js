@@ -60,7 +60,7 @@ test('Telegram entries and close state are separate for TF2 and TF15',async()=>{
  try{
  await alerts.record(market('2','BUY',at));await alerts.record(market('15','SELL',at));
  const entries=alerts.events.filter(e=>e.kind==='ENTRY');assert.equal(entries.length,2);
- for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('SOLID ENTRY TF'+e.timeframe));assert.match(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'3':'30')));assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'30':'3')+':'));}
+ for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('SOLID ENTRY TF'+e.timeframe));assert.match(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'2':'30')));assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'30':'3')+':'));}
  const close=market('2','BUY',at+1);close.strategyNormal.state='WATCH';close.positionManagement={action:'EXIT_ALL',reason:'EXIT_ALL'};
  await alerts.record(close);assert.equal(await alerts.activePlan('XAUUSD',2),null);assert.equal((await alerts.activePlan('XAUUSD',15)).side,'SELL');
  assert.match(telegramMessage(alerts.events.at(-1)),/PENGURUSAN POSISI TF2/);
@@ -88,7 +88,7 @@ test('restored SOP independently rejects forecast and HEMA contradictions despit
   const m=market(tf,side),s=m.strategyNormal.sop;
   assert.ok(Contract.createEntryDecision(m));
   const bad=[{forecast:'NEUTRAL',marketPower:side==='SELL'?69:45},
-   {['hema'+(tf==='15'?'30':'3')]:{mode:side==='SELL'?'BUY':'SELL'}},
+   {['hema'+(tf==='15'?'30':'2')]:{mode:side==='SELL'?'BUY':'SELL'}},
    {sopGreen:3},{forecast:'NEUTRAL',marketPower:50}];
   for(const edit of bad){
    const changed={...m,strategyNormal:{...m.strategyNormal,sop:{...s,...edit}}};
@@ -96,13 +96,13 @@ test('restored SOP independently rejects forecast and HEMA contradictions despit
    assert.equal(Core.entryConfirmationsPass(changed),false);
   }
   const evidence=Contract.createEntryDecision(m).snapshot.confirmationEvidence;
-  assert.equal(evidence.hemaHigher,side);assert.equal(evidence.forecast,s.forecast);
+  assert.equal(evidence.hemaHigher,tf==='15'?side:null);assert.equal(evidence.forecast,s.forecast);
   assert.equal(Object.isFrozen(evidence),true);
  }
 });
 
 test('delivery revokes SELL when forecast or HEMA changes even if state, plan and gates remain READY',async()=>{
- for(const edit of [{forecast:'NEUTRAL',marketPower:69},{hema3:{mode:'BUY'}}]){
+ for(const edit of [{forecast:'NEUTRAL',marketPower:69},{hema2:{mode:'BUY'}}]){
   const {svc,store,at}=await setup(),m=market('2','SELL',at);
   assert.equal((await svc.dispatchMarkets([m])).queued,1);
   const current={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,...edit}}};
