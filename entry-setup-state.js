@@ -5,6 +5,7 @@ const num=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Num
 function createEntrySetupTracker(){
  const states=new Map();
  function update(d={}){
+  if(require('./tf2-current-solid-sop').isCurrentSolidTf2(d))return d;
   const tf=String(d.timeframe);if(!['2','15'].includes(tf))return d;
   const meta=d.setupMeta||d.tf2SetupMeta;
   const pendingReturn=tf==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;

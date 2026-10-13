@@ -36,6 +36,7 @@ function hemaWidthMode(r={},side,atrReference){
 // TF2 requires HEMA2 only (13 Oct); TF15 retains HEMA15/30. No close/slope gate.
 // TF2 and TF15 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
 function evaluateEntrySop(d={},timeframe='2'){
+  if(String(timeframe)==='2'&&require('./tf2-current-solid-sop').isCurrentSolidTf2(d))return require('./tf2-current-solid-sop').evaluateCurrentSolidTf2(d);
   const atrPullback=d.normal3SetupPolicy==='SEQUENTIAL_ATR40_V1';
   const sequential=atrPullback||String(timeframe)==='2'&&d.normal3SetupPolicy==='TF2_SEQUENTIAL_V1';
   const entryExpired=d.normal3EntryExpired===true;

@@ -12,6 +12,6 @@ test('generated chart keeps canonical scan function, eligibility, targets and la
   assert.match(chart,/zcReady:=eligible/);assert.match(chart,/feedEnabled=input.bool\(false/);
   assert.match(chart,/if barstate.isrealtime and feedEnabled/);
   assert.match(chart,/plot\(zcTp1,title="TP1 — bridge"/);
-  assert.match(chart,/SOLID trigger — tunggu pengesahan/);
+  assert.match(chart,tf===2?/SOLID semasa — semak pengesahan/:/SOLID trigger — tunggu pengesahan/);
  }
 });
