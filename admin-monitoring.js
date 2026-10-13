@@ -4,13 +4,13 @@
  const badge=s=>`<span class="monitor-status ${['OK','WARNING','ERROR','UNKNOWN','UNCONFIGURED'].includes(s)?s:'UNKNOWN'}">${esc(s)}</span>`;
  const usageLabel={POSITION_OPEN:'Ada posisi aktif',ACTIVE_7D:'Aktif trade (7 hari)',INACTIVE_7D:'Tiada trade 7 hari',NO_RECORDED_TRADE:'Belum ada rekod trade'};
  const date=v=>v?new Date(v).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Belum ada';
- let data=null,busy=false,sound=false,audio=null,previous=new Set(),failed=false;
- function stale(){return failed||!data||Date.now()-data.observedAt>30000;}
+ let snapshot=null,poll=null,lastError="",data=null,busy=false,sound=false,audio=null,previous=new Set(),failed=false;
+ function stale(){return failed||ZenCoreMonitorSnapshot.stale(snapshot,performance.now());}
  function beep(){if(!sound||!audio)return;const o=audio.createOscillator(),g=audio.createGain();o.connect(g);g.connect(audio.destination);o.frequency.value=660;g.gain.value=.08;o.start();o.stop(audio.currentTime+.22);}
  function render(){
   const old=stale();$('overall').className='monitor-status '+(old?'UNKNOWN':data.overall);$('overall').textContent=old?'UNKNOWN':data.overall;
   $('headline').textContent=old?'Status semasa belum dapat disahkan':data.overall==='OK'?'Semakan sistem lulus':`${data.alerts.length} amaran perlukan perhatian`;
-  $('updated').textContent=old?'Sambungan monitoring gagal atau data >30 saat. Status lama tidak dianggap online.':`Dikemas kini ${date(data.observedAt)} MYT • semakan setiap 10 saat`;
+  $('updated').textContent=old?(lastError||'Snapshot melebihi 75 saat. Status lama tidak dianggap online.'):`Dikemas kini ${date(data.observedAt)} MYT • semakan setiap 30 saat`;
   if(!data)return;
   $('summary').innerHTML=[['Semua client','total'],['Dipautkan','linked'],['Online','online'],['Ready','ready'],['Perlu perhatian','attention']].map(([label,key])=>`<div class="monitor-stat"><b>${old||!data.clientsAvailable?'—':data.summary[key]}</b><span>${label}</span></div>`).join('');
   $('components').innerHTML=data.components.map(c=>`<article class="monitor-card"><h3>${esc(c.label)}</h3>${badge(old?'UNKNOWN':c.status)}<p>${esc(old?'Perlu data terkini untuk sahkan status.':c.detail)}</p></article>`).join('');
@@ -22,7 +22,7 @@
   $('count').textContent=`${rows.length} dipaparkan / ${data.accounts.length} client. Masa dalam MYT.`;
   $('workers').innerHTML=data.workers.map(w=>`<article class="monitor-card"><h3>${esc(w.name)}</h3>${badge(old?'UNKNOWN':!w.enabled?'UNCONFIGURED':w.online?'OK':'ERROR')}<p>${w.assigned} slot dipautkan • ${w.active} aktif<br>Heartbeat: ${esc(date(w.lastSeenAt))}</p></article>`).join('')||'<p class="monitor-note">Tiada host dipaparkan. Semak status komponen Hosted worker di atas.</p>';
  }
- async function refresh(){if(busy)return;busy=true;$('refresh').disabled=true;try{const r=await fetch('/api/admin/monitoring',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(12000)});if(r.status===401){location.assign('/login');return;}if(!r.ok)throw new Error('MONITOR_UNAVAILABLE');const next=await r.json();if(!next.ok||!Array.isArray(next.components)||!Array.isArray(next.accounts))throw new Error('INVALID_MONITOR');const ids=new Set(next.alerts.map(a=>a.id));if([...ids].some(id=>!previous.has(id)))beep();previous=ids;data=next;failed=false;}catch(_){if(!failed)beep();failed=true;}finally{busy=false;$('refresh').disabled=false;render();}}
+ async function refresh(){if(busy)return;busy=true;$('refresh').disabled=true;try{const r=await fetch('/api/admin/monitoring',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(12000)});if(r.status===401){location.assign('/login');return;}if(!r.ok)throw new Error('MONITOR_UNAVAILABLE');const next=await r.json();snapshot=ZenCoreMonitorSnapshot.receive(next,performance.now());const ids=new Set(next.alerts.map(a=>a.id));if([...ids].some(id=>!previous.has(id)))beep();previous=ids;data=snapshot.data;failed=false;lastError="";}catch(error){lastError=error.name==="TimeoutError"?"API monitoring mengambil masa terlalu lama. Cuba Refresh sekarang.":error.message==="STALE_MONITOR"?"Snapshot server sudah lama. Menunggu semakan baharu.":"Snapshot monitoring tidak dapat disahkan. Cuba Refresh sekarang.";if(!failed)beep();failed=true;}finally{busy=false;$('refresh').disabled=false;render();if(poll)clearTimeout(poll);poll=setTimeout(()=>{if(!document.hidden)refresh();},30000);}}
  let healthEnabled=false;
  async function healthConfig(enabled){
   const notice=$('healthNotice'),button=$('healthTelegram');button.disabled=true;
@@ -36,6 +36,6 @@
  $('healthTelegram').onclick=()=>healthConfig(!healthEnabled);healthConfig();
  $('refresh').onclick=refresh;$('search').oninput=render;$('filter').onchange=render;
  $('sound').onclick=async()=>{try{if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();await audio.resume();sound=!sound;$('sound').textContent=`Bunyi alert: ${sound?'ON':'OFF'}`;$('sound').setAttribute('aria-pressed',String(sound));}catch(_){$('sound').textContent='Bunyi tidak disokong';}};
- const poll=setInterval(()=>{if(!document.hidden)refresh();},10000),age=setInterval(()=>{if(!document.hidden)render();},1000);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});window.addEventListener('pagehide',()=>{clearInterval(poll);clearInterval(age);audio?.close();});refresh();
+ const age=setInterval(()=>{if(!document.hidden)render();},1000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(!snapshot||performance.now()-snapshot.receivedAt>=30000))refresh();});window.addEventListener('pagehide',()=>{clearTimeout(poll);clearInterval(age);audio?.close();});refresh();
 })();
