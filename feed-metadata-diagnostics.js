@@ -1,5 +1,6 @@
 'use strict';
 const RULE='TF2_3GREEN_TP1_HEMAGAP_V1';
+const SEPT='TF2_SEP24_4GREEN_HEMA5_V1';
 const CURRENT='TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1';
 // Bounded, account-free ingress evidence. Never retain the raw webhook body.
 function createFeedMetadataDiagnostics({now=Date.now}={}){
@@ -11,13 +12,13 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
   const row=batch.markets.find(r=>Array.isArray(r)&&r[0]==='XAUUSD');
   if(!row)return;
   const meta=row[66],key=`TF${tf}_${channel}`,previous=channels.get(key);
-  const current=meta?.entryRuleVersion===CURRENT&&meta?.currentSolidOnly===true;
+  const current=[CURRENT,SEPT].includes(meta?.entryRuleVersion)&&meta?.currentSolidOnly===true;
   const revised=current||meta?.entryRuleVersion===RULE&&meta?.pendingEntryReturn===true;
   const observedAt=now(),emittedAt=Number(batch.emittedAt);
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
    transportLagMs:Number.isFinite(emittedAt)?observedAt-emittedAt:null,rowLength:row.length,
-   rule:current?CURRENT:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
-   hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&meta.hemaRequiredTfs[0]===2?['2']:null,
+   rule:current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
+   hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&[2,5].includes(meta.hemaRequiredTfs[0])?[String(meta.hemaRequiredTfs[0])]:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
    hasLiveHema:row[65]?.version===(tf==='2'?'HEMA23_LIVE_V1':'HEMA1530_V1'),
    entryEvent:meta?.entryEvent===true,accepted:acceptedSymbols.includes('XAUUSD')};
