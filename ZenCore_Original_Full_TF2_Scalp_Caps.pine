@@ -1,5 +1,5 @@
 //@version=6
-indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 SOLID HOLD V5 · Chart Exit', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 SOLID HOLD V5.1 · Latest SOLID', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF2 Web Feed"
@@ -22,6 +22,12 @@ varip bool zc80_eligible = false
 varip int zc80_trigger_passed = na
 varip bool zc80_trigger_hema40 = false
 varip string[] zc80_seen = array.new_string()
+// Keep the latest chart signal separate from the execution plan being managed.
+varip string zc_pending_key = ""
+varip string zc_pending_side = ""
+varip float zc_pending_entry = na
+varip int zc_pending_bar = na
+varip int zc_pending_at = na
 varip bool zc_hold_active = false
 varip int zc_hold_closed_at = na
 bool zc_partial_pulse = false
@@ -1391,29 +1397,49 @@ bool zc24_chart_ok = timeframe.period == "2" and tradeMode == "Scalping" and tpM
 // Previous version: TF2_SOLID_80PCT_SCALP_CAP_V3.
 string zc_seq_key = str.tostring(zc_pulse_setup) + "|" + (zc_pulse_buy ? "BUY" : "SELL")
 bool zc_hold_new_source = zc_seq_pulse and not array.includes(zc80_seen, zc_seq_key)
-bool zc80_new_solid = zc_hold_new_source and not zc_hold_active
-// Do not replace a held direction with another label before CLOSE ALL.
+// CLOSE ALL cancels an older pending source. A new native SOLID on this
+// update is captured afterwards and never silently marked seen then discarded.
+if zc_close_all_pulse
+    zc_pending_key := ""
+    zc_hold_active := false
+    zc_hold_closed_at := zc_seq_now
 if zc_hold_new_source
     array.push(zc80_seen, zc_seq_key)
     if array.size(zc80_seen) > 500
         array.shift(zc80_seen)
+    zc_pending_key := zc_seq_key
+    zc_pending_side := zc_pulse_buy ? "BUY" : "SELL"
+    zc_pending_entry := zc_pulse_entry
+    zc_pending_bar := time
+    zc_pending_at := zc_seq_now
+    // No additional entry from the superseded source. Existing exit state stays intact.
+    zc_hold_active := false
+    zc_hold_closed_at := zc_seq_now
+// Preserve the old execution identity until its close event has been emitted.
+// Historical bars have no webhook delivery; Dashboard does not consume execution exits.
+bool zc_old_exit_done = na(xc_setup) or xc_full_event_sent or not barstate.isrealtime or zc24_channel == "Dashboard"
+bool zc80_new_solid = zc_pending_key != "" and not xc_active and zc_old_exit_done
 if zc80_new_solid
-    if not xc_active
-        xc_full_bar := na
+    xc_full_bar := na
+    xc_setup := na
+    xc_half := false
+    xc_stage := 0
+    xc_exit := "NONE"
+    xc_reason := ""
+    xc_half_event_sent := false
+    xc_full_event_sent := false
     zc_hold_active := true
     zc_hold_closed_at := na
-    zc_seq_side := zc_pulse_buy ? "BUY" : "SELL"
-    zc_seq_bar := time
-    zc_seq_trigger := zc_seq_now
-    zc_seq_source := zc_pulse_entry
+    zc_seq_side := zc_pending_side
+    zc_seq_bar := zc_pending_bar
+    zc_seq_trigger := zc_pending_at
+    zc_seq_source := zc_pending_entry
     zc_seq_completed := na
     zc_seq_entry := na
     zc_seq_risk := na
     zc80_eligible := false
-    zc_seq_seen := zc_seq_key
-if zc_close_all_pulse
-    zc_hold_active := false
-    zc_hold_closed_at := zc_seq_now
+    zc_seq_seen := zc_pending_key
+    zc_pending_key := ""
 bool zc24_tf2 = zc24_chart_ok
 bool zc24_buy = zc_seq_side == "BUY"
 bool zc24_price_past = not na(zc_seq_source) and (zc24_buy ? close > zc_seq_source : close < zc_seq_source)
@@ -1431,7 +1457,7 @@ int zc80_passed = (zc24_price_past ? 1 : 0) + (zc_seq_s1 ? 1 : 0) + (zc_seq_shap
 if zc80_new_solid
     zc80_trigger_passed := zc80_passed
     zc80_trigger_hema40 := zc80_hema40
-bool zc_hold_qualify = zc_hold_active and na(zc_seq_completed) and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed >= 5
+bool zc_hold_qualify = not xc_active and zc_hold_active and na(zc_seq_completed) and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed >= 5
 if zc_hold_qualify
     zc80_eligible := true
     zc_seq_completed := zc_seq_now
@@ -1502,6 +1528,8 @@ plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+math.min(.5*zc_seq_risk
 plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+zc_seq_risk : zc_seq_entry-zc_seq_risk) : na, "SOP80 TP2", color=colTP2, style=plot.style_linebr)
 plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+1.5*zc_seq_risk : zc_seq_entry-1.5*zc_seq_risk) : na, "SOP80 TP3", color=colTP3, style=plot.style_linebr)
 plotshape(zc24_ready and not zc24_ready[1], title="SOP 24 Sep TF2 READY", style=shape.labelup, location=location.belowbar, color=color.aqua, text="SOP 80%\nREADY", textcolor=color.black, size=size.small)
+string zc_display_side = zc_pending_key != "" ? zc_pending_side : zc_seq_side
+int zc_display_at = zc_pending_key != "" ? zc_pending_at : zc_seq_trigger
 var table zc24_table = table.new(position.top_left, 2, 9, bgcolor=color.new(#091720, 5), border_width=1)
 if barstate.islast
     table.cell(zc24_table, 0, 0, "SOLID HOLD · MIN 5/6", text_color=color.aqua)
@@ -1509,7 +1537,7 @@ if barstate.islast
     table.cell(zc24_table, 0, 1, "Chart", text_color=color.white)
     table.cell(zc24_table, 1, 1, zc24_chart_ok ? "TF2 SCALPING" : "GUNA TF2 / SCALPING", text_color=zc24_tf2 ? color.lime : color.red)
     table.cell(zc24_table, 0, 2, "SOLID chart terakhir", text_color=color.white)
-    table.cell(zc24_table, 1, 2, zc_seq_side == "" ? "BELUM ADA" : "SOLID " + zc_seq_side, text_color=zc_seq_side == "BUY" ? color.lime : zc_seq_side == "SELL" ? color.red : color.gray)
+    table.cell(zc24_table, 1, 2, zc_display_side == "" ? "BELUM ADA" : "SOLID " + zc_display_side, text_color=zc_display_side == "BUY" ? color.lime : zc_display_side == "SELL" ? color.red : color.gray)
     table.cell(zc24_table, 0, 3, "Harga lepas entry", text_color=color.white)
     table.cell(zc24_table, 1, 3, zc24_price_past ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 4, "Checklist min 3/5", text_color=color.white)
@@ -1519,9 +1547,9 @@ if barstate.islast
     table.cell(zc24_table, 0, 6, "MTF score +1…+5 / −1…−5", text_color=color.white)
     table.cell(zc24_table, 1, 6, zc_seq_mtf ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 7, "SOP " + str.tostring(zc80_passed) + "/6", text_color=color.white)
-    table.cell(zc24_table, 1, 7, zc24_ready ? (zc24_buy ? "BUY READY" : "SELL READY") : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
+    table.cell(zc24_table, 1, 7, zc_pending_key != "" ? "SOLID BARU · URUS EXIT PELAN LAMA" : zc24_ready ? (zc24_buy ? "BUY READY" : "SELL READY") : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
     table.cell(zc24_table, 0, 8, "Signal chart / MYT", text_color=color.white)
-    table.cell(zc24_table, 1, 8, na(zc_seq_trigger) ? "—" : str.format_time(zc_seq_trigger, "HH:mm:ss", "Asia/Kuala_Lumpur") + (zc24_ready ? " · LAYAK SOP" : " · BUKAN ARAHAN ORDER"), text_color=color.white)
+    table.cell(zc24_table, 1, 8, na(zc_display_at) ? "—" : str.format_time(zc_display_at, "HH:mm:ss", "Asia/Kuala_Lumpur") + (zc24_ready ? " · LAYAK SOP" : " · BUKAN ARAHAN ORDER"), text_color=color.white)
 
 f_num(float value)=>
     na(value)?"null":str.tostring(value,"#.########")
@@ -1647,7 +1675,7 @@ if barstate.isrealtime and zc24_feed and zc24_chart_ok
         array.shift(zc24_sends)
     int zc24_count = array.size(zc24_sends)
     bool zc24_dashboard_due = zc24_channel == "Dashboard" and timenow - zc24_last_sent >= 30000 and zc24_count < 6
-    bool zc24_execution_due = zc24_channel == "Execution" and zc24_count < 12 and (zc80_new_solid or zc_close_all_pulse or zc24_event or zc24_bootstrap or zc24_protection != zc24_sent_protection)
+    bool zc24_execution_due = zc24_channel == "Execution" and zc24_count < 12 and (zc_hold_new_source or zc80_new_solid or zc_close_all_pulse or zc24_event or zc24_bootstrap or zc24_protection != zc24_sent_protection)
     if zc24_dashboard_due or zc24_execution_due
         alert(zc24_payload, alert.freq_all)
         array.push(zc24_sends, timenow)
