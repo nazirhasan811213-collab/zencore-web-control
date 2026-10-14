@@ -324,6 +324,8 @@
       ticket,
       origin:raw.origin==='MANUAL'?'MANUAL':'ZENCORE',
       positionId:String(raw.positionId||ticket).replace(/[^0-9]/g,'').slice(0,20),
+      setupId:/^[a-f0-9-]{20}$/.test(String(raw.setupId||''))?raw.setupId:null,
+      fillRiskVersion:raw.fillRiskVersion==='FILL_PRICE_ATR_V1'?raw.fillRiskVersion:null,
       strategyMode: raw.strategyMode==='TF15_INTRA'?'TF15_INTRA':'TF2_SCALPING',
       symbol,
       side,

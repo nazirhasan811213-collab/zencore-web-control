@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const Core = require('./auto-trade-core');
 const {rebasedManagement}=require('./live-entry-management');
+const Reentry=require('./tf2-post-close-reentry');
 
 function serviceError(code, message, status = 400, fields = null) {
   const error = new Error(message);
@@ -129,6 +130,7 @@ function createAutoTradeService(options = {}) {
   if (!allowedDemoOwnershipModes.length) throw new Error('At least one DEMO execution host mode is required.');
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const dispatchDiagnosticAt = new Map();
+  const reentryTracker=new Reentry.Tracker(),reentryCapability=new Map(),heartbeatChains=new Map();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
   const hostedLeaseTtlMs = Math.max(30_000, Math.min(5 * 60 * 1000,
     Number(options.hostedLeaseTtlMs) || 2 * 60 * 1000));
@@ -452,6 +454,9 @@ function createAutoTradeService(options = {}) {
         podCommandKeyIsPerPod: true,
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
+        postCloseReentry:{version:Reentry.VERSION,timeframe:'2',layerFraction:.5,rounding:'FLOOR',
+          enabled:reentryCapability.get(userId)?.podId===pod?.id,
+          ribbonGapAtrMinimum:.10,momentum:'WT_DIRECTIONAL',minimumSopPassed:'5/6',anchor:Reentry.FILL},
         emergencyRequiresStepUp: true
       },
       generatedAt: now()
@@ -1067,7 +1072,15 @@ function createAutoTradeService(options = {}) {
     return store.findPodByTokenHash(tokenHash(rawToken));
   }
 
-  async function heartbeat(rawToken, input = {}) {
+  async function heartbeat(rawToken,input={}){
+    const pod=await authenticatePod(rawToken);
+    if(!pod)throw serviceError('INVALID_POD_TOKEN','Secure Pod tidak dibenarkan.',401);
+    const previous=heartbeatChains.get(pod.id)||Promise.resolve();
+    const task=previous.catch(()=>{}).then(()=>heartbeatUnlocked(rawToken,input));
+    heartbeatChains.set(pod.id,task);
+    try{return await task;}finally{if(heartbeatChains.get(pod.id)===task)heartbeatChains.delete(pod.id);}
+  }
+  async function heartbeatUnlocked(rawToken, input = {}) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
     const heartbeatValidation = Core.normaliseHeartbeat(input);
@@ -1085,6 +1098,15 @@ function createAutoTradeService(options = {}) {
     const updated = await store.updatePodHeartbeat(pod.id, heartbeatValidation.value, seenAt, pod.tokenHash);
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
+    const profile=await store.getProfile(pod.userId);
+    const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
+    if(input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
+      fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&
+      !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')){
+      reentryCapability.set(pod.userId,{podId:pod.id,at:seenAt});
+      const latest=await store.latestSetupForMode(pod.userId,'XAUUSD','TF2_SCALPING');
+      reentryTracker.observe(pod.userId,updated,heartbeatValidation.value.positions,latest,seenAt);
+    }else{reentryTracker.clear(pod.userId);reentryCapability.delete(pod.userId);}
     return {
       ok: true,
       podState: connectionState(updated),
@@ -1098,7 +1120,8 @@ function createAutoTradeService(options = {}) {
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
-      if(latest?.payload?.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1')return p.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&p.analysisSnapshot.entryCommandId===latest.id;
+      const anchor=latest?.payload?.analysisSnapshot?.entryAnchor;
+      if(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1'].includes(anchor))return p.analysisSnapshot?.entryAnchor===anchor&&p.analysisSnapshot.entryCommandId===latest.id;
     }
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
@@ -1119,9 +1142,17 @@ function createAutoTradeService(options = {}) {
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
-    if(typeof options.getLatestMarket!=='function')return true;
+    if(typeof options.getLatestMarket!=='function')return command.payload?.reentry?false:true;
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
+    if(p.reentry?.version===Reentry.VERSION){
+      const pod=await store.getPodForUser(command.userId),cap=reentryCapability.get(command.userId);
+      const positions=await store.listPositions(command.userId);
+      return profile?.desiredState==='ON'&&pod?.id===command.podId&&connectionState(pod).ready&&
+        cap?.podId===pod.id&&now()-cap.at<=15000&&Reentry.qualifies(m,p.side,now())&&
+        m.signalObservedAt>=p.reentry.closedAt&&
+        !positions.some(x=>x.origin!=='MANUAL'&&x.symbol===p.symbol&&(x.strategyMode||'TF2_SCALPING')===p.strategyMode);
+    }
     return !!m && now()-(Number(m.signalObservedAt)||m.receivedAt)<=30000 && (Number(m.signalObservedAt)||m.receivedAt)<=now()+5000 &&
       Core.entryConfirmationsPass(m) && n.side===p.side && (!snap.setupKey||m.setupKey===snap.setupKey) &&
       (snap.entryAnchor==='LIVE_SIGNAL_PRICE_V1'
@@ -1333,6 +1364,24 @@ function createAutoTradeService(options = {}) {
       // Never dispatch new exit rules to a hosted worker or old EA that would silently ignore them.
       if(profile.strategyMode!=='TF15_INTRA' && profile.strategyExitPolicies?.TF2_SCALPING &&
         (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion)))continue;
+      // Re-entry is an authenticated MT5 close transition, never a webhook flag.
+      // It is opt-in by the new EA capability and scalping range feed marker.
+      const cap=reentryCapability.get(profile.userId);
+      if(typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
+        !positions.some(x=>x.origin!=='MANUAL'&&x.symbol==='XAUUSD'&&(x.strategyMode||'TF2_SCALPING')==='TF2_SCALPING')){
+        const market=markets.find(m=>m.symbol==='XAUUSD'&&String(m.timeframe)==='2');
+        const closure=reentryTracker.ready(profile.userId,pod,market,now()),half=Reentry.halfSettings(profile);
+        if(closure&&half&&isCurrent(market)){
+          const setup=Reentry.annotate(Core.buildSetupCommand(Reentry.marketForReentry(market,closure),half,pod.symbolSpecs?.XAUUSD,now()),closure,market.strategyNormal.sop.atrReference);
+          if(setup){
+            const issued=await issueCommand({userId:profile.userId,podId:pod.id,type:'PLACE_SETUP',payload:setup.payload,
+              dedupeKey:closure.id,ttlMs:15000,notAfterMs:Math.min(entryWindow.validUntil??Infinity,setup.notAfterMs??Infinity)});
+            reentryTracker.issued(profile.userId,issued.command.id);
+            if(issued.created){queued++;await store.appendAudit(profile.userId,'POST_CLOSE_REENTRY_QUEUED',{
+              commandId:issued.command.id,parentCommandId:closure.parent,symbol:'XAUUSD',side:closure.side,layers:setup.payload.layers,entryAnchor:Reentry.FILL});}
+          }
+        }
+      }
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;

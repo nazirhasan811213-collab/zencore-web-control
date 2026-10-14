@@ -203,6 +203,7 @@ class Runner:
                 signed=verified_command(command,self.config['commandSigningKey'],self.config['podId'],server_now)
                 fields=command_fields(signed,self.config)
                 if signed['type'] in ('SYSTEM_ON','PLACE_SETUP') and local.get('executorPolicyVersion')!='EXACT_ANALYSIS_V2':raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
+                if signed.get('payload',{}).get('fillRisk') and local.get('fillRiskVersion')!='FILL_PRICE_ATR_V1':raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
                 if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')

@@ -283,7 +283,7 @@
         schemaVersion: SCHEMA_VERSION,
         symbol,
         executionTimeframe:String(market.timeframe||market.strategyNormal?.tf||'2'),
-        ...(management.entryAnchor==='LIVE_SIGNAL_PRICE_V1'?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
+        ...(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1'].includes(management.entryAnchor)?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
         actions,
         reason: String(management.reason || '').slice(0, 180),
         sourceReceivedAt: receivedAt

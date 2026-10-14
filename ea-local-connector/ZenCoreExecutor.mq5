@@ -1,5 +1,5 @@
 #property strict
-#property version "2.00"
+#property version "2.01"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -53,6 +53,14 @@ bool ReadFields(string name){
   ArrayResize(keys,n+1);ArrayResize(values,n+1);keys[n]=k;values[n]=v;
  }
  FileClose(f);return valid;
+}
+bool LoadOwnRisk(ulong ticket){
+ if(!IsOwn(ticket))return false;
+ string symbol=PositionGetString(POSITION_SYMBOL),comment=PositionGetString(POSITION_COMMENT);
+ long identifier=PositionGetInteger(POSITION_IDENTIFIER);
+ if(ReadFields("fill-risk-"+(string)identifier+".tsv") && Get("symbol")==symbol && Get("version")=="FILL_PRICE_ATR_V1")return true;
+ int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
+ return prefix>0 && ReadFields("risk-"+StringSubstr(comment,prefix)+".tsv") && Get("symbol")==symbol;
 }
 string Get(string key){for(int i=0;i<ArraySize(keys);i++)if(keys[i]==key)return values[i];return "";}
 double Val(string key){return StringToDouble(Get(key));}
@@ -114,7 +122,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.00")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.01")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -132,10 +140,18 @@ bool Heartbeat(){
   ulong ticket=PositionGetTicket(i);if(!IsManaged(ticket))continue;
   string symbol=PositionGetString(POSITION_SYMBOL),c=Canonical(symbol);if(c=="")continue;
   string p="p"+(string)count;
+  string comment=PositionGetString(POSITION_COMMENT);int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
+  if(prefix>0){
+   text+=Row(p+"setupId",StringSubstr(comment,prefix,20));
+   if(LoadOwnRisk(ticket)){
+    text+=Row(p+"fillRiskVersion",Get("version"))+Row(p+"tp1",Get("tp1"))+Row(p+"tp2",Get("tp2"))+Row(p+"tp3",Get("tp3"));
+    if(Get("sl")!="")text+=Row(p+"initialSl",Get("sl"));
+   }
+  }
   text+=Row(p+"origin",IsManual(ticket)?"MANUAL":"ZENCORE")+Row(p+"positionId",(string)PositionGetInteger(POSITION_IDENTIFIER))+Row(p+"strategyMode",(ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC15?"TF15_INTRA":"TF2_SCALPING")+Row(p+"ticket",(string)ticket)+Row(p+"symbol",c)+Row(p+"side",PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL")+
   Row(p+"volume",Num(PositionGetDouble(POSITION_VOLUME)))+Row(p+"entry",Num(PositionGetDouble(POSITION_PRICE_OPEN)))+
   Row(p+"currentPrice",Num(PositionGetDouble(POSITION_PRICE_CURRENT)))+Row(p+"activeSl",Num(PositionGetDouble(POSITION_SL)))+
-  Row(p+"profitUsd",Num(PositionGetDouble(POSITION_PROFIT)))+Row(p+"openedAt",(string)(PositionGetInteger(POSITION_TIME)*1000-(IsManual(ticket)?((long)TimeTradeServer()-(long)TimeGMT())*1000:0)));count++;
+  Row(p+"profitUsd",Num(PositionGetDouble(POSITION_PROFIT)))+Row(p+"openedAt",(string)(PositionGetInteger(POSITION_TIME)*1000-((long)TimeTradeServer()-(long)TimeGMT())*1000));count++;
  }
  text+=Row("positionCount",(string)count);return WriteAtomic("heartbeat.tsv",text);
 }
@@ -202,7 +218,7 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  return ok;
 }
 bool RejectEntry(string code){lastEntryCode=code;return false;}
-bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING"){
+bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0){
  lastEntryCode="ENTRY_REJECTED";
  if(c!="XAUUSD")return RejectEntry("SYMBOL_REJECTED");
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return false;
@@ -215,6 +231,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(!FreshLease())return RejectEntry("LEASE_NOT_READY");
  if(layers<1 || layers>10 || !VolumeValid(symbol,lot) || (side!="BUY" && side!="SELL"))return false;
  bool buy=side=="BUY";
+ if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
+ // Per-position targets require hedging; netting merges the layers/fill prices.
+ if(fillAnchor && AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return RejectEntry("FILL_REENTRY_HEDGING_REQUIRED");
  if(entry<=0 || sl<=0 || !(buy?(sl<entry && entry<tp1 && tp1<tp2 && tp2<tp3):(sl>entry && entry>tp1 && tp1>tp2 && tp2>tp3)))return false;
  // Netting cannot hold separate strategy positions on one symbol.
  if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && PositionSelect(symbol))return false;
@@ -240,8 +259,26 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
   if(!Permissions() || !FreshLease())return false;
   if(!SymbolInfoTick(symbol,tick) || (buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl))return false;
   // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
-  bool sent=buy?trade.Buy(lot,symbol,0,sl,0,(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20)):trade.Sell(lot,symbol,0,sl,0,(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20));
+  double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
+  if(fillAnchor && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
+  bool sent=buy?trade.Buy(lot,symbol,0,initialSl,0,(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20)):trade.Sell(lot,symbol,0,initialSl,0,(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20));
   if(!sent || !BrokerDone() || MathAbs(trade.ResultVolume()-lot)>1e-8)return RejectEntry(i>0?"SETUP_PARTIAL":"BROKER_ENTRY_REJECTED");
+  if(fillAnchor){
+   ulong deal=trade.ResultDeal(),ticket=0;long identifier=0;
+   if(HistoryDealSelect(deal))identifier=HistoryDealGetInteger(deal,DEAL_POSITION_ID);
+   for(int j=PositionsTotal()-1;j>=0;j--){ulong t=PositionGetTicket(j);if(IsOwn(t) && PositionGetInteger(POSITION_IDENTIFIER)==identifier){ticket=t;break;}}
+   if(ticket==0)return RejectEntry("FILL_POSITION_LOOKUP_FAILED");
+   double fill=PositionGetDouble(POSITION_PRICE_OPEN),sign=buy?1:-1;
+   double s=Price(symbol,fill-sign*.75*riskAtr),t1=Price(symbol,fill+sign*MathMin(.5*riskAtr,2.0)),t2=Price(symbol,fill+sign*riskAtr),t3=Price(symbol,fill+sign*1.5*riskAtr);
+   if(s<=0 || !(buy?s<fill && fill<t1 && t1<t2 && t2<t3:s>fill && fill>t1 && t1>t2 && t2>t3)){
+    CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME));return RejectEntry("FILL_TICK_RANGE_INVALID");
+   }
+   bool saved=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","FILL_PRICE_ATR_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("atr",Num(riskAtr))+Row("sl",Num(s))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3)));
+   if(!saved || !trade.PositionModify(ticket,s,0) || !BrokerDone()){
+    if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore FILL_RISK_CLOSE_PENDING ticket=",ticket);
+    return RejectEntry("FILL_RISK_INSTALL_FAILED");
+   }
+  }
  }
  return true;
 }
@@ -303,7 +340,8 @@ void ManageLocalStepLock(){
   ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket))continue;
   string comment=PositionGetString(POSITION_COMMENT),symbol=PositionGetString(POSITION_SYMBOL);
   int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
-  if(prefix==0 || !ReadFields("risk-"+StringSubstr(comment,prefix)+".tsv"))continue;
+  if(prefix==0 || !LoadOwnRisk(ticket))continue;
+  bool fillAnchor=Get("version")=="FILL_PRICE_ATR_V1";
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
@@ -315,6 +353,15 @@ void ManageLocalStepLock(){
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
   int observed=buy?(quote>=t3?3:quote>=t2?2:quote>=t1?1:0):(quote<=t3?3:quote<=t2?2:quote<=t1?1:0);
   if(observed>stage){stage=observed;if(!WriteAtomic(stageFile,Row("symbol",symbol)+Row("side",buy?"BUY":"SELL")+Row("stage",(string)stage)))continue;}
+  if(fillAnchor && stage>=1){
+   string half="half-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done";
+   double full=PositionGetDouble(POSITION_VOLUME),step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP),volume=step>0?MathFloor(full*.5/step)*step:0;
+   if(!FileIsExist(channel+"\\"+half,FILE_COMMON) && VolumeValid(symbol,volume) && VolumeValid(symbol,full-volume)){
+    if(!WriteAtomic(half,"intent"))continue;
+    if(!CloseTicket(ticket,volume))Print("ZenCore FILL_PARTIAL_CLOSE_FAILED ticket=",ticket);
+    if(!IsOwn(ticket))continue;
+   }
+  }
   if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=entry;
   if(target<=0)continue;
   double old=PositionGetDouble(POSITION_SL),sl=Price(symbol,target);
@@ -394,6 +441,7 @@ void Process(){
  string side=Get("side"),symbols=Get("symbols");
  bool tightTf2=Get("exitPolicyVersion")=="TF2_TIGHT_SL_3C_V1";
  string slPolicy=Get("slPolicy");
+ bool fillAnchor=Get("fillAnchor")=="FILL_PRICE_ATR_V1";double riskAtr=Val("riskAtr");
  double lot=Val("lot"),entry=Val("entry"),sl=Val("sl"),tp1=Val("tp1"),tp2=Val("tp2"),tp3=Val("tp3");
  int layers=(int)StringToInteger(Get("layers")),actions=(int)StringToInteger(Get("actions"));
  long manualSourceAt=(long)Val("sourceAt");ulong manualTicket=(ulong)StringToInteger(Get("ticket"));string manualId=Get("positionId");
@@ -454,7 +502,7 @@ void Process(){
  }
  else if(type=="PLACE_SETUP"){
   if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
-  else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode);
+  else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
