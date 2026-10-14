@@ -7,6 +7,7 @@
   if(!dialog.open)return;
   const report=window.ZenCoreGoldCopilot.analyse(failed?views.map(v=>({...v,status:'DISCONNECTED'})):views,tf);
   const nodes=[el('span',({QUALIFIED:'SOP CUKUP',WAIT_DATA:'DATA TAK FRESH',WAIT_PLAN:'LEVEL BELUM READY',INVALIDATED:'SETUP BATAL',WAIT_RANGE:'LUAR RANGE',WAIT_CONFIRMATION:'TUNGGU CONFIRM'})[report.status]||report.status,'copilot-status '+(report.status==='QUALIFIED'?'pass':'')),el('h2',report.action),el('p',report.reason)];
+  if(report.chartSignal?.present)nodes.push(el('p','SOLID '+report.chartSignal.side+' pada chart · '+new Date(report.chartSignal.triggeredAt).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT. Ini rekod signal chart; status layak entry ikut SOP di atas.','chart-solid-note'));
   if(report.completion)nodes.push(el('p','SOP '+report.completion.passed+'/6 ('+(report.completion.passed/6*100).toFixed(2)+'%) · HEMA40 '+(report.completion.hema40?'LULUS':'BATAL')+' · 80% bukan win rate.'));
   const expanded=new Set([...content.querySelectorAll('details[open]')].map(d=>d.dataset.section));
   const focused=content.contains(document.activeElement)?document.activeElement.closest('details')?.dataset.section:null;

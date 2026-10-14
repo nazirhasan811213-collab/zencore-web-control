@@ -1,9 +1,9 @@
 //@version=6
-indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 Scalping ATR Caps', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 Native SOLID Sync', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
-zc24_group = "ZenCore TF2 Web Feed — Paused rollout"
-zc24_feed = input.bool(false, "Web feed ON — testing only while server PAUSED", group=zc24_group)
+zc24_group = "ZenCore TF2 Web Feed"
+zc24_feed = input.bool(false, "Web feed ON — Dashboard / Execution", group=zc24_group)
 zc24_channel = input.string("Dashboard", "Feed channel", options=["Dashboard", "Execution"], group=zc24_group)
 zc24_secret = input.string("", "Webhook secret", group=zc24_group, display=display.none)
 zc24_symbol_ok = str.contains(syminfo.ticker, "XAUUSD")
@@ -19,6 +19,8 @@ varip int zc_seq_completed = na
 varip float zc_seq_entry = na
 varip float zc_seq_risk = na
 varip bool zc80_eligible = false
+varip int zc80_trigger_passed = na
+varip bool zc80_trigger_hema40 = false
 varip string[] zc80_seen = array.new_string()
 bool zc_seq_pulse = false
 int zc_seq_now = barstate.isrealtime ? timenow : time_close
@@ -1405,6 +1407,9 @@ bool zc80_data = atr > 0 and not na(he1[1]) and not na(he2[1]) and not na(wt1) a
 bool zc80_hema40 = zc80_data and (zc24_buy ? he2-he2[1] >= .05*atr : he2[1]-he2 >= .05*atr)
 bool zc_seq_shape = zc80_hema40 and (zc24_buy ? he1-he1[1] >= .05*atr : he1[1]-he1 >= .05*atr)
 int zc80_passed = (zc24_price_past ? 1 : 0) + (zc_seq_s1 ? 1 : 0) + (zc_seq_shape ? 1 : 0) + (zc24_greens >= 3 ? 1 : 0) + (zc24_forecast ? 1 : 0) + (zc_seq_mtf ? 1 : 0)
+if zc80_new_solid
+    zc80_trigger_passed := zc80_passed
+    zc80_trigger_hema40 := zc80_hema40
 if zc80_new_solid and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed >= 5
     zc80_eligible := true
     zc_seq_completed := zc_seq_trigger
@@ -1465,14 +1470,14 @@ plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+math.min(.5*zc_seq_risk
 plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+zc_seq_risk : zc_seq_entry-zc_seq_risk) : na, "SOP80 TP2", color=colTP2, style=plot.style_linebr)
 plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+1.5*zc_seq_risk : zc_seq_entry-1.5*zc_seq_risk) : na, "SOP80 TP3", color=colTP3, style=plot.style_linebr)
 plotshape(zc24_ready and not zc24_ready[1], title="SOP 24 Sep TF2 READY", style=shape.labelup, location=location.belowbar, color=color.aqua, text="SOP 80%\nREADY", textcolor=color.black, size=size.small)
-var table zc24_table = table.new(position.top_left, 2, 8, bgcolor=color.new(#091720, 5), border_width=1)
+var table zc24_table = table.new(position.top_left, 2, 9, bgcolor=color.new(#091720, 5), border_width=1)
 if barstate.islast
     table.cell(zc24_table, 0, 0, "SOP 80% · TF2", text_color=color.aqua)
-    table.cell(zc24_table, 1, 0, "SCALP ATR CAPS · UJI PINE", text_color=color.orange)
+    table.cell(zc24_table, 1, 0, "NATIVE SOLID · TF2", text_color=color.orange)
     table.cell(zc24_table, 0, 1, "Chart", text_color=color.white)
     table.cell(zc24_table, 1, 1, zc24_chart_ok ? "TF2 SCALPING" : "GUNA TF2 / SCALPING", text_color=zc24_tf2 ? color.lime : color.red)
-    table.cell(zc24_table, 0, 2, "SOLID semasa", text_color=color.white)
-    table.cell(zc24_table, 1, 2, zc24_solid ? "PASS" : "WAIT", text_color=color.white)
+    table.cell(zc24_table, 0, 2, "SOLID chart terakhir", text_color=color.white)
+    table.cell(zc24_table, 1, 2, zc_seq_side == "" ? "BELUM ADA" : "SOLID " + zc_seq_side, text_color=zc_seq_side == "BUY" ? color.lime : zc_seq_side == "SELL" ? color.red : color.gray)
     table.cell(zc24_table, 0, 3, "Harga lepas entry", text_color=color.white)
     table.cell(zc24_table, 1, 3, zc24_price_past ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 4, "Checklist min 3/5", text_color=color.white)
@@ -1482,7 +1487,9 @@ if barstate.islast
     table.cell(zc24_table, 0, 6, "MTF score +1…+5 / −1…−5", text_color=color.white)
     table.cell(zc24_table, 1, 6, zc_seq_mtf ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 7, "SOP " + str.tostring(zc80_passed) + "/6", text_color=color.white)
-    table.cell(zc24_table, 1, 7, zc24_ready ? (zc24_buy ? "BUY READY" : "SELL READY") : "SKIP / TUNGGU SOLID", text_color=zc24_ready ? color.lime : color.orange)
+    table.cell(zc24_table, 1, 7, zc24_ready ? (zc24_buy ? "BUY READY" : "SELL READY") : not na(zc_seq_trigger) and not zc80_eligible ? "SKIP · SOP PADA SOLID" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
+    table.cell(zc24_table, 0, 8, "Signal chart / MYT", text_color=color.white)
+    table.cell(zc24_table, 1, 8, na(zc_seq_trigger) ? "—" : str.format_time(zc_seq_trigger, "HH:mm:ss", "Asia/Kuala_Lumpur") + (zc24_solid ? " · LAYAK SOP" : " · BUKAN ARAHAN ORDER"), text_color=color.white)
 
 f_num(float value)=>
     na(value)?"null":str.tostring(value,"#.########")
@@ -1530,7 +1537,7 @@ string zc24_hema_json = "{\"version\":\"HEMA23_LIVE_V1\",\"tf2\":{\"fast\":" + f
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
 string zc_native_signals = "{\"primaryBuy\":" + f_bool(is_zone_turn_green) + ",\"primarySell\":" + f_bool(is_zone_turn_red) + ",\"solidPulse\":" + f_bool(zc_seq_pulse) + ",\"reentry\":" + f_quote(zc_native_reentry) + ",\"momentumBuy\":" + f_bool(continuation_buy) + ",\"momentumSell\":" + f_bool(continuation_sell) + ",\"nativeEntry\":" + f_num(curr_entry) + ",\"nativeSl\":" + f_num(curr_sl) + ",\"nativeTp1\":" + f_num(curr_tp1) + ",\"nativeTp2\":" + f_num(curr_tp2) + ",\"nativeTp3\":" + f_num(curr_tp3) + "}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(f_advice(ai_coach)) + ",\"aiCoach\":" + f_quote(ai_coach) + ",\"dashboard\":" + zc_all_dashboard + ",\"chartSignals\":" + zc_native_signals + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF2_SOLID_80PCT_SCALP_CAP_V3\",\"riskPlanVersion\":\"TF2_SCALP_ATR_CAP_V1\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF2_SOLID_80PCT_SCALP_CAP_V3\",\"riskPlanVersion\":\"TF2_SCALP_ATR_CAP_V1\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
@@ -1608,7 +1615,7 @@ if barstate.isrealtime and zc24_feed and zc24_chart_ok
         array.shift(zc24_sends)
     int zc24_count = array.size(zc24_sends)
     bool zc24_dashboard_due = zc24_channel == "Dashboard" and timenow - zc24_last_sent >= 30000 and zc24_count < 6
-    bool zc24_execution_due = zc24_channel == "Execution" and zc24_count < 12 and (zc24_event or zc24_bootstrap or zc24_protection != zc24_sent_protection)
+    bool zc24_execution_due = zc24_channel == "Execution" and zc24_count < 12 and (zc80_new_solid or zc24_event or zc24_bootstrap or zc24_protection != zc24_sent_protection)
     if zc24_dashboard_due or zc24_execution_due
         alert(zc24_payload, alert.freq_all)
         array.push(zc24_sends, timenow)
@@ -1616,3 +1623,4 @@ if barstate.isrealtime and zc24_feed and zc24_chart_ok
         zc24_sent_protection := zc24_protection
         if zc24_event
             zc24_emitted_setup := zc24_setup_at
+
