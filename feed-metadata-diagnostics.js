@@ -13,7 +13,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
   if(!row)return;
   const meta=row[66],key=`TF${tf}_${channel}`,previous=channels.get(key);
   const current=[CURRENT,SEPT].includes(meta?.entryRuleVersion)&&meta?.currentSolidOnly===true;
-  const solid80=['TF2_SOLID_80PCT_LIVE_V2','TF2_SOLID_HOLD_SCALP_CAP_V4','TF2_SOLID_80PCT_SCALP_CAP_V3'].includes(meta?.entryRuleVersion);
+  const solid80=['TF2_SOLID_80PCT_LIVE_V2','TF2_SOLID_HOLD_SCALP_CAP_V5','TF2_SOLID_HOLD_SCALP_CAP_V4','TF2_SOLID_80PCT_SCALP_CAP_V3'].includes(meta?.entryRuleVersion);
   const revised=current||solid80||meta?.entryRuleVersion===RULE&&meta?.pendingEntryReturn===true;
   const observedAt=now(),emittedAt=Number(batch.emittedAt);
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
