@@ -1384,11 +1384,14 @@ bool zc24_chart_ok = timeframe.period == "2" and tradeMode == "Scalping" and tpM
 // Native SOLID first; hold its direction and wait for all current SOP.
 // Previous version: TF2_SOLID_80PCT_SCALP_CAP_V3.
 string zc_seq_key = str.tostring(zc_pulse_setup) + "|" + (zc_pulse_buy ? "BUY" : "SELL")
-bool zc80_new_solid = zc_seq_pulse and not array.includes(zc80_seen, zc_seq_key)
-if zc80_new_solid
+bool zc_hold_new_source = zc_seq_pulse and not array.includes(zc80_seen, zc_seq_key)
+bool zc80_new_solid = zc_hold_new_source and not zc_hold_active
+// Do not replace a held direction with another label before CLOSE ALL.
+if zc_hold_new_source
     array.push(zc80_seen, zc_seq_key)
     if array.size(zc80_seen) > 500
         array.shift(zc80_seen)
+if zc80_new_solid
     if not xc_active
         xc_full_bar := na
     zc_hold_active := true
