@@ -13,12 +13,12 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
   if(!row)return;
   const meta=row[66],key=`TF${tf}_${channel}`,previous=channels.get(key);
   const current=[CURRENT,SEPT].includes(meta?.entryRuleVersion)&&meta?.currentSolidOnly===true;
-  const solid80=meta?.entryRuleVersion==='TF2_SOLID_80PCT_LIVE_V2';
+  const solid80=['TF2_SOLID_80PCT_LIVE_V2','TF2_SOLID_80PCT_SCALP_CAP_V3'].includes(meta?.entryRuleVersion);
   const revised=current||solid80||meta?.entryRuleVersion===RULE&&meta?.pendingEntryReturn===true;
   const observedAt=now(),emittedAt=Number(batch.emittedAt);
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
    transportLagMs:Number.isFinite(emittedAt)?observedAt-emittedAt:null,rowLength:row.length,
-   rule:solid80?'TF2_SOLID_80PCT_LIVE_V2':current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
+   rule:solid80?meta.entryRuleVersion:current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
    hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&[2,5].includes(meta.hemaRequiredTfs[0])?[String(meta.hemaRequiredTfs[0])]:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
    hasLiveHema:row[65]?.version===(tf==='2'?'HEMA23_LIVE_V1':'HEMA1530_V1'),
