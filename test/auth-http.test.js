@@ -24,6 +24,7 @@ function startServer() {
         ZENCORE_INSECURE_COOKIE: 'true',
         ZENCORE_AUTOTRADE_ENABLED: 'true',
         ZENCORE_AUTOTRADE_EXECUTION_ENABLED: 'true',
+        ZENCORE_LOCAL_EA_DEMO_EXECUTION_ENABLED: 'true',
         ZENCORE_AUTOTRADE_MEMORY: 'true',
         ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION: '1.4.0-demo-execution',
         ZENCORE_HOSTED_MT5_ENABLED: 'false',
@@ -81,7 +82,10 @@ function stopServer(child) {
 test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', { timeout: 30000 }, async () => {
   const { child, output } = await startServer();
   try {
-    let response = await fetch(`${BASE}/`, { redirect: 'manual' });
+    let response = await fetch(`${BASE}/ready`);
+    assert.equal(response.status,200);
+    assert.deepEqual((await response.json()).demoEntry,{allUsers:true,scoped:false,mode:'DEMO',accountRestricted:false});
+    response = await fetch(`${BASE}/`, { redirect: 'manual' });
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
 

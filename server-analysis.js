@@ -236,12 +236,21 @@ if (AUTH_ENABLED) {
         if (user && user.role !== 'viewer' && user.status === 'active') localEaExecutionUserIds.push(user.id);
       }
       console.log(`ZenCore local EA scoped account gate: ${localEaExecutionUserIds.length} account(s)`);
+      const localEaDemoExecutionUserIds=[];
+      for(const email of String(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean)){
+        const user=await store.findUserForLogin(email);
+        if(user&&user.role!=='viewer'&&user.status==='active')localEaDemoExecutionUserIds.push(user.id);
+      }
+      console.log(`ZenCore local EA demo-only scoped gate: ${localEaDemoExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
+        allowLocalEaDemoExecution:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_ENABLED||''),
         localEaExecutionUserIds,
+        localEaDemoExecutionUserIds,
+        localEaDemoAccountMask:process.env.ZENCORE_LOCAL_EA_DEMO_ACCOUNT_MASK||'',
         getLatestMarket:(symbol,tf)=>autoTradeState.realtimeDispatcher?.getLatestMarket(symbol,tf),
         onDispatchDiagnostic: report => console.log('ZenCore pair dispatch:', JSON.stringify(report)),
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
@@ -1490,7 +1499,7 @@ const server = http.createServer(async (req, res) => {
   }
   if(req.method==='GET'&&pathname==='/ready'){
     const status=await readiness.snapshot();
-    return sendJson(res,status.ok?200:503,{...status,autoEntry:{enabled:AUTOTRADE_EXECUTION_ENABLED||LOCAL_EA_EXECUTION_ENABLED||!!String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS||'').trim(),signalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')}});
+    return sendJson(res,status.ok?200:503,{...status,autoEntry:{enabled:AUTOTRADE_EXECUTION_ENABLED||LOCAL_EA_EXECUTION_ENABLED||!!String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS||'').trim(),signalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')},demoEntry:{allUsers:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_ENABLED||''),scoped:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS||'').trim(),mode:'DEMO',accountRestricted:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_ACCOUNT_MASK||'')}});
   }
 
   if (SITE_MODE === 'closed') {
@@ -1582,6 +1591,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Realtime_Feed.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp_Caps.pine') return sendAuthAsset(res, 'ZenCore_Original_Full_TF2_Scalp_Caps.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_SOLID80.pine') return sendAuthAsset(res, 'ZenCore_TF2_SOLID_80PCT_Draft.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCoreExecutor.mq5') return sendAuthAsset(res, 'ea-local-connector/ZenCoreExecutor.mq5', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-execution-contract.js') return sendAuthAsset(res, 'analysis-execution-contract.js', 'application/javascript; charset=utf-8');
