@@ -68,6 +68,12 @@ function detailedClient(row) {
   };
 }
 
+function registrationView(row) {
+  return {...publicClient(row), decision: row.registration_decision || 'pending',
+    reviewedAt: row.registration_reviewed_at || null, reviewedBy: row.registration_reviewed_by || null,
+    reason: row.registration_reason || ''};
+}
+
 class PostgresAuthStore {
   constructor(databaseUrl) {
     const local = /(?:localhost|127\.0\.0\.1)/i.test(databaseUrl);
@@ -120,6 +126,13 @@ class PostgresAuthStore {
         ADD COLUMN IF NOT EXISTS phone VARCHAR(24),
         ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'client',
         ADD COLUMN IF NOT EXISTS ib_referrer_id UUID;
+
+      ALTER TABLE zencore_users
+        ADD COLUMN IF NOT EXISTS registration_reviewed_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS registration_reviewed_by UUID REFERENCES zencore_users(id),
+        ADD COLUMN IF NOT EXISTS registration_decision VARCHAR(16),
+        ADD COLUMN IF NOT EXISTS registration_reason VARCHAR(500);
+      CREATE INDEX IF NOT EXISTS zencore_registration_queue_idx ON zencore_users(status, created_at DESC) WHERE role = 'client';
 
       ALTER TABLE zencore_users
         ALTER COLUMN ic_number TYPE VARCHAR(64);
@@ -255,7 +268,7 @@ class PostgresAuthStore {
       `UPDATE zencore_users
        SET role = 'admin'
        WHERE LOWER(email) = ANY($1::text[])
-         AND role <> 'admin'
+         AND role <> 'admin' AND status = 'active'
        RETURNING id`,
       [normalized]
     );
@@ -356,15 +369,15 @@ class PostgresAuthStore {
 
   async createUser({
     displayName, email, passwordHash, icNumber = null, phone = null,
-    ibReferrerId = null, role = 'client'
+    ibReferrerId = null, role = 'client', status = 'active'
   }) {
     if (!USER_ROLES.includes(role)) throw new Error('Invalid user role');
     try {
       const result = await this.pool.query(
         `WITH inserted AS (
            INSERT INTO zencore_users
-             (id, display_name, email, password_hash, ic_number, phone, ib_referrer_id, role)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             (id, display_name, email, password_hash, ic_number, phone, ib_referrer_id, role, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING *
          )
          SELECT inserted.*,
@@ -374,7 +387,7 @@ class PostgresAuthStore {
          LEFT JOIN zencore_ib_referrers ref ON ref.id = inserted.ib_referrer_id`,
         [
           crypto.randomUUID(), displayName, email, passwordHash,
-          icNumber || null, phone || null, ibReferrerId || null, role
+          icNumber || null, phone || null, ibReferrerId || null, role, status
         ]
       );
       return publicUser(result.rows[0]);
@@ -569,11 +582,32 @@ class PostgresAuthStore {
   }
 
 
+  async listRegistrations({status = 'pending', offset = 0, limit = 50} = {}) {
+    const result = await this.pool.query(`SELECT u.*, ref.code AS ib_code, ref.display_name AS ib_name FROM zencore_users u
+      LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+      WHERE u.role = 'client' AND (u.status IN ('pending','rejected') OR u.registration_decision IS NOT NULL)
+      AND ($1 = 'all' OR ($1 = 'pending' AND u.status = 'pending') OR u.registration_decision = $1)
+      ORDER BY u.created_at DESC, u.id LIMIT $2 OFFSET $3`, [status, limit, offset]);
+    // Count independently so an empty last page still reports the correct total.
+    const count = await this.pool.query(`SELECT COUNT(*)::int AS total FROM zencore_users
+      WHERE role = 'client' AND (status IN ('pending','rejected') OR registration_decision IS NOT NULL)
+      AND ($1 = 'all' OR ($1 = 'pending' AND status = 'pending') OR registration_decision = $1)`, [status]);
+    return { registrations: result.rows.map(registrationView), total: count.rows[0].total, offset, limit };
+  }
+
+  async reviewRegistration(clientId, adminId, decision, reason) {
+    const result = await this.pool.query(`UPDATE zencore_users SET status = $3,
+      registration_decision = $4, registration_reviewed_at = NOW(), registration_reviewed_by = $2,
+      registration_reason = $5 WHERE id = $1 AND role = 'client' AND status = 'pending'
+      RETURNING *`, [clientId, adminId, decision === 'approve' ? 'active' : 'rejected', decision === 'approve' ? 'approved' : 'rejected', reason]);
+    return result.rows[0] ? registrationView(result.rows[0]) : null;
+  }
+
   async setClientActiveForAdmin(clientId, active) {
     const result = await this.pool.query(
       `UPDATE zencore_users
        SET status = $2
-       WHERE id = $1 AND role = 'client'
+       WHERE id = $1 AND role = 'client' AND status IN ('active','disabled')
        RETURNING id, display_name, email, phone, ic_number, status, created_at, last_login_at, ib_referrer_id`,
       [clientId, active === true ? 'active' : 'disabled']
     );
@@ -713,7 +747,7 @@ class PostgresAuthStore {
        SET status = $3
        FROM zencore_ib_referrers ref
        WHERE u.id = $2
-         AND u.role = 'client'
+         AND u.role = 'client' AND u.status IN ('active','disabled')
          AND u.ib_referrer_id = ref.id
          AND ref.user_id = $1
        RETURNING u.id`,
@@ -969,7 +1003,7 @@ class MemoryAuthStore {
     const normalized = new Set(emails.map(value => String(value || '').trim().toLowerCase()).filter(Boolean));
     let changed = 0;
     for (const row of this.usersById.values()) {
-      if (normalized.has(String(row.email || '').toLowerCase()) && row.role !== 'admin') {
+      if (normalized.has(String(row.email || '').toLowerCase()) && row.role !== 'admin' && row.status === 'active') {
         row.role = 'admin';
         changed += 1;
       }
@@ -1058,7 +1092,7 @@ class MemoryAuthStore {
 
   async createUser({
     displayName, email, passwordHash, icNumber = null, phone = null,
-    ibReferrerId = null, role = 'client'
+    ibReferrerId = null, role = 'client', status = 'active'
   }) {
     if (this.usersByEmail.has(email)) {
       const error = new Error('Email already registered');
@@ -1084,7 +1118,7 @@ class MemoryAuthStore {
       ib_referrer_id: ibReferrerId || null,
       ib_code: referrer?.code || null,
       ib_name: referrer?.display_name || null,
-      status: 'active',
+      status,
       created_at: now,
       last_login_at: null
     };
@@ -1196,9 +1230,26 @@ class MemoryAuthStore {
   }
 
 
+  async listRegistrations({status = 'pending', offset = 0, limit = 50} = {}) {
+    const rows = [...this.usersById.values()].filter(r => r.role === 'client' &&
+      (['pending','rejected'].includes(r.status) || r.registration_decision) &&
+      (status === 'all' || (status === 'pending' ? r.status === 'pending' : r.registration_decision === status)))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)||a.id.localeCompare(b.id));
+    return {registrations: rows.slice(offset, offset+limit).map(registrationView), total: rows.length, offset, limit};
+  }
+
+  async reviewRegistration(clientId, adminId, decision, reason) {
+    const row = this.usersById.get(clientId);
+    if (!row || row.role !== 'client' || row.status !== 'pending') return null;
+    row.status = decision === 'approve' ? 'active' : 'rejected';
+    row.registration_decision = decision === 'approve' ? 'approved' : 'rejected';
+    row.registration_reviewed_at = new Date(); row.registration_reviewed_by = adminId; row.registration_reason = reason;
+    return registrationView(row);
+  }
+
   async setClientActiveForAdmin(clientId, active) {
     const row = this.usersById.get(clientId);
-    if (!row || row.role !== 'client') return null;
+    if (!row || row.role !== 'client' || !['active','disabled'].includes(row.status)) return null;
     row.status = active === true ? 'active' : 'disabled';
     return publicClient(row);
   }
@@ -1250,7 +1301,7 @@ class MemoryAuthStore {
   async setClientActiveForIb(ibUserId, clientId, active) {
     const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
     const row = this.usersById.get(clientId);
-    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
+    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id || !['active','disabled'].includes(row.status)) return null;
     row.status = active === true ? 'active' : 'disabled';
     return publicClient(row);
   }

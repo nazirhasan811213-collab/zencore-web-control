@@ -33,11 +33,13 @@
   }
 
   function statusPill(status) {
+    if (status === 'pending' || status === 'rejected') return `<span class="status-pill disabled">${status === 'pending' ? 'MENUNGGU ADMIN' : 'DITOLAK'}</span>`;
     const active = status === 'active';
     return `<span class="status-pill ${active ? 'active' : 'disabled'}">${active ? 'ACTIVE' : 'DISABLED'}</span>`;
   }
 
   function clientAction(client, scope) {
+    if (['pending','rejected'].includes(client.status)) return scope === 'admin' ? '<a class="table-action" href="/admin/registrations">SEMAK PENDAFTARAN</a>' : '<span>Kelulusan Admin</span>';
     const active = client.status === 'active';
     return `<button class="table-action ${active ? 'danger' : 'good'}" type="button"
       data-client-status="${esc(client.id)}" data-active="${active ? 'false' : 'true'}" data-scope="${scope}">

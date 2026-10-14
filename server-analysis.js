@@ -589,6 +589,18 @@ async function handleManagementApi(req, res, pathname, session) {
         res.setHeader('Cache-Control', 'no-store');
         return sendJson(res, 200, await adminMonitoring.snapshot(session.user));
       }
+      if (req.method === 'GET' && pathname === '/api/admin/registrations') {
+        const url = new URL(req.url, 'http://localhost');
+        return sendJson(res, 200, {ok:true, ...await authState.service.adminRegistrations(session.user, {
+          status:url.searchParams.get('status')||'pending', offset:url.searchParams.get('offset')
+        })});
+      }
+      const registrationReview = pathname.match(/^\/api\/admin\/registrations\/([0-9a-f-]{36})\/review$/i);
+      if (req.method === 'POST' && registrationReview) {
+        if (!requestOriginAllowed(req)) return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});
+        const body = await parseApiJson(req,res); if (body === null) return;
+        return sendJson(res,200,{ok:true,client:await authState.service.reviewRegistration(session.user,registrationReview[1],body)});
+      }
       if (req.method === 'GET' && pathname === '/api/admin/overview') {
         return sendJson(res, 200, { ok: true, ...(await authState.service.adminOverview(session.user)) });
       }
@@ -999,8 +1011,9 @@ async function handleAuthApi(req, res, pathname) {
     authAttempts.delete(key);
     return sendJson(res, pathname === '/auth/register' ? 201 : 200, {
       ok: true,
-      user: result.user
-    }, { 'Set-Cookie': authState.service.createCookie(result.token) });
+      user: result.user,
+      pendingApproval: result.pendingApproval === true
+    }, result.token ? { 'Set-Cookie': authState.service.createCookie(result.token) } : {});
   } catch (error) {
     if (error?.status) {
       return sendJson(res, error.status, {
@@ -1495,7 +1508,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {
@@ -1669,6 +1682,11 @@ const server = http.createServer(async (req, res) => {
     const session = await requireRole(req, res, 'admin', '/login');
     if (!session) return;
     return sendAuthAsset(res, 'admin-monitoring.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/registrations') {
+    const session = await requireRole(req,res,'admin','/login'); if (!session) return;
+    return sendAuthAsset(res,'admin-registrations.html','text/html; charset=utf-8');
   }
 
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/mt5') {

@@ -85,7 +85,8 @@ function createAuthService(options = {}) {
         passwordHash,
         phone: validation.value.phone,
         ibReferrerId: referrer.id,
-        role: ROLE_CLIENT
+        role: ROLE_CLIENT,
+        status: 'pending'
       });
     } catch (error) {
       if (error?.code === 'EMAIL_EXISTS') {
@@ -96,8 +97,7 @@ function createAuthService(options = {}) {
       throw error;
     }
 
-    const session = await issueSession(user.id);
-    return { user: safeUser(user), referrer, ...session };
+    return { user: safeUser(user), referrer, pendingApproval: true };
   }
 
   async function resolveReferrer(code) {
@@ -167,6 +167,24 @@ function createAuthService(options = {}) {
   async function adminClients(user, options = {}) {
     assertRole(user, ROLE_ADMIN);
     return store.listClientsForAdmin(options);
+  }
+
+  async function adminRegistrations(user, options = {}) {
+    assertRole(user, ROLE_ADMIN);
+    const status = options.status || 'pending';
+    if (!['pending','approved','rejected','all'].includes(status)) throw authError('INVALID_STATUS', 'Status tidak sah.', 400);
+    return store.listRegistrations({ status, offset: Math.min(1000000, Math.max(0, Math.floor(Number(options.offset)||0))), limit: 50 });
+  }
+
+  async function reviewRegistration(user, clientId, input = {}) {
+    assertRole(user, ROLE_ADMIN);
+    if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
+    if (!['approve','reject'].includes(input.decision)) throw authError('INVALID_DECISION', 'Pilih luluskan atau tolak.', 400);
+    const reason = String(input.reason || '').trim();
+    if (reason.length > 500) throw authError('INVALID_REASON', 'Catatan maksimum 500 aksara.', 400);
+    const client = await store.reviewRegistration(clientId, user.id, input.decision, reason);
+    if (!client) throw authError('REGISTRATION_ALREADY_REVIEWED', 'Pendaftaran tidak dijumpai atau sudah diputuskan. Refresh senarai.', 409);
+    return client;
   }
 
   async function createIb(user, input = {}) {
@@ -243,6 +261,7 @@ function createAuthService(options = {}) {
     const code = String(input.code || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
     const client = await store.getClientForAdmin(String(clientId));
     if (!client) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
+    if (['pending','rejected'].includes(client.status)) throw authError('REGISTRATION_REVIEW_REQUIRED', 'Luluskan pendaftaran sebelum jadikan IB.', 409);
     const displayName = String(input.displayName || client.displayName || '').trim().replace(/\s+/g, ' ');
     const fields = {};
     if (!/^[a-z0-9][a-z0-9_-]{1,47}$/.test(code)) {
@@ -509,6 +528,8 @@ function createAuthService(options = {}) {
     const valid = userRow
       ? await verifyPassword(password, userRow.password_hash)
       : (await hashPassword(password), false);
+    if (valid && userRow.status === 'pending') throw authError('REGISTRATION_PENDING', 'Pendaftaran masih menunggu kelulusan Admin.', 403);
+    if (valid && userRow.status === 'rejected') throw authError('REGISTRATION_REJECTED', 'Pendaftaran belum diluluskan. Hubungi Admin atau IB.', 403);
     if (!valid || userRow.status !== 'active') {
       throw authError('INVALID_CREDENTIALS', 'E-mel atau password tidak betul.', 401);
     }
@@ -555,6 +576,8 @@ function createAuthService(options = {}) {
     updatePromotionPhone,
     adminOverview,
     adminClients,
+    adminRegistrations,
+    reviewRegistration,
     adminIbDetail,
     adminClientDetail,
     createIb,

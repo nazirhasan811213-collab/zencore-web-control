@@ -1,13 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { MemoryAuthStore } = require('../auth-store');
-const { createAuthService } = require('../auth-service');
+const { createAuthService } = require('./helpers/approved-auth.cjs');
 
 function requestWithCookie(cookie) {
   return { headers: { cookie } };
 }
 
-test('register creates a user and authenticated session without storing raw password', async () => {
+test('approved registration fixture creates authenticated session without storing raw password', async () => {
   const store = new MemoryAuthStore();
   await store.init();
   const auth = createAuthService({ store, secureCookies: false });

@@ -4,7 +4,7 @@ const { listConnectionMonitor } = require('../connection-monitor');
 const { MemoryAutoTradeStore } = require('../auto-trade-store');
 const { createAutoTradeService } = require('../auto-trade-service');
 const { MemoryAuthStore } = require('../auth-store');
-const { createAuthService } = require('../auth-service');
+const { createAuthService } = require('./helpers/approved-auth.cjs');
 test('IB monitoring never queries another IB client and clients are forbidden', async () => {
   const store = new MemoryAuthStore(); const auth = createAuthService({ store, secureCookies: false });
   const admin = (await auth.register({displayName:'Admin',email:'admin@demo.test',icNumber:'900101011111',phone:'0123456781',ibCode:'nazir',password:'TestPass2026!'})).user;
