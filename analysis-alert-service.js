@@ -133,6 +133,7 @@ class AnalysisAlerts {
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
         riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
+        solidHoldActive:m.strategyNormal.sop?.solidHoldActive,solidClosedAt:m.strategyNormal.sop?.solidClosedAt,riskAtrReference:m.strategyNormal.sop?.riskAtrReference,signalObservedAt:m.signalObservedAt,
         sourceEntry:m.strategyNormal.sop?.sourceEntry,price:m.strategyNormal.sop?.price,triggerAt:m.strategyNormal.sop?.triggerAt,qualifiedAt:m.strategyNormal.sop?.qualifiedAt,
         entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
         m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},

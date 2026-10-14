@@ -5,10 +5,10 @@ const PAUSED=()=>/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAU
 function qualifies(m,side,at=Date.now()){
  const n=m?.strategyNormal,s=n?.sop,h=s?.hema2,a=s?.atrReference;
  const seen=m?.signalObservedAt,received=m?.receivedAt,sign=side==='BUY'?1:side==='SELL'?-1:0;
- return !PAUSED()&&m?.symbol==='XAUUSD'&&String(m.timeframe)==='2'&&n?.entrySopVersion===E.VERSION&&n.side===side&&
+ return !PAUSED()&&m?.symbol==='XAUUSD'&&String(m.timeframe)==='2'&&[E.VERSION,'NORMAL_20261001_TF2_SOLID_HOLD_V15'].includes(n?.entrySopVersion)&&n.side===side&&
   sign!==0&&Number.isFinite(seen)&&Number.isFinite(received)&&at-seen>=-5000&&at-seen<=30000&&at-received>=-5000&&at-received<=30000&&
   Number.isFinite(a)&&a>0&&Number.isFinite(m.price)&&m.price>0&&s.price===m.price&&
-  B.confirmations(side,s).pass&&sign*(h.fast-h.slow)>=.10*a&&sign*(h.waveTrend1-h.waveTrend2)>0;
+  (n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15'?s.solidHoldActive===true&&s.solidClosedAt==null&&B.confirmations(side,s).passed===6:B.confirmations(side,s).pass)&&sign*(h.fast-h.slow)>=.10*a&&sign*(h.waveTrend1-h.waveTrend2)>0;
 }
 // State is deliberately session-local: a restart, offline heartbeat or relink
 // cannot reconstruct a close and accidentally replay an old trade.
@@ -22,7 +22,7 @@ class Tracker{
   if(x&&(x.key!==key||at-x.lastHeartbeat>15000)){this.clear(user);x=null;}
   if(own.length){
    const p=latest?.payload;
-   if(latest?.status!=='EXECUTED'||p?.analysisSnapshot?.analysisSopVersion!==E.VERSION||
+   if(latest?.status!=='EXECUTED'||![E.VERSION,'NORMAL_20261001_TF2_SOLID_HOLD_V15'].includes(p?.analysisSnapshot?.analysisSopVersion)||
       !own.every(z=>z.side===p.side&&z.setupId===latest.id.slice(0,20))){this.clear(user);return;}
    this.states.set(user,{key,parent:latest.id,side:p.side,lastHeartbeat:at,seenOpen:true,emptyCount:0,closedAt:null});return;
   }
@@ -45,7 +45,7 @@ function marketForReentry(m,closure){
  const n=m.strategyNormal,t=m.signalObservedAt,p=R.levels(closure.side,m.price,n.sop.atrReference);
  return {...m,setupKey:closure.id,entryEvent:true,feedChannel:'EXECUTION',entryAuthorizedAt:t,
   strategyNormal:{...n,state:'READY',solid:true,entryType:'POST_CLOSE_REENTRY',plan:{...p,riskPlanVersion:R.VERSION},
-    sop:{...n.sop,solid:true,triggerAt:t,qualifiedAt:t}}};
+    sop:{...n.sop,solid:true,triggerAt:t,qualifiedAt:t,riskAtrReference:n.sop.atrReference,signalObservedAt:t}}};
 }
 function halfSettings(profile){
  const raw=profile.modeSettings?.TF2_SCALPING?.gold;

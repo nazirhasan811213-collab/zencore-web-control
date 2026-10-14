@@ -7,7 +7,7 @@
 
   const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'];
   const septTf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_SEP24_HEMA5_V8';
-  const solid80Tf2=n=>['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14'].includes(n?.entrySopVersion);
+  const solid80Tf2=n=>['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15'].includes(n?.entrySopVersion);
   const currentTf2=n=>solid80Tf2(n)||septTf2(n)||n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
   const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
@@ -93,7 +93,7 @@
   function entryConfirmationsPass(market = {}) {
     const n = market.strategyNormal || {}, s = n.sop || {};
     if (n.state !== 'READY') return false;
-    if(solid80Tf2(n))return solid80Tf2Confirmations(n.side,s)&&String(market.timeframe)==='2'&&n.tf==='2m';
+    if(solid80Tf2(n))return solid80Tf2Confirmations(n.side,s,n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15')&&String(market.timeframe)==='2'&&n.tf==='2m';
     if (!String(n.entrySopVersion || '').startsWith('NORMAL_20261001_')) return true;
     if(currentTf2(n))return currentSolidTf2Confirmations({side:n.side,solid:n.solid,green:s.sopGreen,forecast:s.forecast,power:s.marketPower,minimumGreen:septTf2(n)?4:3,price:septTf2(n)?s.hema2?.price:market.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&String(market.timeframe)==='2'&&n.tf==='2m';
     const tf = String(market.timeframe), higher = tf === '15' ? '30' : '3';
@@ -128,12 +128,12 @@
       Array.isArray(x.gates)&&x.gates.length===5&&keys.every(k=>x.gates.filter(g=>g.key===k&&g.pass===true).length===1);
   }
 
-  function solid80Tf2Confirmations(side,s={}){
+  function solid80Tf2Confirmations(side,s={},held=false){
     const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||{},a=number(s.atrReference),f=number(h.fast),sl=number(h.slow),f2=number(h.fastPreviousBar),s2=number(h.slowPreviousBar),w1=number(h.waveTrend1),w2=number(h.waveTrend2),p=number(s.marketPower),m=number(s.mtfScore),e=number(s.sourceEntry),q=number(s.price),g=number(s.sopGreen),t=number(s.triggerAt);
-    if(!sign||s.solid!==true||t===null||s.qualifiedAt!==t||Date.now()-t>30000||Date.now()-t< -5000||a===null||a<=0||[f,sl,f2,s2,w1,w2,p,m,e,q,g].some(v=>v===null)||!Number.isInteger(m)||!Number.isInteger(g)||g<0||g>5||p<0||p>100)return false;
+    if(!sign||s.solid!==true||t===null||!(held?s.solidHoldActive===true&&s.solidClosedAt==null&&number(s.qualifiedAt)>=t&&number(s.qualifiedAt)>0&&number(s.signalObservedAt)>=s.qualifiedAt&&Date.now()-s.signalObservedAt<=30000&&Date.now()-s.signalObservedAt>=-5000:s.qualifiedAt===t&&Date.now()-t<=30000&&Date.now()-t>=-5000)||a===null||a<=0||[f,sl,f2,s2,w1,w2,p,m,e,q,g].some(v=>v===null)||!Number.isInteger(m)||!Number.isInteger(g)||g<0||g>5||p<0||p>100)return false;
     const h40=sign*(sl-s2)>=.05*a;
     const values={entry:sign*(q-e)>0,wt:sign*(w1-w2)>0,slope:h40&&sign*(f-f2)>=.05*a,sop:g>=3,forecast:sign===1?(s.forecast==='NEUTRAL'||s.forecast==='BULLISH')&&p>45:(s.forecast==='NEUTRAL'&&p<45||s.forecast==='BEARISH'&&p>45),mtf:sign*m>=1&&sign*m<=5};
-    return h40&&Object.values(values).filter(Boolean).length>=5&&Array.isArray(s.gates)&&s.gates.length===6&&Object.entries(values).every(([k,v])=>s.gates.filter(g=>g.key===k&&g.pass===v).length===1);
+    return h40&&Object.values(values).filter(Boolean).length>=(held?6:5)&&Array.isArray(s.gates)&&s.gates.length===6&&Object.entries(values).every(([k,v])=>s.gates.filter(g=>g.key===k&&g.pass===v).length===1);
   }
 
   function tf2ScalpPlanPass(side,p={},atr){
@@ -147,8 +147,14 @@
   function createEntryDecision(market = {}) {
     if(typeof process!=='undefined'&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return null;
     const normal = market.strategyNormal || {};
-    if(normal.entrySopVersion==='NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14'&&
-      (normal.sop?.riskPlanVersion!=='TF2_SCALP_ATR_CAP_V1'||!tf2ScalpPlanPass(normal.side,normal.plan,normal.sop?.atrReference)))return null;
+    if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15'].includes(normal.entrySopVersion)&&
+      (normal.sop?.riskPlanVersion!=='TF2_SCALP_ATR_CAP_V1'||!tf2ScalpPlanPass(normal.side,normal.plan,normal.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15'?normal.sop?.riskAtrReference:normal.sop?.atrReference)))return null;
+    if(normal.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15'){
+      const observed=number(market.signalObservedAt),received=sourceTime(market),authorized=number(market.entryAuthorizedAt),complete=number(normal.sop?.qualifiedAt);
+      if(market.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||market.feedChannel!=='EXECUTION'||market.entryEvent!==true||
+        !observed||!received||!authorized||!complete||authorized!==observed||complete>authorized||authorized-complete>30000||
+        [observed,received].some(t=>Date.now()-t>30000||Date.now()-t< -5000))return null;
+    }
     const plan = normal.plan || {};
     const restoredTf2=currentTf2(normal)||revisedTf2(normal)||['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restoredTf15=['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
@@ -222,6 +228,7 @@
       sourceReceivedAt: receivedAt,
       ...(restored ? {confirmationEvidence: {
         feedChannel: market.feedChannel || null,
+        ...(normal.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15'?{solidHoldActive:normal.sop.solidHoldActive,triggerAt:normal.sop.triggerAt,qualifiedAt:normal.sop.qualifiedAt}:{}),
         signalObservedAt: number(market.signalObservedAt),
         sopGreen: normal.sop.sopGreen,
         forecast: normal.sop.forecast,
