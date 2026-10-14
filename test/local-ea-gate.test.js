@@ -54,3 +54,25 @@ test('supported REAL transport reports rollout lock correctly, not a misleading 
  }
  pod.connectorVersion='1.2.0-ea-local';assert.equal((await enabled.state('client')).connection.state,'BLOCKED_REAL');
 });
+
+
+test('demo-only rollout is limited to nominated user and masked DEMO account, never REAL or another client',async()=>{
+ const store=new MemoryAutoTradeStore(),now=Date.now();
+ const service=createAutoTradeService({store,now:()=>now,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',localEaDemoExecutionUserIds:['owner'],localEaDemoAccountMask:'****6110'});
+ const base={id:'pod',userId:'owner',ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:now,tradeMode:'DEMO',accountMask:'****6110',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local'};
+ store.podsByUser.set('owner',base);
+ assert.equal((await service.state('owner')).control.executionRolloutUnlocked,true);
+ for(const [field,value] of [['tradeMode','REAL'],['tradeMode',null],['accountMask','****7777'],['ownershipMode','INTERNAL_DEMO']]){
+  const original=base[field];base[field]=value;assert.equal((await service.state('owner')).control.executionRolloutUnlocked,false);await assert.rejects(service.turnOn('owner',{confirmation:'AKTIFKAN DEMO'}),{code:'EXECUTION_ROLLOUT_LOCKED'});base[field]=original;
+ }
+ store.podsByUser.set('other',{...base,id:'other-pod',userId:'other'});assert.equal((await service.state('other')).control.executionRolloutUnlocked,false);
+ await service.saveSettings('owner',{capitalUsd:100,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],riskAcknowledged:true});
+ const state=await service.turnOn('owner',{confirmation:'AKTIFKAN DEMO'});assert.equal(state.control.desiredState,'ON');assert.equal(state.control.effectiveState,'ARMING');
+});
+
+test('queued DEMO ON is revoked when account leaves its scoped mask before delivery',async()=>{
+ const store=new MemoryAutoTradeStore(),now=Date.now(),service=createAutoTradeService({store,now:()=>now,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',localEaDemoExecutionUserIds:['owner'],localEaDemoAccountMask:'****6110'});
+ const paired=await service.connectLocalEa('owner');const pod=store.podsByUser.get('owner');Object.assign(pod,{lastSeenAt:now,tradeMode:'DEMO',accountMask:'****6110',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local'});
+ await service.saveSettings('owner',{capitalUsd:100,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],riskAcknowledged:true});await service.turnOn('owner',{confirmation:'AKTIFKAN DEMO'});pod.accountMask='****7777';
+ assert.equal((await service.nextCommand(paired.podToken)).command,null);
+});

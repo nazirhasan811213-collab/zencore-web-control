@@ -77,7 +77,7 @@ test('delivery rejects queued entry when same-TF direction changes, preserving o
  const current=new Map(rows.map(m=>[m.timeframe,m]));current.set('2',{...rows[0],strategyNormal:{state:'WATCH',side:'SELL'}});
  const token='zcpod_'+'t'.repeat(48),hash=require('../auto-trade-service').tokenHash(token);
  store.podsByToken.set(hash,{...store.podsByUser.get('owner'),tokenHash:hash});
- const guarded=createAutoTradeService({store,now:()=>at,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(symbol,tf)=>current.get(tf)});
+ const guarded=createAutoTradeService({store,now:()=>at,localEaExecutionUserIds:['owner'],commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(symbol,tf)=>current.get(tf)});
  assert.equal((await guarded.nextCommand(token)).command,null);
  assert.equal(store.commands.get('pod')[0].result.code,'ENTRY_CONFIRMATION_CHANGED');
  assert.equal((await guarded.nextCommand(token)).command.payload.side,'SELL');
@@ -108,7 +108,7 @@ test('delivery revokes SELL when forecast or HEMA changes even if state, plan an
   const current={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,...edit}}};
   const token='zcpod_'+'t'.repeat(48),hash=require('../auto-trade-service').tokenHash(token);
   store.podsByToken.set(hash,{...store.podsByUser.get('owner'),tokenHash:hash});
-  const guarded=createAutoTradeService({store,now:()=>at,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:()=>current});
+  const guarded=createAutoTradeService({store,now:()=>at,localEaExecutionUserIds:['owner'],commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:()=>current});
   assert.equal((await guarded.nextCommand(token)).command,null);
   assert.equal(store.commands.get('pod')[0].result.code,'ENTRY_CONFIRMATION_CHANGED');
   assert.ok(Contract.createManagementDecision({...current,positionManagement:{action:'EXIT_ALL'}}));

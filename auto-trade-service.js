@@ -97,8 +97,12 @@ function createAutoTradeService(options = {}) {
   const allowDemoExecution = options.allowDemoExecution === true;
   const allowLocalEaExecution = options.allowLocalEaExecution === true;
   const localEaExecutionUserIds = new Set(Array.isArray(options.localEaExecutionUserIds) ? options.localEaExecutionUserIds : []);
+  const localEaDemoExecutionUserIds = new Set(Array.isArray(options.localEaDemoExecutionUserIds) ? options.localEaDemoExecutionUserIds : []);
+  const localEaDemoAccountMask = String(options.localEaDemoAccountMask || '');
   function executionAllowed(userId, pod) {
-    return allowDemoExecution || ((allowLocalEaExecution || localEaExecutionUserIds.has(userId)) && isLocalEa(pod));
+    return allowDemoExecution || ((allowLocalEaExecution || localEaExecutionUserIds.has(userId)) && isLocalEa(pod)) ||
+      (localEaDemoExecutionUserIds.has(userId) && isLocalEa(pod) && pod.tradeMode === 'DEMO' &&
+        (!localEaDemoAccountMask || pod.accountMask === localEaDemoAccountMask));
   }
   const hostedMt5Enabled = options.hostedMt5Enabled === true;
   const hostedWorkerEnabled = hostedMt5Enabled && options.hostedWorkerEnabled === true;
@@ -1118,6 +1122,7 @@ function createAutoTradeService(options = {}) {
 
   async function queuedEntryIsCurrent(command){
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
+    if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
       const anchor=latest?.payload?.analysisSnapshot?.entryAnchor;
@@ -1306,7 +1311,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
-    const profiles = (allowDemoExecution || allowLocalEaExecution || localEaExecutionUserIds.size) ? await store.listOnProfiles() : [];
+    const profiles = (allowDemoExecution || allowLocalEaExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
