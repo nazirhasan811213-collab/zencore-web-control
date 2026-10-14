@@ -76,3 +76,14 @@ test('queued DEMO ON is revoked when account leaves its scoped mask before deliv
  await service.saveSettings('owner',{capitalUsd:100,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],riskAcknowledged:true});await service.turnOn('owner',{confirmation:'AKTIFKAN DEMO'});pod.accountMask='****7777';
  assert.equal((await service.nextCommand(paired.podToken)).command,null);
 });
+
+
+test('all-user DEMO rollout supports any demo account but blocks REAL and hosted transports without auto-arming',async()=>{
+ const store=new MemoryAutoTradeStore(),now=Date.now(),service=createAutoTradeService({store,now:()=>now,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',allowLocalEaDemoExecution:true});
+ for(const [id,mode,host] of [['demo1','DEMO','TRADER_OWNED_EA_LOCAL'],['demo2','DEMO','TRADER_OWNED_EA_LOCAL'],['real','REAL','TRADER_OWNED_EA_LOCAL'],['hosted','DEMO','INTERNAL_DEMO']]){
+  store.podsByUser.set(id,{id:'pod-'+id,userId:id,ownershipMode:host,lastSeenAt:now,tradeMode:mode,accountMask:'****1234',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local'});
+  const state=await service.state(id);assert.equal(state.control.executionRolloutUnlocked,id.startsWith('demo'));assert.equal(state.control.effectiveState,'STOPPED');
+  if(!id.startsWith('demo'))await assert.rejects(service.turnOn(id,{confirmation:'AKTIFKAN '+mode}),{code:'EXECUTION_ROLLOUT_LOCKED'});
+ }
+ const p=store.podsByUser.get('demo1');p.tradeMode='REAL';assert.equal((await service.state('demo1')).control.executionRolloutUnlocked,false);
+});

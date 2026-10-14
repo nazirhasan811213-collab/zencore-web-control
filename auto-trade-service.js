@@ -96,13 +96,14 @@ function createAutoTradeService(options = {}) {
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
   const allowDemoExecution = options.allowDemoExecution === true;
   const allowLocalEaExecution = options.allowLocalEaExecution === true;
+  const allowLocalEaDemoExecution = options.allowLocalEaDemoExecution === true;
   const localEaExecutionUserIds = new Set(Array.isArray(options.localEaExecutionUserIds) ? options.localEaExecutionUserIds : []);
   const localEaDemoExecutionUserIds = new Set(Array.isArray(options.localEaDemoExecutionUserIds) ? options.localEaDemoExecutionUserIds : []);
   const localEaDemoAccountMask = String(options.localEaDemoAccountMask || '');
   function executionAllowed(userId, pod) {
     return allowDemoExecution || ((allowLocalEaExecution || localEaExecutionUserIds.has(userId)) && isLocalEa(pod)) ||
-      (localEaDemoExecutionUserIds.has(userId) && isLocalEa(pod) && pod.tradeMode === 'DEMO' &&
-        (!localEaDemoAccountMask || pod.accountMask === localEaDemoAccountMask));
+      (isLocalEa(pod) && pod.tradeMode === 'DEMO' && (allowLocalEaDemoExecution ||
+        localEaDemoExecutionUserIds.has(userId) && (!localEaDemoAccountMask || pod.accountMask === localEaDemoAccountMask)));
   }
   const hostedMt5Enabled = options.hostedMt5Enabled === true;
   const hostedWorkerEnabled = hostedMt5Enabled && options.hostedWorkerEnabled === true;
@@ -1311,7 +1312,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
-    const profiles = (allowDemoExecution || allowLocalEaExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
+    const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
