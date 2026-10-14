@@ -455,7 +455,7 @@ function createAutoTradeService(options = {}) {
         riskWarningOnly: true,
         stopKeepsExitManagement: true,
         postCloseReentry:{version:Reentry.VERSION,timeframe:'2',layerFraction:.5,rounding:'FLOOR',
-          enabled:reentryCapability.get(userId)?.podId===pod?.id,
+          enabled:!!pod&&reentryCapability.get(userId)?.podId===pod.id&&now()-reentryCapability.get(userId).at<=15000,
           ribbonGapAtrMinimum:.10,momentum:'WT_DIRECTIONAL',minimumSopPassed:'5/6',anchor:Reentry.FILL},
         emergencyRequiresStepUp: true
       },
