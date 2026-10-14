@@ -22,3 +22,16 @@ test('latest native SOLID is retained while the previous execution exit is pendi
  a.match(s,/zc_pending_key != "" \? zc_pending_side : zc_seq_side/);
  a.match(s,/xc_setup := na/);
 });
+
+test('opposite yellow ends only entry SOLID and never mutates execution state',()=>{
+ const s=fs.readFileSync(require.resolve('../ZenCore_Original_Full_TF2_Scalp_Caps.pine'),'utf8');
+ const block=s.slice(s.indexOf('bool zc_solid_colour_enabled'),s.indexOf('// Preserve the old execution identity'));
+ a.match(block,/barstate.isconfirmed and v2_useCol and v2_strat == "Bj Reversal"/);
+ a.match(block,/zc_solid_end_buy = zc_solid_colour_enabled and v2_dr/);
+ a.match(block,/zc_solid_end_sell = zc_solid_colour_enabled and v2_ur/);
+ a.match(block,/zc_hold_active := false/);a.match(block,/zc_pending_key := ""/);
+ a.match(block,/zc80_eligible := false/);
+ a.doesNotMatch(block,/xc_\w+\s*:=/);a.doesNotMatch(block,/alert\(/);
+ a.doesNotMatch(s,/if not xc_active and \(xc_exit == "EMERGENCY"/);
+ a.ok(s.indexOf('bool zc_solid_colour_enabled')<s.indexOf('bool zc_hold_qualify'));
+});
