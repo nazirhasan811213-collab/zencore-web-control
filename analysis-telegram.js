@@ -94,7 +94,7 @@ function analysisContext(s={}){
 function telegramMessage(e){
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
-  if(e.kind!=='ENTRY')return `ZENCORE | ${e.percent===50?'CLOSE SEPARUH (50%)':'CLOSE ALL — TUTUP BAKI'} TF${e.timeframe||'2'}\n${e.symbol}\n\n${e.message}\n\n${footer}`;
+  if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI TF${e.timeframe||'2'}\n\n${e.percent===50?'CLOSE SEPARUH (50%)':'CLOSE ALL — TUTUP BAKI'}\n${e.symbol}\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;

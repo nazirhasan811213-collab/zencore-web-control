@@ -588,6 +588,8 @@ function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(c
 function broadcastPrediction(symbol){const summary=marketSummary(symbol);require('./analysis-alert-bus').emit('market',summary);const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(summary);for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
 function expandCompactMarket(row,batch){
   if(!Array.isArray(row)||row.length<61)return null;
+  const versionedManagement=String(batch.timeframe)==='2'&&batch.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'&&['TF2_SOLID_80PCT_SCALP_CAP_V3','TF2_SOLID_HOLD_SCALP_CAP_V4','TF2_SOLID_HOLD_SCALP_CAP_V5'].includes(row[66]?.entryRuleVersion);
+  const managementBlocked=versionedManagement?require('./tf2-live-management').block(row,batch):batch.confirmed===false;
   const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action,normal3PriceCrossEntry,normal3ReentrySignal,normal3ReentrySide,normal3ReentryHemaPass]=row;
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
@@ -601,8 +603,8 @@ function expandCompactMarket(row,batch){
     normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,
     normal3Forecast,normal3MarketPower,normal3Entry:entry,normal3Close:close,normal3Atr:atr,
     normal5Position,normal5Close,normal5Hema20,normal5Hema40,
-    positionExitStage,positionExitAction:require('./tf2-live-management').block(row,batch)?'IDLE':positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,
-    exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered:require('./tf2-live-management').block(row,batch)?false:slMoveTriggered
+    positionExitStage,positionExitAction:managementBlocked?'IDLE':positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,
+    exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered:managementBlocked?false:slMoveTriggered
   };
 }
 function storeSnapshot(parsed){
