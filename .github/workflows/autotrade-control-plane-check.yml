@@ -4,6 +4,11 @@ name: Auto Trade control plane checks
   pull_request:
     paths:
       - "analysis-alert*"
+      - "pine-insights.*"
+      - "analysis-dual.*"
+      - "gold-copilot.js"
+      - "home.html"
+      - "scripts/check-pine-insights-ui.cjs"
       - "precision-entry.*"
       - "auto-trade-monitor.css"
       - "viewer-mode.css"
@@ -65,9 +70,14 @@ jobs:
       - name: Check Analysis popup and mobile layout
         run: node scripts/check-analysis-alert-ui.cjs
 
+      - name: Check Pine insights dual timeframe UI
+        run: node scripts/check-pine-insights-ui.cjs
+
       - name: Save Analysis previews
         uses: actions/upload-artifact@v4
         with:
           name: analysis-alert-previews
-          path: alert-ui-*.png
+          path: |
+            alert-ui-*.png
+            pine-ui-*.png
           retention-days: 7
