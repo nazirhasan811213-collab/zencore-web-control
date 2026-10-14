@@ -55,3 +55,25 @@ test('global pause still blocks new held policy',()=>{
  const old=process.env.ZENCORE_ENTRY_SIGNALS_PAUSED;try{process.env.ZENCORE_ENTRY_SIGNALS_PAUSED='true';a.equal(E.strategy(data()).state,'PAUSED');a.equal(decision(data()),null);}
  finally{if(old===undefined)delete process.env.ZENCORE_ENTRY_SIGNALS_PAUSED;else process.env.ZENCORE_ENTRY_SIGNALS_PAUSED=old;}
 });
+
+test('current server route keeps V4 separate from TF15 and legacy latches',()=>{
+ const vm=require('node:vm'),code=fs.readFileSync(require.resolve('../server-v17'),'utf8'),ctx={require:require('node:module').createRequire(require.resolve('../server-v17'))};
+ vm.runInNewContext(code.slice(code.indexOf('function normalScalpStrategy('),code.indexOf('function validationKey(')),ctx);
+ const x=data();a.equal(ctx.normalScalpStrategy('XAUUSD',x).entrySopVersion,E.VERSION);
+ a.equal(require('../entry-setup-state').createEntrySetupTracker().update(x).setupMeta.entryRuleVersion,E.RULE);
+});
+test('alert service retains hold proof and deduplicates ENTRY without sending messages',async()=>{
+ const {AnalysisAlerts}=require('../analysis-alert-service'),service=new AnalysisAlerts();await service.init();
+ const x=data();x.setupKey='TF2|XAUUSD|BUY|held';x.strategyNormal=E.strategy(x);
+ await service.ingest(x);a.equal(service.events.length,1);a.equal(service.events[0].kind,'ENTRY');
+ const event=service.events[0];a.equal(event.telegramSop.solidHoldActive,true);a.equal(event.telegramSop.riskAtrReference,3);a.ok(T.entrySopAllowed(event));
+ a.match(T.telegramMessage(event),/SOLID HOLD/);
+ const later={...x,receivedAt:x.receivedAt+1,entryEvent:false};await service.ingest(later);a.equal(service.events.length,1);
+ const closed={...x,receivedAt:x.receivedAt+2,entryEvent:false,setupMeta:{...x.setupMeta,solidHoldActive:false,solidClosedAt:x.receivedAt+2},positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};
+ closed.strategyNormal=E.strategy(closed);await service.ingest(closed);a.equal(service.events.at(-1).kind,'CLOSE');a.equal(service.events.at(-1).percent,100);
+});
+test('existing post-close half-layer entry remains supported but CLOSE ALL cannot reenter',()=>{
+ const x=data(),market={...x,strategyNormal:E.strategy(x)};a.equal(P.qualifies(market,'BUY'),true);
+ const re=P.marketForReentry(market,{side:'BUY',id:'post-close-test'});a.ok(C.createEntryDecision(re));
+ market.strategyNormal.sop.solidHoldActive=false;a.equal(P.qualifies(market,'BUY'),false);
+});
