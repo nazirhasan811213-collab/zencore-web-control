@@ -42,12 +42,12 @@ test('V3 freshness policy cannot be relaxed by V4 latch fields',()=>{
 });
 test('Pine holds only native chart SOLID; qualification is once, full SOP, CLOSE ALL wins, wire unchanged',()=>{
  const s=fs.readFileSync(require.resolve('../ZenCore_Original_Full_TF2_Scalp_Caps.pine'),'utf8');
- a.ok(s.includes(E.RULE));a.match(s,/varip bool zc_hold_active = false/);
+ a.ok(s.includes(require('../tf2-solid-hold-v5').RULE));a.match(s,/varip bool zc_hold_active = false/);
  a.match(s,/if current_condition == 3\s+zc_close_all_pulse := true/);
  a.match(s,/if zc_close_all_pulse\s+zc_hold_active := false/);
- a.match(s,/zc_hold_active and na\(zc_seq_completed\).*zc80_passed == 6/);
+ a.match(s,/zc_hold_active and na\(zc_seq_completed\).*zc80_passed >= 5/);
  a.match(s,/zc_seq_completed := zc_seq_now/);a.match(s,/zc_seq_risk := atr/);
- a.match(s,/if zc_hold_qualify\s+xc_active := true/);
+ a.match(s,/if zc_hold_qualify\s+xc_half_event_sent := false\s+xc_full_event_sent := false\s+xc_active := true/);
  a.match(s,/zc24_emitted_setup := zc24_setup_at/);
  a.match(s,/zc24_count < 12/);a.equal((s.match(/array.push\(zc24_parts,/g)||[]).length,67);
 });

@@ -1,5 +1,5 @@
 //@version=6
-indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 SOLID HOLD V4', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 SOLID HOLD V5 · Chart Exit', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF2 Web Feed"
@@ -24,6 +24,10 @@ varip bool zc80_trigger_hema40 = false
 varip string[] zc80_seen = array.new_string()
 varip bool zc_hold_active = false
 varip int zc_hold_closed_at = na
+bool zc_partial_pulse = false
+bool zc_partial_buy = false
+varip bool xc_half_event_sent = false
+varip bool xc_full_event_sent = false
 bool zc_close_all_pulse = false
 bool zc_seq_pulse = false
 int zc_seq_now = barstate.isrealtime ? timenow : time_close
@@ -1070,6 +1074,8 @@ if curr_active and curr_triggered
                 curr_active := false 
                 curr_sl_hit := true 
             else if current_condition == 2
+                zc_partial_pulse := true
+                zc_partial_buy := curr_isBuy
                 float y_pos = curr_isBuy ? high + (atr*0.5) : low - (atr*0.5)
                 string l_style = curr_isBuy ? label.style_label_down : label.style_label_up
                 f_addMgmtLabel(bar_index, y_pos, "⚠️ CLOSE SEPARUH", l_style, color.new(color.orange, 10), color.black, size.small)
@@ -1425,7 +1431,7 @@ int zc80_passed = (zc24_price_past ? 1 : 0) + (zc_seq_s1 ? 1 : 0) + (zc_seq_shap
 if zc80_new_solid
     zc80_trigger_passed := zc80_passed
     zc80_trigger_hema40 := zc80_hema40
-bool zc_hold_qualify = zc_hold_active and na(zc_seq_completed) and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed == 6
+bool zc_hold_qualify = zc_hold_active and na(zc_seq_completed) and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed >= 5
 if zc_hold_qualify
     zc80_eligible := true
     zc_seq_completed := zc_seq_now
@@ -1434,9 +1440,11 @@ if zc_hold_qualify
 // 30 seconds is transport freshness; source SOLID has no time expiry.
 // SOP #1 is the native chart SOLID event. Qualification is a separate gate.
 bool zc24_solid = zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
-bool zc24_ready = zc24_solid and zc80_eligible and zc80_data and zc80_hema40 and zc80_passed == 6
+bool zc24_ready = zc24_solid and zc80_eligible and zc80_data and zc80_hema40 and zc80_passed >= 5
 // Execution plan is independent. Never overwrite curr_* native chart state.
 if zc_hold_qualify
+    xc_half_event_sent := false
+    xc_full_event_sent := false
     xc_active := true
     xc_half := false
     xc_half_bar := na
@@ -1448,20 +1456,21 @@ if zc_hold_qualify
     xc_full_bar := na
     xc_sl := xc_buy ? xc_entry-.75*xc_risk : xc_entry+.75*xc_risk
     xc_exit := "NONE"
-    xc_reason := "Semua SOP lengkap"
+    xc_reason := "Minimum 5/6 SOP lengkap"
 string zc24_sl_move = xc_active and xc_stage > 0 ? (xc_stage == 1 ? "MOVE_SL_ENTRY" : xc_stage == 2 ? "MOVE_SL_TP1" : "MOVE_SL_TP2") : "NONE"
 bool zc24_opposite_yellow = false
 if xc_active and not zc_hold_qualify
     bool xc_stop = xc_buy ? close <= xc_sl : close >= xc_sl
     bool xc_emergency = xc_buy ? close < basis : close > basis
     bool xc_profit = xc_buy ? close > xc_entry : close < xc_entry
-    bool xc_partial = xc_profit and (xc_buy ? sellSig or rsi_val >= 75 : buySig or rsi_val <= 25)
-    zc24_opposite_yellow := xc_half and barstate.isconfirmed and bar_index > xc_half_bar and (xc_buy ? v2_dr : v2_ur)
+    bool xc_partial = zc_partial_pulse and zc_partial_buy == xc_buy
+    bool xc_opposite_colour = xc_buy ? (is_bar_bearish or (v2_useCol and v2_strat == "Bj Reversal" and v2_dr)) : (is_bar_bullish or (v2_useCol and v2_strat == "Bj Reversal" and v2_ur))
+    zc24_opposite_yellow := xc_half and barstate.isconfirmed and bar_index > xc_half_bar and xc_opposite_colour
     if xc_stop or xc_emergency or zc24_opposite_yellow or zc_close_all_pulse
         xc_active := false
         xc_full_bar := bar_index
         xc_exit := xc_emergency or zc_close_all_pulse ? "EMERGENCY" : zc24_opposite_yellow ? "OPPOSITE_YELLOW" : "SL"
-        xc_reason := xc_emergency or zc_close_all_pulse ? "SOP CLOSE ALL" : zc24_opposite_yellow ? "Confirmed opposite yellow after partial" : "Protected SL touched"
+        xc_reason := xc_emergency or zc_close_all_pulse ? "SOP CLOSE ALL" : zc24_opposite_yellow ? "Candle warna melawan arah posisi selepas Close Separuh" : "Protected SL touched"
     else
         int xc_reached = xc_buy ? (close >= xc_entry+1.5*xc_risk ? 3 : close >= xc_entry+xc_risk ? 2 : close >= xc_entry+math.min(.5*xc_risk,2.0) ? 1 : 0) : (close <= xc_entry-1.5*xc_risk ? 3 : close <= xc_entry-xc_risk ? 2 : close <= xc_entry-math.min(.5*xc_risk,2.0) ? 1 : 0)
         if xc_reached > xc_stage
@@ -1471,13 +1480,13 @@ if xc_active and not zc_hold_qualify
         if xc_partial and not xc_half
             xc_half := true
             xc_half_bar := bar_index
-            xc_reason := "Close Separuh — native WT/RSI advisory"
+            xc_reason := "Close Separuh — signal asal pada chart"
 // SOP CLOSE ALL invalidates the latch; ordinary SL keeps post-close reentry support.
 if not xc_active and (xc_exit == "EMERGENCY" or xc_exit == "OPPOSITE_YELLOW") and not na(xc_full_bar) and zc_hold_active
     zc_hold_active := false
     zc_hold_closed_at := zc_seq_now
 zc24_solid := zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
-zc24_ready := zc24_solid and zc80_eligible and zc80_data and zc80_hema40 and zc80_passed == 6
+zc24_ready := zc24_solid and zc80_eligible and zc80_data and zc80_hema40 and zc80_passed >= 5
 bool zc24_completed = not na(xc_setup) and not xc_active
 bool zc24_half_armed = xc_half
 int zc24_half_bar = xc_half_bar
@@ -1495,7 +1504,7 @@ plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+1.5*zc_seq_risk : zc_se
 plotshape(zc24_ready and not zc24_ready[1], title="SOP 24 Sep TF2 READY", style=shape.labelup, location=location.belowbar, color=color.aqua, text="SOP 80%\nREADY", textcolor=color.black, size=size.small)
 var table zc24_table = table.new(position.top_left, 2, 9, bgcolor=color.new(#091720, 5), border_width=1)
 if barstate.islast
-    table.cell(zc24_table, 0, 0, "SOLID HOLD · TF2", text_color=color.aqua)
+    table.cell(zc24_table, 0, 0, "SOLID HOLD · MIN 5/6", text_color=color.aqua)
     table.cell(zc24_table, 1, 0, "NATIVE SOLID · TF2", text_color=color.orange)
     table.cell(zc24_table, 0, 1, "Chart", text_color=color.white)
     table.cell(zc24_table, 1, 1, zc24_chart_ok ? "TF2 SCALPING" : "GUNA TF2 / SCALPING", text_color=zc24_tf2 ? color.lime : color.red)
@@ -1538,9 +1547,9 @@ f_advice(string value)=>
 string zc24_side = zc_seq_side == "" ? "WAIT" : zc_seq_side
 string zc24_forecast_text = forecast_direction == "BULLISH 🚀" ? "BULLISH" : forecast_direction == "BEARISH 🩸" ? "BEARISH" : forecast_direction == "CHOPPY 🛑" ? "CHOPPY" : "NEUTRAL"
 string zc24_m5_pos = "WAIT"
-bool zc24_closed_now = zc24_completed and bar_index == zc24_full_bar
+bool zc24_closed_now = zc24_completed and not xc_full_event_sent
 string zc24_exit_stage = zc24_completed ? "CLOSED" : zc24_half_armed ? "WAIT_YELLOW" : xc_active ? "HOLD" : "IDLE"
-string zc24_exit_action = zc24_closed_now ? (zc24_close_type == "EMERGENCY" ? "EXIT_ALL" : zc24_close_type == "OPPOSITE_YELLOW" ? "EXIT_REMAINING" : "EXIT_SL") : zc24_half_armed and bar_index == zc24_half_bar ? "CLOSE_50_NOW" : zc24_half_armed ? "WAIT_OPPOSITE_YELLOW" : xc_active ? "HOLD" : "IDLE"
+string zc24_exit_action = zc24_closed_now ? (zc24_close_type == "EMERGENCY" ? "EXIT_ALL" : zc24_close_type == "OPPOSITE_YELLOW" ? "EXIT_REMAINING" : "EXIT_SL") : zc24_completed ? "IDLE" : zc24_half_armed and not xc_half_event_sent ? "CLOSE_50_NOW" : zc24_half_armed ? "WAIT_OPPOSITE_YELLOW" : xc_active ? "HOLD" : "IDLE"
 string zc24_yellow_type = zc24_opposite_yellow ? (xc_buy ? "BEARISH_YELLOW" : "BULLISH_YELLOW") : "NONE"
 string zc24_sl_label = zc24_completed ? "CLOSED" : not xc_active ? "IDLE" : zc24_lock_stage == 3 ? "TP2_LOCKED" : zc24_lock_stage == 2 ? "TP1_LOCKED" : zc24_lock_stage == 1 ? "BREAKEVEN" : "INITIAL"
 int zc24_remaining = zc24_completed ? 0 : zc24_half_armed ? 50 : xc_active ? 100 : 0
@@ -1560,7 +1569,7 @@ string zc24_hema_json = "{\"version\":\"HEMA23_LIVE_V1\",\"tf2\":{\"fast\":" + f
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
 string zc_native_signals = "{\"primaryBuy\":" + f_bool(is_zone_turn_green) + ",\"primarySell\":" + f_bool(is_zone_turn_red) + ",\"solidPulse\":" + f_bool(zc_seq_pulse) + ",\"reentry\":" + f_quote(zc_native_reentry) + ",\"momentumBuy\":" + f_bool(continuation_buy) + ",\"momentumSell\":" + f_bool(continuation_sell) + ",\"nativeEntry\":" + f_num(curr_entry) + ",\"nativeSl\":" + f_num(curr_sl) + ",\"nativeTp1\":" + f_num(curr_tp1) + ",\"nativeTp2\":" + f_num(curr_tp2) + ",\"nativeTp3\":" + f_num(curr_tp3) + "}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(f_advice(ai_coach)) + ",\"aiCoach\":" + f_quote(ai_coach) + ",\"dashboard\":" + zc_all_dashboard + ",\"chartSignals\":" + zc_native_signals + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF2_SOLID_HOLD_SCALP_CAP_V4\",\"riskPlanVersion\":\"TF2_SCALP_ATR_CAP_V1\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF2_SOLID_HOLD_SCALP_CAP_V5\",\"riskPlanVersion\":\"TF2_SCALP_ATR_CAP_V1\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
@@ -1644,5 +1653,11 @@ if barstate.isrealtime and zc24_feed and zc24_chart_ok
         array.push(zc24_sends, timenow)
         zc24_last_sent := timenow
         zc24_sent_protection := zc24_protection
+        if zc24_channel == "Execution"
+            if zc24_exit_action == "CLOSE_50_NOW"
+                xc_half_event_sent := true
+            if zc24_closed_now
+                xc_full_event_sent := true
+                xc_half_event_sent := true
         if zc24_event
             zc24_emitted_setup := zc24_setup_at
