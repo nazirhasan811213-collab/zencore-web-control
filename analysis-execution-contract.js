@@ -7,7 +7,7 @@
 
   const TF2_REVISED_VERSIONS=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'];
   const septTf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_SEP24_HEMA5_V8';
-  const solid80Tf2=n=>n?.entrySopVersion==='NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13';
+  const solid80Tf2=n=>['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14'].includes(n?.entrySopVersion);
   const currentTf2=n=>solid80Tf2(n)||septTf2(n)||n?.entrySopVersion==='NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7';
   const revisedTf2=n=>TF2_REVISED_VERSIONS.includes(n?.entrySopVersion);
   const CONTRACT_VERSION = 'ZENCORE_ANALYSIS_EXECUTION_V1';
@@ -136,10 +136,19 @@
     return h40&&Object.values(values).filter(Boolean).length>=5&&Array.isArray(s.gates)&&s.gates.length===6&&Object.entries(values).every(([k,v])=>s.gates.filter(g=>g.key===k&&g.pass===v).length===1);
   }
 
+  function tf2ScalpPlanPass(side,p={},atr){
+    const sign=side==='BUY'?1:side==='SELL'?-1:0;
+    if(!p||!sign||typeof atr!=='number'||!Number.isFinite(atr)||atr<=0||!Number.isFinite(p.entry)||p.entry<=0)return false;
+    const expected={sl:p.entry-sign*.75*atr,tp1:p.entry+sign*Math.min(.5*atr,2),tp2:p.entry+sign*atr,tp3:p.entry+sign*1.5*atr};
+    return Object.entries(expected).every(([k,v])=>Number.isFinite(p[k])&&Math.abs(v-p[k])<=1e-6);
+  }
+
   // READY remains the Pine SOP decision; entry quality is an additional filter.
   function createEntryDecision(market = {}) {
     if(typeof process!=='undefined'&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return null;
     const normal = market.strategyNormal || {};
+    if(normal.entrySopVersion==='NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14'&&
+      (normal.sop?.riskPlanVersion!=='TF2_SCALP_ATR_CAP_V1'||!tf2ScalpPlanPass(normal.side,normal.plan,normal.sop?.atrReference)))return null;
     const plan = normal.plan || {};
     const restoredTf2=currentTf2(normal)||revisedTf2(normal)||['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
     const restoredTf15=['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(normal.entrySopVersion);
@@ -283,6 +292,7 @@
   }
 
   return {
+    tf2ScalpPlanPass,
     currentSolidTf2Confirmations,
     solid80Tf2Confirmations,
     CONTRACT_VERSION,
