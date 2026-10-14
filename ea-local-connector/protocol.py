@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.00'
-CONNECTOR_BUILD = '2.0.0'
+EA_VERSION = '2.01'
+CONNECTOR_BUILD = '2.0.1'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -150,6 +150,21 @@ def command_fields(command, identity):
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
             fields['lot'] = number(payload['lotPerLayer'])
             fields['layers'] = int(payload['layers'])
+            if snap.get('entryAnchor') == 'FILL_PRICE_ATR_V1':
+                risk=payload.get('fillRisk', {})
+                reentry=payload.get('reentry', {})
+                if (risk.get('version')!='FILL_PRICE_ATR_V1' or reentry.get('version')!='TF2_POST_CLOSE_HALF_LAYERS_V1' or
+                    reentry!=snap.get('reentry') or payload.get('strategyMode')!='TF2_SCALPING' or payload.get('exitPolicy') is not None):
+                    raise ValueError('FILL_RISK_REJECTED')
+                atr=float(number(risk.get('atr')))
+                expected={'tp1':min(.5*atr,2),'tp2':atr,'tp3':1.5*atr,'sl':.75*atr}
+                if atr<=0 or risk.get('distances')!=expected: raise ValueError('FILL_RISK_REJECTED')
+                sign=1 if payload['side']=='BUY' else -1
+                for k,d in expected.items():
+                    target=float(payload['entry'])+(-sign if k=='sl' else sign)*d
+                    if abs(float(payload[k])-target)>1e-6: raise ValueError('FILL_RISK_REJECTED')
+                fields['fillAnchor']='FILL_PRICE_ATR_V1'
+                fields['riskAtr']=number(atr)
             policy=payload.get('exitPolicy')
             if policy is not None:
                 if (payload.get('strategyMode')!='TF2_SCALPING' or policy.get('version')!='TF2_TIGHT_SL_3C_V1' or
@@ -192,7 +207,8 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':(VERSION if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1' else '1.3.0-ea-local') if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
-      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[]
+      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
+      'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
@@ -206,6 +222,10 @@ def heartbeat(fields, selected_identity, now_ms=None):
         position = {'strategyMode':fields.get(prefix+'strategyMode','TF2_SCALPING'),'ticket':fields[prefix+'ticket'], 'symbol':fields[prefix+'symbol'], 'side':fields[prefix+'side']}
         position['origin']=fields.get(prefix+'origin','ZENCORE')
         position['positionId']=fields.get(prefix+'positionId',position['ticket'])
+        position['setupId']=fields.get(prefix+'setupId')
+        position['fillRiskVersion']=fields.get(prefix+'fillRiskVersion')
+        for key in ('tp1','tp2','tp3','initialSl'):
+            if prefix+key in fields: position[key]=float(fields[prefix+key])
         for key in ('volume','entry','currentPrice','activeSl','profitUsd','openedAt'):
             position[key] = float(fields[prefix+key])
         value['positions'].append(position)
@@ -219,7 +239,7 @@ VALIDATION_CODES = frozenset((
  'INVALID_SYMBOLS','ANALYSIS_CONTRACT_REJECTED','SYMBOL_REJECTED',
  'ANALYSIS_PRICE_MISMATCH','SIDE_REJECTED','EXIT_POLICY_REJECTED',
  'ACTIONS_REJECTED','ACTION_REJECTED','PERCENT_REJECTED','TYPE_REJECTED',
- 'EA_STRATEGY_UPGRADE_REQUIRED','EA_POLICY_UPGRADE_REQUIRED','SERVER_TIME_REQUIRED','CONTROL_STOPPED'
+ 'EA_STRATEGY_UPGRADE_REQUIRED','EA_POLICY_UPGRADE_REQUIRED','SERVER_TIME_REQUIRED','CONTROL_STOPPED','FILL_RISK_REJECTED'
 ))
 
 def validation_code(error):

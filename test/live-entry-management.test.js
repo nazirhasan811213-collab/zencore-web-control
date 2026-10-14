@@ -31,3 +31,15 @@ test('missing quote blocks derived management, and yellow exit requires post-ent
  f.positions[0].activeSl=f.positions[0].entry;
  assert.equal(C.createManagementDecision(rebasedManagement(f.market,f.positions,f.command).market).snapshot.actions[0].percent,100);
 });
+
+// New re-entry tickets may have different fill targets; old chart levels must never manage them.
+test('fill-anchored re-entry suppresses chart-price exits and permits only fresh advisory exits',()=>{
+ const {rebasedManagement}=require('../live-entry-management');
+ const command={id:'11111111-1111-4111-8111-111111111111',payload:{symbol:'XAUUSD',side:'BUY',strategyMode:'TF2_SCALPING',analysisSnapshot:{entryAnchor:'FILL_PRICE_ATR_V1'}}};
+ const positions=[{origin:'ZENCORE',symbol:'XAUUSD',side:'BUY',strategyMode:'TF2_SCALPING',setupId:command.id.slice(0,20),fillRiskVersion:'FILL_PRICE_ATR_V1',entry:4100,activeSl:4100,openedAt:1000}];
+ let m={signalObservedAt:1001,positionManagement:{slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:99,action:'EXIT_SL'}};
+ let x=rebasedManagement(m,positions,command);assert.equal(x.market.positionManagement.action,'HOLD');assert.equal(x.market.positionManagement.slMoveTriggered,false);
+ m.positionManagement={action:'EXIT_ALL'};x=rebasedManagement(m,positions,command);assert.equal(x.market.positionManagement.action,'EXIT_ALL');
+ m.signalObservedAt=999;x=rebasedManagement(m,positions,command);assert.equal(x.market.positionManagement.action,'HOLD');
+ positions[0].setupId='wrong';assert.equal(rebasedManagement(m,positions,command).market,null);
+});

@@ -1,6 +1,18 @@
 'use strict';
 // Rebased orders must never consume price-based exits from the original chart.
 function rebasedManagement(market,positions,command){
+ if(command?.payload?.analysisSnapshot?.entryAnchor==='FILL_PRICE_ATR_V1'){
+  const p=command.payload,own=positions.filter(x=>x.origin!=='MANUAL'&&x.symbol===p.symbol&&(x.strategyMode||'TF2_SCALPING')===p.strategyMode);
+  if(!own.length)return {rebased:false,market};
+  if(!own.every(x=>x.side===p.side&&x.setupId===command.id.slice(0,20)&&x.fillRiskVersion==='FILL_PRICE_ATR_V1'))return {rebased:true,market:null};
+  // Each ticket has its own fill/targets. EA performs local TP StepLock/partial.
+  // Fresh direction-based advisory exits remain allowed, chart-price exits do not.
+  const fresh=market.signalObservedAt>=Math.max(...own.map(x=>x.openedAt));
+  const source=market.positionManagement||{},action=fresh&&['EXIT_ALL','CLOSE_50_NOW'].includes(source.action)?source.action:
+    fresh&&source.oppositeYellow===true&&source.action==='EXIT_REMAINING'&&own.every(x=>p.side==='BUY'?x.activeSl>=x.entry:x.activeSl<=x.entry)?'EXIT_REMAINING':'HOLD';
+  return {rebased:true,market:{...market,positionManagement:{...source,slMoveTriggered:false,action,
+    entryAnchor:'FILL_PRICE_ATR_V1',entryCommandId:command.id}}};
+ }
  if(command?.payload?.analysisSnapshot?.entryAnchor!=='LIVE_SIGNAL_PRICE_V1')return {rebased:false,market};
  const p=command.payload,own=positions.filter(x=>x.origin!=='MANUAL'&&x.symbol===p.symbol&&(x.strategyMode||'TF2_SCALPING')===p.strategyMode);
  if(!own.length)return {rebased:false,market};
