@@ -44,7 +44,7 @@ test('Pine holds only native chart SOLID; qualification is once, full SOP, CLOSE
  const s=fs.readFileSync(require.resolve('../ZenCore_Original_Full_TF2_Scalp_Caps.pine'),'utf8');
  a.ok(s.includes(require('../tf2-solid-hold-v5').RULE));a.match(s,/varip bool zc_hold_active = false/);
  a.match(s,/if current_condition == 3\s+zc_close_all_pulse := true/);
- a.match(s,/if zc_close_all_pulse\s+zc_hold_active := false/);
+ a.match(s,/if zc_close_all_pulse\s+zc_pending_key := ""\s+zc_hold_active := false/);
  a.match(s,/zc_hold_active and na\(zc_seq_completed\).*zc80_passed >= 5/);
  a.match(s,/zc_seq_completed := zc_seq_now/);a.match(s,/zc_seq_risk := atr/);
  a.match(s,/if zc_hold_qualify\s+xc_half_event_sent := false\s+xc_full_event_sent := false\s+xc_active := true/);
