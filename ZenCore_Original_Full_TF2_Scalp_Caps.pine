@@ -1416,8 +1416,9 @@ if zc80_new_solid and zc24_tf2 and zc80_data and zc80_hema40 and zc80_passed >= 
     zc_seq_entry := close
     zc_seq_risk := atr
 // 30 seconds is delivery freshness, not waiting for another candle/SOP.
-bool zc24_solid = zc80_eligible and zc_seq_now-zc_seq_trigger >= 0 and zc_seq_now-zc_seq_trigger <= 30000
-bool zc24_ready = zc24_solid and zc80_data and zc80_hema40 and zc80_passed >= 5
+// SOP #1 is the native chart SOLID event. Qualification is a separate gate.
+bool zc24_solid = zc_seq_side != "" and not na(zc_seq_trigger) and zc_seq_now-zc_seq_trigger >= 0 and zc_seq_now-zc_seq_trigger <= 30000
+bool zc24_ready = zc24_solid and zc80_eligible and zc80_data and zc80_hema40 and zc80_passed >= 5
 // Execution plan is independent. Never overwrite curr_* native chart state.
 if zc80_new_solid and zc80_eligible
     xc_active := true
@@ -1489,7 +1490,7 @@ if barstate.islast
     table.cell(zc24_table, 0, 7, "SOP " + str.tostring(zc80_passed) + "/6", text_color=color.white)
     table.cell(zc24_table, 1, 7, zc24_ready ? (zc24_buy ? "BUY READY" : "SELL READY") : not na(zc_seq_trigger) and not zc80_eligible ? "SKIP · SOP PADA SOLID" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
     table.cell(zc24_table, 0, 8, "Signal chart / MYT", text_color=color.white)
-    table.cell(zc24_table, 1, 8, na(zc_seq_trigger) ? "—" : str.format_time(zc_seq_trigger, "HH:mm:ss", "Asia/Kuala_Lumpur") + (zc24_solid ? " · LAYAK SOP" : " · BUKAN ARAHAN ORDER"), text_color=color.white)
+    table.cell(zc24_table, 1, 8, na(zc_seq_trigger) ? "—" : str.format_time(zc_seq_trigger, "HH:mm:ss", "Asia/Kuala_Lumpur") + (zc24_ready ? " · LAYAK SOP" : " · BUKAN ARAHAN ORDER"), text_color=color.white)
 
 f_num(float value)=>
     na(value)?"null":str.tostring(value,"#.########")
