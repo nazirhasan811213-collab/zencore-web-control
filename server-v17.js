@@ -625,6 +625,7 @@ function storeSnapshot(parsed){
 function captureBody(body){
   let parsed=null;try{parsed=JSON.parse(body)}catch(_){}
   if(!parsed)return;
+  parsed=require('./tf2-feed-source').normalizeTf2FeedSource(parsed);
   if(parsed.feedVersion==='TF15_REALTIME_V1'){
     const items=require('./strategy-market-hub').ingest(parsed);
     feedMetadataDiagnostics.record(parsed,items.map(m=>m.symbol));

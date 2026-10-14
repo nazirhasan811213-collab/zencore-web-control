@@ -1388,7 +1388,7 @@ array.push(zc24_parts, f_bool(false))
 array.push(zc24_parts, zc24_hema_json)
 array.push(zc24_parts, zc24_meta_json)
 
-string zc24_payload = "{\"authToken\":" + f_quote(zc24_secret) + ",\"feedUpdateVersion\":\"SPLIT_CHANNEL_BOOTSTRAP_V2\",\"snapshotIntervalMs\":30000,\"feedChannel\":" + f_quote(str.upper(zc24_channel)) + ",\"feedVersion\":\"TF2_REALTIME_V1\",\"confirmed\":" + f_bool(barstate.isconfirmed) + ",\"emittedAt\":" + str.tostring(timenow) + ",\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Native SOP24 TF2\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"2\",\"tpMode\":\"Fixed R:R\",\"markets\":[[" + array.join(zc24_parts, ",") + "]]}"
+string zc24_payload = "{\"authToken\":" + f_quote(zc24_secret) + ",\"feedUpdateVersion\":\"SPLIT_CHANNEL_BOOTSTRAP_V2\",\"snapshotIntervalMs\":30000,\"feedChannel\":" + f_quote(str.upper(zc24_channel)) + ",\"feedVersion\":\"TF2_REALTIME_V1\",\"confirmed\":" + f_bool(barstate.isconfirmed) + ",\"emittedAt\":" + str.tostring(timenow) + ",\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"2\",\"tpMode\":\"Fixed R:R\",\"markets\":[[" + array.join(zc24_parts, ",") + "]]}"
 if barstate.isrealtime and zc24_feed and zc24_chart_ok
     zc24_started := true
     while array.size(zc24_sends) > 0 and timenow - array.get(zc24_sends, 0) > 180000
