@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { MemoryAuthStore } = require('../auth-store');
-const { createAuthService } = require('../auth-service');
+const { createAuthService } = require('./helpers/approved-auth.cjs');
 
 async function makeClient(auth, suffix, ibCode = 'nazir') {
   return auth.register({

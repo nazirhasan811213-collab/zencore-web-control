@@ -191,6 +191,12 @@
         status(body.error || 'Permintaan tidak berjaya. Cuba semula.');
         return;
       }
+      if (body.pendingApproval) {
+        status('Pendaftaran diterima. Tunggu kelulusan Admin sebelum log masuk.', 'success');
+        form.reset();
+        resolveIbAssignment();
+        return;
+      }
       status(page === 'register' ? 'Pendaftaran client berjaya. Membuka ZenCore...' : 'Login berjaya.', 'success');
       window.setTimeout(() => { window.location.replace(landingForRole(body.user?.role)); }, 350);
     } catch (_) {

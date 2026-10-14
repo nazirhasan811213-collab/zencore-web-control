@@ -12,7 +12,7 @@ const COMMAND_SIGNING_KEY = 'test-command-signing-key-at-least-32-bytes';
 
 function startServer() {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['-r', './compat-v17.js', 'server-analysis.js'], {
+    const child = spawn(process.execPath, ['-r', './compat-v17.js', '-r', './test/helpers/seed-admin.cjs', 'server-analysis.js'], {
       cwd: ROOT,
       env: {
         ...process.env,
@@ -146,6 +146,8 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const viewerLogin = await response.json();
     assert.equal(viewerLogin.user.role, 'viewer');
     const viewerCookie = response.headers.get('set-cookie').split(';')[0];
+    response=await fetch(`${BASE}/api/admin/registrations`,{headers:{Cookie:viewerCookie}});assert.equal(response.status,403);
+    response=await fetch(`${BASE}/api/admin/registrations/00000000-0000-4000-8000-000000000001/review`,{method:'POST',headers:{Cookie:viewerCookie,Origin:BASE,'Content-Type':'application/json'},body:JSON.stringify({decision:'approve'})});assert.equal(response.status,403);
 
     response = await fetch(`${BASE}/app`, { headers: { Cookie: viewerCookie } });
     assert.equal(response.status, 200);
@@ -258,6 +260,22 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const registered = await response.json();
     assert.equal(registered.user.role, 'client');
     const userId = registered.user.id;
+    assert.equal(registered.user.status, 'pending');
+    assert.equal(registered.pendingApproval, true);
+    assert.equal(response.headers.get('set-cookie'), null);
+    response = await fetch(`${BASE}/auth/login`, {method:'POST',headers:{'Content-Type':'application/json',Origin:BASE},body:JSON.stringify(registration)});
+    assert.equal(response.status,403);
+    assert.equal((await response.json()).code,'REGISTRATION_PENDING');
+    response = await fetch(`${BASE}/auth/login`, {method:'POST',headers:{'Content-Type':'application/json',Origin:BASE},body:JSON.stringify({email:'test-admin@example.com',password:'AdminFixture2026!'})});
+    assert.equal(response.status,200);
+    const adminCookie=response.headers.get('set-cookie').split(';')[0];
+    response=await fetch(`${BASE}/admin/registrations`,{headers:{Cookie:adminCookie}});assert.equal(response.status,200);
+    response=await fetch(`${BASE}/api/admin/registrations`,{headers:{Cookie:adminCookie}});assert.equal((await response.json()).registrations[0].id,userId);
+    response=await fetch(`${BASE}/api/admin/registrations/${userId}/review`,{method:'POST',headers:{Cookie:adminCookie,Origin:'https://untrusted.example','Content-Type':'application/json'},body:JSON.stringify({decision:'approve'})});assert.equal(response.status,403);
+    response=await fetch(`${BASE}/api/admin/registrations/${userId}/review`,{method:'POST',headers:{Cookie:adminCookie,Origin:BASE,'Content-Type':'application/json'},body:JSON.stringify({decision:'approve',reason:'Verified fixture'})});assert.equal(response.status,200);
+    response=await fetch(`${BASE}/api/admin/registrations/${userId}/review`,{method:'POST',headers:{Cookie:adminCookie,Origin:BASE,'Content-Type':'application/json'},body:JSON.stringify({decision:'reject'})});assert.equal(response.status,409);
+    response = await fetch(`${BASE}/auth/login`, {method:'POST',headers:{'Content-Type':'application/json',Origin:BASE},body:JSON.stringify(registration)});
+    assert.equal(response.status,200);
     const setCookie = response.headers.get('set-cookie');
     assert.ok(setCookie);
     assert.match(setCookie, /HttpOnly/);

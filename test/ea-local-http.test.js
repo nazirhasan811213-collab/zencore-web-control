@@ -5,7 +5,7 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const base='http://127.0.0.1:18873';
 test('desktop login cookie can pair EA, origin and unauthenticated requests remain protected',async()=>{
- const child=spawn(process.execPath,['-r','./compat-v17.js','server-analysis.js'],{cwd:root,env:{...process.env,
+ const child=spawn(process.execPath,['-r','./compat-v17.js','-r','./test/helpers/seed-admin.cjs','server-analysis.js'],{cwd:root,env:{...process.env,
    NODE_ENV:'test',SITE_MODE:'precision-entry',PORT:'18873',ZENCORE_AUTH_ENABLED:'true',ZENCORE_AUTH_MEMORY:'true',ZENCORE_INSECURE_COOKIE:'true',
    ZENCORE_AUTOTRADE_ENABLED:'true',ZENCORE_AUTOTRADE_EXECUTION_ENABLED:'true',ZENCORE_AUTOTRADE_MEMORY:'true',
    ZENCORE_HOSTED_MT5_ENABLED:'false',ZENCORE_GCP_HOSTED_WORKER_ENABLED:'false',
@@ -20,7 +20,10 @@ test('desktop login cookie can pair EA, origin and unauthenticated requests rema
   assert.equal(response.status,401);
   response=await fetch(base+'/auth/register',{method:'POST',headers:{Accept:'application/json',Origin:base,'Content-Type':'application/json'},
    body:JSON.stringify({displayName:'EA HTTP Trader',email:'ea-http-test@example.com',phone:'0123456782',ibCode:'nazir',password:'TestOnly2026!',riskAccepted:true})});
-  assert.equal(response.status,201);const cookie=response.headers.get('set-cookie').split(';')[0];
+  assert.equal(response.status,201);const registration=await response.json();assert.equal(response.headers.get('set-cookie'),null);
+  response=await fetch(base+'/auth/login',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({email:'test-admin@example.com',password:'AdminFixture2026!'})});const adminCookie=response.headers.get('set-cookie').split(';')[0];
+  response=await fetch(base+'/api/admin/registrations/'+registration.user.id+'/review',{method:'POST',headers:{Cookie:adminCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({decision:'approve'})});assert.equal(response.status,200);
+  response=await fetch(base+'/auth/login',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({email:'ea-http-test@example.com',password:'TestOnly2026!'})});assert.equal(response.status,200);const cookie=response.headers.get('set-cookie').split(';')[0];
   response=await fetch(base+'/api/auto-trade/ea-connect',{method:'POST',headers:{Accept:'application/json',Cookie:cookie,Origin:'https://untrusted.example'}});
   assert.equal(response.status,403);
   response=await fetch(base+'/api/auto-trade/ea-connect',{method:'POST',headers:{Accept:'application/json',Cookie:cookie,Origin:base,'Content-Type':'application/json'},body:'{}'});

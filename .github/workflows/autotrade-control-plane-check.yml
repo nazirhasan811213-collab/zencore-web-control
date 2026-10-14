@@ -8,6 +8,11 @@ name: Auto Trade control plane checks
       - "analysis-dual.*"
       - "gold-copilot.js"
       - "home.html"
+      - "auth*"
+      - "register.html"
+      - "admin-registrations.*"
+      - "management.js"
+      - "scripts/check-registration-ui.cjs"
       - "scripts/check-pine-insights-ui.cjs"
       - "precision-entry.*"
       - "auto-trade-monitor.css"
@@ -73,6 +78,9 @@ jobs:
       - name: Check Pine insights dual timeframe UI
         run: node scripts/check-pine-insights-ui.cjs
 
+      - name: Check registration approval UI
+        run: node scripts/check-registration-ui.cjs
+
       - name: Save Analysis previews
         uses: actions/upload-artifact@v4
         with:
@@ -80,4 +88,5 @@ jobs:
           path: |
             alert-ui-*.png
             pine-ui-*.png
+            registration-ui-*.png
           retention-days: 7
