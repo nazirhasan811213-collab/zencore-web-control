@@ -4,7 +4,7 @@
  const tone=text=>/BEAR|SELL|TURUN|Downtrend/i.test(text||'')?'bear':/BULL|BUY|NAIK|Uptrend/i.test(text||'')?'bull':'neutral';
  function card({tf,advisor,live=false,observedAt,expanded=false}) {
   const box=el('section',undefined,'pine-insights');box.dataset.tf=String(tf);box.setAttribute('aria-label','Rumusan Pine TF'+tf);
-  const header=el('div',undefined,'pine-heading'),title=el('div');title.append(el('span','PINE / MARKET INTELLIGENCE','pine-kicker'),el('h3','TF'+tf+' · '+(tf===2?'Scalping':'Intra')));
+  const header=el('div',undefined,'pine-heading'),title=el('div');title.append(el('span','PINE / MARKET INTELLIGENCE','pine-kicker'),el('h3','TF'+tf+' · '+(tf===3?'Scalping':'Intra')));
   header.append(title,el('span',live?'● LIVE':'○ '+(advisor?'DATA TERAKHIR':'TUNGGU DATA'),'pine-status '+(live?'fresh':'old')));box.append(header);
   const summary=el('div',undefined,'pine-summary '+tone(advisor?.mtfSummary));summary.append(el('small','RUMUSAN MULTI TF'),el('p',advisor?.mtfSummary||'Rumusan TF'+tf+' belum masuk.'));box.append(summary);
   const grid=el('div',undefined,'pine-grid');

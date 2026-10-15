@@ -7,7 +7,7 @@
  function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
  function metric(label,value){const n=el('div',undefined,'metric');n.append(el('small',label),el('b',value));return n;}
  const price=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(pair.value==='GBPUSD'?5:3):'—';
- for(const tf of [3,2,15]){
+ for(const tf of [3,15]){
   const card=el('article',undefined,'tf-card');card.dataset.timeframe=String(tf);
   const header=el('header'),title=el('div');title.append(el('span','XAUUSD / HEMA '+(tf===15?'15 / 30':String(tf)),'eyebrow'),el('h2','TF'+tf+' • '+(tf===15?'Intraday':'Scalping')));
   const badge=el('span','WAITING','feed-pill');header.append(title,badge);
@@ -16,7 +16,7 @@
   card.append(header,content,chartButton,chart);root.append(card);cards.set(tf,{card,badge,content,chart});
  }
  function render(){
-  for(const tf of [3,2,15]){
+  for(const tf of [3,15]){
    const c=cards.get(tf);c.card.hidden=selected!=='both'&&selected!==String(tf);
    const view=payload?.views?.find(v=>v.timeframe===tf),m=view?.market,n=m?.strategyNormal||{},s=n.sop||{};
    const age=m?.receivedAt?Math.max(0,Date.now()-m.receivedAt):null;
@@ -26,8 +26,8 @@
    const focused=c.content.contains(document.activeElement)?document.activeElement.closest('details')?.dataset.section:null;
    const open=new Set([...c.content.querySelectorAll('details[open]')].map(d=>d.dataset.section));
    const nodes=[el('div',live?(n.state==='READY'?'SOLID '+n.side:label(n.state||'WAIT')+' • '+(n.side||'WAIT')):'TUNGGU DATA TF'+tf,'signal'+(live&&n.state==='READY'?' ready '+(n.side==='SELL'?'sell':'buy'):'')),el('p',live?n.reason||'':m?'Ini data terakhir sahaja. Signal tak aktif sampai data fresh masuk.':'Feed TF'+tf+' belum diterima untuk '+pair.value+'.')];
-   const metrics=el('div',undefined,'metrics primary-metrics');metrics.append(metric(live?'HARGA XAUUSD':'HARGA TERAKHIR',price(m?.price)),metric('FORECAST • 10 CANDLE',s.forecast||'—'),metric('POWER MARKET',s.marketPower==null?'—':s.marketPower+'%'),metric('SOP HIJAU',s.sopGreen==null?'—':s.sopGreen+'/5'),metric(tf===2?'SOLID CHART TERAKHIR':'SOLID SETUP',tf===2&&s.chartSignal?.present?'SOLID '+s.chartSignal.side:n.solid==null?'—':n.solid?'AKTIF':'BELUM'));nodes.push(metrics);
-   if(tf===2&&s.chartSignal?.present){const signal=s.chartSignal;nodes.push(el('p','SOLID '+signal.side+' pada chart · '+new Date(signal.triggeredAt).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT · '+(live&&signal.current?(signal.held?'SOLID dipegang hingga CLOSE ALL':'signal baru diterima'):'rekod signal terakhir')+'. Status order: '+(live&&n.state==='READY'?'LAYAK':(signal.held&&signal.current?'TUNGGU SOP LENGKAP':'BELUM LAYAK / TUNGGU SIGNAL BARU'))+'.','chart-solid-note'));}
+   const metrics=el('div',undefined,'metrics primary-metrics');metrics.append(metric(live?'HARGA XAUUSD':'HARGA TERAKHIR',price(m?.price)),metric('FORECAST • 10 CANDLE',s.forecast||'—'),metric('POWER MARKET',s.marketPower==null?'—':s.marketPower+'%'),metric('SOP HIJAU',s.sopGreen==null?'—':s.sopGreen+'/5'),metric(tf===3?'SOLID CHART TERAKHIR':'SOLID SETUP',tf===3&&s.chartSignal?.present?'SOLID '+s.chartSignal.side:n.solid==null?'—':n.solid?'AKTIF':'BELUM'));nodes.push(metrics);
+   if(tf===3&&s.chartSignal?.present){const signal=s.chartSignal;nodes.push(el('p','SOLID '+signal.side+' pada chart · '+new Date(signal.triggeredAt).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT · '+(live&&signal.current?(signal.held?'SOLID dipegang hingga ribbon bertentangan / CLOSE ALL':'signal baru diterima'):'rekod signal terakhir')+'. Status order: '+(live&&n.state==='READY'?'LAYAK':(signal.held&&signal.current?'TUNGGU SOP LENGKAP':'BELUM LAYAK / TUNGGU SIGNAL BARU'))+'.','chart-solid-note'));}
    if(n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_80PCT_V12'){const q=el('div',undefined,'metrics');q.append(metric('KELENGKAPAN SOP',s.passed+'/6 · '+Number(s.scorePercent).toFixed(2)+'%'),metric('HEMA40 WAJIB',s.hema40?'LULUS':'BATAL'),metric('MTF SCORE',s.mtfScore??'—'));nodes.push(q,el('p','80% ialah kelengkapan SOP, bukan win rate. Tiada tunggu candle berikutnya.'));}
    const advisor=s.advisor||m?.dashboard;nodes.push(window.ZenCorePineInsights.card({tf,advisor,live,observedAt:m?.signalObservedAt||m?.receivedAt,expanded:open.has('pine-coach-'+tf)}));
    nodes.push(el('h3',s.hema2?.state==='ABOVE'||s.hema2?.state==='BELOW'||s.hema2?.state==='INSIDE'?'Harga vs HEMA':'Arah HEMA'));const hema=el('div',undefined,'hema');for(const h of tf===15?[15,30]:[tf])hema.append(metric('HEMA TF'+(h===2&&n.entrySopVersion?.includes('SEP24')?5:h),label(s['hema'+h]?.state||s['hema'+h]?.mode||'WAIT_DATA')));nodes.push(hema);
@@ -57,11 +57,11 @@
   const g=generation;stream?.close();streamLive=false;
   if(!window.EventSource)return;
   const active=new EventSource('/api/analysis/timeframes/events?symbol='+encodeURIComponent(pair.value));stream=active;
-  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;clearTimeout(timer);connection.textContent='Data TF2 & TF15 masuk terus • connection aktif';render();}catch(_){}});
+  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;clearTimeout(timer);connection.textContent='Data TF3 & TF15 masuk terus • connection aktif';render();}catch(_){}});
   active.addEventListener('unavailable',()=>{if(g===generation&&!controller)poll();});
   active.onerror=()=>{if(g!==generation)return;streamLive=false;connection.textContent='Tengah connect balik • masih check data sementara';if(!controller){clearTimeout(timer);poll();}};
  }
- async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Data TF2 & TF15 masuk terus • connection aktif':'Data TF2 & TF15 • check berkala sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
+ async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Data TF3 & TF15 masuk terus • connection aktif':'Data TF3 & TF15 • check berkala sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
  pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values())c.chart.replaceChildren();connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
  const params=new URLSearchParams(location.search);if(['XAUUSD'].includes(params.get('pair')))pair.value=params.get('pair');if(['2','3','15'].includes(params.get('tf'))){selected=params.get('tf');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));}
  render();startStream();poll();setInterval(render,1000);

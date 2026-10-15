@@ -384,8 +384,9 @@
     const symbol = byId('riskSymbol')?.value || 'XAUUSD';
     const effective = Core.effectiveSettings({...validation.value,strategyMode:editingMode()}, symbol);
     setText('riskTotalLot', effective.totalLot == null ? '—' : effective.totalLot.toFixed(3));
-    const market = markets.find(item => Core.normaliseSymbol(item.symbol) === symbol);
-    const matchingTf = String(market?.timeframe || market?.strategyNormal?.tf || '').replace(/m$/, '') === (editingMode() === 'TF15_INTRA' ? '15' : '2');
+    const selectedTf = editingMode() === 'TF15_INTRA' ? '15' : '3';
+    const market = markets.find(item => Core.normaliseSymbol(item.symbol) === symbol && String(item.timeframe || item.strategyNormal?.tf || '').replace(/m$/, '') === selectedTf);
+    const matchingTf = !!market;
     const plan = matchingTf ? market?.strategyNormal?.plan : null;
     const spec = (currentState?.hostedAccount?.symbolSpecs || currentState?.pod?.symbolSpecs)?.[symbol];
     const risk = Core.calculateRisk({

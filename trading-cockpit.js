@@ -5,7 +5,7 @@
  const Live=window.ZenCoreDashboardLive,tape=Live.createTape(),activity=[],activityState=new Map();let flashTimer=null;
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toFixed(symbol==='GBPUSD'?5:3);
- const tfName=tf=>tf===2?'SCALPING':'INTRADAY';
+ const tfName=tf=>tf===3?'SCALPING':'INTRADAY';
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
  function fresh(v){return !failed&&Live.fresh(v);}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
@@ -13,7 +13,7 @@
  function tone(v){return ready(v)?v.market.strategyNormal.side==='BUY'?'buy':'sell':'';}
  function dot(id,live){$(id).classList.toggle('live',live);}
  async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
- function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[2,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
+ function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[3,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
  function liveViews(){return [...views(),...(streamLive?pushedViews:[])];}
  function renderLive(){
   const now=Date.now(),q=Live.quote(liveViews().filter(()=>!failed||streamLive),now),last=tape.points().at(-1);
