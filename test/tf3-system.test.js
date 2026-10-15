@@ -26,3 +26,14 @@ test('Telegram TF3 entry and close preserve timeframe without sending messages',
 test('ATR14 metadata rejected; chart partial becomes full close; management deduplicates',()=>{let f=fixture();f.row[66].atrPeriod=14;a.equal(market(f).strategyNormal.state,'WAIT');f=fixture();const m=market(f);m.positionManagement={action:'CLOSE_50_NOW',reason:'chart partial'};const d=C.createManagementDecision(m);a.equal(d.snapshot.actions[0].percent,100);a.equal(d.snapshot.actions[0].reason,'EXIT_ALL');a.equal(d.managementKey,C.createManagementDecision({...m,receivedAt:m.receivedAt+1}).managementKey);a.equal(d.snapshot.setupKey,m.setupKey);});
 test('queued TF3 confirmation is recomputed from live values',()=>{const m=market(fixture());a.equal(Core.entryConfirmationsPass(m),true);m.strategyNormal.sop.hema3.fast=4099;a.equal(Core.entryConfirmationsPass(m),false);});
 test('Pine release uses ATR8, live ribbon and full close on native partial',()=>{const s=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');a.match(s,/atr     = ta.atr\(8\)/);a.match(s,/or xc_partial\n/);a.doesNotMatch(s,/xc_half := true/);a.match(s,/frozen_structure := draft_structure/);a.match(s,/alert\(zc24_payload, alert.freq_all\)/);});
+test('live TF3 profile queues once and delivery checks TF3 rather than legacy TF2',async()=>{
+ const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
+ const f=fixture(),m=market(f),at=f.now,store=new MemoryAutoTradeStore(),lookups=[];
+ const token='zcpod_'+'t'.repeat(48),hash=tokenHash(token);
+ const pod={id:'pod',userId:'owner',tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.2.0-ea-local',symbolSpecs:{}};
+ store.podsByUser.set('owner',pod);store.podsByToken.set(hash,pod);
+ const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'3',localEaExecutionUserIds:['owner'],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,tf)=>{lookups.push(tf);return tf==='3'?m:null;}});
+ await svc.saveSettings('owner',{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});await store.setControl('owner',{desiredState:'ON',effectiveState:'ON'});
+ a.equal((await svc.dispatchMarkets([m])).queued,1);a.equal((await svc.dispatchMarkets([m])).queued,0);
+ const result=await svc.nextCommand(token);a.equal(result.command.payload.analysisSnapshot.executionTimeframe,'3');a.equal(lookups.at(-1),'3');
+});
