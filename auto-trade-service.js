@@ -1214,6 +1214,17 @@ function createAutoTradeService(options = {}) {
     const command = await store.ackCommand(pod.id, String(commandId || ''), status, result);
     if (!command) throw serviceError('COMMAND_NOT_FOUND', 'Arahan tidak dijumpai atau sudah diproses.', 404);
 
+    // Connection readiness does not imply that the EA is armed.
+    if (command.type === 'PLACE_SETUP' && status !== 'EXECUTED' && result.code === 'ENTRY_STOPPED') {
+      await store.setControl(pod.userId, {
+        desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
+        lastError: 'EA entry STOPPED. Aktifkan ON SISTEM semula untuk pengesahan EA.'
+      }, {id:pod.id,tokenHash:pod.tokenHash});
+      if (typeof store.cancelPendingEntryCommands === 'function') {
+        await store.cancelPendingEntryCommands(pod.userId, 'EA_ENTRY_STOPPED');
+      }
+    }
+
     if (command.type === 'SYSTEM_ON') {
       await store.setControl(pod.userId, status === 'EXECUTED' ? {
         desiredState: 'ON', effectiveState: 'ON', pendingCommandId: null, lastError: null
