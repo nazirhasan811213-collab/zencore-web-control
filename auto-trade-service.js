@@ -1121,7 +1121,7 @@ function createAutoTradeService(options = {}) {
     };
   }
 
-  async function queuedEntryIsCurrent(command){
+  async function queuedEntryIsCurrent(command, diagnostic = {}){
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
@@ -1164,21 +1164,21 @@ function createAutoTradeService(options = {}) {
         m.signalObservedAt>=p.reentry.closedAt&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol===p.symbol&&(x.strategyMode||'TF2_SCALPING')===p.strategyMode);
     }
-    return !!m && now()-(Number(m.signalObservedAt)||m.receivedAt)<=30000 && (Number(m.signalObservedAt)||m.receivedAt)<=now()+5000 &&
-      Core.entryConfirmationsPass(m) && n.side===p.side && (!snap.setupKey||m.setupKey===snap.setupKey) &&
-      (snap.entryAnchor==='LIVE_SIGNAL_PRICE_V1'
-        ? ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.sourceChartPlan?.[key]===snap.sourceChartPlan?.[key])&&
-          (p.side==='BUY'?m.price>snap.sourceChartPlan.entry&&m.price<snap.sourceChartPlan.tp1:m.price<snap.sourceChartPlan.entry&&m.price>snap.sourceChartPlan.tp1)
-        : ['entry','sl','tp1','tp2','tp3'].every(key=>n.plan?.[key]===p[key]));
+    const delivery = require('./entry-delivery-check').checkEntryDelivery(command, m, now());
+    Object.assign(diagnostic, delivery);
+    return delivery.ok;
   }
   async function nextCommand(rawToken) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
     const command = await store.nextCommandForPod(pod.id, now());
     if (!command) return { ok: true, command: null, serverTime: now() };
-    if(!await queuedEntryIsCurrent(command)){
-      await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED'});
-      await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED'});
+    const deliveryDiagnostic = {};
+    if(!await queuedEntryIsCurrent(command, deliveryDiagnostic)){
+      const reason = deliveryDiagnostic.reason || 'ENTRY_POLICY_CHANGED';
+      await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED',message:reason});
+      await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED',reason,...deliveryDiagnostic});
+      console.warn('ZenCore entry delivery revoked:', JSON.stringify({commandId:command.id,symbol:command.payload?.symbol,reason,...deliveryDiagnostic}));
       return {ok:true,command:null,serverTime:now()};
     }
     return {
