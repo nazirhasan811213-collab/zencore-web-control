@@ -160,7 +160,7 @@
             <p class="tf-empty-note">Lot atau layer kosong = tiada entry selepas Simpan.</p>
             <div hidden><input id="fxLotPerLayer" value="0.01"><input id="fxLayers" value="1"><b id="totalLotPreview"></b><b id="fxTotalLotPreview"></b></div>
             <fieldset class="symbol-fieldset">
-              <legend>AUTO EXIT • ENTRY MANUAL TF2</legend><strong id="manualExitStatus">BELUM DISAHKAN EA</strong><p id="manualLayerStatus" role="status" aria-live="polite">Layer aktif: — / 10</p>
+              <legend>AUTO EXIT • ENTRY MANUAL</legend><strong id="manualExitStatus">BELUM DISAHKAN EA</strong><p id="manualLayerStatus" role="status" aria-live="polite">Layer aktif: — / 10</p>
               <label class="risk-ack"><input id="manualExitEnabled" type="checkbox"><span>Saya buka BUY/SELL sendiri. ZenCore urus exit posisi manual XAUUSD baharu.</span></label>
               <div class="tf-inputs"><label>TP1<input id="manualTp1" type="number" value="2" readonly></label><label>TP2<input id="manualTp2" type="number" value="4" readonly></label><label>TP3<input id="manualTp3" type="number" value="6" readonly></label><label>SL<input id="manualSl" type="number" value="3" readonly></label></div>
               <small>Jarak harga Gold, bukan jumlah untung USD. Contoh jarak 1.00: BUY 4000 → TP 4001. Hanya akaun hedging; posisi lama dan EA lain tidak diambil alih. TP/SL dikira dari entry setiap tiket. Had 10 layer ialah amaran sahaja; posisi tambahan tetap dilindungi. Close separuh tidak mengosongkan slot. Saiz lot ikut entry anda. Tetapan berkuat kuasa selepas EA menerima arahan Simpan. SL sedia ada yang lebih ketat dikekalkan.</small>
@@ -311,9 +311,9 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/tf3-scalping.js?v=20261015" defer></script><script src="/analysis-execution-contract.js?v=20261015.tf3" defer></script>
+  <script src="/tf3-scalping.js?v=20261015" defer></script><script src="/analysis-execution-contract.js?v=20261015.only315" defer></script>
   <script src="/auto-trade-core.js?v=20261007.news-choice" defer></script>
-  <script src="/auto-trade.js?v=20261015.tf3.20261007.news-choice" defer></script>
+  <script src="/auto-trade.js?v=20261015.only315.20261007.news-choice" defer></script>
   <script src="/viewer-mode.js?v=1.1" defer></script>
 <script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>

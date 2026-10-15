@@ -7,7 +7,7 @@
  function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
  function metric(label,value){const n=el('div',undefined,'metric');n.append(el('small',label),el('b',value));return n;}
  const price=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(pair.value==='GBPUSD'?5:3):'—';
- for(const tf of [3,2,15]){
+ for(const tf of [3,15]){
   const card=el('article',undefined,'tf-card');card.dataset.timeframe=String(tf);
   const header=el('header'),title=el('div');title.append(el('span','XAUUSD / HEMA '+(tf===15?'15 / 30':String(tf)),'eyebrow'),el('h2','TF'+tf+' • '+(tf===15?'Intraday':'Scalping')));
   const badge=el('span','WAITING','feed-pill');header.append(title,badge);
@@ -16,7 +16,7 @@
   card.append(header,content,chartButton,chart);root.append(card);cards.set(tf,{card,badge,content,chart});
  }
  function render(){
-  for(const tf of [3,2,15]){
+  for(const tf of [3,15]){
    const c=cards.get(tf);c.card.hidden=selected!=='both'&&selected!==String(tf);
    const view=payload?.views?.find(v=>v.timeframe===tf),m=view?.market,n=m?.strategyNormal||{},s=n.sop||{};
    const age=m?.receivedAt?Math.max(0,Date.now()-m.receivedAt):null;
@@ -57,11 +57,11 @@
   const g=generation;stream?.close();streamLive=false;
   if(!window.EventSource)return;
   const active=new EventSource('/api/analysis/timeframes/events?symbol='+encodeURIComponent(pair.value));stream=active;
-  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;clearTimeout(timer);connection.textContent='Data TF2 & TF15 masuk terus • connection aktif';render();}catch(_){}});
+  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;clearTimeout(timer);connection.textContent='Data TF3 & TF15 masuk terus • connection aktif';render();}catch(_){}});
   active.addEventListener('unavailable',()=>{if(g===generation&&!controller)poll();});
   active.onerror=()=>{if(g!==generation)return;streamLive=false;connection.textContent='Tengah connect balik • masih check data sementara';if(!controller){clearTimeout(timer);poll();}};
  }
- async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Data TF2 & TF15 masuk terus • connection aktif':'Data TF2 & TF15 • check berkala sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
+ async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Data TF3 & TF15 masuk terus • connection aktif':'Data TF3 & TF15 • check berkala sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
  pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values())c.chart.replaceChildren();connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
  const params=new URLSearchParams(location.search);if(['XAUUSD'].includes(params.get('pair')))pair.value=params.get('pair');if(['2','3','15'].includes(params.get('tf'))){selected=params.get('tf');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));}
  render();startStream();poll();setInterval(render,1000);

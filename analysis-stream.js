@@ -7,7 +7,7 @@ function openAnalysisStream({req,res,symbol,bus,fetchMarkets,now=Date.now}){
  const markets=new Map();let closed=false;
  function update(items){
   for(const m of items||[]){
-   const tf=String(m?.timeframe);if(m?.symbol!==symbol||!['2','3','15'].includes(tf))continue;
+   const tf=String(m?.timeframe);if(m?.symbol!==symbol||!['3','15'].includes(tf))continue;
    const old=markets.get(tf);
    if(old&&Number(m.receivedAt)<Number(old.receivedAt))continue;
    if(old&&Number(m.signalObservedAt)>0&&Number(old.signalObservedAt)>0&&Number(m.signalObservedAt)<Number(old.signalObservedAt))continue;
@@ -15,7 +15,7 @@ function openAnalysisStream({req,res,symbol,bus,fetchMarkets,now=Date.now}){
   }
  }
  function send(){if(!closed)res.write('event: timeframes\ndata: '+JSON.stringify(dualAnalysis([...markets.values()],symbol,now()))+'\n\n');}
- function event(m){if(m?.symbol!==symbol)return;update([m]);send();}
+ function event(m){if(m?.symbol!==symbol||!['3','15'].includes(String(m?.timeframe)))return;update([m]);send();}
  res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
  bus.on('market',event);
  const keepalive=setInterval(()=>{
