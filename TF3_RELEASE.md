@@ -1,17 +1,17 @@
-# ZenCore TF3 — ATR8 / ribbon / close all
+# ZenCore TF3 — ATR14 / ribbon / close all
 
 Release scope: application, Pine feed, dispatcher, Telegram, monitoring and web configuration only. Connector and EA source/binaries unchanged.
 
 ## Active scalping policy
-- TF3; ATR(8); MTF 5/10/15.
+- TF3; ATR(14); MTF 5/10/15.
 - SOLID from native chart; held until opposite live HEMA ribbon or native Close All.
 - Mandatory matching HEMA20/40 colour and HEMA40 slope >=0.05 ATR versus prior bar.
 - Minimum 5/6 current confirmations: price vs original entry, WT, both HEMA slopes, checklist >=3/5, forecast thresholds 45, directional MTF.
-- SL max(0.65 ATR, last-three-closed-bar structure plus one tick), reject if tick-rounded distance >0.75 ATR.
+- SL 0.65 ATR(14) from SOP-completion entry, rounded outward to the symbol tick. No three-candle structure gate or 0.75 ATR rejection.
 - TP1 min(0.5 ATR,3), TP2 1 ATR, TP3 1.5 ATR.
 - TP1 lock entry +/-0.50 (price units), TP2 lock TP1, TP3 lock TP2.
 - Native chart Close Separuh now means CLOSE ALL for the matching TF3 setup.
-- ATR/structure/entry anchor fixed at SOP completion, not broker fill. Existing EA supports exact supplied SL.
+- ATR/entry anchor fixed at SOP completion, not broker fill. Existing EA supports exact supplied SL.
 - No automatic TF2/TF3 switching. No profit claims or native Pine compilation verification.
 
 ## Compatibility
@@ -23,7 +23,7 @@ TF3 orders reuse the existing TF2_SCALPING transport mode/magic and existing lot
 3. Replace the scalping indicator with ZenCore_TF3_Scalp.pine. Existing chart plan remains the native SOLID source; SOP80 Entry and SL/TP plots are the execution plan.
 4. Set the existing webhook secret privately; never share it in screenshots.
 5. Create Dashboard and Execution alerts using the two feed-channel settings and Any alert() function call, with the existing ZenCore webhook URL. Each alert captures its own indicator settings.
-6. Verify TF3_DASHBOARD and TF3_EXECUTION in admin monitoring, fresh timestamps, correct rule TF3_SOLID_RIBBON_V1 and ATR period 8.
+6. Verify TF3_DASHBOARD and TF3_EXECUTION in admin monitoring, fresh timestamps, correct rule TF3_SOLID_RIBBON_V1 and ATR period 14.
 7. Existing accounts retain their ON/OFF status, broker login, lot/layers and real/demo authorization. No force orders are submitted during deployment.
 
 ## Rollback
