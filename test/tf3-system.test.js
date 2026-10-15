@@ -112,8 +112,8 @@ test('TF3 accepts exactly 4/6 for BUY and SELL, rejects 3/6 and keeps mandatory 
   f.row[43]=side==='BUY'?40:40;f.row[42]=side==='BUY'?'BULLISH':'BEARISH';
   f.row[66].dashboardAi.mtfScore=-sign;
   let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.equal(m.strategyNormal.sop.requiredPassed,4);a.ok(C.createEntryDecision(m));
-  f.batch.emittedAt++;f.row[66].entryAuthorizedAt=f.batch.emittedAt;f.row[13]=-sign*2;
-  m=Hub.ingest(f.batch,f.now+2)[0];a.equal(m.strategyNormal.sop.passed,3);a.equal(C.createEntryDecision(m),null);
+  const bad=fixture(side);bad.row[43]=40;bad.row[42]=side==='BUY'?'BULLISH':'BEARISH';bad.row[66].dashboardAi.mtfScore=-sign;bad.row[13]=-sign*2;
+  m=market(bad);a.equal(m.strategyNormal.sop.passed,3);a.equal(C.createEntryDecision(m),null);
  }
 });
 test('chart renders SOP completion plan and suppresses native trade levels on TF3',()=>{
