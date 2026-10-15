@@ -99,7 +99,7 @@ function telegramMessage(e){
   const p=e.telegramPlan, q=e.telegramQuality;
   if(e.telegramSop?.version==='NORMAL_20261001_TF3_RIBBON_V1'){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF3 • SCALPING\n${e.symbol} • ${e.side}\nSOP ${s.gates.filter(g=>g.pass).length}/6 • HEMA searah\nMTF 5/10/15: ${s.mtfScore}\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nTP1 → SL entry ${e.side==='BUY'?'+':'−'}0.50\n\n${analysisContext(s)}\n\n${footer}`;
+    return `ZENCORE | SOLID ENTRY TF3 • SCALPING\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n${e.symbol} • ${e.side}\nSOP ${s.gates.filter(g=>g.pass).length}/6 • HEMA searah\nMTF 5/10/15: ${s.mtfScore}\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nTP1 → SL entry ${e.side==='BUY'?'+':'−'}0.50\n\n${analysisContext(s)}\n\n${footer}`;
   }
 
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){

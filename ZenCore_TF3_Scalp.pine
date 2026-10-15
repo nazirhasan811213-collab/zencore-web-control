@@ -4,7 +4,7 @@ indicator('ZenCore AI Dashboard Pro + Alerts â€” Original + TF3 SOLID HOLD TF3 Â
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF3 Web Feed"
 zc24_feed = input.bool(true, "Aktifkan web feed", group=zc24_group)
-zc24_channel = input.string("Dashboard", "Feed channel", options=["Dashboard", "Execution"], group=zc24_group)
+zc24_channel = input.string("Unified", "Feed channel", options=["Unified", "Dashboard", "Execution"], group=zc24_group)
 zc24_secret = input.string("", "Webhook secret", group=zc24_group, display=display.none)
 zc24_symbol_ok = str.contains(syminfo.ticker, "XAUUSD")
 
@@ -1631,7 +1631,7 @@ string zc24_hema_json = "{\"version\":\"HEMA3_LIVE_V1\",\"tf3\":{\"fast\":" + f_
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
 string zc_native_signals = "{\"primaryBuy\":" + f_bool(is_zone_turn_green) + ",\"primarySell\":" + f_bool(is_zone_turn_red) + ",\"solidPulse\":" + f_bool(zc_seq_pulse) + ",\"reentry\":" + f_quote(zc_native_reentry) + ",\"momentumBuy\":" + f_bool(continuation_buy) + ",\"momentumSell\":" + f_bool(continuation_sell) + ",\"nativeEntry\":" + f_num(curr_entry) + ",\"nativeSl\":" + f_num(curr_sl) + ",\"nativeTp1\":" + f_num(curr_tp1) + ",\"nativeTp2\":" + f_num(curr_tp2) + ",\"nativeTp3\":" + f_num(curr_tp3) + "}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(f_advice(ai_coach)) + ",\"aiCoach\":" + f_quote(ai_coach) + ",\"dashboard\":" + zc_all_dashboard + ",\"chartSignals\":" + zc_native_signals + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-RIBBON-ATR14-ENTRY-1.2\",\"riskPlanVersion\":\"TF3_ATR_ENTRY_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-UNIFIED-FLOW-1.3\",\"riskPlanVersion\":\"TF3_ATR_ENTRY_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
@@ -1702,20 +1702,20 @@ array.push(zc24_parts, f_bool(false))
 array.push(zc24_parts, zc24_hema_json)
 array.push(zc24_parts, zc24_meta_json)
 
-string zc24_payload = "{\"authToken\":" + f_quote(zc24_secret) + ",\"feedUpdateVersion\":\"SPLIT_CHANNEL_BOOTSTRAP_V2\",\"snapshotIntervalMs\":30000,\"feedChannel\":" + f_quote(str.upper(zc24_channel)) + ",\"feedVersion\":\"TF3_REALTIME_V1\",\"confirmed\":" + f_bool(barstate.isconfirmed) + ",\"emittedAt\":" + str.tostring(timenow) + ",\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"tpMode\":\"Fixed R:R\",\"markets\":[[" + array.join(zc24_parts, ",") + "]]}"
+string zc24_payload = "{\"authToken\":" + f_quote(zc24_secret) + ",\"feedUpdateVersion\":\"SPLIT_CHANNEL_BOOTSTRAP_V2\",\"snapshotIntervalMs\":30000,\"feedChannel\":" + f_quote(zc24_channel == "Dashboard" ? "DASHBOARD" : "EXECUTION") + ",\"feedVersion\":\"TF3_REALTIME_V1\",\"confirmed\":" + f_bool(barstate.isconfirmed) + ",\"emittedAt\":" + str.tostring(timenow) + ",\"schemaVersion\":\"32.3-EXIT-STEPLOCK\",\"source\":\"ZenCore Multi-Pair Feed\",\"encoding\":\"zencore-compact-v1\",\"timeframe\":\"3\",\"tpMode\":\"Fixed R:R\",\"markets\":[[" + array.join(zc24_parts, ",") + "]]}"
 if barstate.isrealtime and zc24_feed and zc24_chart_ok
     zc24_started := true
     while array.size(zc24_sends) > 0 and timenow - array.get(zc24_sends, 0) > 180000
         array.shift(zc24_sends)
     int zc24_count = array.size(zc24_sends)
-    bool zc24_dashboard_due = zc24_channel == "Dashboard" and timenow - zc24_last_sent >= 30000 and zc24_count < 6
-    bool zc24_execution_due = zc24_channel == "Execution" and zc24_count < 12 and (zc_hold_new_source or zc80_new_solid or zc_close_all_pulse or zc24_event or zc24_bootstrap or zc24_protection != zc24_sent_protection)
+    bool zc24_dashboard_due = (zc24_channel == "Dashboard" or zc24_channel == "Unified") and timenow - zc24_last_sent >= 30000 and zc24_count < 6
+    bool zc24_execution_due = zc24_channel != "Dashboard" and zc24_count < 12 and (zc_hold_new_source or zc80_new_solid or zc_close_all_pulse or zc24_event or zc24_bootstrap or zc24_protection != zc24_sent_protection)
     if zc24_dashboard_due or zc24_execution_due
         alert(zc24_payload, alert.freq_all)
         array.push(zc24_sends, timenow)
         zc24_last_sent := timenow
         zc24_sent_protection := zc24_protection
-        if zc24_channel == "Execution"
+        if zc24_channel != "Dashboard"
             if zc24_exit_action == "CLOSE_50_NOW"
                 xc_half_event_sent := true
             if zc24_closed_now

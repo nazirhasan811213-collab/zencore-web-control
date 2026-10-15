@@ -51,3 +51,57 @@ test('previous structure-plan version cannot authorize a new entry',()=>{
  const f=fixture();f.row[66].riskPlanVersion='TF3_ATR_STRUCTURE_V1';
  const m=market(f);a.equal(m.strategyNormal.state,'WAIT');a.equal(C.createEntryDecision(m),null);
 });
+
+test('newer dashboard cannot consume an unseen execution event; same-channel replay remains blocked',()=>{
+ const f=fixture(),dash={...f.batch,feedChannel:'DASHBOARD',emittedAt:f.now+10};
+ a.equal(Hub.ingest(dash,f.now+11).length,1);
+ const exec=Hub.ingest(f.batch,f.now+12);
+ a.equal(exec.length,1);a.ok(C.createEntryDecision(exec[0]));
+ a.equal(Hub.ingest(f.batch,f.now+13).length,0);
+});
+
+test('reversed channel arrival delivers one TF3 command while dashboard plan remains independent',async()=>{
+ const {createRealtimeDispatcher}=require('../realtime-dispatcher');
+ const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
+ const f=fixture(),m=market(f),at=f.now,store=new MemoryAutoTradeStore();
+ const token='zcpod_'+'v'.repeat(48),hash=tokenHash(token);
+ const pod={id:'pod-flow',userId:'flow',tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
+ store.podsByUser.set('flow',pod);store.podsByToken.set(hash,pod);
+ let dispatcher;
+ const svc=createAutoTradeService({store,now:()=>at+20,scalpingTimeframe:'3',localEaExecutionUserIds:['flow'],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,tf)=>dispatcher.getLatestMarket(sym,tf)});
+ dispatcher=createRealtimeDispatcher({dispatch:(batch,current)=>svc.dispatchMarkets(batch,current),fetchMarkets:async()=>[]});
+ await svc.saveSettings('flow',{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});await store.setControl('flow',{desiredState:'ON',effectiveState:'ON'});
+ const dashboard=JSON.parse(JSON.stringify(m));dashboard.feedChannel='DASHBOARD';dashboard.entryEvent=false;dashboard.signalObservedAt=at+10;dashboard.receivedAt=at+11;
+ for(const k of ['entry','sl','tp1','tp2','tp3'])dashboard.strategyNormal.plan[k]+=.01;
+ await dispatcher.onMarket(dashboard);await dispatcher.onMarket(m);
+ const result=await svc.nextCommand(token);
+ a.equal(result.command.type,'PLACE_SETUP');a.equal(result.command.payload.entry,m.strategyNormal.plan.entry);
+ await svc.acknowledgeCommand(token,result.command.id,{status:'EXECUTED',code:'SETUP_OPENED'});
+ a.equal((await store.listAudit('flow',30)).some(e=>e.type==='COMMAND_ACKNOWLEDGED'),true);
+ a.equal((await svc.nextCommand(token)).command,null);
+});
+
+test('independent dashboard cannot override side, source setup or price range checks',()=>{
+ const check=require('../entry-delivery-check').checkEntryDelivery;
+ for(const [change,reason] of [[m=>m.strategyNormal.side='SELL','SOP_CONFIRMATION_FAILED'],[m=>m.setupKey='other','SETUP_CHANGED'],[m=>m.price=m.strategyNormal.plan.tp1,'PRICE_OUTSIDE_ENTRY_RANGE']]){
+  const f=fixture(),m=market(f),cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD']},null,f.now);
+  const dashboard=JSON.parse(JSON.stringify(m));dashboard.feedChannel='DASHBOARD';change(dashboard);
+  a.equal(check(cmd,dashboard,f.now).reason,reason);
+ }
+});
+test('Unified Pine uses one execution stream with heartbeat budget and explicit Telegram status',()=>{
+ const text=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');
+ a.match(text,/input.string\("Unified", "Feed channel"/);
+ a.match(text,/zc24_channel == "Dashboard" \? "DASHBOARD" : "EXECUTION"/);
+ a.match(text,/zc24_count < 6/);a.match(text,/zc24_count < 12/);
+ a.match(require('node:fs').readFileSync(require.resolve('../analysis-telegram'),'utf8'),/BELUM SAH ORDER MT5/);
+});
+
+test('newer dashboard does not suppress a matching execution close event',async()=>{
+ const {createRealtimeDispatcher}=require('../realtime-dispatcher'),seen=[];
+ const f=fixture(),m=market(f),exit={...m,entryEvent:false,positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};
+ const dashboard={...m,feedChannel:'DASHBOARD',entryEvent:false,signalObservedAt:f.now+10};
+ const dispatcher=createRealtimeDispatcher({dispatch:async batch=>seen.push(...batch),fetchMarkets:async()=>[]});
+ await dispatcher.onMarket(dashboard);await dispatcher.onMarket(exit);
+ a.equal(seen.at(-1),exit);
+});
