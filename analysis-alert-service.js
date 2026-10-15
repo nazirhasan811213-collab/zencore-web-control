@@ -182,7 +182,7 @@ class AnalysisAlerts {
     if(queued && this.token)this.deliver().catch(()=>console.error('Telegram delivery unavailable'));
   }
   async activePlan(symbol,timeframe=2) {
-    if(![2,15].includes(timeframe))throw fail('Timeframe tidak sah.');
+    if(![2,3,15].includes(timeframe))throw fail('Timeframe tidak sah.');
     if (!/^[A-Z0-9._-]{2,20}$/.test(symbol)) throw fail('Pair tidak sah.');
     const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol+'|'+timeframe])).rows[0]?.data:this.states.get(symbol+'|'+timeframe);
     if (state?.activePlan) return state.activePlan;
@@ -233,3 +233,4 @@ class AnalysisAlerts {
   }
 }
 module.exports={AnalysisAlerts};
+

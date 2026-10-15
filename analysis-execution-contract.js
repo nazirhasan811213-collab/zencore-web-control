@@ -93,6 +93,10 @@
   function entryConfirmationsPass(market = {}) {
     const n = market.strategyNormal || {}, s = n.sop || {};
     if (n.state !== 'READY') return false;
+    if(n.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
+      const adapter=typeof module==='object'&&module.exports?require('./tf3-scalping'):globalThis.ZenCoreTf3;
+      return String(market.timeframe)==='3'&&n.tf==='3m'&&n.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&adapter?.confirmations(n.side,s).pass&&adapter.planPass(n.side,n.plan,s);
+    }
     if(solid80Tf2(n))return solid80Tf2Confirmations(n.side,s,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(n.entrySopVersion),n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V16'?5:6)&&String(market.timeframe)==='2'&&n.tf==='2m';
     if (!String(n.entrySopVersion || '').startsWith('NORMAL_20261001_')) return true;
     if(currentTf2(n))return currentSolidTf2Confirmations({side:n.side,solid:n.solid,green:s.sopGreen,forecast:s.forecast,power:s.marketPower,minimumGreen:septTf2(n)?4:3,price:septTf2(n)?s.hema2?.price:market.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&String(market.timeframe)==='2'&&n.tf==='2m';
@@ -147,6 +151,10 @@
   function createEntryDecision(market = {}) {
     if(typeof process!=='undefined'&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return null;
     const normal = market.strategyNormal || {};
+    if(normal.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
+      const adapter=typeof module==='object'&&module.exports?require('./tf3-scalping'):globalThis.ZenCoreTf3;
+      const decision=adapter?.entryDecision(market);return decision?deepFreeze(decision):null;
+    }
     if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(normal.entrySopVersion)&&
       (normal.sop?.riskPlanVersion!=='TF2_SCALP_ATR_CAP_V1'||!tf2ScalpPlanPass(normal.side,normal.plan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(normal.entrySopVersion)?normal.sop?.riskAtrReference:normal.sop?.atrReference)))return null;
     if(['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(normal.entrySopVersion)){
@@ -255,7 +263,10 @@
     if (!SUPPORTED_MARKETS.includes(symbol) || !receivedAt) return null;
 
     const actions = [];
-    const slMoveAction = String(management.slMoveAction || 'NONE').toUpperCase();
+    const requestedAction = String(management.slMoveAction || 'NONE').toUpperCase();
+    // Existing EA uses absolute activeSl for MOVE_SL_TP1; MOVE_SL_ENTRY ignores it.
+    if(requestedAction==='MOVE_SL_ENTRY_PLUS_050'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF3_RIBBON_V1')return null;
+    const slMoveAction=requestedAction==='MOVE_SL_ENTRY_PLUS_050'?'MOVE_SL_TP1':requestedAction;
     if (management.slMoveTriggered === true &&
         ['MOVE_SL_ENTRY', 'MOVE_SL_TP1', 'MOVE_SL_TP2'].includes(slMoveAction)) {
       const activeSl = number(management.activeSl);
@@ -270,7 +281,7 @@
 
     const exitAction = String(management.action || 'IDLE').toUpperCase();
     if (exitAction === 'CLOSE_50_NOW') {
-      actions.push({ type: 'CLOSE_PERCENT', percent: 50, reason: 'CLOSE_SEPARUH' });
+      actions.push({ type: 'CLOSE_PERCENT', percent: market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?100:50, reason: market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?'EXIT_ALL':'CLOSE_SEPARUH' });
     }
     if (['EXIT_REMAINING', 'EXIT_ALL', 'EXIT_SL'].includes(exitAction)) {
       actions.push({ type: 'CLOSE_PERCENT', percent: 100, reason: exitAction });
@@ -281,7 +292,7 @@
       .map(action => `${action.type}:${action.activeSl ?? action.percent ?? ''}:${action.reason || ''}`)
       .join(',');
     return deepFreeze({
-      managementKey: (market.setupKey&&['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(market.strategyNormal?.entrySopVersion)
+      managementKey: (market.setupKey&&['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(market.strategyNormal?.entrySopVersion)
         ?[CONTRACT_VERSION,symbol,String(market.timeframe),market.setupKey,actionKey]:[CONTRACT_VERSION,symbol,receivedAt,actionKey]).join('|'),
       snapshot: {
         contractVersion: CONTRACT_VERSION,
@@ -291,6 +302,7 @@
         schemaVersion: SCHEMA_VERSION,
         symbol,
         executionTimeframe:String(market.timeframe||market.strategyNormal?.tf||'2'),
+        ...(market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?{setupKey:market.setupKey,analysisSopVersion:market.strategyNormal.entrySopVersion}:{}),
         ...(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1'].includes(management.entryAnchor)?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
         actions,
         reason: String(management.reason || '').slice(0, 180),
@@ -316,3 +328,4 @@
     createManagementDecision
   };
 });
+

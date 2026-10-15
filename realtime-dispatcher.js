@@ -20,7 +20,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  function sameConfirmation(entry,current){return current?.feedChannel==='DASHBOARD'&&entryConfirmationsPass(current)&&
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
-  if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','15'].includes(String(m.timeframe)))return;
+  if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','3','15'].includes(String(m.timeframe)))return;
   const k=key(m),previous=pending.get(k),old=latest.get(k);
   if(old&&Number(m.signalObservedAt||m.receivedAt)<Number(old.signalObservedAt||old.receivedAt))return;
   latest.set(k,m);
@@ -33,3 +33,4 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  return {tick,onMarket,getLatestMarket:(symbol,tf)=>latest.get(String(symbol)+'|'+String(tf))};
 }
 module.exports={createRealtimeDispatcher};
+

@@ -7,7 +7,7 @@ function openAnalysisStream({req,res,symbol,bus,fetchMarkets,now=Date.now}){
  const markets=new Map();let closed=false;
  function update(items){
   for(const m of items||[]){
-   const tf=String(m?.timeframe);if(m?.symbol!==symbol||!['2','15'].includes(tf))continue;
+   const tf=String(m?.timeframe);if(m?.symbol!==symbol||!['2','3','15'].includes(tf))continue;
    const old=markets.get(tf);
    if(old&&Number(m.receivedAt)<Number(old.receivedAt))continue;
    if(old&&Number(m.signalObservedAt)>0&&Number(old.signalObservedAt)>0&&Number(m.signalObservedAt)<Number(old.signalObservedAt))continue;
@@ -30,3 +30,4 @@ function openAnalysisStream({req,res,symbol,bus,fetchMarkets,now=Date.now}){
  return {close};
 }
 module.exports={openAnalysisStream};
+
