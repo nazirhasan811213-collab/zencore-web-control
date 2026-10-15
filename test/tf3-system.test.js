@@ -105,3 +105,23 @@ test('newer dashboard does not suppress a matching execution close event',async(
  await dispatcher.onMarket(dashboard);await dispatcher.onMarket(exit);
  a.equal(seen.at(-1),exit);
 });
+
+test('TF3 accepts exactly 4/6 for BUY and SELL, rejects 3/6 and keeps mandatory HEMA',()=>{
+ for(const side of ['BUY','SELL']){
+  const f=fixture(side),sign=side==='BUY'?1:-1;
+  f.row[43]=side==='BUY'?40:40;f.row[42]=side==='BUY'?'BULLISH':'BEARISH';
+  f.row[66].dashboardAi.mtfScore=-sign;
+  let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.equal(m.strategyNormal.sop.requiredPassed,4);a.ok(C.createEntryDecision(m));
+  const bad=fixture(side);bad.row[43]=40;bad.row[42]=side==='BUY'?'BULLISH':'BEARISH';bad.row[66].dashboardAi.mtfScore=-sign;bad.row[13]=-sign*2;
+  m=market(bad);a.equal(m.strategyNormal.sop.passed,3);a.equal(C.createEntryDecision(m),null);
+ }
+});
+test('chart renders SOP completion plan and suppresses native trade levels on TF3',()=>{
+ const text=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');
+ a.match(text,/zc80_passed >= 4/);a.doesNotMatch(text,/zc80_passed >= 5|Minimum 5\/6/);
+ a.match(text,/transition_line := timeframe.period == "3" \? na : line.new/);
+ a.match(text,/entry_label := timeframe.period == "3" \? na : label.new/);
+ a.match(text,/array.from\(zc_seq_entry, draft_sl, zc_seq_entry\+dir\*math.min/);
+ a.match(text,/"ENTRY SOP " \+ zc_seq_side, "SL SOP", "TP1 SOP", "TP2 SOP", "TP3 SOP"/);
+ a.match(text,/if timeframe.period != "3"/);
+});

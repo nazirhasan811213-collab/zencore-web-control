@@ -17,6 +17,7 @@ varip string zc_seq_seen = ""
 varip float zc_seq_source = na
 varip int zc_seq_completed = na
 varip float zc_seq_entry = na
+varip int zc_plan_bar = na
 varip float zc_seq_risk = na
 varip float draft_sl = na
 varip bool zc80_eligible = false
@@ -190,16 +191,18 @@ f_trimTradeModels() =>
         box.delete(array.shift(tmBoxes))
 
 f_addLineLabel(float _y, int _x1, int _x2, color _col, string _txt) =>
-    line ln = line.new(_x1, _y, _x2, _y, xloc=xloc.bar_index, color=_col, width=2)
-    label lb = label.new(_x2, _y, _txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=color.black, color=_col, size=size.normal)
-    array.push(tmLines, ln)
-    array.push(tmLabels, lb)
+    if timeframe.period != "3"
+        line ln = line.new(_x1, _y, _x2, _y, xloc=xloc.bar_index, color=_col, width=2)
+        label lb = label.new(_x2, _y, _txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=color.black, color=_col, size=size.normal)
+        array.push(tmLines, ln)
+        array.push(tmLabels, lb)
 
 f_addTPLineLabel(float _y, int _x1, int _x2, color _col, string _txt) =>
-    line ln = line.new(_x1, _y, _x2, _y, xloc=xloc.bar_index, color=_col, width=2)
-    label lb = label.new(_x2, _y, _txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=color.black, color=_col, size=size.normal)
-    array.push(tpLines, ln)
-    array.push(tpLabels, lb)
+    if timeframe.period != "3"
+        line ln = line.new(_x1, _y, _x2, _y, xloc=xloc.bar_index, color=_col, width=2)
+        label lb = label.new(_x2, _y, _txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=color.black, color=_col, size=size.normal)
+        array.push(tpLines, ln)
+        array.push(tpLabels, lb)
 
 f_addMgmtLabel(int x, float y, string txt, string style, color col, color textcol, string sz) =>
     label lb = label.new(x, y, txt, style=style, color=col, textcolor=textcol, size=sz)
@@ -286,11 +289,11 @@ if is_zone_turn_green
         line.set_x2(transition_line, bar_index - 1)
     
     saved_entry_price := close + point_offset 
-    transition_line := line.new(x1=bar_index - 1, y1=saved_entry_price, x2=bar_index, y2=saved_entry_price, color=color.green, style=line.style_dashed, width=2, extend=extend.right)
+    transition_line := timeframe.period == "3" ? na : line.new(x1=bar_index - 1, y1=saved_entry_price, x2=bar_index, y2=saved_entry_price, color=color.green, style=line.style_dashed, width=2, extend=extend.right)
     
     if not na(entry_label)
         label.delete(entry_label)
-    entry_label := label.new(x=bar_index, y=saved_entry_price, text="Entry BUY: " + str.tostring(saved_entry_price, format.mintick), color=color.new(color.green, 80), textcolor=color.black, style=label.style_label_lower_left, size=size.normal)
+    entry_label := timeframe.period == "3" ? na : label.new(x=bar_index, y=saved_entry_price, text="Entry BUY: " + str.tostring(saved_entry_price, format.mintick), color=color.new(color.green, 80), textcolor=color.black, style=label.style_label_lower_left, size=size.normal)
 
 if is_zone_turn_red
     if not na(transition_line)
@@ -298,11 +301,11 @@ if is_zone_turn_red
         line.set_x2(transition_line, bar_index - 1)
         
     saved_entry_price := close - point_offset
-    transition_line := line.new(x1=bar_index - 1, y1=saved_entry_price, x2=bar_index, y2=saved_entry_price, color=color.red, style=line.style_dashed, width=2, extend=extend.right)
+    transition_line := timeframe.period == "3" ? na : line.new(x1=bar_index - 1, y1=saved_entry_price, x2=bar_index, y2=saved_entry_price, color=color.red, style=line.style_dashed, width=2, extend=extend.right)
     
     if not na(entry_label)
         label.delete(entry_label)
-    entry_label := label.new(x=bar_index, y=saved_entry_price, text="Entry SELL: " + str.tostring(saved_entry_price, format.mintick), color=color.new(color.red, 80), textcolor=color.black, style=label.style_label_upper_left, size=size.normal)
+    entry_label := timeframe.period == "3" ? na : label.new(x=bar_index, y=saved_entry_price, text="Entry SELL: " + str.tostring(saved_entry_price, format.mintick), color=color.new(color.red, 80), textcolor=color.black, style=label.style_label_upper_left, size=size.normal)
 
 if not na(entry_label)
     label.set_x(entry_label, bar_index + 2)
@@ -343,8 +346,9 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
         float z1 = f_priceFromRatio(SL, ENTRY, 0.786)
         float z2 = f_priceFromRatio(SL, ENTRY, 0.236)
         
-        box bx = box.new(x1, math.max(z1, z2), x2, math.min(z1, z2), xloc=xloc.bar_index, border_color=colZoneBd, bgcolor=colZoneBg)
-        array.push(tmBoxes, bx)
+        box bx = timeframe.period == "3" ? na : box.new(x1, math.max(z1, z2), x2, math.min(z1, z2), xloc=xloc.bar_index, border_color=colZoneBd, bgcolor=colZoneBg)
+        if not na(bx)
+            array.push(tmBoxes, bx)
         
         f_addLineLabel(SL,    x1, x2, colSL,    f_lbl("🛑 Stoploss", SL))
         f_addLineLabel(ENTRY, x1, x2, colEntry, f_lbl("🎯 Entry", ENTRY))
@@ -1492,17 +1496,18 @@ float draft_raw_sl = zc24_buy ? close-draft_distance : close+draft_distance
 float draft_candidate_sl = (zc24_buy ? math.floor(draft_raw_sl/syminfo.mintick+1e-9) : math.ceil(draft_raw_sl/syminfo.mintick-1e-9))*syminfo.mintick
 bool draft_plan_ok = atr > 0 and draft_candidate_sl > 0 and (zc24_buy ? draft_candidate_sl < close : draft_candidate_sl > close)
 bool draft_ribbon = zc24_buy ? he1 > he2 : he1 < he2
-bool zc_hold_qualify = draft_ribbon and draft_plan_ok and not xc_active and zc_hold_active and na(zc_seq_completed) and zc24_tf3 and zc80_data and zc80_hema40 and zc80_passed >= 5
+bool zc_hold_qualify = draft_ribbon and draft_plan_ok and not xc_active and zc_hold_active and na(zc_seq_completed) and zc24_tf3 and zc80_data and zc80_hema40 and zc80_passed >= 4
 if zc_hold_qualify
     zc80_eligible := true
     zc_seq_completed := zc_seq_now
     zc_seq_entry := close
+    zc_plan_bar := bar_index
     zc_seq_risk := atr
     draft_sl := draft_candidate_sl
 // 30 seconds is transport freshness; source SOLID has no time expiry.
 // SOP #1 is the native chart SOLID event. Qualification is a separate gate.
 bool zc24_solid = zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
-bool zc24_ready = zc24_solid and zc80_eligible and draft_ribbon and zc80_data and zc80_hema40 and zc80_passed >= 5
+bool zc24_ready = zc24_solid and zc80_eligible and draft_ribbon and zc80_data and zc80_hema40 and zc80_passed >= 4
 // Execution plan is independent. Never overwrite curr_* native chart state.
 if zc_hold_qualify
     xc_half_event_sent := false
@@ -1518,7 +1523,7 @@ if zc_hold_qualify
     xc_full_bar := na
     xc_sl := draft_sl
     xc_exit := "NONE"
-    xc_reason := "Minimum 5/6 SOP lengkap"
+    xc_reason := "Minimum 4/6 SOP lengkap"
 string zc24_sl_move = xc_active and xc_stage > 0 ? (xc_stage == 1 ? "MOVE_SL_ENTRY_PLUS_050" : xc_stage == 2 ? "MOVE_SL_TP1" : "MOVE_SL_TP2") : "NONE"
 bool zc24_opposite_yellow = false
 if xc_active and not zc_hold_qualify
@@ -1542,7 +1547,7 @@ if xc_active and not zc_hold_qualify
 
 // Execution exits do not independently terminate the entry SOLID.
 zc24_solid := zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
-zc24_ready := zc24_solid and zc80_eligible and draft_ribbon and zc80_data and zc80_hema40 and zc80_passed >= 5
+zc24_ready := zc24_solid and zc80_eligible and draft_ribbon and zc80_data and zc80_hema40 and zc80_passed >= 4
 bool zc24_completed = not na(xc_setup) and not xc_active
 bool zc24_half_armed = xc_half
 int zc24_half_bar = xc_half_bar
@@ -1551,18 +1556,35 @@ int zc24_lock_stage = xc_stage
 int zc24_setup_at = zc_seq_bar
 string zc24_close_type = xc_exit
 string zc24_close_reason = xc_reason
-// Separate frozen SOP levels, so native fibo lines and signals are preserved.
-plot(zc_seq_entry, "SOP80 Entry (qualification)", color=colEntry, style=plot.style_linebr)
-plot(not na(zc_seq_completed) ? draft_sl : na, "SL 0.65 ATR14", color=colSL, style=plot.style_linebr)
-plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+math.min(.5*zc_seq_risk,3.0) : zc_seq_entry-math.min(.5*zc_seq_risk,3.0)) : na, "SOP80 TP1", color=colTP1, style=plot.style_linebr)
-plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+zc_seq_risk : zc_seq_entry-zc_seq_risk) : na, "SOP80 TP2", color=colTP2, style=plot.style_linebr)
-plot(not na(zc_seq_completed) ? (zc24_buy ? zc_seq_entry+1.5*zc_seq_risk : zc_seq_entry-1.5*zc_seq_risk) : na, "SOP80 TP3", color=colTP3, style=plot.style_linebr)
-plotshape(zc24_ready and not zc24_ready[1], title="SOP 24 Sep TF3 READY", style=shape.labelup, location=location.belowbar, color=color.aqua, text="SOP 80%\nREADY", textcolor=color.black, size=size.small)
+// One visible plan, sourced from the exact SOP-completion prices sent to execution.
+var line[] sopPlanLines = array.new_line()
+var label[] sopPlanLabels = array.new_label()
+if barstate.islast
+    while array.size(sopPlanLines) > 0
+        line.delete(array.pop(sopPlanLines))
+    while array.size(sopPlanLabels) > 0
+        label.delete(array.pop(sopPlanLabels))
+    if zc24_chart_ok and not na(zc_seq_completed)
+        float dir = zc24_buy ? 1.0 : -1.0
+        float[] levels = array.from(zc_seq_entry, draft_sl, zc_seq_entry+dir*math.min(.5*zc_seq_risk,3.0), zc_seq_entry+dir*zc_seq_risk, zc_seq_entry+dir*1.5*zc_seq_risk)
+        string[] names = array.from("ENTRY SOP " + zc_seq_side, "SL SOP", "TP1 SOP", "TP2 SOP", "TP3 SOP")
+        color[] colours = array.from(colEntry, colSL, colTP1, colTP2, colTP3)
+        int planStart = math.max(nz(zc_plan_bar, bar_index), bar_index-500)
+        for idx = 0 to 4
+            float level = array.get(levels, idx)
+            color levelColour = array.get(colours, idx)
+            array.push(sopPlanLines, line.new(planStart, level, bar_index+5, level, color=levelColour, width=2))
+            array.push(sopPlanLabels, label.new(bar_index+5, level, array.get(names,idx)+" : "+str.tostring(level,"#.00"), style=label.style_label_left, color=levelColour, textcolor=color.black, size=size.normal))
+    if dashOn and not na(dash_main)
+        table.cell(dash_main, 1, 11, na(zc_seq_completed) ? "TUNGGU SOP 4/6" : str.tostring(zc_seq_entry,"#.00"), text_color=color.yellow, text_halign=text.align_left, text_size=dashSize)
+plot(not na(zc_seq_completed) ? zc_seq_entry : na, "SOP Entry", display=display.data_window)
+plot(not na(zc_seq_completed) ? draft_sl : na, "SOP SL", display=display.data_window)
+
 string zc_display_side = zc_pending_key != "" ? zc_pending_side : zc_seq_side
 int zc_display_at = zc_pending_key != "" ? zc_pending_at : zc_seq_trigger
 var table zc24_table = table.new(position.top_left, 2, 11, bgcolor=color.new(#091720, 5), border_width=1)
 if barstate.islast
-    table.cell(zc24_table, 0, 0, "DRAFT · 5/6 + HEMA WAJIB", text_color=color.aqua)
+    table.cell(zc24_table, 0, 0, "DRAFT · 4/6 + HEMA WAJIB", text_color=color.aqua)
     table.cell(zc24_table, 1, 0, "NATIVE SOLID · TF3", text_color=color.orange)
     table.cell(zc24_table, 0, 1, "Chart", text_color=color.white)
     table.cell(zc24_table, 1, 1, zc24_chart_ok ? "TF3 SCALPING" : "GUNA TF3 / SCALPING", text_color=zc24_tf3 ? color.lime : color.red)
@@ -1631,7 +1653,7 @@ string zc24_hema_json = "{\"version\":\"HEMA3_LIVE_V1\",\"tf3\":{\"fast\":" + f_
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
 string zc_native_signals = "{\"primaryBuy\":" + f_bool(is_zone_turn_green) + ",\"primarySell\":" + f_bool(is_zone_turn_red) + ",\"solidPulse\":" + f_bool(zc_seq_pulse) + ",\"reentry\":" + f_quote(zc_native_reentry) + ",\"momentumBuy\":" + f_bool(continuation_buy) + ",\"momentumSell\":" + f_bool(continuation_sell) + ",\"nativeEntry\":" + f_num(curr_entry) + ",\"nativeSl\":" + f_num(curr_sl) + ",\"nativeTp1\":" + f_num(curr_tp1) + ",\"nativeTp2\":" + f_num(curr_tp2) + ",\"nativeTp3\":" + f_num(curr_tp3) + "}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(f_advice(ai_coach)) + ",\"aiCoach\":" + f_quote(ai_coach) + ",\"dashboard\":" + zc_all_dashboard + ",\"chartSignals\":" + zc_native_signals + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-UNIFIED-FLOW-1.3\",\"riskPlanVersion\":\"TF3_ATR_ENTRY_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-UNIFIED-SOP4-PLAN-1.4\",\"riskPlanVersion\":\"TF3_ATR_ENTRY_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
