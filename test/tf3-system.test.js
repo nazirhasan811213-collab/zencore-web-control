@@ -96,3 +96,12 @@ test('Unified Pine uses one execution stream with heartbeat budget and explicit 
  a.match(text,/zc24_count < 6/);a.match(text,/zc24_count < 12/);
  a.match(require('node:fs').readFileSync(require.resolve('../analysis-telegram'),'utf8'),/BELUM SAH ORDER MT5/);
 });
+
+test('newer dashboard does not suppress a matching execution close event',async()=>{
+ const {createRealtimeDispatcher}=require('../realtime-dispatcher'),seen=[];
+ const f=fixture(),m=market(f),exit={...m,entryEvent:false,positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};
+ const dashboard={...m,feedChannel:'DASHBOARD',entryEvent:false,signalObservedAt:f.now+10};
+ const dispatcher=createRealtimeDispatcher({dispatch:async batch=>seen.push(...batch),fetchMarkets:async()=>[]});
+ await dispatcher.onMarket(dashboard);await dispatcher.onMarket(exit);
+ a.equal(seen.at(-1),exit);
+});
