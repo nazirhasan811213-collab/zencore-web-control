@@ -22,18 +22,22 @@ function decode(row,batch){
   };
 }
 
-const entries=new Map();
+const entries=new Map(), channels=new Map();
 function ingest(batch,now=Date.now()){
  const out=[];
  if(batch?.feedVersion!=='TF3_REALTIME_V1'||String(batch.timeframe)!=='3'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>30000||now-batch.emittedAt< -5000)return out;
  for(const row of batch.markets){
   if(!Array.isArray(row)||row.length!==67||row[0]!=='XAUUSD'||row[65]?.version!=='HEMA3_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
   const d=decode(row,batch);if(!d||!Number.isFinite(d.time)||!Number.isFinite(d.close))continue;
-  const prev=entries.get(d.symbol);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt))continue;
+  const channelKey=d.symbol+'|'+batch.feedChannel;
+  const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt))continue;
   d.receivedAt=now;
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.positionExitAction,reason:d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
-  entries.set(d.symbol,m);out.push(m);
+  channels.set(channelKey,m);
+  const current=entries.get(d.symbol);
+  if(!current||m.signalObservedAt>=current.signalObservedAt)entries.set(d.symbol,m);
+  out.push(m);
  }
  return out;
 }

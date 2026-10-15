@@ -22,8 +22,11 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  function onMarket(m){
   if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','3','15'].includes(String(m.timeframe)))return;
   const k=key(m),previous=pending.get(k),old=latest.get(k);
-  if(old&&Number(m.signalObservedAt||m.receivedAt)<Number(old.signalObservedAt||old.receivedAt))return;
-  latest.set(k,m);
+  if(old&&Number(m.signalObservedAt||m.receivedAt)<Number(old.signalObservedAt||old.receivedAt)){
+   // Independent TradingView alerts can arrive in reverse channel order.
+   // Only a fresh authorized execution with still-matching current confirmations survives.
+   if(String(m.timeframe)!=='3'||m.feedChannel!=='EXECUTION'||!createEntryDecision(m)||!sameConfirmation(m,old))return;
+  }else latest.set(k,m);
   // Keep a fresh execution event through matching dashboard confirmations only.
   // Changed direction, setup or failed confirmations revoke every pending entry.
   if(!previous||!createEntryDecision(previous)||!sameConfirmation(previous,m))pending.set(k,m);

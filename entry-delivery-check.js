@@ -19,8 +19,12 @@ function checkEntryDelivery(command,market,at=Date.now()){
  const live=snap.entryAnchor==='LIVE_SIGNAL_PRICE_V1';
  const current=live?n.plan?.sourceChartPlan:n.plan;
  const expected=live?snap.sourceChartPlan:p;
- const changed=keys.filter(k=>!samePrice(current?.[k],expected?.[k]));
+ // Dashboard is a separate Pine instance; its completion tick can differ.
+ // Its current SOP/side/setup are checked above; the signed execution plan stays fixed.
+ const independentDashboard=String(market.timeframe)==='3'&&market.feedChannel==='DASHBOARD'&&snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1';
+ const changed=independentDashboard?[]:keys.filter(k=>!samePrice(current?.[k],expected?.[k]));
  if(changed.length)return fail('PLAN_CHANGED',{changedFields:changed});
+ if(snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'&&!(Number.isFinite(market.price)&&(p.side==='BUY'?market.price>p.sl&&market.price<p.tp1:market.price<p.sl&&market.price>p.tp1)))return fail('PRICE_OUTSIDE_ENTRY_RANGE');
  if(live&&!(p.side==='BUY'?market.price>expected.entry&&market.price<expected.tp1:market.price<expected.entry&&market.price>expected.tp1))return fail('PRICE_OUTSIDE_ENTRY_RANGE');
  return {ok:true,reason:null,...detail};
 }
