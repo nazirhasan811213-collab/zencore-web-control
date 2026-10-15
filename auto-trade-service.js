@@ -307,7 +307,7 @@ function createAutoTradeService(options = {}) {
       } catch (_) { checks.push('ENVELOPE_INVALID'); }
       // Whitelist metadata only: never return keys, tokens, signatures, envelopes, credentials or raw payloads.
       return { type: command.type, symbol: command.payload?.symbol || null,
-        timeframe: command.payload?.strategyMode === 'TF15_INTRA' ? '15' : '2', status: command.status,
+        timeframe: command.payload?.analysisSnapshot?.executionTimeframe || (command.payload?.strategyMode === 'TF15_INTRA' ? '15' : '2'), status: command.status,
         createdAt: command.createdAt, deliveredAt: command.deliveredAt, acknowledgedAt: command.acknowledgedAt,
         resultCode: String(command.result?.code || '').replace(/[^A-Za-z0-9_.-]/g,'').slice(0,40), checks };
     }) };
@@ -1126,7 +1126,11 @@ function createAutoTradeService(options = {}) {
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
-      const anchor=latest?.payload?.analysisSnapshot?.entryAnchor;
+      const latestSnap=latest?.payload?.analysisSnapshot;
+      if(latestSnap?.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'||p.analysisSnapshot?.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
+        if(latestSnap?.analysisSopVersion!==p.analysisSnapshot?.analysisSopVersion||latestSnap?.setupKey!==p.analysisSnapshot?.setupKey)return false;
+      }
+      const anchor=latestSnap?.entryAnchor;
       if(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1'].includes(anchor))return p.analysisSnapshot?.entryAnchor===anchor&&p.analysisSnapshot.entryCommandId===latest.id;
     }
     if(command.type==='MANUAL_EXIT_CONFIG'){
@@ -1145,11 +1149,12 @@ function createAutoTradeService(options = {}) {
       return true;
     }
     if(command.type!=='PLACE_SETUP')return true;
+    if(options.scalpingTimeframe==='3'&&command.payload?.strategyMode!=='TF15_INTRA'&&command.payload?.analysisSnapshot?.executionTimeframe!=='3')return false;
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     if(typeof options.getLatestMarket!=='function')return command.payload?.reentry?false:true;
-    const p=command.payload||{},snap=p.analysisSnapshot||{},tf=p.strategyMode==='TF15_INTRA'?'15':'2';
+    const p=command.payload||{},snap=p.analysisSnapshot||{},tf=snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?'3':p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
     if(p.reentry?.version===Reentry.VERSION){
       const pod=await store.getPodForUser(command.userId),cap=reentryCapability.get(command.userId);
@@ -1373,7 +1378,7 @@ function createAutoTradeService(options = {}) {
       // Re-entry is an authenticated MT5 close transition, never a webhook flag.
       // It is opt-in by the new EA capability and scalping range feed marker.
       const cap=reentryCapability.get(profile.userId);
-      if(typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
+      if(options.scalpingTimeframe!=='3'&&typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol==='XAUUSD'&&(x.strategyMode||'TF2_SCALPING')==='TF2_SCALPING')){
         const market=markets.find(m=>m.symbol==='XAUUSD'&&String(m.timeframe)==='2');
         const closure=reentryTracker.ready(profile.userId,pod,market,now()),half=Reentry.halfSettings(profile);
@@ -1390,6 +1395,7 @@ function createAutoTradeService(options = {}) {
       }
       for (const market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
+        if(options.scalpingTimeframe==='3'&&!['3','15'].includes(String(market.timeframe)))continue;
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
         if (!allowedDemoSymbols.includes(symbol) || !Core.permitsPositionEntry(market,positions)) continue;
         if (hostedAccount) {
@@ -1400,6 +1406,7 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || !isCurrent(market)) continue;
+        if(String(market.timeframe)==='3'&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
         const issued = hostedAccount
           ? await issueHostedCommand({
@@ -1445,6 +1452,10 @@ function createAutoTradeService(options = {}) {
         if(!positions.some(p=>p.symbol===symbol&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
         const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
+        const latestSnap=latest?.payload?.analysisSnapshot;
+        if(String(market.timeframe)==='3'||latestSnap?.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
+          if(hostedAccount||latestSnap?.analysisSopVersion!=='NORMAL_20261001_TF3_RIBBON_V1'||String(market.timeframe)!=='3'||market.setupKey!==latestSnap.setupKey)continue;
+        }
         const rebased=rebasedManagement(market,positions,latest);
         const management = Core.buildManagementCommand(rebased.market||{});
         const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
@@ -1521,3 +1532,4 @@ module.exports = {
   validateCredentialEnvelope,
   buildCredentialEncryptionConfig
 };
+

@@ -23,7 +23,7 @@ const { SignalOutcomeStore } = require('./signal-outcome-store');
 const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let signalOutcomes = null;
-require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(market));
+require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(String(market.timeframe)==='2'?{...market,strategyNormal:{...market.strategyNormal,state:'WAIT'}}:market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = Number(process.env.ZENCORE_INTERNAL_V17_PORT || (process.env.NODE_ENV==='test'?PUBLIC_PORT+3:10003));
@@ -244,6 +244,7 @@ if (AUTH_ENABLED) {
       console.log(`ZenCore local EA demo-only scoped gate: ${localEaDemoExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
+        scalpingTimeframe: '3',
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -1395,7 +1396,7 @@ function fetchLocalMarkets() {
         if (response.statusCode !== 200) return reject(new Error(`Market API HTTP ${response.statusCode}`));
         try {
           const parsed = JSON.parse(body);
-          resolve([...(Array.isArray(parsed.markets) ? parsed.markets : []),...require('./strategy-market-hub').markets()]);
+          resolve([...(Array.isArray(parsed.markets) ? parsed.markets : []),...require('./strategy-market-hub').markets(),...require('./tf3-market-hub').markets()]);
         } catch (_) {
           reject(new Error('Market API returned invalid JSON'));
         }
@@ -1591,6 +1592,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Realtime_Feed.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF3_Scalp.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/tf3-scalping.js') return sendAuthAsset(res, 'tf3-scalping.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp_Caps.pine') return sendAuthAsset(res, 'ZenCore_Original_Full_TF2_Scalp_Caps.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_SOLID80.pine') return sendAuthAsset(res, 'ZenCore_TF2_SOLID_80PCT_Draft.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCoreExecutor.mq5') return sendAuthAsset(res, 'ea-local-connector/ZenCoreExecutor.mq5', 'text/plain; charset=utf-8');
@@ -1866,3 +1869,4 @@ const server = http.createServer(async (req, res) => {
 server.listen(PUBLIC_PORT, '0.0.0.0', () => {
   console.log(`ZenCore ${SITE_MODE === 'precision-entry' ? 'Precision Entry' : 'Retired Legacy'} gateway running on port ${PUBLIC_PORT} -> V17 ${V17_PORT}${AUTH_ENABLED ? ' • AUTH ON' : ' • AUTH OFF'}`);
 });
+

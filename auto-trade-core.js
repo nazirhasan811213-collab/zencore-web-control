@@ -448,7 +448,7 @@
     const mode=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
     const tf = String(market.timeframe || market.strategyNormal?.tf || '').replace(/m$/, '');
     // Never reuse a TF2/legacy signal for a TF10 account.
-    if(!['2','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
+    if(!['2','3','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
     const decision = Contract.createEntryDecision(market);
     if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
@@ -540,3 +540,4 @@
     buildManagementCommand
   };
 });
+

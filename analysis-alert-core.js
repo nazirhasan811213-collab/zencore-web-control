@@ -3,7 +3,7 @@ const { createEntryDecision, createManagementDecision } = require('./analysis-ex
 function signals(m, now = Date.now()) {
   const scoped=/^NORMAL_20261001_/.test(m.strategyNormal?.entrySopVersion||'');
   const tf=String(m.timeframe||(scoped?'':'2')).replace(/m$/, '');
-  if(scoped && (!['2','15'].includes(tf) || m.strategyNormal?.tf!==tf+'m'))return null;
+  if(scoped && (!['2','3','15'].includes(tf) || m.strategyNormal?.tf!==tf+'m'))return null;
   const time = Number(m.receivedAt);
   if (!time || time > now + 30000 || now - time > 180000) return null;
   const entry = createEntryDecision(m)?.snapshot;
@@ -25,3 +25,4 @@ function transitions(previous, next) {
 }
 const defaults = () => ({popup:true,sound:true,telegramEnabled:false,telegramId:'',verified:false});
 module.exports = {signals,transitions,defaults};
+
