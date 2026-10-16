@@ -65,3 +65,21 @@ test('actual heartbeat close resets TF15; fresh new SOLID enters full layers imm
  const next=fixture();next.now=at+20;next.batch.emittedAt=next.now;next.row[66].entryAuthorizedAt=next.now;next.row[66].completedAt=next.now;next.row[66].solidTriggeredAt=at+10;next.row[66].setupAt=at+10;current=market(next);at=next.now;
  a.equal((await svc.dispatchMarkets([current])).queued,1);const fresh=await svc.nextCommand(token);a.ok(fresh.command);a.equal(fresh.command.payload.layers,2);a.equal(fresh.command.payload.strategyMode,'TF15_INTRA');
 });
+
+
+test('fixed-event retry keeps original authorization, deadline and setup identity',()=>{
+ const f=fixture();f.now+=100;f.batch.emittedAt=f.now;const auth=f.now-20000;
+ Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:auth,entryAuthorizedAt:auth});
+ const m=market(f),d=C.createEntryDecision(m);a.ok(d);a.equal(d.snapshot.entryAuthorizedAt,auth);
+ const cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH'},null,f.now);
+ a.ok(cmd);a.equal(cmd.notAfterMs,auth+30000);
+ const retry={...m,receivedAt:f.now+1,signalObservedAt:f.now+1};
+ a.equal(C.createEntryDecision(retry).signalKey,d.signalKey);
+ const check=require('../entry-delivery-check').checkEntryDelivery;
+ a.equal(check({payload:cmd.payload},m,auth+30001).reason,'ENTRY_EVENT_EXPIRED');
+ a.equal(C.createEntryDecision({...m,entryAuthorizedAt:auth+1}),null);
+ a.equal(C.createEntryDecision({...m,feedChannel:'DASHBOARD'}),null);
+ a.equal(C.createEntryDecision({...m,entryEvent:false}),null);
+ const stale=fixture();stale.now+=200;stale.batch.emittedAt=stale.now;Object.assign(stale.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:stale.now-31000,entryAuthorizedAt:stale.now-31000});
+ a.equal(C.createEntryDecision(market(stale)),null);
+});

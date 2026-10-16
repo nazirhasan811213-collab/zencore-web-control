@@ -8,7 +8,7 @@ function decode(row,batch){
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
     ...(['HEMA3_LIVE_V1'].includes(row[65]?.version)?{hemaConfirmation:row[65]}:{}),
-    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupMeta:row[66],nativeChartExitAll:batch.feedChannel==='EXECUTION'&&row[66]?.entryPolicyVersion===S.POLICY.entryPolicyVersion&&row[66]?.nativeExitAll===true,setupKey:row[66]?.setupAt?`TF3|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
+    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,entryDeliveryVersion:row[66]?.entryDeliveryVersion,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupMeta:row[66],nativeChartExitAll:batch.feedChannel==='EXECUTION'&&row[66]?.entryPolicyVersion===S.POLICY.entryPolicyVersion&&row[66]?.nativeExitAll===true,setupKey:row[66]?.setupAt?`TF3|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
     symbol,timeframe:String(batch.timeframe||'3'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,

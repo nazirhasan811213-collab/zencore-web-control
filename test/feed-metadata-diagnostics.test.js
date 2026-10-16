@@ -23,3 +23,9 @@ test('records missing metadata without pretending revised SOP was received',()=>
  const b=batch();b.markets[0].length=65;const d=createFeedMetadataDiagnostics();d.record(b);
  const c=d.snapshot().channels[0];assert.equal(c.latest.rowLength,65);assert.equal(c.latest.hasEntryMetadata,false);assert.equal(c.revisedCount,0);
 });
+test('bounded SOLID lifecycle evidence identifies inactive source without retaining raw payload',()=>{
+ const b=batch();Object.assign(b.markets[0][66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',solidHoldActive:false,solidStateReason:'OPPOSITE_RIBBON',solidTriggeredAt:10,solidClosedAt:30,completedAt:20,entryAuthorizedAt:20,entryAttempt:2});
+ const d=createFeedMetadataDiagnostics();d.record(b);const x=d.snapshot().channels[0].latest;
+ assert.equal(x.solidStateReason,'OPPOSITE_RIBBON');assert.equal(x.entryAuthorizedAt,20);assert.equal(x.entryAttempt,2);assert.equal(x.solidHoldActive,false);
+ b.markets[0][66].solidStateReason='NEVER_EXPOSE';d.record(b);assert.equal(d.snapshot().channels[0].latest.solidStateReason,null);assert.equal(JSON.stringify(d.snapshot()).includes('NEVER_EXPOSE'),false);
+});

@@ -35,6 +35,9 @@ test('live TF3 profile queues once and delivery checks TF3 rather than legacy TF
  const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'3',localEaExecutionUserIds:['owner'],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,tf)=>{lookups.push(tf);return tf==='3'?m:null;}});
  await svc.saveSettings('owner',{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});await store.setControl('owner',{desiredState:'ON',effectiveState:'ON'});
  a.equal((await svc.dispatchMarkets([m])).queued,1);a.equal((await svc.dispatchMarkets([m])).queued,0);
+ m.entryDeliveryVersion='FIXED_EVENT_RETRY_V1';
+ const retry={...m,receivedAt:at+1,signalObservedAt:at+1};
+ a.equal((await svc.dispatchMarkets([retry])).queued,0);
  const result=await svc.nextCommand(token);a.equal(result.command.payload.analysisSnapshot.executionTimeframe,'3');a.equal(lookups.at(-1),'3');
 });
 
@@ -172,4 +175,22 @@ test('Pine qualification keeps Movement and ribbon mandatory with five confirmat
  const gates=s.split('\n').filter(l=>l.startsWith('bool zc_hold_qualify =')||l.startsWith('bool zc24_ready =')||l.startsWith('zc24_ready :='));
  a.equal(gates.length,3);for(const g of gates){a.match(g,/draft_ribbon/);a.match(g,/zc80_passed >= 4/);a.doesNotMatch(g,/zc80_hema40/);}
  a.match(s,/bool zc_movement_pass =/);a.doesNotMatch(s,/bool zc_seq_shape =/);
+});
+
+
+test('fixed-event retry keeps original authorization, deadline and setup identity',()=>{
+ const f=fixture();f.now+=100;f.batch.emittedAt=f.now;const auth=f.now-20000;
+ Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:auth,entryAuthorizedAt:auth});
+ const m=market(f),d=C.createEntryDecision(m);a.ok(d);a.equal(d.snapshot.entryAuthorizedAt,auth);
+ const cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH'},null,f.now);
+ a.ok(cmd);a.equal(cmd.notAfterMs,auth+30000);
+ const retry={...m,receivedAt:f.now+1,signalObservedAt:f.now+1};
+ a.equal(C.createEntryDecision(retry).signalKey,d.signalKey);
+ const check=require('../entry-delivery-check').checkEntryDelivery;
+ a.equal(check({payload:cmd.payload},m,auth+30001).reason,'ENTRY_EVENT_EXPIRED');
+ a.equal(C.createEntryDecision({...m,entryAuthorizedAt:auth+1}),null);
+ a.equal(C.createEntryDecision({...m,feedChannel:'DASHBOARD'}),null);
+ a.equal(C.createEntryDecision({...m,entryEvent:false}),null);
+ const stale=fixture();stale.now+=200;stale.batch.emittedAt=stale.now;Object.assign(stale.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:stale.now-31000,entryAuthorizedAt:stale.now-31000});
+ a.equal(C.createEntryDecision(market(stale)),null);
 });
