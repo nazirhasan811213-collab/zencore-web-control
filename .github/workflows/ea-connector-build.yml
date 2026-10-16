@@ -44,7 +44,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler not available on Windows runner.' }
           & $compiler ea-local-connector/installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
-          Get-FileHash dist/ZenCoreSetup-2.1.0.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreSetup-2.1.0.exe" } | Add-Content dist/SHA256.txt
+          Get-FileHash dist/ZenCoreSetup-2.1.0.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreSetup-2.1.0.exe" } | Set-Content dist/SHA256.txt
       - name: Validate easy setup install and uninstall
         shell: pwsh
         run: |
@@ -61,6 +61,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ZenCore-EA-Connector-Windows-Real-Demo
-          path: dist/*
+          path: |
+            dist/ZenCoreSetup-2.1.0.exe
+            dist/ZenCoreExecutor.mq5
+            dist/ZenCore_TF3_Scalp.pine
+            dist/ZenCore_TF15_Intraday.pine
+            dist/PANDUAN_INSTALL_2.1.0.txt
+            dist/*validation.json
+            dist/Connector*.png
+            dist/SHA256.txt
           if-no-files-found: error
           retention-days: 30
