@@ -21,7 +21,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
    rule:solid80?meta.entryRuleVersion:current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
    hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&[2,5].includes(meta.hemaRequiredTfs[0])?[String(meta.hemaRequiredTfs[0])]:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
-   hasLiveHema:row[65]?.version===(tf==='3'?'HEMA3_LIVE_V1':tf==='2'?'HEMA23_LIVE_V1':'HEMA1530_V1'),
+   hasLiveHema:(tf==='15'?['HEMA15_LIVE_V1','HEMA1530_V1'].includes(row[65]?.version):row[65]?.version===(tf==='3'?'HEMA3_LIVE_V1':'HEMA23_LIVE_V1')),
    entryEvent:meta?.entryEvent===true,accepted:acceptedSymbols.includes('XAUUSD')};
   channels.set(key,{timeframe:tf,channel,count:(previous?.count||0)+1,
    revisedCount:(previous?.revisedCount||0)+(revised?1:0),
