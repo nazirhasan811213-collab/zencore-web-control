@@ -7,6 +7,7 @@ const MarketRetention=require('./market-retention');
 const retentionTimer=setInterval(()=>{for(const [symbol,m] of entries)if(!MarketRetention.retained(m))entries.delete(symbol);},60000);retentionTimer.unref?.();
 const setupTracker=require('./entry-setup-state').createEntrySetupTracker();
 function ingest(batch,at=Date.now()) {
+ if(batch?.markets?.some(row=>row?.[66]?.entryRuleVersion==='TF15_SOLID_RIBBON_V1'))return require('./tf15-market-hub').ingest(batch,at);
  const touched=[];
  if(batch?.feedVersion!=='TF15_REALTIME_V1'||!Array.isArray(batch.markets))return touched;
  for(const row of batch.markets){
@@ -27,5 +28,5 @@ function ingest(batch,at=Date.now()) {
  }
  return touched;
 }
-function markets(){return [...entries.values()];}
+function markets(){const current=require('./tf15-market-hub').markets(),symbols=new Set(current.map(m=>m.symbol));return [...entries.values()].filter(m=>!symbols.has(m.symbol)).concat(current);}
 module.exports={ingest,markets};

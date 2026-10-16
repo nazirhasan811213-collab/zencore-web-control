@@ -29,3 +29,8 @@ TF3 orders reuse the existing TF2_SCALPING transport mode/magic and existing lot
 
 ## Rollback
 Restore the previous application commit and its TF2 Pine alerts together. Do not mix TF3 and TF2 execution setups. Preserve open positions and broker-side SL.
+
+## Dual timeframe release — 16 October 2026
+TF15 now follows the same held-SOLID, mandatory ribbon, any 4/6 confirmations and ATR14 plan as TF3. Its own HEMA15 values and MTF 15/30/45 are mandatory data; it does not reuse TF3 candles. The risk multipliers, TP1 price cap and exit rules are identical, measured with each timeframe's ATR14. New Pine: ZenCore_TF15_Intraday.pine. Choose Intraday, 15 minutes, Unified alert. TF3 remains Scalping, 3 minutes, MTF 5/10/15.
+
+Connector 2.1.0 embeds EA 2.10 source, adds explicit TF3/TF15 mode validation and clearer rejection codes, and retains broker-price and account protection checks. EA EX5 is compiled locally by Connector with MetaEditor. The installer does not link accounts, arm trading or send orders.

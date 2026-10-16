@@ -322,7 +322,7 @@ class App:
     def __init__(self,root,test_mode=False):
         self.root=root;self.ui_queue=queue.Queue();self.session_api=None
         self.runner=None;self.runner_thread=None;self.pairing=False;self.switching=False
-        root.title('ZenCore Connect 2.0 • EA '+EA_VERSION)
+        root.title('ZenCore Connect '+CONNECTOR_BUILD+' • EA '+EA_VERSION)
         height=min(830,max(620,root.winfo_screenheight()-120))
         root.geometry('880x'+str(height)+'+40+20');root.minsize(760,620)
         bg='#07111d';panel='#101e30';muted='#a9bed3';root.configure(bg=bg)

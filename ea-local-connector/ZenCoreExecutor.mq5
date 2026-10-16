@@ -1,5 +1,5 @@
 #property strict
-#property version "2.01"
+#property version "2.10"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -122,7 +122,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.01")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.10")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -229,7 +229,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(StringFind(","+enabledSymbols+",",","+c+",")<0)return RejectEntry("SYMBOL_DISABLED");
  if(!Permissions())return RejectEntry(PermissionReason());
  if(!FreshLease())return RejectEntry("LEASE_NOT_READY");
- if(layers<1 || layers>10 || !VolumeValid(symbol,lot) || (side!="BUY" && side!="SELL"))return false;
+ if(layers<1 || layers>10)return RejectEntry("LAYERS_INVALID");
+ if(!VolumeValid(symbol,lot))return RejectEntry("VOLUME_INVALID");
+ if(side!="BUY" && side!="SELL")return RejectEntry("SIDE_REJECTED");
  bool buy=side=="BUY";
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
@@ -501,7 +503,9 @@ void Process(){
   SaveState();
  }
  else if(type=="PLACE_SETUP"){
-  if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
+  string executionTf=Get("executionTimeframe");
+  if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
+  else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
   else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
