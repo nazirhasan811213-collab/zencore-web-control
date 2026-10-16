@@ -1408,7 +1408,7 @@ function createAutoTradeService(options = {}) {
           }
         }
       }
-      for (const market of Array.isArray(markets) ? markets : []) {
+      for (let market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(options.scalpingTimeframe==='3'&&!['3','15'].includes(String(market.timeframe)))continue;
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
@@ -1462,7 +1462,7 @@ function createAutoTradeService(options = {}) {
       ]);
       if (!hostedAccount && !pod) continue;
       const positionSymbols = new Set(positions.map(position => position.symbol));
-      for (const market of Array.isArray(markets) ? markets : []) {
+      for (let market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!positionSymbols.has(symbol)) continue;
         const mode=String(market.timeframe||market.strategyNormal?.tf||'2').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
@@ -1470,6 +1470,7 @@ function createAutoTradeService(options = {}) {
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
         const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
         const latestSnap=latest?.payload?.analysisSnapshot;
+        market=require('./native-chart-exit').forActiveSetup(market,latest,positions,mode,now());
         if(market.strategyNormal?.entrySopVersion?.endsWith('_RIBBON_V1')||['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(latestSnap?.analysisSopVersion)){
           if(hostedAccount||latestSnap?.analysisSopVersion!==market.strategyNormal?.entrySopVersion||String(market.timeframe)!==String(latestSnap.executionTimeframe)||market.setupKey!==latestSnap.setupKey)continue;
         }
