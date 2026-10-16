@@ -5,13 +5,14 @@ Release scope: application, Pine feed, dispatcher, Telegram, monitoring and web 
 ## Active scalping policy
 - TF3; ATR(14); MTF 5/10/15.
 - SOLID from native chart; held until opposite live HEMA ribbon or native Close All.
-- Mandatory matching HEMA20/40 colour and HEMA40 slope >=0.05 ATR versus prior bar.
-- Minimum 5/6 current confirmations: price vs original entry, WT, both HEMA slopes, checklist >=3/5, forecast thresholds 45, directional MTF.
+- Mandatory matching HEMA20/40 ribbon colour. HEMA40 slope is not a separate mandatory gate; both slopes count together as one of six confirmations.
+- Minimum 4/6 current confirmations: price vs original entry, WT, both HEMA slopes, checklist >=3/5, forecast thresholds 45, directional MTF.
 - SL 0.65 ATR(14) from SOP-completion entry, rounded outward to the symbol tick. No three-candle structure gate or 0.75 ATR rejection.
 - TP1 min(0.5 ATR,3), TP2 1 ATR, TP3 1.5 ATR.
 - TP1 lock entry +/-0.50 (price units), TP2 lock TP1, TP3 lock TP2.
 - Native chart Close Separuh now means CLOSE ALL for the matching TF3 setup.
 - ATR/entry anchor fixed at SOP completion, not broker fill. Existing EA supports exact supplied SL.
+- Fresh EXECUTION entryEvent=true within 30 seconds remains mandatory; Dashboard cannot authorize an order. TF3 server no longer adds an SL-to-TP1 price-range gate. Broker/unchanged EA execution checks still apply.
 - No automatic TF2/TF3 switching. No profit claims or native Pine compilation verification.
 
 ## Compatibility
