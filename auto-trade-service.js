@@ -1127,7 +1127,7 @@ function createAutoTradeService(options = {}) {
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
       const latestSnap=latest?.payload?.analysisSnapshot;
-      if(latestSnap?.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'||p.analysisSnapshot?.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
+      if(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(latestSnap?.analysisSopVersion)||['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(p.analysisSnapshot?.analysisSopVersion)){
         if(latestSnap?.analysisSopVersion!==p.analysisSnapshot?.analysisSopVersion||latestSnap?.setupKey!==p.analysisSnapshot?.setupKey)return false;
       }
       const anchor=latestSnap?.entryAnchor;
@@ -1464,8 +1464,8 @@ function createAutoTradeService(options = {}) {
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
         const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
         const latestSnap=latest?.payload?.analysisSnapshot;
-        if(String(market.timeframe)==='3'||latestSnap?.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
-          if(hostedAccount||latestSnap?.analysisSopVersion!=='NORMAL_20261001_TF3_RIBBON_V1'||String(market.timeframe)!=='3'||market.setupKey!==latestSnap.setupKey)continue;
+        if(market.strategyNormal?.entrySopVersion?.endsWith('_RIBBON_V1')||['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(latestSnap?.analysisSopVersion)){
+          if(hostedAccount||latestSnap?.analysisSopVersion!==market.strategyNormal?.entrySopVersion||String(market.timeframe)!==String(latestSnap.executionTimeframe)||market.setupKey!==latestSnap.setupKey)continue;
         }
         const rebased=rebasedManagement(market,positions,latest);
         const management = Core.buildManagementCommand(rebased.market||{});

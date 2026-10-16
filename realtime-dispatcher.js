@@ -26,7 +26,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
    // Independent TradingView alerts can arrive in reverse channel order.
    // Only a fresh authorized execution with still-matching current confirmations survives.
    const matchingExit=!!createManagementDecision(m)&&m.setupKey&&m.setupKey===old.setupKey&&m.strategyNormal?.side===old.strategyNormal?.side;
-   if(String(m.timeframe)!=='3'||m.feedChannel!=='EXECUTION'||(!matchingExit&&(!createEntryDecision(m)||!sameConfirmation(m,old))))return;
+   if(!['3','15'].includes(String(m.timeframe))||m.feedChannel!=='EXECUTION'||(!matchingExit&&(!createEntryDecision(m)||!sameConfirmation(m,old))))return;
   }else latest.set(k,m);
   // Keep a fresh execution event through matching dashboard confirmations only.
   // Changed direction, setup or failed confirmations revoke every pending entry.

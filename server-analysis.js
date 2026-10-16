@@ -1591,8 +1591,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
-  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Realtime_Feed.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF3_Scalp.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/tf15-intraday.js') return sendAuthAsset(res, 'tf15-intraday.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Intraday.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/tf3-scalping.js') return sendAuthAsset(res, 'tf3-scalping.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp_Caps.pine') return sendAuthAsset(res, 'ZenCore_Original_Full_TF2_Scalp_Caps.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_SOLID80.pine') return sendAuthAsset(res, 'ZenCore_TF2_SOLID_80PCT_Draft.pine', 'text/plain; charset=utf-8');
