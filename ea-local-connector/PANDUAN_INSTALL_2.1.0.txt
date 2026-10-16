@@ -42,7 +42,7 @@ Entry separa/gagal mungkin meninggalkan beberapa layer: semak MT5, jangan replay
 STATUS UJIAN:
 Windows installer/protokol boleh diuji tanpa broker. MQ5 masih perlu berjaya
 compile dalam MetaEditor dan diuji pada DEMO. Ujian installer bukan bukti profit,
-latensi broker atau pelaksanaan trade sebenar. Live rollout kekal PAUSED.
+latensi broker atau pelaksanaan trade sebenar. Installer tidak menukar status ON/OFF sistem.
 
 PAKEJ TF3 + TF15 TERKINI
 TF3: MTF 5/10/15. TF15: MTF 15/30/45. Kedua-duanya minimum 4/6 dan ribbon searah wajib.
