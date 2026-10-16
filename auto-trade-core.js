@@ -465,7 +465,7 @@
     });
     return {
       signalKey: decision.signalKey,
-      notAfterMs: observed!==null?observed+30000:Infinity,
+      notAfterMs: snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+30000:observed!==null?observed+30000:Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: snapshot,
