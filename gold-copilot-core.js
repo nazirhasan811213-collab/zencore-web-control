@@ -13,7 +13,7 @@
   const inRange=valid&&(solid80?sign*(price-levels.entry)>=0:sign*(price-levels.entry)>0)&&sign*(levels.tp1-price)>0;
   const checks=Array.isArray(s.gates)?s.gates.map(g=>({label:String(g.label||g.key),pass:g.pass===true,detail:String(g.detail||'')})):[];
   const higher=solid80?'MTF':base.higher,aligned=solid80?(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(n.entrySopVersion)?s.ribbon===true:s.hema40===true):s['hema'+tf]?.mode===side&&s['hema'+higher]?.mode===side;
-  const checkPass=solid80?checks.length===6&&checks.filter(g=>g.pass).length>=(n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15'?6:5):checks.length>0&&checks.every(g=>g.pass);
+  const checkPass=solid80?checks.length===6&&checks.filter(g=>g.pass).length>=(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(n.entrySopVersion)?4:n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_HOLD_V15'?6:5):checks.length>0&&checks.every(g=>g.pass);
   const approved=v.entryReady===true&&n.state==='READY'&&n.solid===true&&checkPass&&aligned&&(!solid80||(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(n.entrySopVersion)?s.solidHoldActive&&now-s.signalObservedAt<=30000:now-s.triggerAt<=30000))&&(!s.hemaShape||s.hemaShape.pass===true);
   const actionable=approved&&inRange;
   const failed=checks.filter(g=>!g.pass).map(g=>g.label);
