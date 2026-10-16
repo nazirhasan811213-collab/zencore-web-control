@@ -273,8 +273,8 @@
     const actions = [];
     const requestedAction = String(management.slMoveAction || 'NONE').toUpperCase();
     // Existing EA uses absolute activeSl for MOVE_SL_TP1; MOVE_SL_ENTRY ignores it.
-    if(requestedAction==='MOVE_SL_ENTRY_PLUS_050'&&!['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion))return null;
-    const slMoveAction=requestedAction==='MOVE_SL_ENTRY_PLUS_050'?'MOVE_SL_TP1':requestedAction;
+    if(['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150','MOVE_SL_TP3'].includes(requestedAction)&&!['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion))return null;
+    const slMoveAction=['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150'].includes(requestedAction)?'MOVE_SL_TP1':requestedAction==='MOVE_SL_TP3'?'MOVE_SL_TP2':requestedAction;
     if (management.slMoveTriggered === true &&
         ['MOVE_SL_ENTRY', 'MOVE_SL_TP1', 'MOVE_SL_TP2'].includes(slMoveAction)) {
       const activeSl = number(management.activeSl);

@@ -43,6 +43,6 @@ test('entry and TP1 boundaries and invalid prices do not qualify',()=>{
 });
 
 test('current TF3 and TF15 Copilot agree with four-of-six ribbon SOP even when slope fails',()=>{
- for(const tf of [3,15]){const v=view(tf);const n=v.market.strategyNormal;n.entrySopVersion='NORMAL_20261001_TF'+tf+'_RIBBON_V1';n.sop={...n.sop,ribbon:true,hema40:false,solidHoldActive:true,signalObservedAt:now,gates:Array.from({length:6},(_,i)=>({label:'gate'+i,pass:i<4}))};
+ for(const tf of [3,15]){const v=view(tf);const n=v.market.strategyNormal;n.entrySopVersion='NORMAL_20261001_TF'+tf+'_RIBBON_V1';n.sop={...n.sop,ribbon:true,movement:true,hema40:false,solidHoldActive:true,signalObservedAt:now,gates:Array.from({length:5},(_,i)=>({label:'gate'+i,pass:i<4}))};
  assert.equal(analyse([v],tf,now).status,'QUALIFIED');n.sop.gates[3].pass=false;assert.equal(analyse([v],tf,now).status,'WAIT_CONFIRMATION');}
 });

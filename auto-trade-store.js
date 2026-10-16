@@ -1480,6 +1480,11 @@ class PostgresAutoTradeStore {
     return publicHostedCommand(query.rows[0]);
   }
 
+  async lastStrategyCycleReset(userId,podId,mode) {
+    const result=await this.pool.query(`SELECT detail FROM zencore_autotrade_audit WHERE user_id=$1 AND event_type='STRATEGY_CYCLE_RESET' AND detail->>'podId'=$2 AND detail->>'mode'=$3 ORDER BY created_at DESC LIMIT 1`,[userId,podId,mode]);
+    return result.rows[0]?.detail||null;
+  }
+
   async appendAudit(userId, eventType, detail = {}) {
     await this.pool.query(
       `INSERT INTO zencore_autotrade_audit (user_id, event_type, detail)
@@ -2238,6 +2243,10 @@ class MemoryAutoTradeStore {
     row.result = result || {};
     row.acknowledgedAt = Date.now();
     return publicHostedCommand(row);
+  }
+
+  async lastStrategyCycleReset(userId,podId,mode) {
+    return (this.audit.get(userId)||[]).find(e=>e.type==='STRATEGY_CYCLE_RESET'&&e.detail.podId===podId&&e.detail.mode===mode)?.detail||null;
   }
 
   async appendAudit(userId, eventType, detail = {}) {

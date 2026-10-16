@@ -41,11 +41,11 @@ test('valid 3-green entry authorizes below TP1, but TP2 analysis cannot bypass u
   const forged=structuredClone(m);forged.strategyNormal.sop.hema2.fast=forged.strategyNormal.sop.hema2.slow+(side==='BUY'?.01:-.01);forged.strategyNormal.sop.hema2.gapAtr=999;assert.equal(C.createEntryDecision(forged),null);
  }
 });
-test('current Pine uses five current gates while unchanged EA still enforces TP1 compatibility',()=>{
+test('legacy Pine keeps five current gates while current EA retains broker SL checks',()=>{
  const pine=fs.readFileSync(require.resolve('../ZenCore_TF2_Realtime_Feed.pine'),'utf8');
  assert.match(pine,/greens>=4/);assert.match(pine,/m5close>math.max\(m5h20,m5h40\)/);assert.doesNotMatch(pine.match(/bool eligible=.*$/m)[0],/higherHema/);
  assert.match(pine,/bool solidLatched=solid/);assert.match(pine,/c>entry and c<tp1/);assert.match(pine,/eligible and eaEntryWindow/);assert.match(pine,/TF2_SEP24_4GREEN_HEMA5_V1/);
- const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/tick.ask>=tp1/);assert.match(ea,/tick.bid<=tp1/);
+ const ea=fs.readFileSync(require.resolve('../ea-local-connector/ZenCoreExecutor.mq5'),'utf8');assert.match(ea,/BROKER_STOP_DISTANCE/);assert.doesNotMatch(ea,/tick.ask>=tp1|tick.bid<=tp1/);
 });
 test('directional forecast must exceed 40; neutral still uses strict 50 boundary',()=>{
  for(const side of ['BUY','SELL']){

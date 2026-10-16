@@ -1,5 +1,5 @@
 #property strict
-#property version "2.10"
+#property version "2.11"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -122,7 +122,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.10")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.11")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -218,7 +218,7 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  return ok;
 }
 bool RejectEntry(string code){lastEntryCode=code;return false;}
-bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0){
+bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion=""){
  lastEntryCode="ENTRY_REJECTED";
  if(c!="XAUUSD")return RejectEntry("SYMBOL_REJECTED");
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return false;
@@ -250,16 +250,16 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  }
  trade.SetTypeFillingBySymbol(symbol);sl=Price(symbol,sl);
  MqlTick tick;if(!SymbolInfoTick(symbol,tick) || tick.bid<=0 || tick.ask<=0)return false;
- // Refuse a late market entry, even if the quote moved after Analysis dispatched it.
- if(buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl)return RejectEntry("ENTRY_OUTSIDE_PLAN");
+ // Analysis owns entry qualification. Broker stop-distance and quote checks remain.
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)return RejectEntry("BROKER_STOP_DISTANCE");
  if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return false;
  // Store chart targets locally so StepLock survives a TradingView/feed outage.
- if(!WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return false;
+ if(!WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return false;
  for(int i=0;i<layers;i++){
   if(!Permissions() || !FreshLease())return false;
-  if(!SymbolInfoTick(symbol,tick) || (buy?tick.ask>=tp1 || tick.bid<=sl:tick.bid<=tp1 || tick.ask>=sl))return false;
+  if(!SymbolInfoTick(symbol,tick) || tick.ask<=0 || tick.bid<=0)return RejectEntry("QUOTE_NOT_READY");
+  if(!fillAnchor && (buy?sl>=tick.bid-distance:sl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
   // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
   double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
   if(fillAnchor && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
@@ -344,16 +344,22 @@ void ManageLocalStepLock(){
   int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
   if(prefix==0 || !LoadOwnRisk(ticket))continue;
   bool fillAnchor=Get("version")=="FILL_PRICE_ATR_V1";
+  bool pineLock=Get("exitLockVersion")=="PINE_STEPLOCK_150_TP3_PLUS3_V1";double planEntry=Val("entry");
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
   if(t1<=0 || !(buy?t1<t2 && t2<t3:t1>t2 && t2>t3))continue;
   MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
   double quote=buy?tick.bid:tick.ask,target=0;
+  if(pineLock && planEntry>0)entry=planEntry;
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
   int observed=buy?(quote>=t3?3:quote>=t2?2:quote>=t1?1:0):(quote<=t3?3:quote<=t2?2:quote<=t1?1:0);
+  if(pineLock){
+   if(buy?quote>t3+3.0:quote<t3-3.0)observed=4;
+   if(observed==1 && (buy?quote<=entry+1.50:quote>=entry-1.50))observed=0;
+  }
   if(observed>stage){stage=observed;if(!WriteAtomic(stageFile,Row("symbol",symbol)+Row("side",buy?"BUY":"SELL")+Row("stage",(string)stage)))continue;}
   if(fillAnchor && stage>=1){
    string half="half-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done";
@@ -364,7 +370,7 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=entry;
+  if(pineLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
   if(target<=0)continue;
   double old=PositionGetDouble(POSITION_SL),sl=Price(symbol,target);
   if(sl<=0 || (old>0 && (buy?sl<=old:sl>=old)))continue;
@@ -443,7 +449,7 @@ void Process(){
  string side=Get("side"),symbols=Get("symbols");
  bool tightTf2=Get("exitPolicyVersion")=="TF2_TIGHT_SL_3C_V1";
  string slPolicy=Get("slPolicy");
- bool fillAnchor=Get("fillAnchor")=="FILL_PRICE_ATR_V1";double riskAtr=Val("riskAtr");
+ bool fillAnchor=Get("fillAnchor")=="FILL_PRICE_ATR_V1";double riskAtr=Val("riskAtr");string exitLockVersion=Get("exitLockVersion");
  double lot=Val("lot"),entry=Val("entry"),sl=Val("sl"),tp1=Val("tp1"),tp2=Val("tp2"),tp3=Val("tp3");
  int layers=(int)StringToInteger(Get("layers")),actions=(int)StringToInteger(Get("actions"));
  long manualSourceAt=(long)Val("sourceAt");ulong manualTicket=(ulong)StringToInteger(Get("ticket"));string manualId=Get("positionId");
@@ -506,7 +512,7 @@ void Process(){
   string executionTf=Get("executionTimeframe");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
-  else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr);
+  else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
@@ -551,14 +557,14 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=2.10 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=2.11 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTick(){
  if(lockHandle!=INVALID_HANDLE && account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER)){ManageLocalStepLock();ManageManual();}
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 2.10 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 2.11 • menunggu login MT5 / channel tersedia");return;}
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
@@ -567,6 +573,6 @@ void OnTimer(){
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 2.10 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.11 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

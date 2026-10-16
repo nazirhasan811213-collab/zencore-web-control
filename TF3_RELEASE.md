@@ -34,3 +34,15 @@ Restore the previous application commit and its TF2 Pine alerts together. Do not
 TF15 now follows the same held-SOLID, mandatory ribbon, any 4/6 confirmations and ATR14 plan as TF3. Its own HEMA15 values and MTF 15/30/45 are mandatory data; it does not reuse TF3 candles. The risk multipliers, TP1 price cap and exit rules are identical, measured with each timeframe's ATR14. New Pine: ZenCore_TF15_Intraday.pine. Choose Intraday, 15 minutes, Unified alert. TF3 remains Scalping, 3 minutes, MTF 5/10/15.
 
 Connector 2.1.0 embeds EA 2.10 source, adds explicit TF3/TF15 mode validation and clearer rejection codes, and retains broker-price and account protection checks. EA EX5 is compiled locally by Connector with MetaEditor. The installer does not link accounts, arm trading or send orders.
+
+## Pine primary policy — 17 October 2026
+Supersedes the earlier ATR scalp caps and 4/6 sections above for new entries.
+The supplied Pasted text(10).txt is the reference: native SOLID label, Movement = WT1 > WT2 ? Bullish : Bearish, HEMA Trend = HEMA20/40 ribbon. All three are mandatory. Five current confirmations: price vs source SOLID, WT, native checklist >=4/5, forecast 45 thresholds, directional MTF. Any four pass. No slope gate. Native checklist item 5 is HTF HEMA (TF3 -> 5, TF15 -> 30), separate from MTF score.
+
+At SOP completion freeze entry and ATR14. SL = entry +/-1 ATR. Honour Pine TP mode: Fixed R:R 1/2/3, or Fibonacci ratios 1.618/2.618/4.236 measured from SL. Fibo box ratios .236/.786 remain native. No extra ATR caps. The native virtual-position waiting veto and EA SL-to-TP1 entry-price veto are removed. Existing same-strategy positions, broker SL-distance and account permissions remain execution guards.
+
+New setups carry PINE_3TRIGGERS_4OF5_V2 and PINE_STEPLOCK_150_TP3_PLUS3_V1. TP1 lock is Pine entry +/-1.50, TP2 locks TP1, TP3 locks TP2; quote strictly more than 3.00 past TP3 locks TP3. A lock cannot be installed before price/broker distance permits it. Native Close Separuh and Close All both close all for that setup. Existing older positions retain their stored exit version.
+
+A complete connected MT5 snapshot transitioning a strategy from positions to zero persists a per-pod/mode reset in the audit store. Only a native SOLID triggered after that reset may authorize a fresh setup. Partial/manual closes and the other timeframe do not reset it. Current-policy new setups bypass the legacy five-minute recent-command cooldown, with setup dedup and live-position guards retained.
+
+Connector 2.1.1 / EA 2.11. Telegram lists each core fact once, replaces low-quality/no-trade advice with SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT, and omits repeated AI Coach trend/momentum/advice. No messages or forced broker orders are sent as tests.

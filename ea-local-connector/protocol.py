@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.10'
-CONNECTOR_BUILD = '2.1.0'
+EA_VERSION = '2.11'
+CONNECTOR_BUILD = '2.1.1'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -150,6 +150,9 @@ def command_fields(command, identity):
                 expected_tf='15' if mode=='TF15_INTRA' else '3'
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
+                if snap.get('entryPolicyVersion')=='PINE_3TRIGGERS_4OF5_V2':
+                    if snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1': raise ValueError('EXIT_POLICY_REJECTED')
+                    fields['exitLockVersion']=snap['exitLockVersion']
             fields['side'] = payload['side']
             fields['slPolicy']='EXACT_ANALYSIS_V2'
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])

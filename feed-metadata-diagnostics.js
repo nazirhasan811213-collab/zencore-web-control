@@ -18,7 +18,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
   const observedAt=now(),emittedAt=Number(batch.emittedAt);
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
    transportLagMs:Number.isFinite(emittedAt)?observedAt-emittedAt:null,rowLength:row.length,
-   rule:solid80?meta.entryRuleVersion:current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
+   scriptRevision:typeof meta?.scriptRevision==='string'?meta.scriptRevision.slice(0,64):null,entryPolicyVersion:typeof meta?.entryPolicyVersion==='string'?meta.entryPolicyVersion.slice(0,64):null,planMode:['Fixed R:R','Fibonacci'].includes(meta?.planMode)?meta.planMode:null,rule:solid80?meta.entryRuleVersion:current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
    hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&[2,5].includes(meta.hemaRequiredTfs[0])?[String(meta.hemaRequiredTfs[0])]:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
    hasLiveHema:(tf==='15'?['HEMA15_LIVE_V1','HEMA1530_V1'].includes(row[65]?.version):row[65]?.version===(tf==='3'?'HEMA3_LIVE_V1':'HEMA23_LIVE_V1')),

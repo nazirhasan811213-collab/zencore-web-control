@@ -132,7 +132,7 @@ class AnalysisAlerts {
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
-        riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
+        entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
         solidHoldActive:m.strategyNormal.sop?.solidHoldActive,solidClosedAt:m.strategyNormal.sop?.solidClosedAt,riskAtrReference:m.strategyNormal.sop?.riskAtrReference,signalObservedAt:m.signalObservedAt,
         sourceEntry:m.strategyNormal.sop?.sourceEntry,price:m.strategyNormal.sop?.price,triggerAt:m.strategyNormal.sop?.triggerAt,qualifiedAt:m.strategyNormal.sop?.qualifiedAt,
         entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,

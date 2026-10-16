@@ -135,6 +135,7 @@ function createAutoTradeService(options = {}) {
   if (!allowedDemoOwnershipModes.length) throw new Error('At least one DEMO execution host mode is required.');
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const dispatchDiagnosticAt = new Map();
+  const entryCycleReset=require('./entry-cycle-reset').createEntryCycleReset(store);
   const reentryTracker=new Reentry.Tracker(),reentryCapability=new Map(),heartbeatChains=new Map();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
   const hostedLeaseTtlMs = Math.max(30_000, Math.min(5 * 60 * 1000,
@@ -1102,9 +1103,11 @@ function createAutoTradeService(options = {}) {
     const seenAt = now();
     const updated = await store.updatePodHeartbeat(pod.id, heartbeatValidation.value, seenAt, pod.tokenHash);
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
+    const cycleBefore=options.scalpingTimeframe==='3'&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
     const profile=await store.getProfile(pod.userId);
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
+    if(input.terminalConnected===true&&fullSnapshot&&options.scalpingTimeframe==='3'&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
     if(input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
       fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&
       !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')){
@@ -1164,6 +1167,7 @@ function createAutoTradeService(options = {}) {
         m.signalObservedAt>=p.reentry.closedAt&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol===p.symbol&&(x.strategyMode||'TF2_SCALPING')===p.strategyMode);
     }
+    if(!await entryCycleReset.allows(command.userId,command.podId,m)){Object.assign(diagnostic,{ok:false,reason:'WAIT_NEW_SOLID_AFTER_CLOSE'});return false;}
     const delivery = require('./entry-delivery-check').checkEntryDelivery(command, m, now());
     Object.assign(diagnostic, delivery);
     return delivery.ok;
@@ -1404,15 +1408,17 @@ function createAutoTradeService(options = {}) {
           }
         }
       }
-      for (const market of Array.isArray(markets) ? markets : []) {
+      for (let market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(options.scalpingTimeframe==='3'&&!['3','15'].includes(String(market.timeframe)))continue;
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
         if (!allowedDemoSymbols.includes(symbol) || !Core.permitsPositionEntry(market,positions)) continue;
+        const pineCurrent=market.strategyNormal?.sop?.entryPolicyVersion==='PINE_3TRIGGERS_4OF5_V2';
+        if(!await entryCycleReset.allows(profile.userId,pod?.id,market))continue;
         if (hostedAccount) {
           if (typeof store.hasRecentHostedEntryCommand === 'function' &&
               await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
-        } else if (typeof store.hasRecentEntryCommand === 'function' &&
+        } else if (!pineCurrent && typeof store.hasRecentEntryCommand === 'function' &&
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
@@ -1456,7 +1462,7 @@ function createAutoTradeService(options = {}) {
       ]);
       if (!hostedAccount && !pod) continue;
       const positionSymbols = new Set(positions.map(position => position.symbol));
-      for (const market of Array.isArray(markets) ? markets : []) {
+      for (let market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if (!positionSymbols.has(symbol)) continue;
         const mode=String(market.timeframe||market.strategyNormal?.tf||'2').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
@@ -1464,6 +1470,7 @@ function createAutoTradeService(options = {}) {
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
         const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
         const latestSnap=latest?.payload?.analysisSnapshot;
+        market=require('./native-chart-exit').forActiveSetup(market,latest,positions,mode,now());
         if(market.strategyNormal?.entrySopVersion?.endsWith('_RIBBON_V1')||['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(latestSnap?.analysisSopVersion)){
           if(hostedAccount||latestSnap?.analysisSopVersion!==market.strategyNormal?.entrySopVersion||String(market.timeframe)!==String(latestSnap.executionTimeframe)||market.setupKey!==latestSnap.setupKey)continue;
         }

@@ -1,0 +1,71 @@
+ZENCORE CONNECT 2.1.1 / EA 2.11
+REAL + DEMO. Satu installer untuk semua client; setiap client pautkan login sendiri.
+
+1. Stop auto entry dalam web. Jangan update ketika order sedang dihantar.
+2. Buka ZenCoreSetup-2.1.1.exe sebagai Windows user yang sama dengan MT5.
+3. Dalam MT5: File > Open Data Folder. Pilih folder itu dalam Connector.
+4. Tekan Pasang / kemas kini EA 2.11. Jika compile gagal, jangan guna EX5 lama.
+5. MT5 Navigator > Refresh > Expert Advisors > ZenCore > ZenCoreExecutor.
+6. Buang EA lama dari chart dan letakkan EA baharu pada SATU chart XAUUSD.
+7. Hidupkan Algo Trading dan Allow Algo Trading. Tidak perlu DLL atau WebRequest.
+8. Isi email/password ZenCore. Password broker hanya dimasukkan dalam MT5.
+9. Cari akaun, semak REAL/DEMO dan server yang betul, kemudian Pautkan akaun.
+10. Semak kad Terminal, Cloud dan Entry. SERVER PAUSED bermaksud sistem pusat
+    mengunci entry, bukan installer rosak. Jangan cuba bypass lock itu.
+11. Lot/layer dan ON/OFF dibuat di web. Installer tidak mengaktifkan trading.
+
+TUKAR AKAUN:
+Tekan Reset link / tukar akaun. Ini STOP dan kosongkan setting web.
+Posisi broker tidak ditutup automatik. Tutup sendiri dalam MT5 jika diperlukan.
+Login akaun baharu dalam MT5, tunggu EA membaca akaun itu, kemudian pautkan
+semula selepas 30 saat. Tiada installer baharu untuk akaun yang berbeza.
+Jika baru membuka Connector, login ZenCore diperlukan sekali untuk reset.
+
+TINGKAP:
+Butang X hanya minimize. Gunakan Keluar Connector untuk menghentikannya.
+PC/VM dan MT5 mesti hidup. Android boleh kawal web, tetapi tidak menjalankan EA.
+
+TP/SL:
+Pelan entry semasa ikut Pine rujukan: SL 1 ATR14. Mod Fixed R:R: 1/2/3R;
+mod Fibonacci: ratio dari SL 1.618/2.618/4.236. Entry ialah harga SOP lengkap.
+EA 2.11 menggunakan SL daripada plan Analysis secara lalai. Pengurangan 80%
+hanya untuk preset legacy yang dinyatakan secara eksplisit dalam arahan signed.
+TP1 -> SL entry pelan Pine +/-1.50; TP2 -> SL TP1; TP3 -> SL TP2.
+Bila harga melepasi TP3 sebanyak lebih 3.00, SL -> TP3. Tiada broker TP3 close-all.
+Jika target lock belum boleh dipasang kerana harga/jarak SL broker, tunggu
+harga membenarkan; SL tidak dilebarkan. Posisi lama mengekalkan polisi asal.
+Tahap yang pernah dicapai disimpan; jika pemasangan SL tertunda dan harga sudah
+melintasi tahap perlindungan itu, EA cuba tutup posisi ZenCore berkenaan sahaja.
+Close separuh/Bj exit datang daripada Analysis. Tanpa feed/cloud, signal exit
+berasaskan indikator tidak dapat diterima; broker SL dan StepLock tempatan kekal.
+
+JANGAN ANGGAP ONLINE = ENTRY DIBENARKAN.
+Order boleh ditolak kerana Algo, akaun read-only, price sudah lepas TP1,
+jarak SL broker, lot tidak sah atau server PAUSED. Semak mesej kod sebenar.
+Entry separa/gagal mungkin meninggalkan beberapa layer: semak MT5, jangan replay.
+
+STATUS UJIAN:
+Windows installer/protokol boleh diuji tanpa broker. MQ5 masih perlu berjaya
+compile dalam MetaEditor dan diuji pada DEMO. Ujian installer bukan bukti profit,
+latensi broker atau pelaksanaan trade sebenar. Installer tidak menukar status ON/OFF sistem.
+
+PAKEJ TF3 + TF15 TERKINI
+TF3: MTF 5/10/15. TF15: MTF 15/30/45. Kedua-duanya wajib SOLID + Movement + HEMA Trend searah, kemudian minimum 4/5.
+Satu EA pada satu chart mengurus dua strategi melalui magic yang berasingan.
+TradingView: TF3 gunakan ZenCore_TF3_Scalp.pine (Scalping); TF15 gunakan
+ZenCore_TF15_Intraday.pine (Intraday). Pilih Unified dan cipta satu alert
+Any alert() function call bagi setiap timeframe. Gunakan webhook sedia ada.
+Gantikan alert lama; ubah indicator pada chart sahaja tidak mengemas kini alert.
+Input lot/layer kedua-dua TF dalam web. Slot kosong tidak diaktifkan oleh installer.
+Kod rejection kini membezakan LAYERS_INVALID, VOLUME_INVALID dan TIMEFRAME_MODE_MISMATCH.
+EA mengekalkan pemeriksaan quote, margin, permission dan jarak SL broker.
+Semakan julat harga SL-TP1 lama telah dikeluarkan. Quote sah, jarak SL broker,
+margin dan had posisi strategi masih berkuat kuasa. Jangan replay setup lama.
+Sumber MQ5 disertakan. Connector memanggil MetaEditor untuk compile EX5
+pada komputer pengguna; fail EX5 siap tidak disertakan tanpa compile sebenar.
+
+KITARAN SELEPAS CLOSE
+Selepas snapshot MT5 mengesahkan semua posisi strategi ditutup, sistem rekod
+STRATEGY_CYCLE_RESET. SOLID lama tidak boleh digunakan semula. Tunggu SOLID
+baharu selepas masa reset dan semua pencetus + 4/5 SOP semasa lengkap.
+TF3 dan TF15 mempunyai kitaran sendiri. Tiada cooldown lima minit untuk SOP ini.
