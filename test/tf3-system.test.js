@@ -125,3 +125,27 @@ test('chart renders SOP completion plan and suppresses native trade levels on TF
  a.match(text,/"ENTRY SOP " \+ zc_seq_side, "SL SOP", "TP1 SOP", "TP2 SOP", "TP3 SOP"/);
  a.match(text,/if timeframe.period != "3"/);
 });
+
+test('native Pine holds unqualified SOLID through opposite ribbon, ends qualified SOLID on reversal',()=>{
+ const text=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');
+ const expr=text.match(/^bool zc_held_colour_end = (.+)$/m)[1].replaceAll(' and ',' && ').replace('not na(zc_seq_completed)','(zc_seq_completed !== null)');
+ const evaluate=new Function('zc_hold_active','zc_seq_completed','zc_seq_side','zc_solid_end_buy','zc_solid_end_sell','return '+expr);
+ for(const side of ['BUY','SELL']){
+  a.equal(evaluate(true,null,side,true,true),false);
+  a.equal(evaluate(true,100,side,true,true),true);
+  a.equal(evaluate(true,100,side,false,false),false);
+ }
+ a.doesNotMatch(text,/zc_pending_colour_end/);
+ a.match(text,/zc_hold_qualify = draft_ribbon and draft_plan_ok/);
+});
+test('source benchmark precedes qualification; fibo zone and trade plan follow frozen SOP entry',()=>{
+ const text=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');
+ const reference=text.indexOf('float solidReference ='),plan=text.indexOf('if zc24_chart_ok and not na(zc_seq_completed)',reference);
+ a.ok(reference>0&&plan>reference);
+ a.match(text,/line.new\(solidStart,solidReference/);
+ a.match(text,/f_priceFromRatio\(draft_sl,zc_seq_entry,0.786\)/);
+ a.match(text,/f_priceFromRatio\(draft_sl,zc_seq_entry,0.236\)/);
+ a.match(text,/if not na\(zc_seq_completed\) and bar_index == zc_plan_bar/);
+ a.match(text,/array.size\(sopEntryHistory\) > 80/);
+ a.match(text,/timeframe.period == "3" and nativeTpLabel \? na/);
+});

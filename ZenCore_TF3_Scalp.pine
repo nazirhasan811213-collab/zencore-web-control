@@ -18,6 +18,7 @@ varip float zc_seq_source = na
 varip int zc_seq_completed = na
 varip float zc_seq_entry = na
 varip int zc_plan_bar = na
+varip int zc_source_bar_index = na
 varip float zc_seq_risk = na
 varip float draft_sl = na
 varip bool zc80_eligible = false
@@ -205,7 +206,8 @@ f_addTPLineLabel(float _y, int _x1, int _x2, color _col, string _txt) =>
         array.push(tpLabels, lb)
 
 f_addMgmtLabel(int x, float y, string txt, string style, color col, color textcol, string sz) =>
-    label lb = label.new(x, y, txt, style=style, color=col, textcolor=textcol, size=sz)
+    bool nativeTpLabel = str.contains(txt, "🥳 TP ")
+    label lb = timeframe.period == "3" and nativeTpLabel ? na : label.new(x, y, txt, style=style, color=col, textcolor=textcol, size=sz)
     array.push(mgmtLabels, lb)
     if array.size(mgmtLabels) > 400 
         label.delete(array.shift(mgmtLabels))
@@ -1427,6 +1429,7 @@ if zc_hold_new_source
     array.push(zc80_seen, zc_seq_key)
     if array.size(zc80_seen) > 500
         array.shift(zc80_seen)
+    zc_source_bar_index := bar_index
     zc_pending_key := zc_seq_key
     zc_pending_side := zc_pulse_buy ? "BUY" : "SELL"
     zc_pending_entry := zc_pulse_entry
@@ -1435,14 +1438,14 @@ if zc_hold_new_source
     // No additional entry from the superseded source. Existing exit state stays intact.
     zc_hold_active := false
     zc_hold_closed_at := zc_seq_now
-// End entry eligibility immediately on the live opposite TF3 HEMA ribbon.
+// Before qualification, opposite HEMA means WAIT. Only a qualified SOLID
+// ends on an opposite ribbon; native Close All or a newer SOLID can supersede it.
 // Never mutate xc_* here: open-position management is independent.
 bool zc_solid_colour_enabled = not na(he1) and not na(he2)
 bool zc_solid_end_buy = zc_solid_colour_enabled and is_hema_bear
 bool zc_solid_end_sell = zc_solid_colour_enabled and is_hema_bull
-bool zc_held_colour_end = zc_hold_active and (zc_seq_side == "BUY" ? zc_solid_end_buy : zc_solid_end_sell)
-bool zc_pending_colour_end = zc_pending_key != "" and (zc_pending_side == "BUY" ? zc_solid_end_buy : zc_solid_end_sell)
-if zc_held_colour_end or zc_pending_colour_end
+bool zc_held_colour_end = zc_hold_active and not na(zc_seq_completed) and (zc_seq_side == "BUY" ? zc_solid_end_buy : zc_solid_end_sell)
+if zc_held_colour_end
     zc_hold_active := false
     zc_hold_closed_at := zc_seq_now
     zc80_eligible := false
@@ -1559,17 +1562,38 @@ string zc24_close_reason = xc_reason
 // One visible plan, sourced from the exact SOP-completion prices sent to execution.
 var line[] sopPlanLines = array.new_line()
 var label[] sopPlanLabels = array.new_label()
+var box sopPlanZone = na
+var label[] sopEntryHistory = array.new_label()
+// Recreate on the qualification bar so intrabar rollback cannot erase the marker.
+if not na(zc_seq_completed) and bar_index == zc_plan_bar
+    label entryMarker = label.new(bar_index, zc_seq_entry, zc_seq_side + " SOP 4/6\nENTRY " + str.tostring(zc_seq_entry,"#.00"), style=zc24_buy ? label.style_label_up : label.style_label_down, color=colEntry, textcolor=color.black, size=size.small)
+    array.push(sopEntryHistory, entryMarker)
+    if array.size(sopEntryHistory) > 80
+        label.delete(array.shift(sopEntryHistory))
 if barstate.islast
     while array.size(sopPlanLines) > 0
         line.delete(array.pop(sopPlanLines))
     while array.size(sopPlanLabels) > 0
         label.delete(array.pop(sopPlanLabels))
+    if not na(sopPlanZone)
+        box.delete(sopPlanZone)
+        sopPlanZone := na
+    float solidReference = zc_pending_key != "" ? zc_pending_entry : zc_seq_source
+    string solidDirection = zc_pending_key != "" ? zc_pending_side : zc_seq_side
+    if zc24_chart_ok and not na(solidReference) and solidDirection != ""
+        color solidColour = solidDirection == "BUY" ? color.green : color.red
+        int solidStart = math.max(nz(zc_source_bar_index,bar_index),bar_index-500)
+        array.push(sopPlanLines, line.new(solidStart,solidReference,bar_index+10,solidReference,color=solidColour,width=2,style=line.style_dashed))
+        array.push(sopPlanLabels, label.new(bar_index+10,solidReference,"SOLID "+solidDirection+" : "+str.tostring(solidReference,"#.00"),style=label.style_label_left,color=solidColour,textcolor=color.white,size=size.small))
     if zc24_chart_ok and not na(zc_seq_completed)
         float dir = zc24_buy ? 1.0 : -1.0
         float[] levels = array.from(zc_seq_entry, draft_sl, zc_seq_entry+dir*math.min(.5*zc_seq_risk,3.0), zc_seq_entry+dir*zc_seq_risk, zc_seq_entry+dir*1.5*zc_seq_risk)
         string[] names = array.from("ENTRY SOP " + zc_seq_side, "SL SOP", "TP1 SOP", "TP2 SOP", "TP3 SOP")
         color[] colours = array.from(colEntry, colSL, colTP1, colTP2, colTP3)
         int planStart = math.max(nz(zc_plan_bar, bar_index), bar_index-500)
+        float zoneA = f_priceFromRatio(draft_sl,zc_seq_entry,0.786)
+        float zoneB = f_priceFromRatio(draft_sl,zc_seq_entry,0.236)
+        sopPlanZone := box.new(planStart,math.max(zoneA,zoneB),bar_index+5,math.min(zoneA,zoneB),border_color=colZoneBd,bgcolor=colZoneBg)
         for idx = 0 to 4
             float level = array.get(levels, idx)
             color levelColour = array.get(colours, idx)
@@ -1584,7 +1608,7 @@ string zc_display_side = zc_pending_key != "" ? zc_pending_side : zc_seq_side
 int zc_display_at = zc_pending_key != "" ? zc_pending_at : zc_seq_trigger
 var table zc24_table = table.new(position.top_left, 2, 11, bgcolor=color.new(#091720, 5), border_width=1)
 if barstate.islast
-    table.cell(zc24_table, 0, 0, "DRAFT · 4/6 + HEMA WAJIB", text_color=color.aqua)
+    table.cell(zc24_table, 0, 0, "SOP · 4/6 + HEMA WAJIB", text_color=color.aqua)
     table.cell(zc24_table, 1, 0, "NATIVE SOLID · TF3", text_color=color.orange)
     table.cell(zc24_table, 0, 1, "Chart", text_color=color.white)
     table.cell(zc24_table, 1, 1, zc24_chart_ok ? "TF3 SCALPING" : "GUNA TF3 / SCALPING", text_color=zc24_tf3 ? color.lime : color.red)
@@ -1653,7 +1677,7 @@ string zc24_hema_json = "{\"version\":\"HEMA3_LIVE_V1\",\"tf3\":{\"fast\":" + f_
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
 string zc_native_signals = "{\"primaryBuy\":" + f_bool(is_zone_turn_green) + ",\"primarySell\":" + f_bool(is_zone_turn_red) + ",\"solidPulse\":" + f_bool(zc_seq_pulse) + ",\"reentry\":" + f_quote(zc_native_reentry) + ",\"momentumBuy\":" + f_bool(continuation_buy) + ",\"momentumSell\":" + f_bool(continuation_sell) + ",\"nativeEntry\":" + f_num(curr_entry) + ",\"nativeSl\":" + f_num(curr_sl) + ",\"nativeTp1\":" + f_num(curr_tp1) + ",\"nativeTp2\":" + f_num(curr_tp2) + ",\"nativeTp3\":" + f_num(curr_tp3) + "}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(f_advice(ai_coach)) + ",\"aiCoach\":" + f_quote(ai_coach) + ",\"dashboard\":" + zc_all_dashboard + ",\"chartSignals\":" + zc_native_signals + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-UNIFIED-SOP4-PLAN-1.4\",\"riskPlanVersion\":\"TF3_ATR_ENTRY_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-SOLID-BENCHMARK-1.5\",\"riskPlanVersion\":\"TF3_ATR_ENTRY_V2\",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(timenow) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
