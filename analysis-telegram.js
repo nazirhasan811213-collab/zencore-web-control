@@ -37,8 +37,8 @@ function entrySopAllowed(e){
   if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
   const s=e.telegramSop;
   if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf2ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
-  if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass;
-  if(s?.version==='NORMAL_20261001_TF3_RIBBON_V1')return e.timeframe==='3'&&s.tf==='3m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf3-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass;
+  if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_4OF5_V2'&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF3_RIBBON_V1')return e.timeframe==='3'&&s.tf==='3m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf3-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_4OF5_V2'&&require('./tf3-scalping').planPass(e.side,e.telegramPlan,s);
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&require('./analysis-execution-contract').solid80Tf2Confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power},['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version),s.version==='NORMAL_20261001_TF2_SOLID_HOLD_V16'?5:6);
   if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
     require('./analysis-execution-contract').currentSolidTf2Confirmations({side:e.side,solid:s.solid,green:s.green,forecast:s.forecast,power:s.power,
@@ -93,18 +93,29 @@ function analysisContext(s={}){
  return `ANALYSIS SEMASA\nTrend: ${text(d.trend)}\nMomentum: ${text(d.momentum)}\nMTF sync: ${text(d.mtfOverall)} • skor ${s.mtfScore}\nForecast: ${s.forecast} • ${s.power} (skor)\nChecklist: ${s.green}/5\n\nRUMUSAN AI\n${text(d.mtfSummary,420)}\n\nAI COACH / RESULT\n${text(d.aiCoach,850)}\n\nCOACH TIPS\n${text(d.proTip,300)}\n\nNASIHAT\n${text(d.advice,300)}`;
 }
 
+function riskText(value){return String(value||'').replace(/(?:🛑\s*)?JAGA MODAL[.\s—-]*JANGAN TRADE!?/gi,'SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT').replace(/(?:❌\s*)?SETUP KURANG PADU[.!]?/gi,'SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT');}
+function pineContext(s={},tf){
+ const d=s.advisor||{},clean=v=>riskText(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
+ const lines=['ANALYSIS PINE',`Trend: ${clean(d.trend)||'Tiada data'}`,`Movement: ${clean(d.momentum)||'Tiada data'}`,`HEMA Trend: ${tf==='15'?s.hema15?.mode:s.hema3?.mode}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${s.forecast} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':'5/10/15'}: ${s.mtfScore}`];
+ // AI Coach repeats trend/momentum/advice. Keep only its additional barrier/whale facts.
+ const seen=new Set(),key=v=>clean(v).replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
+ function add(label,value,max=420){let text=clean(value);if(!text)return;const k=key(text);if(!k||seen.has(k))return;seen.add(k);lines.push(`${label}: ${text.slice(0,max)}`);}
+ add('Rumusan AI',d.mtfSummary);
+ const coach=clean(d.aiCoach);for(const tag of ['HALANGAN','WHALES']){const m=coach.match(new RegExp('\\['+tag+'\\]:\\s*([^\\n]+)'));if(m)add(tag==='HALANGAN'?'Halangan':'Whales',m[1]);}
+ // Prefer one advice line if tips/advice carry the same warning.
+ add('Nasihat',d.advice,300);add('Coach tips',d.proTip,300);
+ return lines.join('\n');
+}
+
 function telegramMessage(e){
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI TF${e.timeframe||'2'}\n\n${e.percent===50?'CLOSE SEPARUH (50%)':'CLOSE ALL — TUTUP BAKI'}\n${e.symbol}\n\n${e.message}\n\n${footer}`;
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(e.telegramSop?.version==='NORMAL_20261001_TF15_RIBBON_V1'){
+  if(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF15 • INTRADAY\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n${e.symbol} • ${e.side}\nSOP ${s.gates.filter(g=>g.pass).length}/6 • HEMA searah\nMTF 15/30/45: ${s.mtfScore}\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nTP1 → SL entry ${e.side==='BUY'?'+':'−'}0.50\n\n${analysisContext(s)}\n\n${footer}`;
-  }
-  if(e.telegramSop?.version==='NORMAL_20261001_TF3_RIBBON_V1'){
-    const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF3 • SCALPING\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n${e.symbol} • ${e.side}\nSOP ${s.gates.filter(g=>g.pass).length}/6 • HEMA searah\nMTF 5/10/15: ${s.mtfScore}\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nTP1 → SL entry ${e.side==='BUY'?'+':'−'}0.50\n\n${analysisContext(s)}\n\n${footer}`;
+    const tf=e.timeframe,label=tf==='15'?'INTRADAY':'SCALPING';
+    return `ZENCORE | SOLID ENTRY TF${tf} • ${label}\n${e.symbol} • ${e.side}\n3 PENCETUS LULUS • SOP ${s.gates.filter(g=>g.pass).length}/5\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nPelan Pine: ${s.planMode}\n\n${pineContext(s,tf)}\n\n${footer}`;
   }
 
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){
