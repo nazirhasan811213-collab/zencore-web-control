@@ -1565,7 +1565,8 @@ if xc_active and not zc_hold_qualify
         int xc_reached = xc_buy ? (close > xc_tp3+3.0 ? 4 : close >= xc_tp3 ? 3 : close >= xc_tp2 ? 2 : close >= xc_tp1 ? 1 : 0) : (close < xc_tp3-3.0 ? 4 : close <= xc_tp3 ? 3 : close <= xc_tp2 ? 2 : close <= xc_tp1 ? 1 : 0)
         if xc_reached > xc_stage and (xc_reached != 1 or (xc_buy ? close > xc_entry + 1.50 : close < xc_entry - 1.50))
             xc_stage := xc_reached
-            xc_sl := xc_stage == 1 ? (xc_buy ? xc_entry+1.50 : xc_entry-1.50) : xc_stage == 2 ? xc_tp1 : xc_stage == 3 ? xc_tp2 : xc_tp3
+            float xc_target_sl = xc_stage == 1 ? (xc_buy ? xc_entry+1.50 : xc_entry-1.50) : xc_stage == 2 ? xc_tp1 : xc_stage == 3 ? xc_tp2 : xc_tp3
+            xc_sl := xc_buy ? math.max(xc_sl,xc_target_sl) : math.min(xc_sl,xc_target_sl)
             zc24_sl_move := xc_stage == 1 ? "MOVE_SL_ENTRY_PLUS_150" : xc_stage == 2 ? "MOVE_SL_TP1" : xc_stage == 3 ? "MOVE_SL_TP2" : "MOVE_SL_TP3"
 
 // Execution exits do not independently terminate the entry SOLID.
