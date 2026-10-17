@@ -285,7 +285,7 @@
 
   function auditDescription(item) {
     const detail = item.detail || {};
-    const blockReasons={ENTRY_EVENT_EXPIRED:'Event dah luput — tunggu pullback + momentum baharu',WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE:'Posisi dah kosong — tunggu pullback dan momentum kuat',WAIT_NEW_SOLID_AFTER_CLOSE:'Tunggu SOLID baharu selepas posisi close',POSITION_STILL_OPEN:'Posisi strategi ini masih terbuka',CONNECTION_NOT_READY:'Sambungan MT5 belum READY',WAIT_EXECUTION_EVENT:'SOP/chart sahaja — belum ada event execution',SOP_OR_SETUP_NOT_CURRENT:'SOP atau identiti setup semasa belum sah',OUTSIDE_SESSION:'Di luar waktu trade pilihan',NEWS_PAUSE:'Trade dihentikan ikut pilihan news',EXECUTION_ROLLOUT_LOCKED:'Execution dikunci oleh pelayan'};
+    const blockReasons={WAIT_MT5_CLOSE_CONFIRMATION:'Belum ada pengesahan kitaran posisi MT5 ditutup selepas order terakhir',ENTRY_EVENT_EXPIRED:'Event dah luput — tunggu pullback + momentum baharu',WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE:'Posisi dah kosong — tunggu pullback dan momentum kuat',WAIT_NEW_SOLID_AFTER_CLOSE:'Tunggu SOLID baharu selepas posisi close',POSITION_STILL_OPEN:'Posisi strategi ini masih terbuka',CONNECTION_NOT_READY:'Sambungan MT5 belum READY',WAIT_EXECUTION_EVENT:'SOP/chart sahaja — belum ada event execution',SOP_OR_SETUP_NOT_CURRENT:'SOP atau identiti setup semasa belum sah',OUTSIDE_SESSION:'Di luar waktu trade pilihan',NEWS_PAUSE:'Trade dihentikan ikut pilihan news',EXECUTION_ROLLOUT_LOCKED:'Execution dikunci oleh pelayan'};
     const descriptions = {
       SECURE_POD_PROVISIONED: 'Secure Pod DEMO disediakan.',
       PAIRING_CODE_CREATED: `Kod pairing sekali guna dijana untuk ${ownershipDescription(detail.ownershipMode)}.`,

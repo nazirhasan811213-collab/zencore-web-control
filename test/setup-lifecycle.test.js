@@ -40,3 +40,8 @@ test('browser adapters load lifecycle helper first; both pages and static route 
  for(const file of ['auto-trade.html','precision-entry.html']){const s=fs.readFileSync(file,'utf8');a.ok(s.indexOf('/setup-lifecycle.js')<s.indexOf('/tf15-intraday.js'));}
  a.match(fs.readFileSync('server-analysis.js','utf8'),/pathname === '\/setup-lifecycle.js'/);
 });
+test('an executed order without an observed MT5 close cannot be treated as a new first entry',async()=>{
+ const {createEntryCycleReset}=require('../entry-cycle-reset');const store={lastStrategyCycleReset:async()=>null,latestExecutedSetupForMode:async()=>({acknowledgedAt:1000})};
+ const gate=createEntryCycleReset(store),s=sop(),m={timeframe:'3',signalObservedAt:5000,strategyNormal:{side:'BUY',sop:{...s,entryPolicyVersion:'PINE_3TRIGGERS_4OF5_V2'}}};
+ a.equal((await gate.check('u','pod',m)).reason,'WAIT_MT5_CLOSE_CONFIRMATION');
+});

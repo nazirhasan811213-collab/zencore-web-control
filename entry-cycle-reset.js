@@ -16,8 +16,12 @@ function createEntryCycleReset(store){
   const mode=String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING',k=key(user,pod,mode);
   if(!cache.has(k))cache.set(k,typeof store.lastStrategyCycleReset==='function'?await store.lastStrategyCycleReset(user,pod,mode):null);
   const reset=cache.get(k);
-  if(!reset)return {allowed:true,reason:null};
   const s=market.strategyNormal.sop;
+  if(s.lifecycleVersion===Lifecycle.VERSION&&typeof store.latestExecutedSetupForMode==='function'){
+    const last=await store.latestExecutedSetupForMode(user,pod,mode);
+    if(last&&(!reset||!Number.isFinite(last.acknowledgedAt)||last.acknowledgedAt>=reset.closedAt))return {allowed:false,reason:'WAIT_MT5_CLOSE_CONFIRMATION'};
+  }
+  if(!reset)return {allowed:true,reason:null};
   if(s.lifecycleVersion===Lifecycle.VERSION){
    const proof=Lifecycle.reentry(market.strategyNormal.side,s,reset.closedAt,market.signalObservedAt);
    return {allowed:!!proof,reason:proof?null:'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE',closedAt:reset.closedAt,proof};
