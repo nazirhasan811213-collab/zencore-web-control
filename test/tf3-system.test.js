@@ -17,7 +17,7 @@ test('BUY and SELL compact TF3 feed -> validated decision -> unchanged connector
  const command={id:'00000000-0000-4000-8000-000000000000',type:'PLACE_SETUP',expiresAt:f.now+30000,payload:cmd.payload};
  const result=cp.spawnSync('python',['-c',"import sys,json;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123456','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify(command),encoding:'utf8'});a.equal(result.status,0,result.stderr);const fields=JSON.parse(result.stdout);a.equal(fields.side,side);a.equal(fields.slPolicy,'EXACT_ANALYSIS_V2');
  }});
-test('stale, wrong timeframe, old rule and replay batches fail closed',()=>{for(const change of [f=>f.batch.emittedAt-=31000,f=>f.batch.timeframe='2',f=>f.row[66].entryRuleVersion='OLD']){const f=fixture();change(f);a.equal(Hub.ingest(f.batch,f.now).length,0);}const f=fixture();a.equal(Hub.ingest(f.batch,f.now).length,1);a.equal(Hub.ingest(f.batch,f.now).length,0);});
+test('stale, wrong timeframe, old rule and replay batches fail closed',()=>{for(const change of [f=>f.batch.emittedAt-=61000,f=>f.batch.timeframe='2',f=>f.row[66].entryRuleVersion='OLD']){const f=fixture();change(f);a.equal(Hub.ingest(f.batch,f.now).length,0);}const f=fixture();a.equal(Hub.ingest(f.batch,f.now).length,1);a.equal(Hub.ingest(f.batch,f.now).length,0);});
 test('opposite ribbon, excess SL and changed MTF block entry',()=>{for(const change of [f=>f.row[65].tf3.fast=4099,f=>f.row[23]=4094,f=>f.row[66].dashboardAi.dashboard.mtfTimeframes=['15','30','60'],f=>f.row[66].solidHoldActive=false]){const f=fixture();change(f);const m=market(f);a.equal(m.strategyNormal.state,'WAIT');a.equal(C.createEntryDecision(m),null);}});
 test('4/5 accepted; execution event mandatory and Dashboard never orders',()=>{const f=fixture();f.row[43]=40;let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.ok(C.createEntryDecision(m));m={...m,feedChannel:'DASHBOARD'};a.equal(C.createEntryDecision(m),null);m={...m,feedChannel:'EXECUTION',entryEvent:false};a.equal(C.createEntryDecision(m),null);});
 test('TP1 plus .50 uses existing absolute-price SL action, not EA entry override',()=>{const f=fixture();f.row[24]=4100.5;f.row[58]='MOVE_SL_ENTRY_PLUS_050';f.row[59]=true;const m=market(f),d=C.createManagementDecision(m);a.deepEqual(d.snapshot.actions[0],{type:'MOVE_SL_TP1',activeSl:4100.5,lockLabel:'INITIAL'});});
@@ -183,14 +183,32 @@ test('fixed-event retry keeps original authorization, deadline and setup identit
  Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:auth,entryAuthorizedAt:auth});
  const m=market(f),d=C.createEntryDecision(m);a.ok(d);a.equal(d.snapshot.entryAuthorizedAt,auth);
  const cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH'},null,f.now);
- a.ok(cmd);a.equal(cmd.notAfterMs,auth+30000);
+ a.ok(cmd);a.equal(cmd.notAfterMs,auth+60000);
  const retry={...m,receivedAt:f.now+1,signalObservedAt:f.now+1};
  a.equal(C.createEntryDecision(retry).signalKey,d.signalKey);
  const check=require('../entry-delivery-check').checkEntryDelivery;
- a.equal(check({payload:cmd.payload},m,auth+30001).reason,'ENTRY_EVENT_EXPIRED');
+ a.equal(check({payload:cmd.payload},m,auth+60001).reason,'ENTRY_EVENT_EXPIRED');
  a.equal(C.createEntryDecision({...m,entryAuthorizedAt:auth+1}),null);
  a.equal(C.createEntryDecision({...m,feedChannel:'DASHBOARD'}),null);
  a.equal(C.createEntryDecision({...m,entryEvent:false}),null);
- const stale=fixture();stale.now+=200;stale.batch.emittedAt=stale.now;Object.assign(stale.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:stale.now-31000,entryAuthorizedAt:stale.now-31000});
+ const stale=fixture();stale.now+=200;stale.batch.emittedAt=stale.now;Object.assign(stale.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:stale.now-61000,entryAuthorizedAt:stale.now-61000});
  a.equal(C.createEntryDecision(market(stale)),null);
+});
+
+
+test('TF3 event lifetime accepts 45s and exactly 60s; rejects after 60s without timer renewal',()=>{
+ for(const age of [45000,60000,60001]){
+  const f=fixture();f.now+=500;const origin=f.now-age;f.batch.emittedAt=origin;
+  Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:origin,entryAuthorizedAt:origin});
+  delete require.cache[require.resolve('../tf3-market-hub')];const hub=require('../tf3-market-hub');
+  const m=hub.ingest(f.batch,f.now)[0];
+  if(age>60000){a.equal(m,undefined);continue;}
+  a.ok(m);a.ok(S.entryDecision(m,f.now));
+  if(age===45000){
+   const cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH'},null,f.now);
+   a.ok(cmd);a.equal(cmd.notAfterMs,origin+60000);
+   a.equal(require('../entry-delivery-check').checkEntryDelivery({payload:cmd.payload},m,f.now).ok,true);
+   a.equal(require('../entry-delivery-check').checkEntryDelivery({payload:cmd.payload},m,origin+60001).reason,'ENTRY_EVENT_EXPIRED');
+  }
+ }
 });

@@ -9,9 +9,9 @@ function checkEntryDelivery(command,market,at=Date.now()){
  const detail={timeframe:snap.executionTimeframe||null,side:p.side||null,setupKey:snap.setupKey||null,
   currentSide:n?.side||null,currentSetupKey:market?.setupKey||null,observedAt:observed||null};
  const fail=(reason,extra={})=>({ok:false,reason,...detail,...extra});
- if(snap.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'&&(!Number.isFinite(snap.entryAuthorizedAt)||at-snap.entryAuthorizedAt>30000||snap.entryAuthorizedAt>at+5000))return fail('ENTRY_EVENT_EXPIRED');
+ if(snap.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'&&(!Number.isFinite(snap.entryAuthorizedAt)||at-snap.entryAuthorizedAt>60000||snap.entryAuthorizedAt>at+5000))return fail('ENTRY_EVENT_EXPIRED');
  if(!market)return fail('MARKET_MISSING');
- if(!Number.isFinite(observed)||at-observed>30000||observed>at+5000)return fail('MARKET_STALE');
+ if(!Number.isFinite(observed)||at-observed>(['3','15'].includes(String(market?.timeframe))&&market?.feedChannel==='EXECUTION'&&market?.entryEvent===true?60000:30000)||observed>at+5000)return fail('MARKET_STALE');
  if(!Core.entryConfirmationsPass(market))return fail('SOP_CONFIRMATION_FAILED',{
   failedGates:(n?.sop?.gates||[]).filter(g=>g.pass===false||g.passed===false).map(g=>g.key).slice(0,10)});
  if(n.side!==p.side)return fail('SIDE_CHANGED');

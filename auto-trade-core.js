@@ -442,7 +442,8 @@
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
     if (!tradingWindow(settings.tradingSchedule,at).allowed) return null;
     const observed=number(market.signalObservedAt);
-    if(observed!==null&&(at-observed>30000||observed>at+5000))return null;
+    const modernEvent=['3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
+    if(observed!==null&&(at-observed>(modernEvent?60000:30000)||observed>at+5000))return null;
     const validation = validateSettings(settings);
     const selected = validation.value.strategyMode;
     const mode=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
@@ -465,7 +466,7 @@
     });
     return {
       signalKey: decision.signalKey,
-      notAfterMs: snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+30000:observed!==null?observed+30000:Infinity,
+      notAfterMs: snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: snapshot,

@@ -12,7 +12,7 @@ function fixture(side='BUY'){
 function market(f){return Hub.ingest(f.batch,f.now)[0];}
 
 test('TF15 uses own candles, ribbon, four confirmations and MTF 15/30/45',()=>{for(const side of ['BUY','SELL']){const f=fixture(side);f.row[65].tf15.slowPreviousBar=f.row[65].tf15.slow;f.row[43]=40;const m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.equal(m.strategyNormal.state,'READY');const d=C.createEntryDecision(m);a.equal(d.snapshot.executionTimeframe,'15');a.equal(d.snapshot.side,side);a.deepEqual(S.POLICY.mtf,['15','30','45']);}});
-test('TF15 rejects TF3 MTF, opposite ribbon, stale and Dashboard authorization',()=>{for(const change of [f=>f.row[66].dashboardAi.dashboard.mtfTimeframes=['5','10','15'],f=>f.row[65].tf15.fast=4099,f=>f.row[66].solidHoldActive=false]){const f=fixture();change(f);a.equal(C.createEntryDecision(market(f)),null);}const f=fixture();f.batch.feedChannel='DASHBOARD';a.equal(C.createEntryDecision(market(f)),null);const old=fixture();old.batch.emittedAt-=31000;a.equal(Hub.ingest(old.batch,old.now).length,0);});
+test('TF15 rejects TF3 MTF, opposite ribbon, stale and Dashboard authorization',()=>{for(const change of [f=>f.row[66].dashboardAi.dashboard.mtfTimeframes=['5','10','15'],f=>f.row[65].tf15.fast=4099,f=>f.row[66].solidHoldActive=false]){const f=fixture();change(f);a.equal(C.createEntryDecision(market(f)),null);}const f=fixture();f.batch.feedChannel='DASHBOARD';a.equal(C.createEntryDecision(market(f)),null);const old=fixture();old.batch.emittedAt-=61000;a.equal(Hub.ingest(old.batch,old.now).length,0);});
 test('TF15 current hub routes new rule separately from legacy; duplicates rejected',()=>{const f=fixture(),legacy=require('../strategy-market-hub');const out=legacy.ingest(f.batch,f.now);a.equal(out.length,1);a.equal(out[0].strategyNormal.entrySopVersion,S.VERSION);a.equal(legacy.ingest(f.batch,f.now).length,0);});
 test('TF15 profile dispatches correct layers and signed unchanged-mode command',async()=>{const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');const f=fixture(),m=market(f),store=new MemoryAutoTradeStore(),token='zcpod_'+'a'.repeat(48),hash=tokenHash(token);const pod={id:'tf15pod',userId:'tf15user',tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:f.now,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};store.podsByUser.set('tf15user',pod);store.podsByToken.set(hash,pod);const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'3',localEaExecutionUserIds:['tf15user'],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'a-test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,tf)=>tf==='15'?m:null});await svc.saveSettings('tf15user',{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF15_INTRA',riskAcknowledged:true});await store.setControl('tf15user',{desiredState:'ON',effectiveState:'ON'});a.equal((await svc.dispatchMarkets([m])).queued,1);const result=await svc.nextCommand(token);a.equal(result.command.payload.strategyMode,'TF15_INTRA');a.equal(result.command.payload.analysisSnapshot.executionTimeframe,'15');a.equal(result.command.payload.layers,2);});
 test('TF15 Telegram labels and current analysis, full close and step lock are isolated',async()=>{const f=fixture(),m=market(f),svc=new Alerts.AnalysisAlerts();await svc.init();await svc.record(m);const e=svc.events.find(x=>x.kind==='ENTRY');a.ok(e);a.equal(T.entrySopAllowed(e),true);a.match(T.telegramMessage(e),/SOLID ENTRY TF15/);a.match(T.telegramMessage(e),/15\/30\/45/);a.doesNotMatch(T.telegramMessage(e),/SOLID ENTRY TF3/);m.positionManagement={action:'CLOSE_50_NOW',reason:'native partial'};const d=C.createManagementDecision(m);a.equal(d.snapshot.executionTimeframe,'15');a.equal(d.snapshot.actions[0].percent,100);a.equal(d.snapshot.setupKey,m.setupKey);clearInterval(svc.cleanupTimer);});
@@ -72,14 +72,32 @@ test('fixed-event retry keeps original authorization, deadline and setup identit
  Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:auth,entryAuthorizedAt:auth});
  const m=market(f),d=C.createEntryDecision(m);a.ok(d);a.equal(d.snapshot.entryAuthorizedAt,auth);
  const cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH'},null,f.now);
- a.ok(cmd);a.equal(cmd.notAfterMs,auth+30000);
+ a.ok(cmd);a.equal(cmd.notAfterMs,auth+60000);
  const retry={...m,receivedAt:f.now+1,signalObservedAt:f.now+1};
  a.equal(C.createEntryDecision(retry).signalKey,d.signalKey);
  const check=require('../entry-delivery-check').checkEntryDelivery;
- a.equal(check({payload:cmd.payload},m,auth+30001).reason,'ENTRY_EVENT_EXPIRED');
+ a.equal(check({payload:cmd.payload},m,auth+60001).reason,'ENTRY_EVENT_EXPIRED');
  a.equal(C.createEntryDecision({...m,entryAuthorizedAt:auth+1}),null);
  a.equal(C.createEntryDecision({...m,feedChannel:'DASHBOARD'}),null);
  a.equal(C.createEntryDecision({...m,entryEvent:false}),null);
- const stale=fixture();stale.now+=200;stale.batch.emittedAt=stale.now;Object.assign(stale.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:stale.now-31000,entryAuthorizedAt:stale.now-31000});
+ const stale=fixture();stale.now+=200;stale.batch.emittedAt=stale.now;Object.assign(stale.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:stale.now-61000,entryAuthorizedAt:stale.now-61000});
  a.equal(C.createEntryDecision(market(stale)),null);
+});
+
+
+test('TF15 event lifetime accepts 45s and exactly 60s; rejects after 60s without timer renewal',()=>{
+ for(const age of [45000,60000,60001]){
+  const f=fixture();f.now+=500;const origin=f.now-age;f.batch.emittedAt=origin;
+  Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:origin,entryAuthorizedAt:origin});
+  delete require.cache[require.resolve('../tf15-market-hub')];const hub=require('../tf15-market-hub');
+  const m=hub.ingest(f.batch,f.now)[0];
+  if(age>60000){a.equal(m,undefined);continue;}
+  a.ok(m);a.ok(S.entryDecision(m,f.now));
+  if(age===45000){
+   const cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH'},null,f.now);
+   a.ok(cmd);a.equal(cmd.notAfterMs,origin+60000);
+   a.equal(require('../entry-delivery-check').checkEntryDelivery({payload:cmd.payload},m,f.now).ok,true);
+   a.equal(require('../entry-delivery-check').checkEntryDelivery({payload:cmd.payload},m,origin+60001).reason,'ENTRY_EVENT_EXPIRED');
+  }
+ }
 });
