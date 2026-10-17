@@ -1,4 +1,5 @@
 'use strict';
+const Lifecycle=require('./setup-lifecycle');
 const POLICY='PINE_3TRIGGERS_4OF5_V2',MODES=['TF2_SCALPING','TF15_INTRA'];
 function createEntryCycleReset(store){
  const cache=new Map();
@@ -10,12 +11,22 @@ function createEntryCycleReset(store){
    await store.appendAudit(user,'STRATEGY_CYCLE_RESET',reset);cache.set(key(user,pod,mode),reset);
   }
  }
- async function allows(user,pod,market){
-  if(market?.strategyNormal?.sop?.entryPolicyVersion!==POLICY)return true;
+ async function check(user,pod,market){
+  if(market?.strategyNormal?.sop?.entryPolicyVersion!==POLICY)return {allowed:true,reason:null};
   const mode=String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING',k=key(user,pod,mode);
   if(!cache.has(k))cache.set(k,typeof store.lastStrategyCycleReset==='function'?await store.lastStrategyCycleReset(user,pod,mode):null);
-  const reset=cache.get(k);return !reset||(Number.isFinite(market.strategyNormal.sop.triggerAt)&&market.strategyNormal.sop.triggerAt>reset.closedAt);
+  const reset=cache.get(k);
+  if(!reset)return {allowed:true,reason:null};
+  const s=market.strategyNormal.sop;
+  if(s.lifecycleVersion===Lifecycle.VERSION){
+   const proof=Lifecycle.reentry(market.strategyNormal.side,s,reset.closedAt,market.signalObservedAt);
+   return {allowed:!!proof,reason:proof?null:'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE',closedAt:reset.closedAt,proof};
+  }
+  const allowed=Number.isFinite(s.triggerAt)&&s.triggerAt>reset.closedAt;
+  return {allowed,reason:allowed?null:'WAIT_NEW_SOLID_AFTER_CLOSE',closedAt:reset.closedAt};
  }
- return {observe,allows};
+ async function allows(...args){return (await check(...args)).allowed;}
+
+ return {observe,allows,check};
 }
 module.exports={createEntryCycleReset};

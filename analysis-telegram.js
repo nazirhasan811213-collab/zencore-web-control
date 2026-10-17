@@ -34,6 +34,7 @@ const {entryQuality}=require('./analysis-execution-contract');
 function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
+ if(e.telegramSop?.lifecycleVersion==='PULLBACK_REQUALIFY_V1'&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
   if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
   const s=e.telegramSop;
   if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf2ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
@@ -119,7 +120,7 @@ function telegramMessage(e){
   if(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     const tf=e.timeframe,label=tf==='15'?'INTRADAY':'SCALPING';
-    return `ZENCORE | SOLID ENTRY TF${tf} • ${label}\n${e.symbol} • ${e.side}\n3 PENCETUS LULUS • SOP ${s.gates.filter(g=>g.pass).length}/5\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nPelan Pine: ${s.planMode}\n\n${pineContext(s,tf)}\n\n${footer}`;
+    return `ZENCORE | ${s.cycleKind==='FOLLOWUP'?'CALON RE-ENTRY':'SOLID ENTRY'} TF${tf} • ${label}\n${e.symbol} • ${e.side}\n3 PENCETUS LULUS • SOP ${s.gates.filter(g=>g.pass).length}/5\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nPelan Pine: ${s.planMode}\n\n${pineContext(s,tf)}\n\n${footer}`;
   }
 
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){

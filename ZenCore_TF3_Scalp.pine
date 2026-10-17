@@ -38,6 +38,22 @@ varip int zc_pending_at = na
 varip bool zc_hold_active = false
 varip int zc_hold_closed_at = na
 varip string zc_hold_reason = "NO_NATIVE_SOLID"
+varip int zc_parent_qualified = na
+varip string zc_cycle_kind = "INITIAL"
+varip int zc_source_setup_at = na
+varip int[] zc_path_times = array.new_int()
+varip float[] zc_path_prices = array.new_float()
+// A short price path is carried with the event, not sent as extra heartbeats.
+if barstate.isrealtime
+    if array.size(zc_path_times) == 0 or int(timenow/1000) > int(array.get(zc_path_times,array.size(zc_path_times)-1)/1000)
+        array.push(zc_path_times,timenow)
+        array.push(zc_path_prices,close)
+    else
+        array.set(zc_path_times,array.size(zc_path_times)-1,timenow)
+        array.set(zc_path_prices,array.size(zc_path_prices)-1,close)
+    while array.size(zc_path_times) > 120
+        array.shift(zc_path_times)
+        array.shift(zc_path_prices)
 bool zc_partial_pulse = false
 bool zc_partial_buy = false
 varip bool xc_half_event_sent = false
@@ -1231,7 +1247,7 @@ barcolor(final_chart_color)
 grp_sop = "SOP Dashboard Settings"
 show_sop = input.bool(true, "Buka SOP Dashboard (Bottom Right)", group=grp_sop)
 
-string htf_sop = timeframe.period == "1" ? "3" : timeframe.period == "3" ? "5" : timeframe.period == "5" ? "15" : timeframe.period == "15" ? "30" : timeframe.period == "30" ? "60" : timeframe.period == "60" ? "240" : timeframe.period == "240" ? "D" : "W"
+string htf_sop = timeframe.period // Own TF HEMA checklist; MTF sync remains separate.
 
 f_htf_ribbon_state() =>
     h1 = f_hema(close, 20)
@@ -1307,7 +1323,7 @@ if show_sop
         table.cell(sop_table, 0, 5, "4. Bottom Bar Color:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
         table.cell(sop_table, 1, 5, sop4_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
         
-        table.cell(sop_table, 0, 6, "5. HTF HEMA ("+htf_sop+"):", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
+        table.cell(sop_table, 0, 6, "5. HEMA TF ("+htf_sop+"):", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
         table.cell(sop_table, 1, 6, sop5_pass ? "✅" : "❌", text_size=dashSize, text_halign=text.align_left)
 
         table.cell(sop_table, 0, 7, "🔮 10-Candle Forecast:", text_color=color.gray, text_size=dashSize, text_halign=text.align_right)
@@ -1478,6 +1494,9 @@ if zc80_new_solid
     zc_hold_closed_at := na
     zc_seq_side := zc_pending_side
     zc_seq_bar := zc_pending_bar
+    zc_source_setup_at := zc_pending_bar
+    zc_cycle_kind := "INITIAL"
+    zc_parent_qualified := na
     zc_seq_trigger := zc_pending_at
     zc_seq_source := zc_pending_entry
     zc_seq_completed := na
@@ -1515,6 +1534,25 @@ float draft_raw_sl = zc24_buy ? close-draft_distance : close+draft_distance
 float draft_candidate_sl = draft_raw_sl
 bool draft_plan_ok = atr > 0 and draft_candidate_sl > 0 and (zc24_buy ? draft_candidate_sl < close : draft_candidate_sl > close)
 bool draft_ribbon = zc24_buy ? he1 > he2 : he1 < he2
+// A fresh pullback + strong resumption can form a NEW candidate. MT5 flat
+// confirmation is checked by the server, never inferred from virtual Pine exits.
+bool zc_recent_pullback = false
+float zc_recent_peak = na
+if not na(zc_seq_completed) and array.size(zc_path_times)>0
+    for zc_pb_i = 0 to array.size(zc_path_times)-1
+        if array.get(zc_path_times,zc_pb_i)>zc_seq_completed
+            float zc_pb_price = (zc24_buy ? 1.0 : -1.0)*array.get(zc_path_prices,zc_pb_i)
+            zc_recent_peak := na(zc_recent_peak) ? zc_pb_price : math.max(zc_recent_peak,zc_pb_price)
+            if zc_recent_peak-zc_pb_price>=atr*0.10
+                zc_recent_pullback := true
+bool zc_reentry_momentum = draft_ribbon and math.abs(he1-he2) >= atr*0.10 and math.abs(he1-he2) > math.abs(he1[1]-he2[1]) and (zc24_buy ? he1>he1[1] and he2>he2[1] and wt1>wt2 and close>math.max(high[1],math.max(he1,he2)) : he1<he1[1] and he2<he2[1] and wt1<wt2 and close<math.min(low[1],math.min(he1,he2))) and math.abs(wt1-wt2)>math.abs(wt1[1]-wt2[1])
+bool zc_followup = barstate.isrealtime and zc_hold_active and not na(zc_seq_completed) and (not xc_active or zc_seq_now-zc_seq_completed>60000) and zc_recent_pullback and zc_reentry_momentum and zc_movement_pass and zc80_data and zc80_passed>=4
+if zc_followup
+    zc_parent_qualified := zc_seq_completed
+    zc_seq_completed := na
+    zc_seq_bar := timenow
+    zc_cycle_kind := "FOLLOWUP"
+    zc80_eligible := false
 bool zc_hold_qualify = draft_ribbon and zc_movement_pass and draft_plan_ok and zc_hold_active and na(zc_seq_completed) and zc24_tf3 and zc80_data and zc80_passed >= 4
 if zc_hold_qualify
     zc80_eligible := true
@@ -1648,7 +1686,7 @@ if barstate.islast
     table.cell(zc24_table, 0, 6, "MTF score +1…+5 / −1…−5", text_color=color.white)
     table.cell(zc24_table, 1, 6, zc_seq_mtf ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 7, "SOP " + str.tostring(zc80_passed) + "/5", text_color=color.white)
-    table.cell(zc24_table, 1, 7, zc_pending_key != "" ? "SOLID BARU · SEMAK PENCETUS" : zc24_ready ? (zc24_buy ? "BUY READY" : "SELL READY") : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
+    table.cell(zc24_table, 1, 7, zc_pending_key != "" ? "SOLID BARU · SEMAK PENCETUS" : not na(zc_seq_completed) and timenow-zc_seq_completed>60000 ? "EVENT LUPUT · TUNGGU PULLBACK + MOMENTUM" : zc24_ready ? "SOP LENGKAP · SEMAK STATUS ORDER DI WEB" : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
     table.cell(zc24_table, 0, 9, "Movement + HEMA wajib", text_color=color.white)
     table.cell(zc24_table, 1, 9, draft_ribbon and zc_movement_pass ? "PASS" : "WAIT", text_color=draft_ribbon ? color.lime : color.red)
     table.cell(zc24_table, 0, 10, "Pelan asal Pine · " + tpModeStr, text_color=color.white)
@@ -1711,7 +1749,12 @@ string zc24_hema_json = "{\"version\":\"HEMA3_LIVE_V1\",\"tf3\":{\"fast\":" + f_
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
 string zc_native_signals = "{\"primaryBuy\":" + f_bool(is_zone_turn_green) + ",\"primarySell\":" + f_bool(is_zone_turn_red) + ",\"solidPulse\":" + f_bool(zc_seq_pulse) + ",\"reentry\":" + f_quote(zc_native_reentry) + ",\"momentumBuy\":" + f_bool(continuation_buy) + ",\"momentumSell\":" + f_bool(continuation_sell) + ",\"nativeEntry\":" + f_num(curr_entry) + ",\"nativeSl\":" + f_num(curr_sl) + ",\"nativeTp1\":" + f_num(curr_tp1) + ",\"nativeTp2\":" + f_num(curr_tp2) + ",\"nativeTp3\":" + f_num(curr_tp3) + "}"
 string zc_seq_ai = "{\"mtfScore\":" + str.tostring(mtf_total) + ",\"mtfOverall\":" + f_quote(mtf_word) + ",\"mtfSummary\":" + f_quote(mtf_summary_txt) + ",\"trend\":" + f_quote(mkt_struct) + ",\"momentum\":" + f_quote(mom_state) + ",\"proTip\":" + f_quote(pro_tip) + ",\"advice\":" + f_quote(f_advice(ai_coach)) + ",\"aiCoach\":" + f_quote(ai_coach) + ",\"dashboard\":" + zc_all_dashboard + ",\"chartSignals\":" + zc_native_signals + "}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-PINE-3TRIGGERS-4OF5-2.2\",\"entryPolicyVersion\":\"PINE_3TRIGGERS_4OF5_V2\",\"riskPlanVersion\":\"TF3_PINE_PLAN_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string[] zc_path_parts = array.new_string()
+if array.size(zc_path_times)>0
+    for zc_i = 0 to array.size(zc_path_times)-1
+        array.push(zc_path_parts,"["+str.tostring(array.get(zc_path_times,zc_i))+","+f_num(array.get(zc_path_prices,zc_i))+"]")
+string zc_reentry_json = "{\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"fastPrevious\":"+f_num(he1[1])+",\"slowPrevious\":"+f_num(he2[1])+",\"wtGapPrevious\":"+f_num(math.abs(wt1[1]-wt2[1]))+",\"pricePath\":["+array.join(zc_path_parts,",")+"]}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF3_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF3-PINE-3TRIGGERS-4OF5-2.3\",\"entryPolicyVersion\":\"PINE_3TRIGGERS_4OF5_V2\",\"riskPlanVersion\":\"TF3_PINE_PLAN_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))

@@ -285,6 +285,7 @@
 
   function auditDescription(item) {
     const detail = item.detail || {};
+    const blockReasons={ENTRY_EVENT_EXPIRED:'Event dah luput — tunggu pullback + momentum baharu',WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE:'Posisi dah kosong — tunggu pullback dan momentum kuat',WAIT_NEW_SOLID_AFTER_CLOSE:'Tunggu SOLID baharu selepas posisi close',POSITION_STILL_OPEN:'Posisi strategi ini masih terbuka',CONNECTION_NOT_READY:'Sambungan MT5 belum READY',WAIT_EXECUTION_EVENT:'SOP/chart sahaja — belum ada event execution',SOP_OR_SETUP_NOT_CURRENT:'SOP atau identiti setup semasa belum sah',OUTSIDE_SESSION:'Di luar waktu trade pilihan',NEWS_PAUSE:'Trade dihentikan ikut pilihan news',EXECUTION_ROLLOUT_LOCKED:'Execution dikunci oleh pelayan'};
     const descriptions = {
       SECURE_POD_PROVISIONED: 'Secure Pod DEMO disediakan.',
       PAIRING_CODE_CREATED: `Kod pairing sekali guna dijana untuk ${ownershipDescription(detail.ownershipMode)}.`,
@@ -294,9 +295,13 @@
       SYSTEM_STOP_REQUESTED: 'Entry baharu disekat; EXIT management dikekalkan.',
       SYSTEM_STOPPED: 'Sistem dihentikan.',
       EMERGENCY_CLOSE_REQUESTED: 'Emergency Close All dihantar ke MT5.',
-      SETUP_QUEUED: `${detail.symbol || 'Pair'} ${detail.side || ''} TF${detail.timeframe || '—'} dihantar • ${detail.totalLot || '—'} lot • risk ${detail.riskLevel || 'PENDING'}.`,
+      SETUP_QUEUED: `${detail.symbol || 'Pair'} ${detail.side || ''} TF${detail.timeframe || '—'} dihantar • ${detail.totalLot || '—'} lot • risk ${detail.riskLevel || 'PENDING'} • SOLID → SOP ${detail.solidToSopMs==null?'—':(detail.solidToSopMs/1000).toFixed(1)+'s'} • SOP → webhook ${detail.sopToWebhookMs??'—'}ms • webhook → queue ${detail.webhookToQueueMs??'—'}ms.`,
       HOSTED_MT5_ENVELOPE_SAVED: `Credential envelope disimpan untuk ${detail.accountMask || 'akaun MT5'} • plaintext tidak disimpan.`,
-      COMMAND_ACKNOWLEDGED: `${detail.commandType || 'Command'}: ${detail.status || 'ACK'}${detail.code ? ' • ' + detail.code : ''}.`
+      ENTRY_BLOCKED:`TF${detail.timeframe||'—'} • ${blockReasons[detail.reason]||detail.analysisReason||detail.reason||'Entry menunggu'}.`,
+      ENTRY_DELIVERED:`TF${detail.timeframe||'—'} • arahan diambil Connector • queue → delivery ${detail.queueToDeliveryMs??'—'}ms.`,
+      MT5_POSITION_OBSERVED:`TF${detail.timeframe||'—'} • MT5 sahkan posisi terbuka • ${detail.layers||'—'} layer.`,
+      STRATEGY_CYCLE_RESET:'MT5 sahkan strategi kosong — semak peluang baharu selepas pullback.',
+      COMMAND_ACKNOWLEDGED: `${detail.commandType || 'Command'}: ${detail.status || 'ACK'}${detail.code ? ' • ' + detail.code : ''}${detail.commandType==='PLACE_SETUP'?' • queue → MT5 ack '+(detail.queueToAckMs??'—')+'ms':''}.`
     };
     return descriptions[item.type] || String(item.type || 'Aktiviti').replaceAll('_', ' ');
   }

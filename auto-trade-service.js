@@ -1105,6 +1105,10 @@ function createAutoTradeService(options = {}) {
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
     const cycleBefore=options.scalpingTimeframe==='3'&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
+    for(const mode of ['TF2_SCALPING','TF15_INTRA']){
+      const newPositions=heartbeatValidation.value.positions.filter(p=>p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode&&!cycleBefore.some(old=>old.ticket===p.ticket));
+      if(input.terminalConnected===true&&newPositions.length&&options.scalpingTimeframe==='3'&&isLocalEa(pod))await store.appendAudit(pod.userId,'MT5_POSITION_OBSERVED',{timeframe:mode==='TF15_INTRA'?'15':'3',observedAt:seenAt,layers:newPositions.length,lifecycleState:'POSITION_OPEN'});
+    }
     const profile=await store.getProfile(pod.userId);
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
     if(input.terminalConnected===true&&fullSnapshot&&options.scalpingTimeframe==='3'&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
@@ -1167,11 +1171,13 @@ function createAutoTradeService(options = {}) {
         m.signalObservedAt>=p.reentry.closedAt&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol===p.symbol&&(x.strategyMode||'TF2_SCALPING')===p.strategyMode);
     }
-    if(!await entryCycleReset.allows(command.userId,command.podId,m)){Object.assign(diagnostic,{ok:false,reason:'WAIT_NEW_SOLID_AFTER_CLOSE'});return false;}
+    const cycle=await entryCycleReset.check(command.userId,command.podId,m);
+    if(!cycle.allowed){Object.assign(diagnostic,{ok:false,reason:cycle.reason});return false;}
     const delivery = require('./entry-delivery-check').checkEntryDelivery(command, m, now());
     Object.assign(diagnostic, delivery);
     return delivery.ok;
   }
+  const entryDeliverySeen=new Set();
   async function nextCommand(rawToken) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
@@ -1184,6 +1190,10 @@ function createAutoTradeService(options = {}) {
       await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED',reason,...deliveryDiagnostic});
       console.warn('ZenCore entry delivery revoked:', JSON.stringify({commandId:command.id,symbol:command.payload?.symbol,reason,...deliveryDiagnostic}));
       return {ok:true,command:null,serverTime:now()};
+    }
+    if(command.type==='PLACE_SETUP'&&!entryDeliverySeen.has(command.id)){
+      if(entryDeliverySeen.size>=1000)entryDeliverySeen.clear();entryDeliverySeen.add(command.id);
+      await store.appendAudit(pod.userId,'ENTRY_DELIVERED',{commandId:command.id,timeframe:command.payload?.analysisSnapshot?.executionTimeframe,deliveredAt:now(),queueToDeliveryMs:Math.max(0,now()-command.createdAt),lifecycleState:'ORDER_SENT_TO_CONNECTOR'});
     }
     return {
       ok: true,
@@ -1245,7 +1255,12 @@ function createAutoTradeService(options = {}) {
       }, {id:pod.id,tokenHash:pod.tokenHash});
     }
     await store.appendAudit(pod.userId, 'COMMAND_ACKNOWLEDGED', {
-      commandId: command.id, commandType: command.type, status, code: result.code
+      commandId: command.id, commandType: command.type, status, code: result.code,
+      ...(command.type==='PLACE_SETUP'?{timeframe:command.payload?.analysisSnapshot?.executionTimeframe,
+        lifecycleState:status==='EXECUTED'?'MT5_ACKNOWLEDGED':'EA_REJECTED',
+        sopCompletedAt:command.payload?.analysisSnapshot?.qualifiedAt||command.payload?.analysisSnapshot?.confirmationEvidence?.qualifiedAt,
+        commandQueuedAt:command.createdAt,commandDeliveredAt:command.deliveredAt,
+        mt5AcknowledgedAt:now(),queueToAckMs:Math.max(0,now()-command.createdAt)}:{})
     });
     return { ok: true, commandId: command.id, status };
   }
@@ -1331,18 +1346,27 @@ function createAutoTradeService(options = {}) {
     return { ok: true, commandId: command.id, status };
   }
 
+  const entryBlockSeen=new Map();
+  async function reportEntryBlock(profile,market,reason,extra={}){
+    if(!market?.strategyNormal?.solid&&market?.strategyNormal?.lifecycleState!=='EVENT_EXPIRED')return;
+    const k=[profile.userId,market.timeframe,market.setupKey,reason].join('|'),at=now();
+    if(at-(entryBlockSeen.get(k)||0)<60000)return;
+    if(entryBlockSeen.size>=1000)entryBlockSeen.clear();
+    entryBlockSeen.set(k,at);
+    await store.appendAudit(profile.userId,'ENTRY_BLOCKED',{symbol:market.symbol,timeframe:String(market.timeframe),setupKey:market.setupKey,reason,lifecycleState:market.strategyNormal?.lifecycleState||null,analysisReason:market.strategyNormal?.reason||null,...extra});
+  }
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
     const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
-      if (!entryWindow.allowed) continue;
+      if (!entryWindow.allowed){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
       const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
         store.listPositions(profile.userId),
         activeHostedAccount(profile.userId)
       ]);
-      if (!executionAllowed(profile.userId, pod)) continue;
+      if (!executionAllowed(profile.userId, pod)){for(const m of markets)await reportEntryBlock(profile,m,'EXECUTION_ROLLOUT_LOCKED');continue;}
       const hostedConnection = hostedAccount ? hostedConnectionState(hostedAccount) : null;
       if (typeof options.onDispatchDiagnostic === 'function' &&
           now() - (dispatchDiagnosticAt.get(profile.userId) || 0) >= 60_000) {
@@ -1391,7 +1415,7 @@ function createAutoTradeService(options = {}) {
         try { options.onDispatchDiagnostic(report); } catch (_) {}
       }
       if(['TF15_INTRA','BOTH'].includes(profile.strategyMode)&&(hostedAccount||!isLocalEa(pod)||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
-      if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready) continue;
+      if (hostedAccount ? !hostedConnection.ready : !connectionState(pod).ready){for(const m of markets)await reportEntryBlock(profile,m,'CONNECTION_NOT_READY');continue;}
       // Never dispatch new exit rules to a hosted worker or old EA that would silently ignore them.
       if(profile.strategyMode!=='TF15_INTRA' && profile.strategyExitPolicies?.TF2_SCALPING &&
         (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion)))continue;
@@ -1417,9 +1441,11 @@ function createAutoTradeService(options = {}) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(options.scalpingTimeframe==='3'&&!['3','15'].includes(String(market.timeframe)))continue;
         if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
-        if (!allowedDemoSymbols.includes(symbol) || !Core.permitsPositionEntry(market,positions)) continue;
+        if (!allowedDemoSymbols.includes(symbol))continue;
+        if(!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
         const pineCurrent=market.strategyNormal?.sop?.entryPolicyVersion==='PINE_3TRIGGERS_4OF5_V2';
-        if(!await entryCycleReset.allows(profile.userId,pod?.id,market))continue;
+        const cycle=await entryCycleReset.check(profile.userId,pod?.id,market);
+        if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
         if (hostedAccount) {
           if (typeof store.hasRecentHostedEntryCommand === 'function' &&
               await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
@@ -1427,7 +1453,7 @@ function createAutoTradeService(options = {}) {
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
-        if (!setup || !isCurrent(market)) continue;
+        if (!setup || !isCurrent(market)){await reportEntryBlock(profile,market,market.strategyNormal?.lifecycleState==='EVENT_EXPIRED'?'ENTRY_EVENT_EXPIRED':market.entryEvent!==true?'WAIT_EXECUTION_EVENT':'SOP_OR_SETUP_NOT_CURRENT');continue;}
         if(String(market.timeframe)==='3'&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
         const issued = hostedAccount
@@ -1452,6 +1478,15 @@ function createAutoTradeService(options = {}) {
             riskBlocksOrder: false,
             timeframe: String(market.timeframe||''),
             confirmationEvidence: setup.payload.analysisSnapshot.confirmationEvidence || null,
+            lifecycleState:'ORDER_QUEUED',
+            nativeSolidAt:market.strategyNormal.sop.triggerAt,
+            sopCompletedAt:market.strategyNormal.sop.qualifiedAt,
+            webhookReceivedAt:market.receivedAt,
+            commandQueuedAt:issued.command.createdAt,
+            cycleKind:market.strategyNormal.sop.cycleKind||'INITIAL',
+            solidToSopMs:Math.max(0,market.strategyNormal.sop.qualifiedAt-market.strategyNormal.sop.triggerAt),
+            sopToWebhookMs:Math.max(0,market.receivedAt-market.strategyNormal.sop.qualifiedAt),
+            webhookToQueueMs:Math.max(0,issued.command.createdAt-market.receivedAt),
             signalToQueueMs: Math.max(0,now()-(Number(market.signalObservedAt)||market.receivedAt))
           });
         }
