@@ -680,7 +680,7 @@ const server=http.createServer(async(req,res)=>{
     entrySignalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''),
     feedIngress:feedMetadataDiagnostics.snapshot(),observedGoldFeed:{timeframe:latestBySymbol.get('XAUUSD')?.timeframe||null,
       rule:latestBySymbol.get('XAUUSD')?.setupMeta?.entryRuleVersion||null,receivedAt:latestBySymbol.get('XAUUSD')?.receivedAt||null},
-    feedRefreshVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',analysisFreshness:'PINE_EMITTED_AT',maxExecutionAgeMs:30000,
+    feedRefreshVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',analysisFreshness:'PINE_EMITTED_AT',maxExecutionAgeMs:60000,
     entryReplayProtection:'FRESH_EXECUTION_EVENT_V2',telegramDedupVersion:'SETUP_AND_CHAT_V2',
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
     checklistMinimum:4,minimumConfirmations:4,totalConfirmations:5,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',

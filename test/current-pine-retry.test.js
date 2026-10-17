@@ -13,7 +13,7 @@ for(const tf of ['3','15']) {
   a.equal(event({zc24_entry_attempts:1,zc24_entry_last_sent:1000,timenow:9000}),true);
   a.equal(event({zc24_entry_attempts:2,zc24_entry_last_sent:9000,timenow:21000}),true);
   a.equal(event({zc24_entry_attempts:3,timenow:22000}),false);
-  a.equal(event({zc_seq_now:31001}),false);a.equal(event({zc24_ready:false}),false);
+  a.equal(event({zc_seq_now:61000}),true);a.equal(event({zc_seq_now:61001}),false);a.equal(event({zc24_ready:false}),false);
   a.equal(event({zc24_suppressed_setup:123}),false);a.equal(event({zc24_bootstrap:true}),false);
   a.match(source,/entryAuthorizedAt\\":.*str.tostring\(zc_seq_completed\)/);
  });

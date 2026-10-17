@@ -25,7 +25,7 @@ function decode(row,batch){
 const entries=new Map(), channels=new Map();
 function ingest(batch,now=Date.now()){
  const out=[];
- if(batch?.feedVersion!=='TF3_REALTIME_V1'||String(batch.timeframe)!=='3'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>30000||now-batch.emittedAt< -5000)return out;
+ if(batch?.feedVersion!=='TF3_REALTIME_V1'||String(batch.timeframe)!=='3'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>(batch.feedChannel==='EXECUTION'&&batch.markets.some(r=>r?.[66]?.entryRuleVersion===S.RULE&&r?.[66]?.entryEvent===true)?60000:30000)||now-batch.emittedAt< -5000)return out;
  for(const row of batch.markets){
   if(!Array.isArray(row)||row.length!==67||row[0]!=='XAUUSD'||row[65]?.version!=='HEMA3_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
   const d=decode(row,batch);if(!d||!Number.isFinite(d.time)||!Number.isFinite(d.close))continue;

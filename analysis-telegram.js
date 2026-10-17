@@ -79,6 +79,10 @@ function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':
 // Entry transport expires 30 seconds after both reception and candle close.
 function entryFresh(e,now=Date.now()){
   const q=e.telegramMarket;
+  if(e.telegramSop?.entryPolicyVersion==='PINE_3TRIGGERS_4OF5_V2'){
+    const origin=q?.entryAuthorizedAt??q?.signalObservedAt;
+    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=30000;
+  }
   if(q?.feedMode==='INTRABAR')return Number.isFinite(q.signalObservedAt)&&now-q.signalObservedAt>=-5000&&now-q.signalObservedAt<=30000&&now-e.time>=-5000&&now-e.time<=30000;
   const duration=Number(q?.timeframe)*60000;
   if(!q || q.feedMode!=='BAR-CLOSE' || !Number.isFinite(duration) || duration<=0 ||
