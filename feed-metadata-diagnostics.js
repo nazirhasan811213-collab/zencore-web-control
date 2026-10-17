@@ -22,6 +22,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
    hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&[2,5].includes(meta.hemaRequiredTfs[0])?[String(meta.hemaRequiredTfs[0])]:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
    hasLiveHema:(tf==='15'?['HEMA15_LIVE_V1','HEMA1530_V1'].includes(row[65]?.version):row[65]?.version===(tf==='3'?'HEMA3_LIVE_V1':'HEMA23_LIVE_V1')),
+   lifecycleVersion:meta?.lifecycleVersion==='PULLBACK_REQUALIFY_V1'?meta.lifecycleVersion:null,cycleKind:['INITIAL','FOLLOWUP'].includes(meta?.cycleKind)?meta.cycleKind:null,
    entryDeliveryVersion:meta?.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?meta.entryDeliveryVersion:null,
    solidHoldActive:meta?.solidHoldActive===true,
    solidStateReason:['NO_NATIVE_SOLID','HOLDING_NATIVE_SOLID','NATIVE_CLOSE_ALL','OPPOSITE_RIBBON'].includes(meta?.solidStateReason)?meta.solidStateReason:null,

@@ -685,7 +685,7 @@ const server=http.createServer(async(req,res)=>{
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
     checklistMinimum:4,minimumConfirmations:4,totalConfirmations:5,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
     targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',
-    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.1',eaVersion:'2.11'
+    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.1',eaVersion:'2.11',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF3:'3',TF15:'15'}
   }));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);

@@ -1480,6 +1480,11 @@ class PostgresAutoTradeStore {
     return publicHostedCommand(query.rows[0]);
   }
 
+  async latestExecutedSetupForMode(userId,podId,mode) {
+    const result=await this.pool.query(`SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND pod_id=$2 AND command_type='PLACE_SETUP' AND status='EXECUTED' AND payload->>'symbol'='XAUUSD' AND payload->>'strategyMode'=$3 ORDER BY acknowledged_at DESC LIMIT 1`,[userId,podId,mode]);
+    return result.rows[0]?publicCommand(result.rows[0]):null;
+  }
+
   async lastStrategyCycleReset(userId,podId,mode) {
     const result=await this.pool.query(`SELECT detail FROM zencore_autotrade_audit WHERE user_id=$1 AND event_type='STRATEGY_CYCLE_RESET' AND detail->>'podId'=$2 AND detail->>'mode'=$3 ORDER BY created_at DESC LIMIT 1`,[userId,podId,mode]);
     return result.rows[0]?.detail||null;
@@ -2243,6 +2248,11 @@ class MemoryAutoTradeStore {
     row.result = result || {};
     row.acknowledgedAt = Date.now();
     return publicHostedCommand(row);
+  }
+
+  async latestExecutedSetupForMode(userId,podId,mode) {
+    const row=[...this.commands.values()].flat().filter(c=>c.userId===userId&&c.podId===podId&&c.type==='PLACE_SETUP'&&c.status==='EXECUTED'&&c.payload?.symbol==='XAUUSD'&&c.payload?.strategyMode===mode).sort((a,b)=>(b.acknowledgedAt||b.createdAt)-(a.acknowledgedAt||a.createdAt))[0];
+    return row?publicCommand(row):null;
   }
 
   async lastStrategyCycleReset(userId,podId,mode) {
