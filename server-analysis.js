@@ -22,6 +22,7 @@ const { AnalysisAlerts } = require('./analysis-alert-service');
 const { SignalOutcomeStore } = require('./signal-outcome-store');
 const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
+let globalUserTradeMonitor = null;
 let signalOutcomes = null;
 require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(String(market.timeframe)==='2'?{...market,strategyNormal:{...market.strategyNormal,state:'WAIT'}}:market));
 
@@ -592,6 +593,16 @@ async function handleManagementApi(req, res, pathname, session) {
           if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
           const body=await readJson(req);
           return sendJson(res,200,{ok:true,...await analysisAlerts.withUserLock(session.user.id,'healthSettings',body)});
+        }
+        return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
+      }
+      if(pathname==='/api/admin/user-trade-monitor') {
+        res.setHeader('Cache-Control','no-store');
+        if(!globalUserTradeMonitor) globalUserTradeMonitor=require('./admin-user-trade-service').createUserTradeMonitoring({auth:authState,trading:autoTradeState});
+        if(req.method==='GET')return sendJson(res,200,await globalUserTradeMonitor.snapshot(session.user));
+        if(req.method==='POST') {
+          if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+          const body=await readJson(req);return sendJson(res,200,await globalUserTradeMonitor.save(session.user,body));
         }
         return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
       }
@@ -1332,6 +1343,10 @@ async function handleExecutionApi(req, res, pathname) {
   }
   try {
     if (req.method === 'GET' && pathname === '/api/execution/link-status') return sendJson(res,200,await autoTradeState.service.executionLinkStatus(token));
+    if(req.method==='POST'&&pathname==='/api/execution/broker-metadata') {
+      const body=await parseApiJson(req,res);if(body===null)return;
+      return sendJson(res,200,await autoTradeState.service.reportBrokerMetadata(token,body));
+    }
     if (req.method === 'POST' && pathname === '/api/execution/heartbeat') {
       const body = await parseApiJson(req, res);
       if (body === null) return;
@@ -1518,7 +1533,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && ['/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/admin-user-trade.js','/admin-user-trade.css','/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {
@@ -1692,6 +1707,11 @@ const server = http.createServer(async (req, res) => {
     const session = await requireRole(req, res, 'admin', '/login');
     if (!session) return;
     return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
+  }
+
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/user-trade-monitor') {
+    const session=await requireRole(req,res,'admin','/login');if(!session)return;
+    return sendAuthAsset(res,'admin-user-trade.html','text/html; charset=utf-8');
   }
 
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/monitoring') {

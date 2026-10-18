@@ -11,7 +11,7 @@ from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
 EA_VERSION = '2.11'
-CONNECTOR_BUILD = '2.1.1'
+CONNECTOR_BUILD = '2.1.2'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -238,6 +238,15 @@ def heartbeat(fields, selected_identity, now_ms=None):
             position[key] = float(fields[prefix+key])
         value['positions'].append(position)
     return value
+
+
+def broker_metadata(fields, selected_identity, now_ms=None):
+    # Separate optional monitor request. Do not add server identity to execution heartbeat.
+    heartbeat(fields, selected_identity, now_ms)
+    if fields.get('accountBindingVersion') != 'ACCOUNT_SESSION_V1':
+        raise ValueError('EA_UPGRADE_REQUIRED')
+    return {'version':'MT5_SERVER_MONITOR_V1', 'mt5ServerName':fields['server'],
+            'accountFingerprint':account_fingerprint(fields)}
 
 
 VALIDATION_CODES = frozenset((

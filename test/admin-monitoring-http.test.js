@@ -16,15 +16,20 @@ test('monitoring HTTP routes enforce admin role and serve the working admin snap
   let ready;
   for(let i=0;i<25;i++){ready=await fetch(base+'/ready');if(ready.status===200)break;await new Promise(r=>setTimeout(r,100));}
   assert.equal(ready.status,200);const readiness=await ready.json();assert.equal(readiness.database,'READY');assert.equal(readiness.dispatcher,'READY');assert.equal(readiness.webhook,'AUTHENTICATED');
+  assert.equal((await fetch(base+'/api/admin/user-trade-monitor')).status,401);
+  assert.equal((await fetch(base+'/admin/user-trade-monitor',{redirect:'manual'})).status,302);
   const anon=await fetch(base+'/api/admin/monitoring');assert.equal(anon.status,401);
   const page=await fetch(base+'/admin/monitoring',{redirect:'manual'});assert.equal(page.status,302);
   for(const role of ['client','admin']){
    const login=await fetch(base+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({email:role+'@monitor.test',password:'MonitorTest2026!'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
    const api=await fetch(base+'/api/admin/monitoring',{headers:{Cookie:cookie}});assert.equal(api.status,role==='admin'?200:403);
+   const tradeMonitor=await fetch(base+'/api/admin/user-trade-monitor',{headers:{Cookie:cookie}});assert.equal(tradeMonitor.status,role==='admin'?200:403);
+   if(role==='admin'){const list=await tradeMonitor.json();assert.equal(list.rows.length,1);assert.equal(list.rows[0].brokerStatus,'MISSING');assert.equal(list.rows[0].mt5ServerName,null);const view=await fetch(base+'/admin/user-trade-monitor',{headers:{Cookie:cookie}});assert.equal(view.status,200);assert.match(await view.text(),/admin-user-trade.js/);const update=(origin)=>fetch(base+'/api/admin/user-trade-monitor',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({inactiveDays:30,referenceServers:['AdminBroker-Live']})});assert.equal((await update('https://untrusted.test')).status,403);assert.equal((await update(base)).status,200);}
    const notifications=await fetch(base+'/api/admin/monitoring/notifications',{headers:{Cookie:cookie}});assert.equal(notifications.status,role==='admin'?200:403);
    if(role==='admin'){const prefs=await notifications.json();assert.equal(prefs.enabled,false);const post=enabled=>fetch(base+'/api/admin/monitoring/notifications',{method:'POST',headers:{Cookie:cookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({enabled})});assert.equal((await post(true)).status,400);assert.equal((await post(false)).status,200);const denied=await fetch(base+'/api/admin/monitoring/notifications',{method:'POST',headers:{Cookie:cookie,Origin:'https://untrusted.test','Content-Type':'application/json'},body:'{"enabled":false}'});assert.equal(denied.status,403);}
    if(role==='admin'){assert.match(api.headers.get('cache-control'),/no-store/);const body=await api.json();assert.equal(body.ok,true);assert.ok(body.components.some(c=>c.id==='feed3'));assert.ok(body.components.some(c=>c.id==='feed15'));assert.equal(body.accounts.length,1);const view=await fetch(base+'/admin/monitoring',{headers:{Cookie:cookie}});assert.equal(view.status,200);assert.match(await view.text(),/admin-monitoring.js/);}
   }
+  for(const [file,mime] of [['admin-user-trade.js','javascript'],['admin-user-trade.css','text/css']]){const asset=await fetch(base+'/'+file);assert.equal(asset.status,200);assert.match(asset.headers.get('content-type'),new RegExp(mime));}
   assert.equal((await fetch(base+'/admin-monitoring.js')).status,200);assert.equal((await fetch(base+'/admin-monitoring.css')).status,200);
  }finally{await new Promise(resolve=>{child.once('exit',resolve);child.kill('SIGTERM');setTimeout(()=>{child.kill('SIGKILL');resolve();},1000).unref();});fs.rmSync(dir,{recursive:true,force:true});}
 });
