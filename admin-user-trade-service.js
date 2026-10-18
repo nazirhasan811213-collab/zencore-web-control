@@ -2,7 +2,7 @@
 const {serverName}=require('./broker-monitor-metadata');
 const DAY=86400000;
 const defaults=()=>({inactiveDays:7,referenceServers:['InterStellarFinancial-Server','InterStellarFinancial-Demo']});
-const stamp=v=>{const n=typeof v==='number'?v:typeof v==='string'?Date.parse(v):NaN;return Number.isFinite(n)&&n>0?n:null;};
+const stamp=v=>{const n=v instanceof Date?v.getTime():typeof v==='number'?v:typeof v==='string'?Date.parse(v):NaN;return Number.isFinite(n)&&n>0?n:null;};
 function settings(input={}){
  const inactiveDays=Number(input.inactiveDays),referenceServers=input.referenceServers;
  if(!Number.isInteger(inactiveDays)||inactiveDays<1||inactiveDays>365||!Array.isArray(referenceServers)||referenceServers.length>100||referenceServers.some(n=>!serverName(n)))throw Object.assign(new Error('Semak tempoh 1-365 hari dan nama server penuh.'),{status:400,code:'INVALID_MONITOR_SETTINGS'});

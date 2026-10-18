@@ -48,3 +48,9 @@ test('password/server credentials remain forbidden in ordinary execution heartbe
  a.equal(require('../auto-trade-core').normaliseHeartbeat({server:'Broker-Live'}).ok,false);
  a.equal(B.report({version:B.VERSION,mt5ServerName:'Broker-Live',accountFingerprint:'a'.repeat(64),account:'123456'}),null);
 });
+
+test('PostgreSQL Date login timestamps retain activity classification',()=>{
+ const now=Date.now(),c={id:'pg',lastLoginAt:new Date(now-10*DAY)};
+ const r=M.row(c,{control:{},tradingActivity:{}},{},M.defaults(),now);
+ a.equal(r.lastLoginAt,now-10*DAY);a.equal(r.flags.neverLogin,false);a.equal(r.flags.loginInactive,true);
+});
