@@ -656,7 +656,15 @@ async function handleManagementApi(req, res, pathname, session) {
           return sendJson(res, 200, { ok: true, ready: false, events: [] });
         }
         const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-        const events = await autoTradeState.store.listAdminAudit(Number(url.searchParams.get('limit') || 150));
+        const window = {};
+        for (const key of ['after','before']) {
+          if (!url.searchParams.has(key)) continue;
+          const raw=url.searchParams.get(key), value=Number(raw);
+          if(!raw || !Number.isSafeInteger(value) || value<=0 || value>8640000000000000) return sendJson(res,400,{ok:false,error:'Masa audit tidak sah.'});
+          window[key]=value;
+        }
+        if(window.after && window.before && window.after>window.before) return sendJson(res,400,{ok:false,error:'Julat masa audit tidak sah.'});
+        const events = await autoTradeState.store.listAdminAudit(Number(url.searchParams.get('limit') || 150),window);
         return sendJson(res, 200, {
           ok: true,
           ready: true,

@@ -2,13 +2,38 @@
 const Lifecycle=require('./setup-lifecycle');
 const POLICY='PINE_3TRIGGERS_3OF4_CHOP50_V3',MODES=['TF2_SCALPING','TF15_INTRA'];
 function createEntryCycleReset(store){
- const cache=new Map();
+ const cache=new Map(), recoveryNeeded=new Set(), flatEvidence=new Map();
  const key=(user,pod,mode)=>[user,pod,mode].join('|');
  const own=(positions,mode)=>positions.some(p=>p.symbol==='XAUUSD'&&p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode);
+ // Called only for accepted, connected, complete MT5 snapshots. A fast trade
+ // can open and close between heartbeats (or while the Connector is offline).
+ // Recover that missing transition from two fresh flat observations, never
+ // from an empty cached position list or a chart/Telegram signal.
  async function observe(user,pod,before,after,at){
-  for(const mode of MODES)if(own(before,mode)&&!own(after,mode)){
-   const reset={podId:pod,mode,closedAt:at};
-   await store.appendAudit(user,'STRATEGY_CYCLE_RESET',reset);cache.set(key(user,pod,mode),reset);
+  for(const mode of MODES){
+   const k=key(user,pod,mode);
+   if(own(after,mode)){flatEvidence.delete(k);continue;}
+   if(own(before,mode)){
+    const reset={podId:pod,mode,closedAt:at,source:'POSITION_TRANSITION'};
+    await store.appendAudit(user,'STRATEGY_CYCLE_RESET',reset);cache.set(k,reset);
+    recoveryNeeded.delete(k);flatEvidence.delete(k);continue;
+   }
+   if(!recoveryNeeded.has(k)||typeof store.latestExecutedSetupForMode!=='function')continue;
+   const prior=flatEvidence.get(k);
+   if(prior&&at-prior.checkedAt<5000)continue;
+   const last=await store.latestExecutedSetupForMode(user,pod,mode),ack=last?.acknowledgedAt;
+   const candidate={checkedAt:at,firstEmptyAt:at,commandId:last?.id,ack};
+   flatEvidence.set(k,candidate);
+   if(!Number.isFinite(ack)||ack<=0||ack>=at)continue;
+   const reset=cache.get(k);
+   if(reset&&reset.closedAt>ack){recoveryNeeded.delete(k);flatEvidence.delete(k);continue;}
+   if(!prior||prior.commandId!==last.id||prior.ack!==ack||at-prior.firstEmptyAt<5000)continue;
+   candidate.firstEmptyAt=prior.firstEmptyAt;
+   if(at-ack<10000)continue;
+   const recovered={podId:pod,mode,closedAt:at,source:'CONFIRMED_FLAT_SNAPSHOTS',
+    lastExecutedCommandId:last.id,firstEmptyAt:prior.firstEmptyAt,confirmedEmptyAt:at};
+   await store.appendAudit(user,'STRATEGY_CYCLE_RESET',recovered);cache.set(k,recovered);
+   recoveryNeeded.delete(k);flatEvidence.delete(k);
   }
  }
  async function check(user,pod,market){
@@ -19,7 +44,9 @@ function createEntryCycleReset(store){
   const s=market.strategyNormal.sop;
   if(s.lifecycleVersion===Lifecycle.VERSION&&typeof store.latestExecutedSetupForMode==='function'){
     const last=await store.latestExecutedSetupForMode(user,pod,mode);
-    if(last&&(!reset||!Number.isFinite(last.acknowledgedAt)||last.acknowledgedAt>=reset.closedAt))return {allowed:false,reason:'WAIT_MT5_CLOSE_CONFIRMATION'};
+    if(last&&(!reset||!Number.isFinite(last.acknowledgedAt)||last.acknowledgedAt>=reset.closedAt)){
+      recoveryNeeded.add(k);return {allowed:false,reason:'WAIT_MT5_CLOSE_CONFIRMATION'};
+    }
   }
   if(!reset)return {allowed:true,reason:null};
   if(s.lifecycleVersion===Lifecycle.VERSION){

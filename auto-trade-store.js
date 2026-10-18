@@ -786,7 +786,7 @@ class PostgresAutoTradeStore {
     }));
   }
 
-  async listAdminAudit(limit = 100) {
+  async listAdminAudit(limit = 100, {after = null, before = null} = {}) {
     const safeLimit = Math.min(300, Math.max(1, Number(limit) || 100));
     const result = await this.pool.query(
       `SELECT a.id, a.user_id, a.event_type, a.detail, a.created_at,
@@ -795,9 +795,11 @@ class PostgresAutoTradeStore {
        FROM zencore_autotrade_audit a
        JOIN zencore_users u ON u.id = a.user_id
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
+       WHERE ($2::timestamptz IS NULL OR a.created_at >= $2)
+         AND ($3::timestamptz IS NULL OR a.created_at <= $3)
        ORDER BY a.created_at DESC
        LIMIT $1`,
-      [safeLimit]
+      [safeLimit, after === null ? null : new Date(after), before === null ? null : new Date(before)]
     );
     return result.rows.map(row => ({
       id: String(row.id),
@@ -1801,12 +1803,13 @@ class MemoryAutoTradeStore {
     });
   }
 
-  async listAdminAudit(limit = 100) {
+  async listAdminAudit(limit = 100, {after = null, before = null} = {}) {
     const rows = [];
     for (const [userId, events] of this.audit.entries()) {
       for (const event of events) rows.push({ ...event, userId });
     }
     return rows
+      .filter(row => (after === null || Number(row.createdAt) >= after) && (before === null || Number(row.createdAt) <= before))
       .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
       .slice(0, Math.min(300, Math.max(1, Number(limit) || 100)));
   }

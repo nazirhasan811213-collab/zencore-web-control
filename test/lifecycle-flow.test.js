@@ -35,3 +35,23 @@ test('expired original event is WAIT while SOLID is still held, and new Pine sou
  f.batch.emittedAt=Date.now();f.row[66].entryEvent=false;delete require.cache[require.resolve('../tf3-market-hub')];const m=require('../tf3-market-hub').ingest(f.batch)[0];a.ok(m);a.equal(m.strategyNormal.solid,true);a.equal(m.strategyNormal.state,'WAIT');a.equal(m.strategyNormal.lifecycleState,'EVENT_EXPIRED');
  for(const tf of ['3','15']){const text=require('fs').readFileSync(`ZenCore_TF${tf}_${tf==='3'?'Scalp':'Intraday'}.pine`,'utf8');a.match(text,/string htf_sop = timeframe.period/);a.match(text,/zc_seq_bar := timenow/);a.match(text,/array.size\(zc_path_times\) > 120/);a.match(text,/zc_reentry_momentum/);}
 });
+test('TF15 missed position transition: disconnected/truncated snapshots never recover; fresh full MT5 snapshots do',async()=>{
+ let at=Date.now(),current;const store=new MemoryAutoTradeStore(),user='missed-flow',token='zcpod_'+'r'.repeat(48),hash=tokenHash(token);
+ const pod={id:'missed-pod',userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',demoExecutionUnlocked:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
+ store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
+ const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'3',allowLocalEaExecution:true,commandSigningKey:'test-signing-key-more-than-thirty-two-bytes',getLatestMarket:()=>current});
+ await svc.saveSettings(user,{capitalUsd:1000,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],strategyMode:'TF15_INTRA',riskAcknowledged:true,tradingSchedule:{enabled:false,skipNews:false}});await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+ const hubPath='../tf15-market-hub';delete require.cache[require.resolve(hubPath)];const hub=require(hubPath);
+ current=hub.ingest(frame('15','BUY',at).batch,at)[0];a.equal((await svc.dispatchMarkets([current])).queued,1);
+ const first=(await svc.nextCommand(token)).command;await svc.acknowledgeCommand(token,first.id,{status:'EXECUTED',code:'SETUP_OPENED'});
+ at+=20000;current=hub.ingest(frame('15','BUY',at).batch,at)[0];a.equal((await svc.dispatchMarkets([current])).queued,0);
+ const hb={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',accountFingerprint:'d'.repeat(64),positions:[],symbolSpecs:[]};
+ await svc.heartbeat(token,{...hb,terminalConnected:false});at+=6000;await svc.heartbeat(token,{...hb,terminalConnected:false});a.equal(await store.lastStrategyCycleReset(user,pod.id,'TF15_INTRA'),null);
+ const many=Array.from({length:50},(_,i)=>({ticket:String(1000+i),symbol:'XAUUSD',side:'BUY',volume:.01,entry:4100,origin:'MANUAL'}));
+ await svc.heartbeat(token,{...hb,positions:many});at+=6000;await svc.heartbeat(token,{...hb,positions:many});a.equal(await store.lastStrategyCycleReset(user,pod.id,'TF15_INTRA'),null);
+ at+=100;await svc.heartbeat(token,hb);a.equal(await store.lastStrategyCycleReset(user,pod.id,'TF15_INTRA'),null);
+ at+=5000;await svc.heartbeat(token,hb);const reset=await store.lastStrategyCycleReset(user,pod.id,'TF15_INTRA');a.equal(reset.source,'CONFIRMED_FLAT_SNAPSHOTS');a.equal(reset.closedAt,at);
+ a.equal((await svc.dispatchMarkets([current])).queued,0,'old chart entry cannot be replayed');
+ const profile=await store.getProfile(user);a.equal(profile.desiredState,'ON');a.equal(profile.effectiveState,'ON');
+ a.equal(await store.lastStrategyCycleReset(user,pod.id,'TF2_SCALPING'),null);
+});

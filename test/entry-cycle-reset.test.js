@@ -18,3 +18,30 @@ test('partial close and manual closes do not reset strategy; next complete cycle
  await r.observe('u','pod',[p],[],1100);a.equal(await r.allows('u','pod',market('15',1200)),true);
  await r.observe('u','pod',[p],[],1300);a.equal(await r.allows('u','pod',market('15',1200)),false);
 });
+test('missed open/close transition recovers only after two confirmed flat MT5 snapshots',async()=>{
+ const store=new MemoryAutoTradeStore(),gate=createEntryCycleReset(store);
+ store.commands.set('pod',[{id:'filled-15',userId:'u',podId:'pod',type:'PLACE_SETUP',status:'EXECUTED',acknowledgedAt:1000,payload:{symbol:'XAUUSD',strategyMode:'TF15_INTRA'}}]);
+ const m={timeframe:'15',signalObservedAt:30000,strategyNormal:{side:'BUY',sop:{entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',lifecycleVersion:'PULLBACK_REQUALIFY_V1',qualifiedAt:30000}}};
+ a.equal((await gate.check('u','pod',m)).reason,'WAIT_MT5_CLOSE_CONFIRMATION');
+ await gate.observe('u','pod',[],[],20000);a.equal((await store.listAudit('u')).length,0);
+ await gate.observe('u','pod',[],[],24000);a.equal((await store.listAudit('u')).length,0);
+ await gate.observe('u','pod',[],[],25000);
+ const reset=await store.lastStrategyCycleReset('u','pod','TF15_INTRA');a.equal(reset.closedAt,25000);a.equal(reset.source,'CONFIRMED_FLAT_SNAPSHOTS');
+ a.equal((await gate.check('u','pod',m)).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE','recovery never bypasses fresh pullback and strong SOP');
+ a.equal(await store.lastStrategyCycleReset('u','pod','TF2_SCALPING'),null);
+ const restarted=createEntryCycleReset(store);a.equal((await restarted.check('u','pod',m)).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE');
+ a.equal((await gate.check('u','different-pod',m)).allowed,true);
+});
+test('unarmed, single, recent-fill and interrupted flat evidence cannot reset a trade cycle',async()=>{
+ const store=new MemoryAutoTradeStore(),gate=createEntryCycleReset(store),rows=[{id:'a',userId:'u',podId:'p',type:'PLACE_SETUP',status:'EXECUTED',acknowledgedAt:1000,payload:{symbol:'XAUUSD',strategyMode:'TF2_SCALPING'}}];
+ store.commands.set('p',rows);
+ const m={timeframe:'3',signalObservedAt:50000,strategyNormal:{side:'BUY',sop:{entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',lifecycleVersion:'PULLBACK_REQUALIFY_V1'}}};
+ await gate.observe('u','p',[],[],10000);a.equal((await store.listAudit('u')).length,0,'no scan without a blocked executed cycle');
+ await gate.check('u','p',m);await gate.observe('u','p',[],[],11000);
+ rows.push({...rows[0],id:'b',acknowledgedAt:14000});
+ await gate.observe('u','p',[],[],16000);a.equal((await store.listAudit('u')).length,0,'new execution restarts evidence');
+ await gate.observe('u','p',[],[],21000);a.equal((await store.listAudit('u')).length,0,'less than 10 seconds after acknowledgement');
+ await gate.observe('u','p',[],[pos('TF2_SCALPING')],24000);
+ await gate.observe('u','p',[],[],26000);a.equal((await store.listAudit('u')).length,0,'seeing a position interrupts empty evidence');
+ await gate.observe('u','p',[],[],31000);a.equal((await store.lastStrategyCycleReset('u','p','TF2_SCALPING')).closedAt,31000);
+});
