@@ -314,6 +314,27 @@ function createAutoTradeService(options = {}) {
     }) };
   }
 
+  const brokerMonitorWrites=new Map();
+  async function reportBrokerMetadata(rawToken,input={}) {
+    const pod=await authenticatePod(rawToken);
+    if(!pod||!isLocalEa(pod))throw serviceError('INVALID_POD_TOKEN','Connector tidak dibenarkan.',401);
+    const data=require('./broker-monitor-metadata').report(input);
+    if(!data)throw serviceError('INVALID_BROKER_METADATA','Metadata server tidak sah.',400);
+    if(!pod.accountFingerprint||data.accountFingerprint!==pod.accountFingerprint||!pod.lastSeenAt||now()-pod.lastSeenAt>30000||pod.lastSeenAt>now()+5000)throw serviceError('BROKER_IDENTITY_NOT_CURRENT','Tunggu heartbeat akaun semasa.',409);
+    const previousAt=brokerMonitorWrites.get(pod.id);
+    if(previousAt!==undefined&&now()-previousAt<60000)return {ok:true,updated:false};
+    if(brokerMonitorWrites.size>=2000)brokerMonitorWrites.clear();
+    brokerMonitorWrites.set(pod.id,now());
+    const prior=await store.getBrokerMonitorRecord(pod.userId);
+    if(prior?.podId===pod.id&&prior?.accountFingerprint===data.accountFingerprint&&prior?.mt5ServerName===data.mt5ServerName)return {ok:true,updated:false};
+    await store.appendAudit(pod.userId,'BROKER_METADATA_REPORTED',{...data,podId:pod.id,reportedAt:now(),source:'CONNECTOR_REPORTED'});
+    return {ok:true,updated:true};
+  }
+  async function userTradeMonitoring(userId) {
+    const [connection,detail,pod,hosted]=await Promise.all([connectionMonitor(userId),store.userTradeMonitorDetails(userId),store.getPodForUser(userId),activeHostedAccount(userId)]);
+    return {...detail,connection,podId:hosted?null:pod?.id,accountFingerprint:hosted?null:pod?.accountFingerprint};
+  }
+
   async function connectionMonitor(userId) {
     const [profile, pod, hosted, events, usage, positions] = await Promise.all([
       store.getProfile(userId), store.getPodForUser(userId), activeHostedAccount(userId), store.listAudit(userId, 30),
@@ -1554,6 +1575,8 @@ function createAutoTradeService(options = {}) {
   return {
     state,
     connectionMonitor,
+    userTradeMonitoring,
+    reportBrokerMetadata,
     executionDiagnostics,
     credentialEncryptionConfig,
     connectHostedAccount,

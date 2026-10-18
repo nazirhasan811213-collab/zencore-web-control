@@ -1210,6 +1210,20 @@ class PostgresAutoTradeStore {
     }
   }
 
+  async getBrokerMonitorRecord(userId) {
+    const r=await this.pool.query("SELECT detail FROM zencore_autotrade_audit WHERE user_id=$1 AND event_type='BROKER_METADATA_REPORTED' ORDER BY created_at DESC LIMIT 1",[userId]);
+    return r.rows[0]?.detail||null;
+  }
+  async userTradeMonitorDetails(userId) {
+    const [commands,audit]=await Promise.all([
+      this.pool.query(`SELECT MAX(COALESCE(acknowledged_at,created_at)) FILTER(WHERE command_type='SYSTEM_ON') AS last_on,
+        MAX(COALESCE(acknowledged_at,created_at)) FILTER(WHERE command_type IN('SYSTEM_STOP','EMERGENCY_CLOSE_ALL')) AS last_stop
+        FROM(SELECT command_type,status,created_at,acknowledged_at FROM zencore_autotrade_commands WHERE user_id=$1
+        UNION ALL SELECT command_type,status,created_at,acknowledged_at FROM zencore_hosted_autotrade_commands WHERE user_id=$1)c WHERE status='EXECUTED'`,[userId]),
+      this.pool.query(`SELECT MAX(created_at) AS last_requested FROM zencore_autotrade_audit WHERE user_id=$1 AND event_type IN('SYSTEM_ON_REQUESTED','HOSTED_SYSTEM_ON_REQUESTED')`,[userId])]);
+    return {lastActivationAt:timestamp(commands.rows[0]?.last_on),lastStopAt:timestamp(commands.rows[0]?.last_stop),lastActivationRequestedAt:timestamp(audit.rows[0]?.last_requested),brokerRecord:await this.getBrokerMonitorRecord(userId)};
+  }
+
   async traderActivitySummary(userId, now = Date.now()) {
     const result = await this.pool.query(`SELECT MAX(COALESCE(acknowledged_at,created_at)) AS last_trade_at,
       COUNT(*) FILTER (WHERE COALESCE(acknowledged_at,created_at)>=$2)::int AS setups_7d,
@@ -2053,6 +2067,18 @@ class MemoryAutoTradeStore {
     rows.push(row);
     this.commands.set(command.podId, rows);
     return { created: true, command: publicCommand(row) };
+  }
+
+  async getBrokerMonitorRecord(userId) {
+    return (this.audit.get(userId)||[]).find(e=>e.type==='BROKER_METADATA_REPORTED')?.detail||null;
+  }
+  async userTradeMonitorDetails(userId) {
+    const rows=[...this.commands.values(),...this.hostedCommands.values()].flat().filter(r=>r.userId===userId&&r.status==='EXECUTED');
+    const maximum=values=>Math.max(0,...values.filter(Number.isFinite))||null;
+    const events=this.audit.get(userId)||[];
+    return {lastActivationAt:maximum(rows.filter(r=>r.type==='SYSTEM_ON').map(r=>r.acknowledgedAt||r.createdAt)),
+      lastStopAt:maximum(rows.filter(r=>['SYSTEM_STOP','EMERGENCY_CLOSE_ALL'].includes(r.type)).map(r=>r.acknowledgedAt||r.createdAt)),
+      lastActivationRequestedAt:maximum(events.filter(e=>['SYSTEM_ON_REQUESTED','HOSTED_SYSTEM_ON_REQUESTED'].includes(e.type)).map(e=>e.createdAt)),brokerRecord:await this.getBrokerMonitorRecord(userId)};
   }
 
   async traderActivitySummary(userId, now = Date.now()) {

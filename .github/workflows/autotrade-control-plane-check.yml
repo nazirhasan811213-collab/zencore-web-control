@@ -78,6 +78,9 @@ jobs:
       - name: Check Pine insights dual timeframe UI
         run: node scripts/check-pine-insights-ui.cjs
 
+      - name: Check user trade monitoring UI
+        run: node scripts/check-user-trade-ui.cjs
+
       - name: Check registration approval UI
         run: node scripts/check-registration-ui.cjs
 
@@ -89,4 +92,5 @@ jobs:
             alert-ui-*.png
             pine-ui-*.png
             registration-ui-*.png
+            user-trade-*.png
           retention-days: 7

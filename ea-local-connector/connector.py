@@ -19,7 +19,7 @@ import urllib.request
 import webbrowser
 import uuid
 from status_view import status_cards
-from protocol import VERSION, EA_VERSION, CONNECTOR_BUILD, validation_code, command_server_time, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat
+from protocol import VERSION, EA_VERSION, CONNECTOR_BUILD, validation_code, command_server_time, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat, broker_metadata
 
 BASE = 'https://zencore-precision-entry.onrender.com'
 INSTALL = Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZenCore' / 'Connector'
@@ -279,7 +279,22 @@ class Runner:
             atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config.get('account',''),
               'server':self.config.get('server',''),'expiresAt':0,'desiredState':'STOPPED'}))
         except OSError: pass  # Existing lease still has a bounded 12-second expiry.
+    def monitor_broker_metadata(self):
+        # Optional, independent HTTP client/thread: never delay command polling or leases.
+        if self.stop.wait(5): return
+        api=Api()
+        while not self.stop.is_set():
+            delay=60
+            try:
+                payload=broker_metadata(read_fields(self.channel/'heartbeat.tsv'),self.config)
+                api.request('/api/execution/broker-metadata',payload,self.config['podToken'])
+            except Exception:
+                # Monitoring availability must never change trading permissions.
+                delay=10
+            self.stop.wait(delay)
     def run(self):
+        if self.config.get('podToken') and self.config.get('account') and self.config.get('server'):
+            threading.Thread(target=self.monitor_broker_metadata,daemon=True).start()
         while not self.stop.is_set():
             delay=.5
             try:

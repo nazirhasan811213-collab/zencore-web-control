@@ -231,6 +231,15 @@ class PostgresAuthStore {
   }
 
 
+  async getTradeMonitorSettings() {
+    const r=await this.pool.query("SELECT setting_value FROM zencore_system_settings WHERE setting_key='user_trade_monitor'");
+    return r.rows[0]?.setting_value || require('./admin-user-trade-service').defaults();
+  }
+  async setTradeMonitorSettings(value) {
+    await this.pool.query("INSERT INTO zencore_system_settings(setting_key,setting_value,updated_at) VALUES('user_trade_monitor',$1::jsonb,NOW()) ON CONFLICT(setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()",[JSON.stringify(value)]);
+    return value;
+  }
+
   async getSystemSettings() {
     const result = await this.pool.query(
       `SELECT setting_key, setting_value, updated_at
@@ -982,6 +991,9 @@ class MemoryAuthStore {
 
   async init() {}
 
+
+  async getTradeMonitorSettings() { return this.tradeMonitorSettings || require('./admin-user-trade-service').defaults(); }
+  async setTradeMonitorSettings(value) { this.tradeMonitorSettings=JSON.parse(JSON.stringify(value)); return value; }
 
   async getSystemSettings() {
     return {

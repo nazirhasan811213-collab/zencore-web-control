@@ -1,0 +1,44 @@
+(()=>{'use strict';
+ const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ let data=null,received=0,busy=false,timer=null,dirty=false,lastError='';
+ const date=t=>t?new Date(t).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' MYT':'Tiada rekod';
+ const now=()=>data?data.servedAt+(performance.now()-received):Date.now();
+ const old=()=>!data||data.servedAt-data.observedAt+performance.now()-received>90000;
+ const since=t=>{if(!t)return 'Tiada rekod';const ms=now()-t;if(ms< -5000)return 'Masa belum dapat disahkan';const days=Math.floor(Math.max(0,ms)/86400000);return days?days+' hari lalu':ms>=3600000?Math.floor(ms/3600000)+' jam lalu':'Hari ini';};
+ const pill=(text,tone='neutral')=>`<span class="utm-pill ${tone}">${esc(text)}</span>`;
+ const broker=r=>r.brokerStatus==='REFERENCE'?pill('SERVER RUJUKAN','good'):r.brokerStatus==='OTHER'?pill('SERVER LAIN','warn'):r.brokerStatus==='UNCONFIGURED'?pill('TIADA RUJUKAN'):pill('BELUM ADA DATA');
+ function notice(){if(!data)return;const stale=old();$('notice').className='utm-notice'+(lastError?' error':stale?' warning':'');$('notice').textContent=lastError?lastError+' Paparan terakhir dikekalkan; status sambungan mungkin lama.':stale?'Snapshot sudah lama. Status sambungan tidak disahkan; cuba Refresh.':'Dikemas kini '+date(data.observedAt)+'. Auto refresh 30 saat. '+(data.summary.unknown?data.summary.unknown+' pengguna belum dapat disemak.':'');}
+ function filtered(r){
+  const search=$('search').value.toLowerCase().trim(),server=$('serverFilter').value,filter=$('activityFilter').value;
+  if(search&&![r.displayName,r.email,r.ibName,r.mt5ServerName,r.serverMask,r.brokerLabel].join(' ').toLowerCase().includes(search))return false;
+  if(server!=='all'&&r.mt5ServerName!==server)return false;
+  if(filter==='all')return true;if(filter==='unknown')return !r.dataAvailable;if(!r.dataAvailable)return false;
+  const flags=r.flags||{};
+  return {other_server:r.brokerStatus==='OTHER',missing_server:r.brokerStatus==='MISSING',login_inactive:flags.loginInactive,never_login:flags.neverLogin,trade_inactive:flags.tradeInactive,never_trade:flags.neverTrade,activation_inactive:flags.activationInactive,never_activated:flags.neverActivated,offline:!old()&&!r.online&&r.transport!=='NOT_LINKED'}[filter]===true;
+ }
+ function flags(r){const f=r.flags||{},items=[];if(r.brokerStatus==='OTHER')items.push(pill('Server lain','warn'));if(f.neverLogin)items.push(pill('Belum login'));else if(f.loginInactive)items.push(pill('Lama tak login','warn'));if(f.neverTrade)items.push(pill('Tiada rekod trade'));else if(f.tradeInactive)items.push(pill('Lama tak trade','warn'));if(f.neverActivated)items.push(pill('Belum ON disahkan'));else if(f.activationInactive)items.push(pill('Lama tak ON','warn'));return items.join('')||pill('Tiada penanda');}
+ function renderUsers(){if(!data)return;const rows=data.rows.filter(filtered);$('count').textContent=rows.length+' / '+data.rows.length+' pengguna';
+  $('users').innerHTML=rows.map(r=>`<tr><td><a href="/admin/client/${encodeURIComponent(r.userId)}"><strong>${esc(r.displayName)}</strong></a><small>${esc(r.email)}</small><small>IB ZenCore: ${esc(r.ibName||'Belum ditetapkan')}</small>${r.clientStatus?pill(r.clientStatus):''}</td>${!r.dataAvailable?'<td colspan="6">Data aktiviti belum dapat disahkan. Cuba refresh.</td>':`<td><strong>${esc(r.brokerLabel||'Nama penuh belum diterima')}</strong><div class="utm-server-name">${esc(r.mt5ServerName||r.serverMask||'Belum dipautkan')}</div>${broker(r)}<small>${esc(r.accountMask||'Tiada akaun')} • ${esc(r.tradeMode)}</small><small>${r.mt5ServerName?'Dilaporkan Connector • '+esc(date(r.brokerReportedAt)):'Perlu metadata Connector 2.1.2; nama penuh tidak diteka.'}</small></td><td>${pill(r.control.effectiveState==='ON'?'ON disahkan':r.control.effectiveState,r.control.effectiveState==='ON'&&!old()&&r.online?'good':'neutral')}<small>Diminta: ${esc(r.control.desiredState)}</small>${pill(old()?'STATUS LAMA':r.online?'ONLINE':r.transport==='NOT_LINKED'?'BELUM LINK':'OFFLINE',!old()&&r.online?'good':'neutral')}<small>Heartbeat: ${esc(date(r.lastSeenAt))}</small></td><td>${esc(date(r.lastTradeAt))}<small>${esc(since(r.lastTradeAt))}</small><small>Setup 7 / 30 hari: ${esc(r.executedSetups7d??'—')} / ${esc(r.executedSetups30d??'—')}</small><small>${esc(r.openPositions??'—')} posisi${!r.positionsFresh?' (snapshot lama)':''}</small></td><td>${esc(date(r.lastLoginAt))}<small>${esc(since(r.lastLoginAt))}</small></td><td>${esc(date(r.lastActivationAt))}<small>${esc(since(r.lastActivationAt))}</small><small>Permintaan ON: ${esc(date(r.lastActivationRequestedAt))}</small><small>OFF disahkan: ${esc(date(r.lastStopAt))}</small></td><td>${flags(r)}</td>`}</tr>`).join('')||'<tr><td colspan="7">Tiada pengguna mengikut tapisan.</td></tr>';
+ }
+ function render(){
+  const s=data.summary,days=data.settings.inactiveDays;
+  const cards=[['Semua pengguna',s.total],['Server lain',s.otherServer],['Nama server belum diterima',s.missingServer],['Tak login ≥'+days+' hari',s.loginInactive],['Tak trade ≥'+days+' hari',s.tradeInactive],['Belum ON disahkan',s.neverActivated]];
+  $('summary').innerHTML=cards.map(([title,value],i)=>`<div class="utm-stat ${i?'attention':''}"><small>${esc(title)}</small><b>${esc(value)}</b></div>`).join('');
+  $('serverCount').textContent=data.servers.length+' server dikenal pasti';
+  $('servers').innerHTML=data.servers.map(s=>`<div class="utm-server">${broker({brokerStatus:s.status})}<strong>${esc(s.mt5ServerName)}</strong><small>${esc(s.users)} pengguna • REAL ${esc(s.real)} / DEMO ${esc(s.demo)}</small><small>${old()?'Sambungan belum disahkan':esc(s.online)+' online ketika snapshot'}</small></div>`).join('')||'<div class="utm-server"><strong>Nama server penuh belum diterima</strong><small>Data lama yang bertopeng tidak boleh digunakan untuk meneka broker/server.</small></div>';
+  const selected=$('serverFilter').value;$('serverFilter').innerHTML='<option value="all">Semua server</option>'+data.servers.map(s=>`<option value="${esc(s.mt5ServerName)}">${esc(s.mt5ServerName)}</option>`).join('');if([...$('serverFilter').options].some(o=>o.value===selected))$('serverFilter').value=selected;
+  if(!dirty){$('referenceServers').value=data.settings.referenceServers.join('\n');$('inactiveDays').value=data.settings.inactiveDays;}
+  notice();renderUsers();
+ }
+ async function load(){if(busy)return;clearTimeout(timer);busy=true;$('refresh').disabled=true;
+  try{const res=await fetch('/api/admin/user-trade-monitor',{credentials:'same-origin',cache:'no-store'});if(res.status===401){location.assign('/login');return;}if(!res.ok)throw Error(res.status===403?'Akses admin sahaja.':'Data monitoring belum tersedia.');const raw=await res.json();if(!raw.ok||!Array.isArray(raw.rows)||!Array.isArray(raw.servers)||!Number.isFinite(raw.observedAt)||!Number.isFinite(raw.servedAt)||raw.observedAt>raw.servedAt+5000||raw.servedAt-raw.observedAt>90000)throw Error('Snapshot tidak sah atau terlalu lama.');data=raw;received=performance.now();lastError='';render();}
+  catch(error){lastError=error.message;if(data){notice();renderUsers();}else{$('notice').textContent=lastError;$('notice').className='utm-notice error';}}
+  finally{busy=false;$('refresh').disabled=false;timer=setTimeout(()=>document.hidden?schedule():load(),30000);}
+ }
+ function schedule(){clearTimeout(timer);timer=setTimeout(()=>document.hidden?schedule():load(),30000);}
+ for(const id of ['search','activityFilter','serverFilter'])$(id).addEventListener(id==='search'?'input':'change',renderUsers);
+ for(const id of ['referenceServers','inactiveDays'])$(id).addEventListener('input',()=>{dirty=true;$('saved').textContent='Belum disimpan';});
+ $('refresh').addEventListener('click',load);
+ $('settings').addEventListener('submit',async e=>{e.preventDefault();$('save').disabled=true;try{const res=await fetch('/api/admin/user-trade-monitor',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({inactiveDays:Number($('inactiveDays').value),referenceServers:$('referenceServers').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean)})});if(!res.ok)throw Error('Tetapan tidak disimpan. Semak nilai dan akses admin.');dirty=false;$('saved').textContent='Tetapan disimpan. Tiada perubahan pada izin trading.';await load();}catch(e){$('saved').textContent=e.message;}finally{$('save').disabled=false;}});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});setInterval(()=>{if(data){const wasOld=$('notice').textContent.includes('Snapshot sudah lama');notice();if(old()&&!wasOld)renderUsers();}},1000);load();
+})();
