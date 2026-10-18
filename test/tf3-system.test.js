@@ -4,7 +4,7 @@ const S=require('../tf3-scalping'),Hub=require('../tf3-market-hub'),C=require('.
 let seq=0;
 function fixture(side='BUY'){
  const now=Date.now()+ ++seq,sign=side==='BUY'?1:-1,row=Array(67).fill(null),t=now-180000;
- Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,21:4,22:4100,23:4100-sign*4,24:4100-sign*4,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
+ Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*4,24:4100-sign*4,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
  row[65]={version:'HEMA3_LIVE_V1',tf3:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
  row[66]={entryRuleVersion:S.RULE,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['5','10','15']}}};
  return {row,now,batch:{feedVersion:'TF3_REALTIME_V1',timeframe:'3',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
@@ -19,7 +19,7 @@ test('BUY and SELL compact TF3 feed -> validated decision -> unchanged connector
  }});
 test('stale, wrong timeframe, old rule and replay batches fail closed',()=>{for(const change of [f=>f.batch.emittedAt-=61000,f=>f.batch.timeframe='2',f=>f.row[66].entryRuleVersion='OLD']){const f=fixture();change(f);a.equal(Hub.ingest(f.batch,f.now).length,0);}const f=fixture();a.equal(Hub.ingest(f.batch,f.now).length,1);a.equal(Hub.ingest(f.batch,f.now).length,0);});
 test('opposite ribbon, excess SL and changed MTF block entry',()=>{for(const change of [f=>f.row[65].tf3.fast=4099,f=>f.row[23]=4094,f=>f.row[66].dashboardAi.dashboard.mtfTimeframes=['15','30','60'],f=>f.row[66].solidHoldActive=false]){const f=fixture();change(f);const m=market(f);a.equal(m.strategyNormal.state,'WAIT');a.equal(C.createEntryDecision(m),null);}});
-test('4/5 accepted; execution event mandatory and Dashboard never orders',()=>{const f=fixture();f.row[43]=40;let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.ok(C.createEntryDecision(m));m={...m,feedChannel:'DASHBOARD'};a.equal(C.createEntryDecision(m),null);m={...m,feedChannel:'EXECUTION',entryEvent:false};a.equal(C.createEntryDecision(m),null);});
+test('Forecast ignored; execution event mandatory and Dashboard never orders',()=>{const f=fixture();f.row[43]=40;let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.ok(C.createEntryDecision(m));m={...m,feedChannel:'DASHBOARD'};a.equal(C.createEntryDecision(m),null);m={...m,feedChannel:'EXECUTION',entryEvent:false};a.equal(C.createEntryDecision(m),null);});
 test('TP1 plus .50 uses existing absolute-price SL action, not EA entry override',()=>{const f=fixture();f.row[24]=4100.5;f.row[58]='MOVE_SL_ENTRY_PLUS_050';f.row[59]=true;const m=market(f),d=C.createManagementDecision(m);a.deepEqual(d.snapshot.actions[0],{type:'MOVE_SL_TP1',activeSl:4100.5,lockLabel:'INITIAL'});});
 test('Telegram TF3 entry and close preserve timeframe without sending messages',async()=>{const f=fixture(),m=market(f);const service=new Alerts.AnalysisAlerts();await service.init();await service.record(m);const e=service.events.find(x=>x.kind==='ENTRY');a.ok(e);a.equal(T.entrySopAllowed(e),true);a.match(T.telegramMessage(e),/SOLID ENTRY TF3/);a.match(T.telegramMessage(e),/4,100\.00/);const close={...m,receivedAt:f.now+1,entryEvent:false,positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};await service.record(close);a.ok(service.events.some(x=>x.kind==='CLOSE'&&x.timeframe==='3'));clearInterval(service.cleanupTimer);});
 
@@ -109,19 +109,19 @@ test('newer dashboard does not suppress a matching execution close event',async(
  a.equal(seen.at(-1),exit);
 });
 
-test('TF3 accepts exactly 4/5 for BUY and SELL, rejects 3/5 and keeps mandatory HEMA',()=>{
+test('TF3 accepts 3/4 for BUY and SELL, rejects 2/4 and keeps mandatory HEMA',()=>{
  for(const side of ['BUY','SELL']){
   const f=fixture(side),sign=side==='BUY'?1:-1;
   f.row[43]=side==='BUY'?40:40;f.row[42]=side==='BUY'?'BULLISH':'BEARISH';
 
-  let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.equal(m.strategyNormal.sop.requiredPassed,4);a.ok(C.createEntryDecision(m));
-  const bad=fixture(side);bad.row[43]=40;bad.row[42]=side==='BUY'?'BULLISH':'BEARISH';bad.row[66].dashboardAi.mtfScore=-sign;
-  m=market(bad);a.equal(m.strategyNormal.sop.passed,3);a.equal(C.createEntryDecision(m),null);
+  let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.equal(m.strategyNormal.sop.requiredPassed,3);a.ok(C.createEntryDecision(m));
+  const bad=fixture(side);bad.row[43]=40;bad.row[42]=side==='BUY'?'BULLISH':'BEARISH';bad.row[66].dashboardAi.mtfScore=-sign;bad.row[66].sourceEntry=4100+sign;
+  m=market(bad);a.equal(m.strategyNormal.sop.passed,2);a.equal(C.createEntryDecision(m),null);
  }
 });
 test('chart renders SOP completion plan and suppresses native trade levels on TF3',()=>{
  const text=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');
- a.match(text,/zc80_passed >= 4/);a.doesNotMatch(text,/zc80_passed >= 5|Minimum 5\/6/);
+ a.match(text,/zc80_passed >= 3/);a.doesNotMatch(text,/zc80_passed >= 5|Minimum 5\/6/);
  a.match(text,/transition_line := timeframe.period == "3" \? na : line.new/);
  a.match(text,/entry_label := timeframe.period == "3" \? na : label.new/);
  a.match(text,/array.from\(zc_seq_entry, draft_sl, zc_seq_tp1, zc_seq_tp2, zc_seq_tp3\)/);
@@ -173,7 +173,7 @@ test('fresh authorized TF3 event is not blocked solely by TP1 or SL range',()=>{
 test('Pine qualification keeps Movement and ribbon mandatory with five confirmations',()=>{
  const s=require('node:fs').readFileSync(require.resolve('../ZenCore_TF3_Scalp.pine'),'utf8');
  const gates=s.split('\n').filter(l=>l.startsWith('bool zc_hold_qualify =')||l.startsWith('bool zc24_ready =')||l.startsWith('zc24_ready :='));
- a.equal(gates.length,3);for(const g of gates){a.match(g,/draft_ribbon/);a.match(g,/zc80_passed >= 4/);a.doesNotMatch(g,/zc80_hema40/);}
+ a.equal(gates.length,3);for(const g of gates){a.match(g,/draft_ribbon/);a.match(g,/zc80_passed >= 3/);a.doesNotMatch(g,/zc80_hema40/);}
  a.match(s,/bool zc_movement_pass =/);a.doesNotMatch(s,/bool zc_seq_shape =/);
 });
 

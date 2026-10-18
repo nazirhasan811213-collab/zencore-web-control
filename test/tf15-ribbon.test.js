@@ -4,7 +4,7 @@ const S=require('../tf15-intraday'),Hub=require('../tf15-market-hub'),C=require(
 let seq=0;
 function fixture(side='BUY'){
  const now=Date.now()+ ++seq,sign=side==='BUY'?1:-1,row=Array(67).fill(null),t=now-900000;
- Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,21:4,22:4100,23:4100-sign*4,24:4100-sign*4,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
+ Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*4,24:4100-sign*4,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
  row[65]={version:'HEMA15_LIVE_V1',tf15:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
  row[66]={entryRuleVersion:S.RULE,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['15','30','45']}}};
  return {row,now,batch:{feedVersion:'TF15_REALTIME_V1',timeframe:'15',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
@@ -24,7 +24,7 @@ test('mandatory Movement and HEMA veto entry even when four optional confirmatio
   const f=fixture(side),m=market(f),s=m.strategyNormal.sop,adapter=require('../tf15-intraday');
   a.equal(adapter.confirmations(side,s).pass,true);
   const wrong={...s,advisor:{...s.advisor,momentum:side==='BUY'?'Bearish 🔴':'Bullish 🟢'}};
-  a.equal(adapter.confirmations(side,wrong).passed,5);a.equal(adapter.confirmations(side,wrong).pass,false);
+  a.equal(adapter.confirmations(side,wrong).passed,4);a.equal(adapter.confirmations(side,wrong).pass,false);
   const h={...s.hema15,fast:s.hema15.slow+(side==='BUY'?-1:1)};
   a.equal(adapter.confirmations(side,{...s,hema15:h}).pass,false);
  }

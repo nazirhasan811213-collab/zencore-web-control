@@ -430,7 +430,7 @@
     const symbol=normaliseSymbol(market.symbol);
     const tf=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '');
     const mode=tf==='15'?'TF15_INTRA':'TF2_SCALPING';
-    const open=positions.filter(position=>!(market.strategyNormal?.sop?.entryPolicyVersion==='PINE_3TRIGGERS_4OF5_V2'&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
+    const open=positions.filter(position=>!(['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion)&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
       (position.strategyMode||'TF2_SCALPING')===mode);
     if (!open.length) return true;
     const normal=market.strategyNormal||{};
