@@ -45,3 +45,13 @@ test('unarmed, single, recent-fill and interrupted flat evidence cannot reset a 
  await gate.observe('u','p',[],[],26000);a.equal((await store.listAudit('u')).length,0,'seeing a position interrupts empty evidence');
  await gate.observe('u','p',[],[],31000);a.equal((await store.lastStrategyCycleReset('u','p','TF2_SCALPING')).closedAt,31000);
 });
+test('a new Pine INITIAL native SOLID after confirmed close uses entry SOP; held/followup signals still need re-entry proof',async()=>{
+ const store=new MemoryAutoTradeStore(),gate=createEntryCycleReset(store);
+ await gate.observe('u','p',[pos('TF2_SCALPING')],[],10000);
+ const s={entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',lifecycleVersion:'PULLBACK_REQUALIFY_V1',cycleKind:'INITIAL',sourceSetupAt:20000,triggerAt:20001,reentryContext:{parentQualifiedAt:null}};
+ const m={timeframe:'3',signalObservedAt:21000,strategyNormal:{side:'BUY',sop:s}};
+ a.equal((await gate.check('u','p',m)).allowed,true);
+ for(const bad of [{...s,sourceSetupAt:9999},{...s,triggerAt:9999},{...s,cycleKind:'FOLLOWUP'},{...s,reentryContext:{parentQualifiedAt:5000}},{...s,sourceSetupAt:undefined}])a.equal((await gate.check('u','p',{...m,strategyNormal:{side:'BUY',sop:bad}})).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE');
+ await gate.observe('u','p',[pos('TF2_SCALPING')],[],22000);
+ a.equal((await gate.check('u','p',m)).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE','same INITIAL cannot bypass its own confirmed close');
+});

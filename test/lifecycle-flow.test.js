@@ -55,3 +55,15 @@ test('TF15 missed position transition: disconnected/truncated snapshots never re
  const profile=await store.getProfile(user);a.equal(profile.desiredState,'ON');a.equal(profile.effectiveState,'ON');
  a.equal(await store.lastStrategyCycleReset(user,pod.id,'TF2_SCALPING'),null);
 });
+for(const tf of ['3','15'])test(`TF${tf} fresh native SOLID after old close can queue normal entry without FOLLOWUP momentum`,async()=>{
+ let at=Date.now()+100;const store=new MemoryAutoTradeStore(),user='native-'+tf,token='zcpod_'+'n'.repeat(48),hash=tokenHash(token);
+ const pod={id:user,userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',demoExecutionUnlocked:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
+ const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'3',allowLocalEaExecution:true,commandSigningKey:'test-signing-key-more-than-thirty-two-bytes'});
+ await svc.saveSettings(user,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',riskAcknowledged:true,tradingSchedule:{enabled:false,skipNews:false}});await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+ await store.appendAudit(user,'STRATEGY_CYCLE_RESET',{podId:pod.id,mode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',closedAt:at-172800000});
+ const f=frame(tf,'BUY',at);f.row[66].sourceSetupAt=at-180000;f.row[66].solidTriggeredAt=at-179000;
+ a.equal(L.momentum('BUY',{reentryContext:{}}),false);
+ const path=tf==='3'?'../tf3-market-hub':'../tf15-market-hub';delete require.cache[require.resolve(path)];const current=require(path).ingest(f.batch,at)[0];a.equal(current.strategyNormal.state,'READY');
+ a.equal((await svc.dispatchMarkets([current])).queued,1);a.equal((await svc.dispatchMarkets([current])).queued,0);
+ const command=(await store.listRecentCommands(user))[0];a.equal(command.type,'PLACE_SETUP');a.equal(command.payload.layers,2);a.equal(command.payload.analysisSnapshot.cycleKind,'INITIAL');
+});

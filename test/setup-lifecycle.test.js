@@ -26,7 +26,7 @@ test('chart/Analysis READY is revoked after authorization expiry; waiting source
  const p={solid:true,confirmations:true,completedAt:1000,observedAt:61001,now:61001,event:true};a.equal(L.describe(p),'EVENT_EXPIRED');
  a.equal(L.describe({...p,completedAt:null,confirmations:false}),'WAIT_SOP');a.equal(L.describe({...p,now:1001}),'ENTRY_EVENT_READY');
 });
-test('actual close gate requires post-close pullback even for a new native SOLID',async()=>{
+test('an unclassified trigger without new-native source evidence still requires post-close pullback',async()=>{
  const {createEntryCycleReset}=require('../entry-cycle-reset');const audit=[];const store={appendAudit:async(u,t,d)=>audit.push(d),lastStrategyCycleReset:async()=>null};const reset=createEntryCycleReset(store);
  await reset.observe('u','p',[{symbol:'XAUUSD',strategyMode:'TF2_SCALPING',origin:'ZENCORE'}],[],2500);
  const s=sop();const m={symbol:'XAUUSD',timeframe:'3',signalObservedAt:5000,strategyNormal:{side:'BUY',sop:{...s,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',triggerAt:4000}}};
