@@ -85,6 +85,7 @@ jobs:
         run: node scripts/check-registration-ui.cjs
 
       - name: Save Analysis previews
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: analysis-alert-previews

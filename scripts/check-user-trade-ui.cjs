@@ -25,7 +25,7 @@ const M=require('../admin-user-trade-service');
   await page.locator('#activityFilter').selectOption('unknown');a.equal(await page.locator('#users tr').count(),1);a.match(await page.locator('#users').innerText(),/belum dapat disahkan/);
   await page.locator('#activityFilter').selectOption('all');await page.locator('#search').fill('OtherBroker');a.equal(await page.locator('#users tr').count(),1);await page.locator('#search').fill('');
   await page.screenshot({path:'user-trade-desktop.png',fullPage:true});
-  await page.setViewportSize({width:390,height:844});a.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'user-trade-mobile.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'user-trade-mobile.png',fullPage:true});a.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.locator('#config summary').click();await page.locator('#referenceServers').fill('AdminBroker-Server');await page.locator('#inactiveDays').fill('30');await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('saved').textContent.includes('disimpan.'));
   a.deepEqual(posted,{inactiveDays:30,referenceServers:['AdminBroker-Server']});
   fail=true;await page.locator('#refresh').click();await page.waitForFunction(()=>document.getElementById('notice').classList.contains('error'));a.equal(await page.locator('#users tr').count(),4);a.match(await page.locator('#notice').innerText(),/Paparan terakhir dikekalkan/);
