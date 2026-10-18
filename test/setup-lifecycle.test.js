@@ -29,7 +29,7 @@ test('chart/Analysis READY is revoked after authorization expiry; waiting source
 test('actual close gate requires post-close pullback even for a new native SOLID',async()=>{
  const {createEntryCycleReset}=require('../entry-cycle-reset');const audit=[];const store={appendAudit:async(u,t,d)=>audit.push(d),lastStrategyCycleReset:async()=>null};const reset=createEntryCycleReset(store);
  await reset.observe('u','p',[{symbol:'XAUUSD',strategyMode:'TF2_SCALPING',origin:'ZENCORE'}],[],2500);
- const s=sop();const m={symbol:'XAUUSD',timeframe:'3',signalObservedAt:5000,strategyNormal:{side:'BUY',sop:{...s,entryPolicyVersion:'PINE_3TRIGGERS_4OF5_V2',triggerAt:4000}}};
+ const s=sop();const m={symbol:'XAUUSD',timeframe:'3',signalObservedAt:5000,strategyNormal:{side:'BUY',sop:{...s,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',triggerAt:4000}}};
  a.equal((await reset.check('u','p',m)).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE');
  m.strategyNormal.sop.reentryContext.pricePath=[[2600,100],[3000,101],[4000,100.5],[5000,103]];a.equal(await reset.allows('u','p',m),true);
 });
@@ -42,6 +42,6 @@ test('browser adapters load lifecycle helper first; both pages and static route 
 });
 test('an executed order without an observed MT5 close cannot be treated as a new first entry',async()=>{
  const {createEntryCycleReset}=require('../entry-cycle-reset');const store={lastStrategyCycleReset:async()=>null,latestExecutedSetupForMode:async()=>({acknowledgedAt:1000})};
- const gate=createEntryCycleReset(store),s=sop(),m={timeframe:'3',signalObservedAt:5000,strategyNormal:{side:'BUY',sop:{...s,entryPolicyVersion:'PINE_3TRIGGERS_4OF5_V2'}}};
+ const gate=createEntryCycleReset(store),s=sop(),m={timeframe:'3',signalObservedAt:5000,strategyNormal:{side:'BUY',sop:{...s,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3'}}};
  a.equal((await gate.check('u','pod',m)).reason,'WAIT_MT5_CLOSE_CONFIRMATION');
 });

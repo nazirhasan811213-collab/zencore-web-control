@@ -1,6 +1,6 @@
 'use strict';
 const Lifecycle=require('./setup-lifecycle');
-const POLICY='PINE_3TRIGGERS_4OF5_V2',MODES=['TF2_SCALPING','TF15_INTRA'];
+const POLICY='PINE_3TRIGGERS_3OF4_CHOP50_V3',MODES=['TF2_SCALPING','TF15_INTRA'];
 function createEntryCycleReset(store){
  const cache=new Map();
  const key=(user,pod,mode)=>[user,pod,mode].join('|');
@@ -12,7 +12,7 @@ function createEntryCycleReset(store){
   }
  }
  async function check(user,pod,market){
-  if(market?.strategyNormal?.sop?.entryPolicyVersion!==POLICY)return {allowed:true,reason:null};
+  if(![POLICY,'PINE_3TRIGGERS_4OF5_V2'].includes(market?.strategyNormal?.sop?.entryPolicyVersion))return {allowed:true,reason:null};
   const mode=String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING',k=key(user,pod,mode);
   if(!cache.has(k))cache.set(k,typeof store.lastStrategyCycleReset==='function'?await store.lastStrategyCycleReset(user,pod,mode):null);
   const reset=cache.get(k);
