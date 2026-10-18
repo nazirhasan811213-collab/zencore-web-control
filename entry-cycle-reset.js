@@ -50,6 +50,13 @@ function createEntryCycleReset(store){
   }
   if(!reset)return {allowed:true,reason:null};
   if(s.lifecycleVersion===Lifecycle.VERSION){
+   // Pine INITIAL is a genuinely new native SOLID, not a continuation of the
+   // last closed setup. Require both its source candle and live trigger after
+   // the confirmed close; a held INITIAL cannot reuse this after its own exit.
+   const freshNative=s.cycleKind==='INITIAL'&&s.reentryContext?.parentQualifiedAt==null&&
+    Number.isFinite(s.sourceSetupAt)&&s.sourceSetupAt>reset.closedAt&&
+    Number.isFinite(s.triggerAt)&&s.triggerAt>=s.sourceSetupAt&&s.triggerAt>reset.closedAt;
+   if(freshNative)return {allowed:true,reason:null,closedAt:reset.closedAt,cycleKind:'INITIAL'};
    const proof=Lifecycle.reentry(market.strategyNormal.side,s,reset.closedAt,market.signalObservedAt);
    return {allowed:!!proof,reason:proof?null:'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE',closedAt:reset.closedAt,proof};
   }
