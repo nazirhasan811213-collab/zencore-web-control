@@ -63,7 +63,7 @@ test('Telegram entries and close state are separate for TF2 and TF15',async()=>{
  for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('SOLID ENTRY TF'+e.timeframe));assert.match(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'2':'30')));assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'30':'3')+':'));}
  const close=market('2','BUY',at+1);close.strategyNormal.state='WATCH';close.positionManagement={action:'EXIT_ALL',reason:'EXIT_ALL'};
  await alerts.record(close);assert.equal(await alerts.activePlan('XAUUSD',2),null);assert.equal((await alerts.activePlan('XAUUSD',15)).side,'SELL');
- assert.match(telegramMessage(alerts.events.at(-1)),/PENGURUSAN POSISI TF2/);
+ assert.match(telegramMessage(alerts.events.at(-1)),/CLOSE ALL TF2/);
  const e=entries[0];assert.equal(entrySopAllowed({...e,timeframe:'15'}),false);assert.equal(entrySopAllowed({...e,telegramMarket:{...e.telegramMarket,timeframe:'15'}}),false);
  }finally{clearInterval(alerts.cleanupTimer);}
 });
