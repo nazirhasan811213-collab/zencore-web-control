@@ -311,7 +311,7 @@
         symbol,
         executionTimeframe:String(market.timeframe||market.strategyNormal?.tf||'2'),
         ...(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?{setupKey:market.setupKey,analysisSopVersion:market.strategyNormal.entrySopVersion}:{}),
-        ...(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1'].includes(management.entryAnchor)?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
+        ...(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1','PINE_SETUP_PLAN_V1'].includes(management.entryAnchor)?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
         actions,
         reason: String(management.reason || '').slice(0, 180),
         sourceReceivedAt: receivedAt

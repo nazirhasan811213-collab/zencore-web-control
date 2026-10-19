@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m pip install pyinstaller==6.16.0 pillow==11.3.0
           python -m PyInstaller --noconfirm --clean --onefile --windowed --name ZenCoreConnector --add-data "ea-local-connector/ZenCoreExecutor.mq5;." --paths ea-local-connector ea-local-connector/connector.py
-          Copy-Item ea-local-connector/PANDUAN_INSTALL_2.1.2.txt dist/PANDUAN_INSTALL_2.1.2.txt
+          Copy-Item ea-local-connector/PANDUAN_INSTALL_2.1.3.txt dist/PANDUAN_INSTALL_2.1.3.txt
           Copy-Item ea-local-connector/ZenCoreExecutor.mq5 dist/ZenCoreExecutor.mq5
           Copy-Item ZenCore_TF3_Scalp.pine,ZenCore_TF15_Intraday.pine dist/
           Get-FileHash dist/ZenCoreConnector.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreConnector.exe" } | Set-Content dist/SHA256.txt
@@ -35,7 +35,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw 'Packaged EXE smoke test failed.' }
           $result = Get-Content dist/validation.json -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.eaResource -or -not $result.dpapi -or -not $result.tkGui) { throw 'Packaged EXE validation incomplete.' }
-          if ($result.connectorBuild -ne '2.1.2') { throw 'Wrong Connector build.' }
+          if ($result.connectorBuild -ne '2.1.3') { throw 'Wrong Connector build.' }
           if ($result.eaVersion -ne '2.11') { throw 'Wrong EA version embedded.' }
       - name: Build easy Windows setup
         shell: pwsh
@@ -44,12 +44,12 @@ jobs:
           if (-not (Test-Path $compiler)) { throw 'Inno Setup compiler not available on Windows runner.' }
           & $compiler ea-local-connector/installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
-          Get-FileHash dist/ZenCoreSetup-2.1.2.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreSetup-2.1.2.exe" } | Set-Content dist/SHA256.txt
+          Get-FileHash dist/ZenCoreSetup-2.1.3.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  ZenCoreSetup-2.1.3.exe" } | Set-Content dist/SHA256.txt
       - name: Validate easy setup install and uninstall
         shell: pwsh
         run: |
           $testDir = Join-Path $env:RUNNER_TEMP 'ZenCore-Setup-Smoke'
-          $setup = Start-Process dist/ZenCoreSetup-2.1.2.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$testDir" -Wait -PassThru
+          $setup = Start-Process dist/ZenCoreSetup-2.1.3.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$testDir" -Wait -PassThru
           if ($setup.ExitCode -ne 0) { throw 'Setup installation failed.' }
           $installed = Join-Path $testDir 'ZenCoreConnector.exe'
           $check = Start-Process $installed -ArgumentList '--self-test', '--output=dist/setup-validation.json' -Wait -PassThru
@@ -62,11 +62,11 @@ jobs:
         with:
           name: ZenCore-EA-Connector-Windows-Real-Demo
           path: |
-            dist/ZenCoreSetup-2.1.2.exe
+            dist/ZenCoreSetup-2.1.3.exe
             dist/ZenCoreExecutor.mq5
             dist/ZenCore_TF3_Scalp.pine
             dist/ZenCore_TF15_Intraday.pine
-            dist/PANDUAN_INSTALL_2.1.2.txt
+            dist/PANDUAN_INSTALL_2.1.3.txt
             dist/*validation.json
             dist/Connector*.png
             dist/SHA256.txt

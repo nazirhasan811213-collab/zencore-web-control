@@ -273,11 +273,11 @@
       const pnl = Number(position.profitUsd || 0);
       return `<tr>
         <td><b>${escape(position.symbol)}</b><small>#${escape(position.ticket)}</small></td>
-        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.layers)} layer</small></td>
+        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'3'))}</small></td>
         <td><b>${escape(position.volume)}</b><small>lot</small></td>
         <td><b>${escape(price(position.entry, position.symbol))} → ${escape(price(position.currentPrice, position.symbol))}</b><small>${escape(timeText(position.openedAt))}</small></td>
-        <td><b>${escape(price(position.activeSl, position.symbol))}</b><small>Initial ${escape(price(position.initialSl, position.symbol))}</small></td>
-        <td><b>${escape(String(position.slLock || 'INITIAL').replaceAll('_', ' '))}</b><small>${escape(String(position.exitStage || 'HOLD').replaceAll('_', ' '))}</small></td>
+        <td><b>${escape(price(position.activeSl, position.symbol))}</b><small>Initial ${escape(price(position.exitPlan?.sl ?? position.initialSl, position.symbol))}</small></td>
+        <td><b>${escape(String(position.slLock || 'INITIAL').replaceAll('_', ' '))}</b><small>${position.exitPlan ? `Entry pelan ${escape(price(position.exitPlan.entry,position.symbol))}<br>TP1 ${escape(price(position.exitPlan.tp1,position.symbol))}<br>TP2 ${escape(price(position.exitPlan.tp2,position.symbol))}<br>TP3 ${escape(price(position.exitPlan.tp3,position.symbol))}` : escape(String(position.exitStage || 'HOLD').replaceAll('_', ' '))}</small></td>
         <td class="${pnl >= 0 ? 'positive' : 'negative'}"><b>${escape(money(pnl))}</b><small>live snapshot</small></td>
       </tr>`;
     }).join('');
