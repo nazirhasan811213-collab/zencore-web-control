@@ -36,7 +36,9 @@ function ingest(batch,now=Date.now()){
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
   channels.set(channelKey,m);
   const current=entries.get(d.symbol);
-  if(!current||m.signalObservedAt>=current.signalObservedAt)entries.set(d.symbol,m);
+  // A separate Dashboard instance can complete the same source at another tick.
+  // Never replace the execution identity/plan with its independently timed copy.
+  if(!current||(m.feedChannel==='EXECUTION'&&(current.feedChannel!=='EXECUTION'||m.signalObservedAt>=current.signalObservedAt))||(current.feedChannel!=='EXECUTION'&&m.signalObservedAt>=current.signalObservedAt))entries.set(d.symbol,m);
   out.push(m);
  }
  return out;

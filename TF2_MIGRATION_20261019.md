@@ -18,3 +18,9 @@ Dashboard, analysis stream, monitoring, Telegram and execution delivery now reco
 6. Confirm `/sop-version` reports active scalping 2, TF2/TF15 feeds are fresh, and authenticated MT5 activity reports the intended side/timeframe. Do not create forced test trades.
 
 No account ON/OFF state, account binding, password, lot/layer setting or broker authorization is changed. No live deployment or TradingView/Pine compilation is implied by local tests. Reverting requires matching application, Pine alerts and Connector; preserve existing broker SL and setup management.
+
+## Execution authority correction
+
+Only TF2 EXECUTION events update the execution dispatch cache and delivery reference. Dashboard snapshots remain available to analysis clients through the event bus but cannot replace queued order identity, plan or expiry. This fixes the observed 207ms completion difference between independent Pine alerts without treating unrelated setups as the same one. A newer EXECUTION source still revokes changed side/setup/SOP; freshness and original authorization expiry still apply. Recovery fetches preserve the execution-channel cache. TF15 behavior is unchanged.
+
+All current pages label scalping TF2 and MTF 3/5/10. TF3 remains management-only for old positions; the old Pine download alias serves the TF2 replacement. Connector 2.1.4 and the existing TF2 Pine remain compatible; no binary or Pine logic changed in this correction. No account is armed and no broker order is forced by deployment.

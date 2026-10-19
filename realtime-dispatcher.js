@@ -5,6 +5,9 @@ const {createEntryDecision,entryConfirmationsPass,createManagementDecision}=requ
 // Only matching current dashboard confirmations may preserve a queued trigger.
 function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  const pending=new Map(),latest=new Map();
+ // TF2 Dashboard is display-only. Only EXECUTION may replace execution state.
+ const tf2Ribbon=m=>String(m?.timeframe)==='2'&&m?.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1';
+ const executionInput=m=>!tf2Ribbon(m)||m.feedChannel==='EXECUTION';
  const key=m=>String(m?.symbol||'')+'|'+String(m?.timeframe||'');
  const tick=createCoalescingDispatcher(async()=>{
   let markets;
@@ -14,12 +17,14 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
    // Events received during a fallback fetch take priority over that fetched copy.
    if(pending.size){markets=[...pending.values()];pending.clear();}
   }
+  if(markets)markets=markets.filter(executionInput);
   if(markets)for(const m of markets){const k=key(m),old=latest.get(k);if(!old||Number(m.signalObservedAt||m.receivedAt)>=Number(old.signalObservedAt||old.receivedAt))latest.set(k,m);}
   await dispatch(markets,m=>latest.get(key(m))===m || sameConfirmation(m,latest.get(key(m))));
  },onError);
  function sameConfirmation(entry,current){return current?.feedChannel==='DASHBOARD'&&entryConfirmationsPass(current)&&
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
+  if(!executionInput(m))return;
   if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','3','15'].includes(String(m.timeframe)))return;
   const k=key(m),previous=pending.get(k),old=latest.get(k);
   if(old&&Number(m.signalObservedAt||m.receivedAt)<Number(old.signalObservedAt||old.receivedAt)){

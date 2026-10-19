@@ -26,7 +26,7 @@ Butang X hanya minimize. Gunakan Keluar Connector untuk menghentikannya.
 PC/VM dan MT5 mesti hidup. Android boleh kawal web, tetapi tidak menjalankan EA.
 
 TP/SL:
-Pelan entry semasa ikut Pine rujukan: SL TF3 minimum 3.00 unit gold atau ATR14 jika lebih besar; TF15 1 ATR14. Mod Fixed R:R: 1/2/3R;
+Pelan entry semasa ikut Pine rujukan: SL TF2 minimum 3.00 unit gold atau ATR14 jika lebih besar; TF15 1 ATR14. Mod Fixed R:R: 1/2/3R;
 mod Fibonacci: ratio dari SL 1.618/2.618/4.236. Entry ialah harga SOP lengkap.
 EA 2.11 menggunakan SL daripada plan Analysis secara lalai. Pengurangan 80%
 hanya untuk preset legacy yang dinyatakan secara eksplisit dalam arahan signed.
@@ -48,9 +48,9 @@ Windows installer/protokol boleh diuji tanpa broker. MQ5 masih perlu berjaya
 compile dalam MetaEditor dan diuji pada DEMO. Ujian installer bukan bukti profit,
 latensi broker atau pelaksanaan trade sebenar. Installer tidak menukar status ON/OFF sistem.
 
-PAKEJ TF3 + TF15 / PINE 2.4
+PAKEJ TF2 + TF15 / PINE 2.4
 Pine: 3 pencetus wajib searah, minimum 3/4 pengesahan, Chop Index <50 wajib.
-Forecast info sahaja. SL TF3=max(ATR14,3.00 unit harga gold); TF15 ATR14 biasa.
+Forecast info sahaja. SL TF2=max(ATR14,3.00 unit harga gold); TF15 ATR14 biasa.
 Re-entry selepas MT5 sahkan kosong, pullback dan momentum kuat; ikut SOP semasa.
 Connector tidak menentukan arah, lot atau pelan SL/TP. EA 2.11 tidak diubah.
 
@@ -71,3 +71,5 @@ Kemas kini Connector sahaja apabila tiada order sedang dihantar. Tidak perlu
 reset link akaun atau ubah lot/layer. Jangan buang EA daripada posisi aktif.
 
 TF2 Scalping: gunakan ZenCore_TF2_Scalp.pine pada chart 2 minit. Connector menghantar metadata TF2 ribbon dan Pine StepLock kepada EA 2.11.
+
+Laluan scalping aktif TF2 sahaja, MTF 3/5/10. Gunakan satu alert Unified. Dashboard untuk paparan; ID dan pelan order datang daripada saluran Execution. Posisi TF3 lama kekal diurus mengikut setup asal hingga ditutup.

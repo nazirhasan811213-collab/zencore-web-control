@@ -84,12 +84,12 @@ test('reversed channel arrival delivers one TF2 command while dashboard plan rem
  a.equal((await svc.nextCommand(token)).command,null);
 });
 
-test('independent dashboard cannot override side or source setup',()=>{
+test('independent dashboard cannot be used to deliver a queued TF2 execution',()=>{
  const check=require('../entry-delivery-check').checkEntryDelivery;
  for(const [change,reason] of [[m=>m.strategyNormal.side='SELL','SOP_CONFIRMATION_FAILED'],[m=>m.setupKey='other','SETUP_CHANGED']]){
   const f=fixture(),m=market(f),cmd=Core.buildSetupCommand(m,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD']},null,f.now);
   const dashboard=JSON.parse(JSON.stringify(m));dashboard.feedChannel='DASHBOARD';change(dashboard);
-  a.equal(check(cmd,dashboard,f.now).reason,reason);
+  a.equal(check(cmd,dashboard,f.now).reason,'EXECUTION_FEED_REQUIRED');
  }
 });
 test('Unified Pine uses one execution stream with heartbeat budget and explicit Telegram status',()=>{
@@ -282,4 +282,59 @@ test('TF2 requires MTF 3/5/10 and rejects the old 5/10/15 feed',()=>{
  a.equal(m.strategyNormal.state,'WAIT');a.equal(C.createEntryDecision(m),null);
  const pine=require('node:fs').readFileSync(require.resolve('../ZenCore_TF2_Scalp.pine'),'utf8');
  a.match(pine,/tf_1 := "3"\n    tf_2 := "5"\n    tf_3 := "10"/);
+});
+
+
+test('live 207ms Dashboard setup mismatch cannot revoke a queued TF2 execution',async()=>{
+ const {createRealtimeDispatcher}=require('../realtime-dispatcher');
+ const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
+ for(const dashboardFirst of [true,false]){
+  const f=fixture(),at=f.now,store=new MemoryAutoTradeStore();
+  delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const hub=require('../tf2-ribbon-market-hub');
+  const m=hub.ingest(f.batch,at)[0];
+  const token='zcpod_'+'r'.repeat(48),hash=tokenHash(token);
+  const pod={id:'pod-authority',userId:'authority',tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
+  store.podsByUser.set(pod.userId,pod);store.podsByToken.set(hash,pod);
+  let clock=at,dispatcher;
+  const svc=createAutoTradeService({store,now:()=>clock,scalpingTimeframe:'2',localEaExecutionUserIds:[pod.userId],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'regression-authority-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,tf)=>dispatcher.getLatestMarket(sym,tf)});
+  dispatcher=createRealtimeDispatcher({dispatch:(batch,current)=>svc.dispatchMarkets(batch,current),fetchMarkets:async()=>hub.markets()});
+  await svc.saveSettings(pod.userId,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});await store.setControl(pod.userId,{desiredState:'ON',effectiveState:'ON'});
+  const dashboard=JSON.parse(JSON.stringify(m));dashboard.feedChannel='DASHBOARD';dashboard.entryEvent=true;dashboard.setupKey='TF2|XAUUSD|BUY|'+(at+207);dashboard.signalObservedAt=at+207;dashboard.receivedAt=at+208;dashboard.strategyNormal.sop.qualifiedAt=at+207;
+  for(const k of ['entry','sl','tp1','tp2','tp3'])dashboard.strategyNormal.plan[k]+=.01;
+  const legacy=JSON.parse(JSON.stringify(m));legacy.timeframe='3';legacy.strategyNormal.tf='3m';legacy.strategyNormal.entrySopVersion='NORMAL_20261001_TF3_RIBBON_V1';legacy.setupKey='TF3|XAUUSD|BUY|'+at;
+  await dispatcher.onMarket(legacy);a.equal((await svc.nextCommand(token)).command,null);
+  if(dashboardFirst)await dispatcher.onMarket(dashboard);
+  await dispatcher.onMarket(m);
+  if(!dashboardFirst)await dispatcher.onMarket(dashboard);
+  a.equal(dispatcher.getLatestMarket('XAUUSD','2'),m);
+  clock=at+1000;
+  const result=await svc.nextCommand(token);
+  a.equal(result.command.type,'PLACE_SETUP');a.equal(result.command.payload.analysisSnapshot.setupKey,m.setupKey);a.equal(result.command.payload.entry,m.strategyNormal.plan.entry);
+  await svc.acknowledgeCommand(token,result.command.id,{status:'EXECUTED',code:'SETUP_OPENED'});
+  await dispatcher.onMarket(dashboard);await dispatcher.tick();
+  a.equal((await svc.nextCommand(token)).command,null);
+ }
+});
+
+test('TF2 Dashboard cannot replace an in-flight event; fresh EXECUTION changes still revoke it',async()=>{
+ const {createRealtimeDispatcher}=require('../realtime-dispatcher');
+ for(const executionChanges of [false,true]){
+  const f=fixture();delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const m=require('../tf2-ribbon-market-hub').ingest(f.batch,f.now)[0];
+  let release,allowed;const gate=new Promise(r=>release=r);
+  const d=createRealtimeDispatcher({dispatch:async(batch,current)=>{if(allowed===undefined){await gate;allowed=current(batch[0]);}},fetchMarkets:async()=>[]});
+  const active=d.onMarket(m);
+  const next={...m,feedChannel:executionChanges?'EXECUTION':'DASHBOARD',signalObservedAt:f.now+207,receivedAt:f.now+208,setupKey:'different'};
+  d.onMarket(next);release();await active;
+  a.equal(allowed,!executionChanges);
+ }
+});
+
+test('TF2 fallback cache preserves execution identity when newer Dashboard arrives',()=>{
+ const f=fixture();delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const hub=require('../tf2-ribbon-market-hub');
+ const execution=hub.ingest(f.batch,f.now)[0];
+ const dashboard=JSON.parse(JSON.stringify(f.batch));dashboard.feedChannel='DASHBOARD';dashboard.emittedAt=f.now+207;dashboard.markets[0][66].setupAt=f.now+207;
+ a.equal(hub.ingest(dashboard,f.now+208).length,1);
+ a.equal(hub.markets()[0],execution);
+ const command=Core.buildSetupCommand(execution,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD']},null,f.now);
+ a.equal(require('../entry-delivery-check').checkEntryDelivery(command,execution,f.now+60001).ok,false);
 });

@@ -1617,7 +1617,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/tf2-ribbon-scalping.js') return sendAuthAsset(res, 'tf2-ribbon-scalping.js', 'application/javascript; charset=utf-8');
-  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF3_Scalp.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/tf15-intraday.js') return sendAuthAsset(res, 'tf15-intraday.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Intraday.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/setup-lifecycle.js') return sendAuthAsset(res, 'setup-lifecycle.js', 'application/javascript; charset=utf-8');
