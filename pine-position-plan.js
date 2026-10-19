@@ -5,7 +5,7 @@ const ANCHOR='PINE_SETUP_PLAN_V1';
 function valid(command){
  const p=command?.payload,s=p?.analysisSnapshot,sign=p?.side==='BUY'?1:p?.side==='SELL'?-1:0;
  return command?.type==='PLACE_SETUP'&&VERSIONS.includes(s?.analysisSopVersion)&&
-  s.exitLockVersion==='PINE_STEPLOCK_150_TP3_PLUS3_V1'&&sign!==0&&
+  (s.exitLockVersion==='PINE_STEPLOCK_150_TP3_PLUS3_V1'||(s.exitLockVersion==='PINE_STEPLOCK_BE_TF15_V1'&&s.analysisSopVersion==='NORMAL_20261001_TF15_RIBBON_V1'&&s.executionTimeframe==='15'&&p.strategyMode==='TF15_INTRA'))&&sign!==0&&
   ['entry','sl','tp1','tp2','tp3'].every(k=>Number.isFinite(p[k])&&p[k]>0&&p[k]===s[k])&&
   sign*(p.entry-p.sl)>0&&sign*(p.tp1-p.entry)>0&&sign*(p.tp2-p.tp1)>0&&sign*(p.tp3-p.tp2)>0;
 }
@@ -39,11 +39,12 @@ function management(market,positions,command,at){
  const source=market.positionManagement||{},freshExit=own.every(x=>Number.isFinite(x.openedAt)&&observed>=x.openedAt);
  const chartClose=freshExit&&(market.nativeChartExitAll===true&&market.feedChannel==='EXECUTION'||market.setupKey===s.setupKey&&['CLOSE_50_NOW','EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(source.action));
  const pm={action:chartClose?'EXIT_ALL':'HOLD',slMoveTriggered:false,entryAnchor:ANCHOR,entryCommandId:command.id,reason:chartClose?'Chart Close → CLOSE ALL setup aktif':'Exit ikut pelan '+(s.cycleKind==='FOLLOWUP'?'RE-ENTRY':'ENTRY')};
+ const tf15Be=s.exitLockVersion==='PINE_STEPLOCK_BE_TF15_V1';
  let target=null,label='INITIAL';
- if(sign*(quote-p.tp3)>3){target=p.tp3;label='TP3_LOCKED';}
+ if(!tf15Be&&sign*(quote-p.tp3)>3){target=p.tp3;label='TP3_LOCKED';}
  else if(hit(p.tp3)){target=p.tp2;label='TP2_LOCKED';}
  else if(hit(p.tp2)){target=p.tp1;label='TP1_LOCKED';}
- else if(hit(p.tp1)&&sign*(quote-p.entry)>1.50){target=p.entry+sign*1.50;label='ENTRY_PLUS_150';}
+ else if(hit(p.tp1)&&(tf15Be||sign*(quote-p.entry)>1.50)){target=tf15Be?p.entry:p.entry+sign*1.50;label=tf15Be?'ENTRY_BE':'ENTRY_PLUS_150';}
  if(!chartClose&&target!==null&&own.some(x=>!Number.isFinite(x.activeSl)||x.activeSl<=0||sign*(target-x.activeSl)>0.000001))Object.assign(pm,{slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:target,slLockLabel:label});
  return {...market,setupKey:s.setupKey,strategyNormal:{...market.strategyNormal,side:p.side,entrySopVersion:s.analysisSopVersion,plan:{entry:p.entry,sl:p.sl,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3}},positionManagement:pm};
 }

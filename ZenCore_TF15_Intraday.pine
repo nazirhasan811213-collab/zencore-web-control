@@ -1590,7 +1590,7 @@ if zc_hold_qualify
     xc_sl := draft_sl
     xc_exit := "NONE"
     xc_reason := "Minimum 3/4 SOP lengkap + Chop <50"
-string zc24_sl_move = xc_active and xc_stage > 0 ? (xc_stage == 1 ? "MOVE_SL_ENTRY_PLUS_150" : xc_stage == 2 ? "MOVE_SL_TP1" : xc_stage == 3 ? "MOVE_SL_TP2" : "MOVE_SL_TP3") : "NONE"
+string zc24_sl_move = xc_active and xc_stage > 0 ? (xc_stage == 1 ? "MOVE_SL_TP1" : xc_stage == 2 ? "MOVE_SL_TP1" : xc_stage == 3 ? "MOVE_SL_TP2" : "MOVE_SL_TP3") : "NONE"
 bool zc24_opposite_yellow = false
 if xc_active and not zc_hold_qualify
     bool xc_stop = xc_buy ? close <= xc_sl : close >= xc_sl
@@ -1605,12 +1605,12 @@ if xc_active and not zc_hold_qualify
         xc_exit := xc_emergency or zc_close_all_pulse or xc_partial ? "EMERGENCY" : zc24_opposite_yellow ? "OPPOSITE_YELLOW" : "SL"
         xc_reason := xc_partial ? "Chart Close Separuh → CLOSE ALL" : xc_emergency or zc_close_all_pulse ? "SOP CLOSE ALL" : zc24_opposite_yellow ? "Candle warna melawan arah posisi selepas Close Separuh" : "Protected SL touched"
     else
-        int xc_reached = xc_buy ? (close > xc_tp3+3.0 ? 4 : close >= xc_tp3 ? 3 : close >= xc_tp2 ? 2 : close >= xc_tp1 ? 1 : 0) : (close < xc_tp3-3.0 ? 4 : close <= xc_tp3 ? 3 : close <= xc_tp2 ? 2 : close <= xc_tp1 ? 1 : 0)
-        if xc_reached > xc_stage and (xc_reached != 1 or (xc_buy ? close > xc_entry + 1.50 : close < xc_entry - 1.50))
+        int xc_reached = xc_buy ? (close >= xc_tp3 ? 3 : close >= xc_tp2 ? 2 : close >= xc_tp1 ? 1 : 0) : (close <= xc_tp3 ? 3 : close <= xc_tp2 ? 2 : close <= xc_tp1 ? 1 : 0)
+        if xc_reached > xc_stage
             xc_stage := xc_reached
-            float xc_target_sl = xc_stage == 1 ? (xc_buy ? xc_entry+1.50 : xc_entry-1.50) : xc_stage == 2 ? xc_tp1 : xc_stage == 3 ? xc_tp2 : xc_tp3
+            float xc_target_sl = xc_stage == 1 ? xc_entry : xc_stage == 2 ? xc_tp1 : xc_stage == 3 ? xc_tp2 : xc_tp3
             xc_sl := xc_buy ? math.max(xc_sl,xc_target_sl) : math.min(xc_sl,xc_target_sl)
-            zc24_sl_move := xc_stage == 1 ? "MOVE_SL_ENTRY_PLUS_150" : xc_stage == 2 ? "MOVE_SL_TP1" : xc_stage == 3 ? "MOVE_SL_TP2" : "MOVE_SL_TP3"
+            zc24_sl_move := xc_stage == 1 ? "MOVE_SL_TP1" : xc_stage == 2 ? "MOVE_SL_TP1" : xc_stage == 3 ? "MOVE_SL_TP2" : "MOVE_SL_TP3"
 
 // Execution exits do not independently terminate the entry SOLID.
 zc24_solid := zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
@@ -1723,7 +1723,7 @@ bool zc24_closed_now = zc24_completed and not xc_full_event_sent
 string zc24_exit_stage = zc24_completed ? "CLOSED" : zc24_half_armed ? "WAIT_YELLOW" : xc_active ? "HOLD" : "IDLE"
 string zc24_exit_action = zc24_closed_now ? (zc24_close_type == "EMERGENCY" ? "EXIT_ALL" : zc24_close_type == "OPPOSITE_YELLOW" ? "EXIT_REMAINING" : "EXIT_SL") : zc24_completed ? "IDLE" : zc24_half_armed and not xc_half_event_sent ? "CLOSE_50_NOW" : zc24_half_armed ? "WAIT_OPPOSITE_YELLOW" : xc_active ? "HOLD" : "IDLE"
 string zc24_yellow_type = zc24_opposite_yellow ? (xc_buy ? "BEARISH_YELLOW" : "BULLISH_YELLOW") : "NONE"
-string zc24_sl_label = zc24_completed ? "CLOSED" : not xc_active ? "IDLE" : zc24_lock_stage == 4 ? "TP3_LOCKED" : zc24_lock_stage == 3 ? "TP2_LOCKED" : zc24_lock_stage == 2 ? "TP1_LOCKED" : zc24_lock_stage == 1 ? "ENTRY_PLUS_150" : "INITIAL"
+string zc24_sl_label = zc24_completed ? "CLOSED" : not xc_active ? "IDLE" : zc24_lock_stage == 4 ? "TP3_LOCKED" : zc24_lock_stage == 3 ? "TP2_LOCKED" : zc24_lock_stage == 2 ? "TP1_LOCKED" : zc24_lock_stage == 1 ? "ENTRY_BE" : "INITIAL"
 int zc24_remaining = zc24_completed ? 0 : zc24_half_armed ? 50 : xc_active ? 100 : 0
 // Retry the same immutable event at most three times within its original 60s.
 // No HTTP acknowledgement is available in Pine. Deduplication happens on server.
@@ -1755,7 +1755,7 @@ if array.size(zc_path_times)>0
     for zc_i = 0 to array.size(zc_path_times)-1
         array.push(zc_path_parts,"["+str.tostring(array.get(zc_path_times,zc_i))+","+f_num(array.get(zc_path_prices,zc_i))+"]")
 string zc_reentry_json = "{\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"fastPrevious\":"+f_num(he1[1])+",\"slowPrevious\":"+f_num(he2[1])+",\"wtGapPrevious\":"+f_num(math.abs(wt1[1]-wt2[1]))+",\"pricePath\":["+array.join(zc_path_parts,",")+"]}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF15_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF15-PINE-3TRIGGERS-3OF4-CHOP50-2.4\",\"entryPolicyVersion\":\"PINE_3TRIGGERS_3OF4_CHOP50_V3\",\"riskPlanVersion\":\"TF15_PINE_PLAN_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF15_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF15-PINE-3TRIGGERS-3OF4-CHOP50-2.5\",\"entryPolicyVersion\":\"PINE_3TRIGGERS_3OF4_CHOP50_V3\",\"riskPlanVersion\":\"TF15_PINE_PLAN_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"exitLockVersion\":\"PINE_STEPLOCK_BE_TF15_V1\",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))

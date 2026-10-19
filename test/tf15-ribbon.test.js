@@ -6,7 +6,7 @@ function fixture(side='BUY'){
  const now=Date.now()+ ++seq,sign=side==='BUY'?1:-1,row=Array(67).fill(null),t=now-900000;
  Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*4,24:4100-sign*4,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
  row[65]={version:'HEMA15_LIVE_V1',tf15:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
- row[66]={entryRuleVersion:S.RULE,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['15','30','45']}}};
+ row[66]={entryRuleVersion:S.RULE,exitLockVersion:S.POLICY.exitLockVersion,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['15','30','45']}}};
  return {row,now,batch:{feedVersion:'TF15_REALTIME_V1',timeframe:'15',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
 }
 function market(f){return Hub.ingest(f.batch,f.now)[0];}
@@ -119,4 +119,12 @@ test('current Telegram layout puts action and own plan before bounded analysis, 
    a.match(text,/Rujukan: ZC-/);a.match(text,/MYT/);
   }finally{clearInterval(alerts.cleanupTimer);}
  }
+});
+
+
+test('TF15 new entries require BE policy metadata; old feed remains available for management only',()=>{
+ const f=fixture();delete f.row[66].exitLockVersion;
+ a.equal(C.createEntryDecision(market(f)),null);
+ const next=fixture();delete require.cache[require.resolve('../tf15-market-hub')];const m=require('../tf15-market-hub').ingest(next.batch,next.now)[0];a.equal(C.createEntryDecision(m).snapshot.exitLockVersion,'PINE_STEPLOCK_BE_TF15_V1');
+ a.equal(S.POLICY.tp1Lock,0);a.equal(S.POLICY.tp3Extension,null);
 });

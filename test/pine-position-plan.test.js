@@ -53,3 +53,24 @@ test('Postgres active plan lookup is parameterized and scopes user, pod, symbol,
  store.pool={query:async(sql,args)=>{a.match(sql,/user_id=\$1 AND pod_id=\$2/);a.match(sql,/LEFT\(id::text,20\)=\$5/);a.deepEqual(args,['u','pod','XAUUSD','TF2_SCALPING','aaaaaaaa-bbbb-4ccc-8d']);return {rows:[]};}};
  a.equal(await store.setupForPosition('u','pod','XAUUSD','TF2_SCALPING','aaaaaaaa-bbbb-4ccc-8d'),null);
 });
+
+
+test('restored TF15 BE exit keeps TP2/TP3 locks, full close, no extension, and rejects use by TF2',()=>{
+ for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP']){
+  const {command,position,market,sign}=fixture('15',side,kind),p=command.payload;
+  p.analysisSnapshot.exitLockVersion='PINE_STEPLOCK_BE_TF15_V1';
+  for(const [quote,target] of [[p.tp1,p.entry],[p.tp2,p.tp1],[p.tp3,p.tp2],[p.tp3+sign*10,p.tp2]]){
+   position.currentPrice=quote;
+   const out=P.management(market,[position],command,NOW);
+   a.equal(Core.buildManagementCommand(out).payload.actions[0].activeSl,target);
+  }
+  position.activeSl=p.tp2;position.currentPrice=p.tp1;
+  a.equal(Core.buildManagementCommand(P.management(market,[position],command,NOW)),null);
+  for(const action of ['CLOSE_50_NOW','EXIT_ALL']){
+   const out=P.management({...market,setupKey:p.analysisSnapshot.setupKey,positionManagement:{action}},[position],command,NOW);
+   a.equal(Core.buildManagementCommand(out).payload.actions[0].percent,100);
+  }
+  p.strategyMode='TF2_SCALPING';p.analysisSnapshot.executionTimeframe='2';p.analysisSnapshot.analysisSopVersion='NORMAL_20261001_TF2_RIBBON_V1';
+  a.equal(P.valid(command),false);
+ }
+});
