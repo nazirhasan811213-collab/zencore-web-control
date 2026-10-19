@@ -4,6 +4,7 @@ name: Auto Trade control plane checks
   pull_request:
     paths:
       - "analysis-alert*"
+      - "analysis-telegram.js"
       - "pine-insights.*"
       - "analysis-dual.*"
       - "gold-copilot.js"
