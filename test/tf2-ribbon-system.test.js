@@ -4,9 +4,9 @@ const S=require('../tf2-ribbon-scalping'),Hub=require('../tf2-ribbon-market-hub'
 let seq=0;
 function fixture(side='BUY'){
  const now=Date.now()+ ++seq,sign=side==='BUY'?1:-1,row=Array(67).fill(null),t=now-180000;
- Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*4,24:4100-sign*4,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
+ Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*3,24:4100-sign*3,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
  row[65]={version:'HEMA2_LIVE_V1',tf2:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
- row[66]={entryRuleVersion:S.RULE,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['3','5','10']}}};
+ row[66]={entryRuleVersion:S.RULE,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:10,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['3','5','10']}}};
  return {row,now,batch:{feedVersion:'TF2_REALTIME_V1',timeframe:'2',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
 }
 function market(f){return Hub.ingest(f.batch,f.now)[0];}
@@ -25,7 +25,7 @@ test('Telegram TF2 entry and close preserve timeframe without sending messages',
 
 test('ATR8 metadata rejected; chart partial becomes full close; management deduplicates',()=>{let f=fixture();f.row[66].atrPeriod=8;a.equal(market(f).strategyNormal.state,'WAIT');f=fixture();const m=market(f);m.positionManagement={action:'CLOSE_50_NOW',reason:'chart partial'};const d=C.createManagementDecision(m);a.equal(d.snapshot.actions[0].percent,100);a.equal(d.snapshot.actions[0].reason,'EXIT_ALL');a.equal(d.managementKey,C.createManagementDecision({...m,receivedAt:m.receivedAt+1}).managementKey);a.equal(d.snapshot.setupKey,m.setupKey);});
 test('queued TF2 confirmation is recomputed from live values',()=>{const m=market(fixture());a.equal(Core.entryConfirmationsPass(m),true);m.strategyNormal.sop.hema2.fast=4099;a.equal(Core.entryConfirmationsPass(m),false);});
-test('Pine release uses ATR14, live ribbon and full close on native partial',()=>{const s=require('node:fs').readFileSync(require.resolve('../ZenCore_TF2_Scalp.pine'),'utf8');a.match(s,/atr     = ta.atr\(14\)/);a.match(s,/or xc_partial\n/);a.doesNotMatch(s,/xc_half := true/);a.doesNotMatch(s,/draft_structure_ok|draft_structure_side|frozen_structure/);a.match(s,/alert\(zc24_payload, alert.freq_all\)/);});
+test('Pine release uses ATR10, live ribbon and full close on native partial',()=>{const s=require('node:fs').readFileSync(require.resolve('../ZenCore_TF2_Scalp.pine'),'utf8');a.match(s,/atr     = ta.atr\(10\)/);a.match(s,/or xc_partial\n/);a.doesNotMatch(s,/xc_half := true/);a.doesNotMatch(s,/draft_structure_ok|draft_structure_side|frozen_structure/);a.match(s,/alert\(zc24_payload, alert.freq_all\)/);});
 test('live TF2 profile queues once and delivery checks TF2 rather than legacy TF2',async()=>{
  const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
  const f=fixture(),m=market(f),at=f.now,store=new MemoryAutoTradeStore(),lookups=[];
@@ -41,12 +41,12 @@ test('live TF2 profile queues once and delivery checks TF2 rather than legacy TF
  const result=await svc.nextCommand(token);a.equal(result.command.payload.analysisSnapshot.executionTimeframe,'2');a.equal(lookups.at(-1),'2');
 });
 
-test('far swing structure does not block ATR14 entry; prices anchor to completion for both sides',()=>{
+test('far swing structure does not block ATR10 entry; prices anchor to completion for both sides',()=>{
  for(const side of ['BUY','SELL']){
   const f=fixture(side);f.row[66].riskStructure=side==='BUY'?3900:4300;
   const m=market(f);a.equal(m.strategyNormal.state,'READY');a.ok(C.createEntryDecision(m));
   const sign=side==='BUY'?1:-1;
-  a.equal(m.strategyNormal.plan.sl,4100-sign*4);
+  a.equal(m.strategyNormal.plan.sl,4100-sign*3);
   a.equal(m.strategyNormal.plan.tp1,4100+sign*4);
  }
 });
@@ -337,4 +337,19 @@ test('TF2 fallback cache preserves execution identity when newer Dashboard arriv
  a.equal(hub.markets()[0],execution);
  const command=Core.buildSetupCommand(execution,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD']},null,f.now);
  a.equal(require('../entry-delivery-check').checkEntryDelivery(command,execution,f.now+60001).ok,false);
+});
+
+
+test('ATR10 SL cap covers both sides, modes and volatility without widening or accepting the old policy',()=>{
+ for(const side of ['BUY','SELL'])for(const mode of ['Fixed R:R','Fibonacci'])for(const atr of [.5,2.2,3,3.5,8]){
+  const sign=side==='BUY'?1:-1,entry=4100,sl=entry-sign*Math.min(atr,3);
+  const targets=mode==='Fibonacci'?[1.618,2.618,4.236].map(r=>sl+(entry-sl)*r):[1,2,3].map(r=>entry+sign*atr*r);
+  const plan={entry,sl,tp1:targets[0],tp2:targets[1],tp3:targets[2]},s={riskAtrReference:atr,planMode:mode};
+  a.equal(S.planPass(side,plan,s),true);
+  a.equal(S.planPass(side,{...plan,sl:entry-sign*3.01},s),false);
+  if(atr!==3)a.equal(S.planPass(side,{...plan,sl:entry-sign*Math.max(atr,3)},s),false);
+ }
+ for(const alter of [f=>f.row[66].atrPeriod=14,f=>f.row[66].riskPlanVersion='TF2_PINE_MIN3_PLAN_V4']){
+  const f=fixture();alter(f);const m=market(f);a.ok(!m||m.strategyNormal.state==='WAIT');if(m)a.equal(C.createEntryDecision(m),null);
+ }
 });

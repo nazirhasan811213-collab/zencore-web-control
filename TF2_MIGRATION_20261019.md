@@ -24,3 +24,8 @@ No account ON/OFF state, account binding, password, lot/layer setting or broker 
 Only TF2 EXECUTION events update the execution dispatch cache and delivery reference. Dashboard snapshots remain available to analysis clients through the event bus but cannot replace queued order identity, plan or expiry. This fixes the observed 207ms completion difference between independent Pine alerts without treating unrelated setups as the same one. A newer EXECUTION source still revokes changed side/setup/SOP; freshness and original authorization expiry still apply. Recovery fetches preserve the execution-channel cache. TF15 behavior is unchanged.
 
 All current pages label scalping TF2 and MTF 3/5/10. TF3 remains management-only for old positions; the old Pine download alias serves the TF2 replacement. Connector 2.1.4 and the existing TF2 Pine remain compatible; no binary or Pine logic changed in this correction. No account is armed and no broker order is forced by deployment.
+
+
+## ATR10 / maximum SL update
+
+TF2 now freezes ATR(10) at SOP completion. SL distance = min(ATR10, 3.00 XAUUSD price units), replacing the old minimum distance. This is a price-distance cap, not a USD cash-loss guarantee. Fixed mode TP1/2/3 remains 1/2/3 times frozen ATR (now ATR10); Fibonacci retains its native SL-to-entry ratios. TF15 and existing exit locks are unchanged. Risk plan `TF2_PINE_ATR10_MAX3_PLAN_V5` rejects old ATR14/minimum-SL feeds for new entries. Replace the TF2 Pine and recreate its Unified alert; no Connector reinstall is needed. Existing positions are not repriced.
