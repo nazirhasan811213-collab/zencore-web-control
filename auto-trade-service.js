@@ -1477,16 +1477,21 @@ function createAutoTradeService(options = {}) {
         if (!setup || !isCurrent(market)){await reportEntryBlock(profile,market,market.strategyNormal?.lifecycleState==='EVENT_EXPIRED'?'ENTRY_EVENT_EXPIRED':market.entryEvent!==true?'WAIT_EXECUTION_EVENT':'SOP_OR_SETUP_NOT_CURRENT');continue;}
         if(String(market.timeframe)==='3'&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
+        // Current Pine execution events already carry a fixed 60s authorization
+        // deadline. Do not silently shorten them to 15s while they wait for a poll.
+        // notAfterMs below still caps retries and session/news boundaries.
+        const entryCommandTtlMs = ['3','15'].includes(String(market.timeframe)) &&
+          market.feedChannel === 'EXECUTION' && market.entryEvent === true ? 60000 : 15000;
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: Math.min(entryWindow.validUntil ?? Infinity,setup.notAfterMs ?? Infinity)
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: entryCommandTtlMs, notAfterMs: Math.min(entryWindow.validUntil ?? Infinity,setup.notAfterMs ?? Infinity)
             })
           : await issueCommand({
               userId: profile.userId, podId: pod.id,
               type: 'PLACE_SETUP', payload: setup.payload,
-              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: 15000, notAfterMs: Math.min(entryWindow.validUntil ?? Infinity,setup.notAfterMs ?? Infinity)
+              dedupeKey: `SETUP|${setup.signalKey}`, ttlMs: entryCommandTtlMs, notAfterMs: Math.min(entryWindow.validUntil ?? Infinity,setup.notAfterMs ?? Infinity)
             });
         if (issued.created) {
           queued += 1;
