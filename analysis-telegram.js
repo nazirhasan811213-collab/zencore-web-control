@@ -103,7 +103,7 @@ function riskText(value){return String(value||'').replace(/(?:🛑\s*)?JAGA MODA
 function pineContext(s={},tf){
  const d=s.advisor||{},clean=v=>riskText(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
  const short=(v,n=100)=>clean(v).slice(0,n)||'Tiada data';
- const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${s['hema'+tf]?.mode||'WAIT_DATA'}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':'5/10/15'}: ${s.mtfScore}`];
+ const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${s['hema'+tf]?.mode||'WAIT_DATA'}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':tf==='2'?'3/5/10':'5/10/15'}: ${s.mtfScore}`];
  // Keep dashboard facts once; Coach often repeats trend, momentum and advice.
  const seen=new Set(),key=v=>clean(v).replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
  function add(label,value,max=240){const text=clean(value);if(!text)return;const k=key(text);if(!k||seen.has(k))return;seen.add(k);lines.push(`${label}: ${text.slice(0,max)}`);}

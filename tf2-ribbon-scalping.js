@@ -1,7 +1,7 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.ZenCoreTf2Ribbon=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
 'use strict';
 const RULE='TF2_SOLID_RIBBON_V1',VERSION='NORMAL_20261001_TF2_RIBBON_V1',RISK='TF2_PINE_MIN3_PLAN_V4';
-const POLICY={feedRule:RULE,version:VERSION,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',timeframe:'2',atrPeriod:14,chartPartialAction:'CLOSE_ALL',mtf:['5', '10', '15'],mandatoryTriggers:['NATIVE_SOLID','DASHBOARD_MOVEMENT','HEMA_TREND'],minimumPassed:3,minimumTotal:4,eventMaxAgeMs:60000,checklistHemaTimeframe:'2',checklistMinimum:4,forecastRequired:false,chopIndexExclusiveMaximum:50,slopeFilter:false,entryPriceRangeRequired:false,planSource:'UPLOADED_PINE_NATIVE_PLAN',slAtr:1,slMinimumPrice:3,tpModes:['Fixed R:R','Fibonacci'],fixedRr:[1,2,3],fibonacciRatios:[1.618,2.618,4.236],tp1Cap:null,tp1Lock:1.5,tp3Extension:3,exitLockVersion:'PINE_STEPLOCK_150_TP3_PLUS3_V1',transportMode:'TF2_SCALPING'};
+const POLICY={feedRule:RULE,version:VERSION,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',timeframe:'2',atrPeriod:14,chartPartialAction:'CLOSE_ALL',mtf:['3', '5', '10'],mandatoryTriggers:['NATIVE_SOLID','DASHBOARD_MOVEMENT','HEMA_TREND'],minimumPassed:3,minimumTotal:4,eventMaxAgeMs:60000,checklistHemaTimeframe:'2',checklistMinimum:4,forecastRequired:false,chopIndexExclusiveMaximum:50,slopeFilter:false,entryPriceRangeRequired:false,planSource:'UPLOADED_PINE_NATIVE_PLAN',slAtr:1,slMinimumPrice:3,tpModes:['Fixed R:R','Fibonacci'],fixedRr:[1,2,3],fibonacciRatios:[1.618,2.618,4.236],tp1Cap:null,tp1Lock:1.5,tp3Extension:3,exitLockVersion:'PINE_STEPLOCK_150_TP3_PLUS3_V1',transportMode:'TF2_SCALPING'};
 const Lifecycle=typeof module==='object'&&module.exports?require('./setup-lifecycle'):rootLifecycle();
 function rootLifecycle(){return globalThis.ZenCoreSetupLifecycle;}
 const finite=x=>typeof x==='number'&&Number.isFinite(x),fresh=(x,now,maxAge=30000)=>finite(x)&&x>0&&now-x>=-5000&&now-x<=maxAge;
@@ -13,7 +13,7 @@ function confirmations(side,s={}){
  const movement=dataReady&&String(s.advisor?.momentum||'').startsWith(expectedMovement)&&(sign===1?expectedMovement==='Bullish':expectedMovement==='Bearish');
  const ribbon=dataReady&&sign*(h.fast-h.slow)>0;
  const values={entry:dataReady&&sign*(s.price-s.sourceEntry)>0,wt:dataReady&&sign*(h.waveTrend1-h.waveTrend2)>0,sop:dataReady&&g>=4,mtf:dataReady&&sign*m>0};
- const names={entry:'Harga lepas entry SOLID',wt:'WT1/WT2',sop:'Checklist Pine 4/5',mtf:'MTF 5/10/15'};
+ const names={entry:'Harga lepas entry SOLID',wt:'WT1/WT2',sop:'Checklist Pine 4/5',mtf:'MTF 3/5/10'};
  const gates=Object.entries(values).map(([key,pass])=>({key,label:names[key],pass})),passed=gates.filter(g=>g.pass).length;
  const chopPass=finite(s.chopIndex)&&s.chopIndex>=0&&s.chopIndex<50;
  return {dataReady,movement,ribbon,chopPass,gates,passed,total:4,scorePercent:passed/4*100,pass:dataReady&&movement&&ribbon&&passed>=3&&chopPass};

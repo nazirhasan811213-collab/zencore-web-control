@@ -2,7 +2,7 @@
 
 Replaces only the active scalping timeframe, TF3 → TF2. TF15 is unchanged.
 
-The new `ZenCore_TF2_Scalp.pine` is derived from the latest TF3 script. Native held SOLID, matching Movement and own HEMA ribbon, any 3/4 confirmations, Chop <50, own-timeframe HEMA checklist, ATR14, minimum SL distance 3.00, native Fixed R:R/Fibonacci and Pine StepLock remain unchanged. MTF 5/10/15 remains unchanged. First execution is immediate on qualification; retries retain the original 60-second authorization and setup identity. There is no new waiting timer.
+The new `ZenCore_TF2_Scalp.pine` is derived from the latest TF3 script. Native held SOLID, matching Movement and own HEMA ribbon, any 3/4 confirmations, Chop <50, own-timeframe HEMA checklist, ATR14, minimum SL distance 3.00, native Fixed R:R/Fibonacci and Pine StepLock remain unchanged. TF2 MTF uses 3/5/10 as requested; TF15 retains 15/30/45. First execution is immediate on qualification; retries retain the original 60-second authorization and setup identity. There is no new waiting timer.
 
 The application accepts only the new TF2 ribbon version for active scalping orders. Old TF2 policies cannot authorize scalping via this configuration. TF3 ingestion remains for setup-scoped management of open positions; TF3 emits no new entry events. Both normal entry and re-entry remain blocked while any own scalping position exists. Full MT5 close confirmation and fresh post-close evidence remain mandatory for the next cycle. TF15 ownership remains separate.
 

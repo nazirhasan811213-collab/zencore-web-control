@@ -1,5 +1,5 @@
 //@version=6
-indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 SOLID HOLD TF2 · PINE 3/4 + CHOP<50 · MTF 5/10/15', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+indicator('ZenCore AI Dashboard Pro + Alerts — Original + TF2 SOLID HOLD TF2 · PINE 3/4 + CHOP<50 · MTF 3/5/10', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF2 Web Feed"
@@ -536,9 +536,9 @@ string tf_2 = "30"
 string tf_3 = "60"
 
 if tradeMode == "Scalping"
-    tf_1 := "5"
-    tf_2 := "10"
-    tf_3 := "15"
+    tf_1 := "3"
+    tf_2 := "5"
+    tf_3 := "10"
 else 
     tf_1 := "60"
     tf_2 := "240"
