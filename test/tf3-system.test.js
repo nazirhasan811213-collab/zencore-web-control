@@ -212,3 +212,30 @@ test('TF3 event lifetime accepts 45s and exactly 60s; rejects after 60s without 
   }
  }
 });
+
+
+test('signed TF3 order survives an 11s poll without extending the original event deadline',async()=>{
+ const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
+ for(const side of ['BUY','SELL'])for(const age of [0,48000]){
+  const f=fixture(side);f.now+=100;const auth=f.now-age;f.batch.emittedAt=f.now;
+  Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',completedAt:auth,entryAuthorizedAt:auth});
+  delete require.cache[require.resolve('../tf3-market-hub')];
+  const m=require('../tf3-market-hub').ingest(f.batch,f.now)[0];a.ok(m);let at=f.now;const store=new MemoryAutoTradeStore(),token='zcpod_'+'q'.repeat(48),hash=tokenHash(token);
+  const pod={id:'expiry-pod',userId:'expiry-owner',tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
+  store.podsByUser.set(pod.userId,pod);store.podsByToken.set(hash,pod);
+  const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'3',localEaExecutionUserIds:[pod.userId],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'expiry-regression-signing-key-longer-than-32',getLatestMarket:()=>m});
+  await svc.saveSettings(pod.userId,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true,tradingSchedule:{enabled:false,skipUsNews:false}});
+  await store.setControl(pod.userId,{desiredState:'ON',effectiveState:'ON'});
+  a.equal((await svc.dispatchMarkets([m])).queued,1);
+  at+=11000;const result=await svc.nextCommand(token);a.ok(result.command);
+  a.equal(result.command.expiresAt,auth+60000);
+  a.equal(JSON.parse(Buffer.from(result.command.signedEnvelope,'base64url')).expiresAt,auth+60000);
+  if(age===0){
+   // Existing Connector conservatively adds the full fetch RTT to serverTime.
+   const verified=cp.spawnSync('python',['-c',"import sys,json;sys.path.insert(0,'ea-local-connector');from protocol import command_server_time;x=json.load(sys.stdin);assert x['command']['expiresAt']>command_server_time(x,11000)"],{input:JSON.stringify(result),encoding:'utf8'});
+   a.equal(verified.status,0,verified.stderr);
+  }
+  a.equal((await svc.dispatchMarkets([m])).queued,0);
+  at=auth+60001;a.equal((await svc.nextCommand(token)).command,null);
+ }
+});
