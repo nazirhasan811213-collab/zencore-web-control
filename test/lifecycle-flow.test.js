@@ -28,6 +28,20 @@ for(const tf of ['3','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side
  const alerts=new (require('../analysis-alert-service').AnalysisAlerts)();await alerts.init();
  try{await alerts.record(current);const event=alerts.events.find(x=>x.kind==='ENTRY');a.ok(event);const t=require('../analysis-telegram');a.equal(t.entrySopAllowed(event),true);a.match(t.telegramMessage(event),new RegExp('CALON RE-ENTRY TF'+tf));}finally{clearInterval(alerts.cleanupTimer);}
  current.strategyNormal.sop.reentryContext.wtGapPrevious=10;a.equal(require('../entry-delivery-check').checkEntryDelivery(next,current,at).reason,'REENTRY_MOMENTUM_CHANGED');
+ // The actual re-entry gets its own exit plan even when Pine moves to another candidate.
+ await svc.acknowledgeCommand(token,next.id,{status:'EXECUTED',code:'SETUP_OPENED'});
+ at+=10;const own={ticket:'654321',symbol:'XAUUSD',side,volume:.01,entry:next.payload.entry+sign*.05,currentPrice:next.payload.tp1,activeSl:next.payload.sl,openedAt:at-1,strategyMode:next.payload.strategyMode,setupId:next.id.slice(0,20)};
+ await svc.heartbeat(token,{...hb,positions:[own]});
+ const rejected={id:'ffffffff-ffff-4fff-8fff-ffffffffffff',userId:user,podId:pod.id,type:'PLACE_SETUP',payload:next.payload,createdAt:at,expiresAt:at+60000};
+ await store.createCommand(rejected);await store.ackCommand(pod.id,rejected.id,'REJECTED',{code:'BROKER_ENTRY_REJECTED'});
+ current={...current,receivedAt:at,signalObservedAt:at,entryEvent:false,setupKey:'NEW-UNEXECUTED-CANDIDATE',positionManagement:{action:'HOLD'}};
+ await svc.dispatchMarkets([current]);
+ const locked=(await svc.nextCommand(token)).command;a.ok(locked);a.equal(locked.type,'MANAGE_POSITION');a.equal(locked.payload.analysisSnapshot.entryCommandId,next.id);
+ a.equal(locked.payload.actions[0].activeSl,next.payload.entry+sign*1.50);
+ const view=await svc.state(user);a.equal(view.positions[0].exitPlan.entryKind,'RE-ENTRY');a.equal(view.positions[0].exitPlan.tp1,next.payload.tp1);a.equal(view.positions[0].exitPlan.sl,next.payload.sl);a.equal(view.positions[0].entry,own.entry);
+ // An old management command cannot act on the next cycle once MT5 is flat.
+ at+=10;await svc.heartbeat(token,hb);a.equal((await svc.nextCommand(token)).command,null);
+
 });
 test('expired original event is WAIT while SOLID is still held, and new Pine source includes lifecycle evidence',()=>{
  const f=frame('3','BUY',Date.now()-61000);const hub=require('../tf3-market-hub');const d=hub.decode?hub.decode(f.row,f.batch):null;

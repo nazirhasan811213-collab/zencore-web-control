@@ -374,6 +374,16 @@ function createAutoTradeService(options = {}) {
         ? store.getActivePairingForUser(userId, now()) : null,
       activeHostedAccount(userId)
     ]);
+    if(isLocalEa(pod)&&positions.length){
+      const plans=new Map();
+      for(const position of positions){
+        if(position.origin==='MANUAL')continue;
+        const mode=position.strategyMode||'TF2_SCALPING',key=position.symbol+'|'+mode;
+        if(!plans.has(key))plans.set(key,await require('./pine-position-plan').resolve(store,userId,pod.id,positions,position.symbol,mode));
+        const command=plans.get(key);
+        if(command)position.exitPlan=require('./pine-position-plan').view(command);
+      }
+    }
     const allowDemoExecution = executionAllowed(userId, pod);
     const podConnection = connectionState(pod);
     const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
@@ -1152,6 +1162,12 @@ function createAutoTradeService(options = {}) {
   async function queuedEntryIsCurrent(command, diagnostic = {}){
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
+    if(command.type==='MANAGE_POSITION'&&command.payload?.analysisSnapshot?.entryAnchor==='PINE_SETUP_PLAN_V1'){
+      const p=command.payload,s=p.analysisSnapshot,positions=await store.listPositions(command.userId);
+      const plan=require('./pine-position-plan'),active=await plan.resolve(store,command.userId,command.podId,positions,p.symbol,p.strategyMode);
+      return !!active&&active.id===s.entryCommandId&&active.payload.analysisSnapshot.setupKey===s.setupKey&&
+        active.payload.analysisSnapshot.analysisSopVersion===s.analysisSopVersion&&now()-s.sourceReceivedAt<=30000&&s.sourceReceivedAt<=now()+5000;
+    }
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
       const latestSnap=latest?.payload?.analysisSnapshot;
@@ -1535,12 +1551,15 @@ function createAutoTradeService(options = {}) {
         if(!positions.some(p=>p.symbol===symbol&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
         const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
-        const latestSnap=latest?.payload?.analysisSnapshot;
-        market=require('./native-chart-exit').forActiveSetup(market,latest,positions,mode,now());
+        const active=pod?await require('./pine-position-plan').resolve(store,profile.userId,pod.id,positions,symbol,mode,latest):null;
+        const activeMarket=active&&now()-pod.lastSeenAt<=15000?require('./pine-position-plan').management(market,positions,active,now()):null;
+        const latestSnap=(active||latest)?.payload?.analysisSnapshot;
+        if(activeMarket)market=activeMarket;
+        if(!activeMarket)market=require('./native-chart-exit').forActiveSetup(market,active||latest,positions,mode,now());
         if(market.strategyNormal?.entrySopVersion?.endsWith('_RIBBON_V1')||['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(latestSnap?.analysisSopVersion)){
           if(hostedAccount||latestSnap?.analysisSopVersion!==market.strategyNormal?.entrySopVersion||String(market.timeframe)!==String(latestSnap.executionTimeframe)||market.setupKey!==latestSnap.setupKey)continue;
         }
-        const rebased=rebasedManagement(market,positions,latest);
+        const rebased=activeMarket?{rebased:false,market}:rebasedManagement(market,positions,latest);
         const management = Core.buildManagementCommand(rebased.market||{});
         const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
         if (!management&&!manualManagement) continue;

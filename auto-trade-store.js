@@ -1245,6 +1245,11 @@ class PostgresAutoTradeStore {
     return result.rows.map(publicCommand);
   }
 
+  async setupForPosition(userId,podId,symbol,mode,setupId) {
+    const result=await this.pool.query(`SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND pod_id=$2 AND command_type='PLACE_SETUP' AND payload->>'symbol'=$3 AND payload->>'strategyMode'=$4 AND LEFT(id::text,20)=$5 ORDER BY created_at DESC LIMIT 1`,[userId,podId,symbol,mode,setupId]);
+    return result.rows[0]?publicCommand(result.rows[0]):null;
+  }
+
   async latestSetupForMode(userId,symbol,mode) {
     const result=await this.pool.query(`SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND command_type='PLACE_SETUP' AND payload->>'symbol'=$2 AND payload->>'strategyMode'=$3 ORDER BY created_at DESC LIMIT 1`,[userId,symbol,mode]);
     return result.rows[0]?publicCommand(result.rows[0]):null;
@@ -2093,6 +2098,11 @@ class MemoryAutoTradeStore {
   async listRecentCommands(userId, limit = 10) {
     return [...this.commands.values()].flat().filter(row => row.userId === userId)
       .sort((a,b) => b.createdAt-a.createdAt).slice(0, Math.max(1, Math.min(20, Number(limit) || 10))).map(publicCommand);
+  }
+
+  async setupForPosition(userId,podId,symbol,mode,setupId) {
+    const row=[...this.commands.values()].flat().find(c=>c.userId===userId&&c.podId===podId&&c.type==='PLACE_SETUP'&&c.payload?.symbol===symbol&&c.payload?.strategyMode===mode&&c.id.slice(0,20)===setupId);
+    return row?publicCommand(row):null;
   }
 
   async latestSetupForMode(userId,symbol,mode) {
