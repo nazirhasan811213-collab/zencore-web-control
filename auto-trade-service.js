@@ -1451,7 +1451,13 @@ function createAutoTradeService(options = {}) {
             });
           })
         };
-        // Diagnostics never change the execution decision or expose account identity.
+        // Read the existing audit through the service's private connection. Diagnostic
+        // failure must not change an execution decision or expose account identity.
+        try {
+          report.recentEntryFlow=require('./entry-flow-evidence').entryFlowEvidence(await store.listAudit(profile.userId,100));
+        } catch (_) { report.entryEvidenceUnavailable=true; }
+        report.strategyMode=profile.strategyMode;
+        report.transport=hostedAccount?'HOSTED':isLocalEa(pod)?'EA_LOCAL':'OTHER';
         try { options.onDispatchDiagnostic(report); } catch (_) {}
       }
       if(['TF15_INTRA','BOTH'].includes(profile.strategyMode)&&(hostedAccount||!isLocalEa(pod)||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
