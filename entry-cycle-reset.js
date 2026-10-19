@@ -56,7 +56,17 @@ function createEntryCycleReset(store){
    const freshNative=s.cycleKind==='INITIAL'&&s.reentryContext?.parentQualifiedAt==null&&
     Number.isFinite(s.sourceSetupAt)&&s.sourceSetupAt>reset.closedAt&&
     Number.isFinite(s.triggerAt)&&s.triggerAt>=s.sourceSetupAt&&s.triggerAt>reset.closedAt;
-   if(freshNative)return {allowed:true,reason:null,closedAt:reset.closedAt,cycleKind:'INITIAL'};
+   // Pine can form FOLLOWUP candidates before this account has traded a new
+   // native source. A source born after the last confirmed broker close is
+   // still a normal entry for this account, even when Pine has advanced its
+   // virtual cycle. After a real trade closes, reset.closedAt advances past
+   // that source, so the ordinary post-close re-entry proof remains required.
+   const parent=s.reentryContext?.parentQualifiedAt;
+   const untradedTf2Source=String(market.timeframe)==='2'&&s.cycleKind==='FOLLOWUP'&&
+    Number.isFinite(s.sourceSetupAt)&&s.sourceSetupAt>reset.closedAt&&
+    Number.isFinite(s.triggerAt)&&s.triggerAt>=s.sourceSetupAt&&s.triggerAt>reset.closedAt&&
+    Number.isFinite(parent)&&parent>=s.triggerAt&&Number.isFinite(s.qualifiedAt)&&s.qualifiedAt>parent;
+   if(freshNative||untradedTf2Source)return {allowed:true,reason:null,closedAt:reset.closedAt,cycleKind:s.cycleKind,entryKind:'NORMAL_ENTRY'};
    const proof=Lifecycle.reentry(market.strategyNormal.side,s,reset.closedAt,market.signalObservedAt);
    return {allowed:!!proof,reason:proof?null:'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE',closedAt:reset.closedAt,proof};
   }
