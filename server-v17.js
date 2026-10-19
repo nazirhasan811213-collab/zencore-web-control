@@ -681,9 +681,9 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
   if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({
-    version:'PINE_3TRIGGERS_3OF4_CHOP50_V3',releaseVersion:'TF2_TF15_CHOP50_20261019',
+    version:'PINE_3TRIGGERS_3OF4_CHOP50_V3',releaseVersion:'TF2_EXECUTION_AUTHORITY_20261019',
     activeScalpingTimeframe:'2',activeEntryTimeframes:['2','15'],timeframes:['2','15'],legacyTf2EntryEnabled:false,
-    tf2Policy:require('./tf2-ribbon-scalping').POLICY,tf3Policy:require('./tf3-scalping').POLICY,tf15Policy:require('./tf15-intraday').POLICY,
+    tf2Policy:require('./tf2-ribbon-scalping').POLICY,legacyTf3ManagementOnly:true,executionAuthority:'TF2_EXECUTION_CHANNEL_ONLY',tf15Policy:require('./tf15-intraday').POLICY,
     entrySignalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''),
     feedIngress:feedMetadataDiagnostics.snapshot(),observedGoldFeed:{timeframe:latestBySymbol.get('XAUUSD')?.timeframe||null,
       rule:latestBySymbol.get('XAUUSD')?.setupMeta?.entryRuleVersion||null,receivedAt:latestBySymbol.get('XAUUSD')?.receivedAt||null},
@@ -692,7 +692,7 @@ const server=http.createServer(async(req,res)=>{
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
     checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf2SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
     targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',
-    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.1',eaVersion:'2.11',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
+    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.4',eaVersion:'2.11',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
   }));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);

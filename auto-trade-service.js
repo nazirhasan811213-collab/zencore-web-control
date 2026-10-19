@@ -1415,13 +1415,13 @@ function createAutoTradeService(options = {}) {
           enabledSymbols: profile.symbols,
           brokerSymbols: Object.keys(specs || {}),
           pairs: allowedDemoSymbols.flatMap(symbol => {
-            const scoped = markets.filter(item => Core.normaliseSymbol(item?.symbol) === symbol);
+            const scoped = markets.filter(item => Core.normaliseSymbol(item?.symbol) === symbol&&(!options.scalpingTimeframe||[options.scalpingTimeframe,'15'].includes(String(item.timeframe))));
             return (scoped.length ? scoped : [null]).map(market => {
             const normal = market?.strategyNormal || {}, sop = normal.sop || {};
             return {
               symbol,
               timeframe: market?.timeframe || null,
-              freshness: market?.freshness || 'OFFLINE',
+              freshness: market?.receivedAt&&market?.signalObservedAt&&now()-market.receivedAt<=30000&&now()-market.signalObservedAt<=30000&&market.signalObservedAt<=now()+5000?'LIVE':market?.receivedAt?'STALE':'OFFLINE',
               ageSeconds: market?.receivedAt ? Math.round((now() - market.receivedAt) / 1000) : null,
               state: market?.strategyNormal?.state || 'WAIT',
               side: market?.strategyNormal?.side || 'WAIT',
@@ -1439,7 +1439,10 @@ function createAutoTradeService(options = {}) {
               forecast: sop.forecast || null,
               marketPower: sop.marketPower ?? null,
               hemaOwn: sop['hema'+String(market?.timeframe)]?.mode || null,
-              hemaHigher: sop['hema'+(String(market?.timeframe)==='15'?'30':'3')]?.mode || null,
+              hemaHigher: String(market?.timeframe)==='15'?sop.hema30?.mode||null:null,
+              executionAuthority: String(market?.timeframe)==='2'?'EXECUTION_CHANNEL_ONLY':'CURRENT_POLICY',
+              lifecycleState:normal.lifecycleState||null,
+              analysisReason:normal.reason||null,
               pullback: sop.pullback?.state || null,
               enabled: profile.symbols.includes(symbol),
               analysisEligible: !!(market && Core.buildSetupCommand(market, profile, specs?.[symbol],now())),
