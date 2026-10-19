@@ -1431,6 +1431,7 @@ function createAutoTradeService(options = {}) {
               setupSolid: normal.solid === true,
               solidStateReason: market?.setupMeta?.solidStateReason || null,
               triggerAt: sop.triggerAt ?? null, qualifiedAt: sop.qualifiedAt ?? null,
+              sourceSetupAt:sop.sourceSetupAt??null,cycleKind:sop.cycleKind||null,
               movementPass: sop.movement ?? null, ribbonPass: sop.ribbon ?? null,
               entryEvent:market?.entryEvent===true,
               entryAuthorizedAt:market?.entryAuthorizedAt??null,

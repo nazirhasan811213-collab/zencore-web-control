@@ -55,3 +55,24 @@ test('a new Pine INITIAL native SOLID after confirmed close uses entry SOP; held
  await gate.observe('u','p',[pos('TF2_SCALPING')],[],22000);
  a.equal((await gate.check('u','p',m)).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE','same INITIAL cannot bypass its own confirmed close');
 });
+
+test('a new untraded TF2 source remains a normal entry across Pine virtual followups',async()=>{
+ const store=new MemoryAutoTradeStore(),gate=createEntryCycleReset(store);
+ const close=1792393054646,source=1792395480000,trigger=1792395480544,parent=1792396200430,qualified=1792396417870;
+ await gate.observe('u','p',[pos('TF2_SCALPING')],[],close);
+ const s={entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',lifecycleVersion:'PULLBACK_REQUALIFY_V1',cycleKind:'FOLLOWUP',sourceSetupAt:source,triggerAt:trigger,qualifiedAt:qualified,reentryContext:{parentQualifiedAt:parent}};
+ const m={timeframe:'2',signalObservedAt:qualified,strategyNormal:{side:'SELL',sop:s}};
+ const decision=await gate.check('u','p',m);a.equal(decision.allowed,true);a.equal(decision.entryKind,'NORMAL_ENTRY');
+ await gate.observe('u','p',[pos('TF15_INTRA')],[],close);a.equal((await gate.check('u','p',{...m,timeframe:'15'})).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE','TF15 policy is unchanged');
+ for(const bad of [{...s,sourceSetupAt:close-1},{...s,sourceSetupAt:undefined},{...s,triggerAt:source-1},{...s,reentryContext:{parentQualifiedAt:null}},{...s,reentryContext:{parentQualifiedAt:qualified+1}},{...s,cycleKind:'UNKNOWN'}])a.equal((await gate.check('u','p',{...m,strategyNormal:{side:'SELL',sop:bad}})).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE');
+ await gate.observe('u','p',[pos('TF2_SCALPING')],[],qualified+10000);
+ a.equal((await gate.check('u','p',m)).reason,'WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE','once broker cycle closes, the same source must provide real re-entry proof');
+});
+
+test('an executed setup without confirmed close still blocks a new TF2 followup source',async()=>{
+ const store=new MemoryAutoTradeStore(),gate=createEntryCycleReset(store);
+ await gate.observe('u','p',[pos('TF2_SCALPING')],[],10000);
+ store.commands.set('p',[{id:'open-command',userId:'u',podId:'p',type:'PLACE_SETUP',status:'EXECUTED',acknowledgedAt:25000,payload:{symbol:'XAUUSD',strategyMode:'TF2_SCALPING'}}]);
+ const m={timeframe:'2',signalObservedAt:30000,strategyNormal:{side:'SELL',sop:{entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',lifecycleVersion:'PULLBACK_REQUALIFY_V1',cycleKind:'FOLLOWUP',sourceSetupAt:20000,triggerAt:20001,qualifiedAt:30000,reentryContext:{parentQualifiedAt:22000}}}};
+ a.equal((await gate.check('u','p',m)).reason,'WAIT_MT5_CLOSE_CONFIRMATION');
+});
