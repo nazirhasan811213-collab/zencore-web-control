@@ -123,7 +123,7 @@ def readiness_message(code):
     messages={
         'TERMINAL_OFFLINE':'MT5 terputus dari broker. Tunggu connection pulih, kemudian ON semula.',
         'TERMINAL_ALGO_DISABLED':'Hidupkan butang Algo Trading MT5, kemudian ON semula.',
-        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.11 pada chart; versi lama tidak menyokong plan tepat.',
+        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.12 pada chart; versi lama tidak menyokong plan tepat.',
         'SL_POLICY_REJECTED':'Polisi SL tidak sepadan. Entry ditolak; kemas kini Connector dan EA.',
         'BROKER_STOP_DISTANCE':'Broker menolak jarak SL. Entry belum dibuka.',
         'ENTRY_OUTSIDE_PLAN':'Harga sudah di luar julat entry hingga TP1. Order tidak dikejar.',

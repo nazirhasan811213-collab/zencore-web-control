@@ -13,7 +13,7 @@ function frame(tf,side,{atr=2,chop=35,mode='Fixed R:R'}={}){
   normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Sop5:true,
   // Forecast intentionally missing: it must not be an entry dependency.
   hemaConfirmation:{['tf'+tf]:{fast:entry+sign,slow:entry}},
-  setupMeta:{entryRuleVersion:S.RULE,entryPolicyVersion:S.POLICY.entryPolicyVersion,riskPlanVersion:S.RISK,atrPeriod:14,planMode:mode,
+  setupMeta:{entryRuleVersion:S.RULE,exitLockVersion:S.POLICY.exitLockVersion,entryPolicyVersion:S.POLICY.entryPolicyVersion,riskPlanVersion:S.RISK,atrPeriod:14,planMode:mode,
    solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:now-1000,sourceEntry:entry-sign,
    solidEligible:true,completedAt:now,completionPrice:entry,riskAtrReference:atr,
    dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:S.POLICY.mtf}}}};

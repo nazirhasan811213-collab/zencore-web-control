@@ -16,3 +16,14 @@ class CurrentPineExitTests(unittest.TestCase):
      for key in ('entry','sl','tp1','tp2','tp3'):self.assertEqual(float(fields[key]),prices[key])
      snap['exitLockVersion']='UNKNOWN'
      with self.assertRaisesRegex(ValueError,'EXIT_POLICY_REJECTED'):command_fields(c,IDENTITY)
+
+ def test_tf15_be_policy_is_scoped_and_legacy_remains_supported(self):
+  for tf in ('2','15'):
+   for side in ('BUY','SELL'):
+    prices=dict(side=side,entry=4200,sl=4196 if side=='BUY' else 4204,tp1=4204 if side=='BUY' else 4196,tp2=4208 if side=='BUY' else 4192,tp3=4212 if side=='BUY' else 4188)
+    snap=dict(prices,contractVersion=CONTRACT,decisionOwner='ZENCORE_ANALYSIS',decision='ENTRY_AUTHORIZED',symbol='XAUUSD',executionTimeframe=tf,analysisSopVersion=f'NORMAL_20261001_TF{tf}_RIBBON_V1',entryPolicyVersion='PINE_3TRIGGERS_3OF4_CHOP50_V3',exitLockVersion='PINE_STEPLOCK_BE_TF15_V1')
+    p=dict(prices,symbol='XAUUSD',analysisContractVersion=CONTRACT,strategy=STRATEGY,schemaVersion=SCHEMA,analysisSnapshot=snap,strategyMode='TF15_INTRA' if tf=='15' else 'TF2_SCALPING',lotPerLayer=.01,layers=2,exitPolicy=None)
+    c=dict(id='aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',type='PLACE_SETUP',expiresAt=1792370060000,payload=p)
+    if tf=='15':self.assertEqual(command_fields(c,IDENTITY)['exitLockVersion'],'PINE_STEPLOCK_BE_TF15_V1')
+    else:
+     with self.assertRaisesRegex(ValueError,'EXIT_POLICY_REJECTED'):command_fields(c,IDENTITY)

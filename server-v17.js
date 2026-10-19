@@ -691,8 +691,8 @@ const server=http.createServer(async(req,res)=>{
     entryReplayProtection:'FRESH_EXECUTION_EVENT_V2',telegramDedupVersion:'SETUP_AND_CHAT_V2',
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
     checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf2SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
-    targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',
-    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.4',eaVersion:'2.11',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
+    targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',exitPolicies:{TF2:'PINE_STEPLOCK_150_TP3_PLUS3_V1',TF15:'PINE_STEPLOCK_BE_TF15_V1'},
+    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.5',eaVersion:'2.12',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
   }));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);
