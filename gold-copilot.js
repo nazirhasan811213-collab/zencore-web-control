@@ -1,6 +1,6 @@
 (() => {
  'use strict';
- const dialog=document.getElementById('goldCopilot'),robot=document.getElementById('copilotRobot'),content=document.getElementById('copilotContent');let views=[],tf=3,failed=false;
+ const dialog=document.getElementById('goldCopilot'),robot=document.getElementById('copilotRobot'),content=document.getElementById('copilotContent');let views=[],tf=2,failed=false;
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  function render(){
   robot.dataset.live=String(!failed&&views.some(v=>window.ZenCoreDashboardLive.fresh(v)));
@@ -12,7 +12,7 @@
   const expanded=new Set([...content.querySelectorAll('details[open]')].map(d=>d.dataset.section));
   const focused=content.contains(document.activeElement)?document.activeElement.closest('details')?.dataset.section:null;
   const insights=el('div',undefined,'pine-dual');
-  for(const t of [3,15]){const v=views.find(v=>Number(v.timeframe)===t),m=v?.market;insights.append(window.ZenCorePineInsights.card({tf:t,advisor:m?.strategyNormal?.sop?.advisor||m?.dashboard,live:!failed&&!!v&&window.ZenCoreDashboardLive.fresh(v),observedAt:m?.signalObservedAt||m?.receivedAt,expanded:expanded.has('pine-coach-'+t)}));}nodes.push(insights);
+  for(const t of [2,15]){const v=views.find(v=>Number(v.timeframe)===t),m=v?.market;insights.append(window.ZenCorePineInsights.card({tf:t,advisor:m?.strategyNormal?.sop?.advisor||m?.dashboard,live:!failed&&!!v&&window.ZenCoreDashboardLive.fresh(v),observedAt:m?.signalObservedAt||m?.receivedAt,expanded:expanded.has('pine-coach-'+t)}));}nodes.push(insights);
 
   if(report.forecast){nodes.push(el('h3','Gold tengah buat apa?'),el('p','Bacaan forecast: '+report.forecast.direction+' · skor kekuatan '+(report.forecast.score??'—')+'/100. Ini bukan win rate atau jaminan pergerakan 10 candle.'),el('p','HEMA TF'+tf+': '+report.hema.own+' / '+(report.higher==='MTF'?'MTF score':'HEMA TF'+report.higher)+': '+report.hema.higher+' · Bentuk: '+report.hema.shape));}
   if(report.levels){nodes.push(el('h3','Level yang kita tengah tengok'));const levels=el('div',undefined,'copilot-levels');for(const [k,v]of Object.entries(report.levels))levels.append(el('div',k.toUpperCase()+'\n'+v.toFixed(3)));nodes.push(levels,el('p','R:R entry→TP1: '+report.rr.toFixed(2)+' · Price latest: '+report.price.toFixed(3)));}
