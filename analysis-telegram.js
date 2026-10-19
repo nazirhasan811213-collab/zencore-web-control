@@ -101,26 +101,84 @@ function analysisContext(s={}){
 function riskText(value){return String(value||'').replace(/(?:🛑\s*)?JAGA MODAL[.\s—-]*JANGAN TRADE!?/gi,'SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT').replace(/(?:❌\s*)?SETUP KURANG PADU[.!]?/gi,'SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT');}
 function pineContext(s={},tf){
  const d=s.advisor||{},clean=v=>riskText(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
- const lines=['ANALYSIS PINE',`Trend: ${clean(d.trend)||'Tiada data'}`,`Movement: ${clean(d.momentum)||'Tiada data'}`,`HEMA Trend: ${tf==='15'?s.hema15?.mode:s.hema3?.mode}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${s.forecast} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':'5/10/15'}: ${s.mtfScore}`];
- // AI Coach repeats trend/momentum/advice. Keep only its additional barrier/whale facts.
+ const short=(v,n=100)=>clean(v).slice(0,n)||'Tiada data';
+ const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${tf==='15'?s.hema15?.mode:s.hema3?.mode}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':'5/10/15'}: ${s.mtfScore}`];
+ // Keep dashboard facts once; Coach often repeats trend, momentum and advice.
  const seen=new Set(),key=v=>clean(v).replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
- function add(label,value,max=420){let text=clean(value);if(!text)return;const k=key(text);if(!k||seen.has(k))return;seen.add(k);lines.push(`${label}: ${text.slice(0,max)}`);}
+ function add(label,value,max=240){const text=clean(value);if(!text)return;const k=key(text);if(!k||seen.has(k))return;seen.add(k);lines.push(`${label}: ${text.slice(0,max)}`);}
+ lines.push('','🧠 RUMUSAN & COACH');
  add('Rumusan AI',d.mtfSummary);
- const coach=clean(d.aiCoach);for(const tag of ['HALANGAN','WHALES']){const m=coach.match(new RegExp('\\['+tag+'\\]:\\s*([^\\n]+)'));if(m)add(tag==='HALANGAN'?'Halangan':'Whales',m[1]);}
- // Prefer one advice line if tips/advice carry the same warning.
- add('Nasihat',d.advice,300);add('Coach tips',d.proTip,300);
+ const coach=clean(d.aiCoach);for(const tag of ['HALANGAN','WHALES']){const m=coach.match(new RegExp('\\['+tag+'\\]:\\s*([^\\n]+)'));if(m)add(tag==='HALANGAN'?'Halangan':'Whales',m[1],160);}
+ add('Nasihat',d.advice,180);add('Coach tips',d.proTip,180);
  return lines.join('\n');
+}
+function currentPineMessage(e,p,s,time){
+ const tf=e.timeframe,reentry=s.cycleKind==='FOLLOWUP',label=tf==='15'?'INTRADAY':'SCALPING',buy=e.side==='BUY';
+ const title=reentry?'CALON RE-ENTRY':'SOLID ENTRY',passed=s.gates.filter(g=>g.pass).length;
+ const action=reentry
+   ? `Semua layer TF${tf} mesti ditutup dan disahkan MT5 sebelum re-entry.`
+   : `Tiada posisi TF${tf} → setup boleh diproses ikut setting user.`;
+ return [
+  `${buy?'🟢':'🔴'} ZENCORE | ${title} TF${tf} • ${label}`,
+  `${e.symbol} • ${e.side} / ${buy?'BELI':'JUAL'}`,
+  '',
+  `✅ SOP ${passed}/4 • Chop ${price(s.chopIndex)}% (<50%)`,
+  '',
+  '📌 APA NAK BUAT',action,
+  ...(reentry?[]:[`Masih pegang posisi TF${tf}? Jangan tambah entry atau re-entry.`]),
+  'Auto Trade semak izin MT5, lot/layer dan setting user sebelum buka order.',
+  '',
+  `🎯 PELAN ${reentry?'RE-ENTRY BAHARU':'ENTRY'}`,
+  `Entry: ${price(p.entry)}`,
+  `🛑 SL: ${price(p.sl)}`,
+  `TP1: ${price(p.tp1)}`,
+  `TP2: ${price(p.tp2)}`,
+  `TP3: ${price(p.tp3)}`,
+  `Pelan Pine: ${s.planMode}`,
+  ...(reentry?['Guna paras re-entry ini; pelan entry lama tidak digunakan.']:[]),
+  '',
+  '🛡 URUS EXIT SETUP INI',
+  `TP1 → SL ${price(p.entry+(buy?1.50:-1.50))}`,
+  'TP2 → SL TP1 • TP3 → SL TP2',
+  'Melepasi TP3 lebih 3.00 → SL TP3',
+  'SL aktif / chart Close Separuh / Close All → tutup semua.',
+  '',
+  pineContext(s,tf),
+  '',
+  'ℹ️ Signal Analysis — belum pengesahan order MT5.',
+  `🕒 ${time} MYT`,
+  `Rujukan: ZC-${e.id}`
+ ].join('\n');
+}
+function closeMessage(e,time){
+ const tf=e.timeframe||'2',half=e.percent===50;
+ const raw=String(e.message||'').split('\n');
+ // The first legacy line repeats pair, timeframe and action already in the header.
+ const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,240);
+ return [
+  `🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,
+  `${e.symbol} • ${tf==='15'?'INTRADAY':'SCALPING'}`,
+  '',
+  '📌 TINDAKAN',
+  half?`Tutup 50% posisi ZenCore TF${tf}.`:`Tutup semua baki posisi ZenCore TF${tf}.`,
+  'Auto Trade: semak pengesahan close di MT5.',
+  `Jangan buka setup baharu selagi masih ada layer TF${tf} terbuka.`,
+  ...(reason?['',`Sebab: ${reason}`]:[]),
+  '',
+  'ℹ️ Arahan exit Analysis — belum pengesahan posisi MT5 ditutup.',
+  `🕒 ${time} MYT`,
+  `Rujukan: ZC-${e.id}`
+ ].join('\n');
 }
 
 function telegramMessage(e){
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
-  if(e.kind!=='ENTRY')return `ZENCORE | PENGURUSAN POSISI TF${e.timeframe||'2'}\n\n${e.percent===50?'CLOSE SEPARUH (50%)':'CLOSE ALL — TUTUP BAKI'}\n${e.symbol}\n\n${e.message}\n\n${footer}`;
+  if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
   if(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    const tf=e.timeframe,label=tf==='15'?'INTRADAY':'SCALPING';
-    return `ZENCORE | ${s.cycleKind==='FOLLOWUP'?'CALON RE-ENTRY':'SOLID ENTRY'} TF${tf} • ${label}\n${e.symbol} • ${e.side}\n3 PENCETUS LULUS • SOP ${s.gates.filter(g=>g.pass).length}/4 • CHOP ${price(s.chopIndex)} <50\nSTATUS: SETUP ANALYSIS — BELUM SAH ORDER MT5\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\nPelan Pine: ${s.planMode}\n\n${pineContext(s,tf)}\n\n${footer}`;
+    return currentPineMessage(e,p,s,time);
   }
 
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){
