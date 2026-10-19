@@ -257,7 +257,7 @@
     }
     const settings = state.settings;
     setText('summaryExposure', settings?.totalLot == null ? '—' : Number(settings.totalLot).toFixed(3));
-    setText('summaryLayers', settings ? ['TF2_SCALPING','TF15_INTRA'].map(mode=>{const cfg=Core.effectiveSettings({...settings,strategyMode:mode},'XAUUSD');return (mode==='TF2_SCALPING'?'TF3':'TF15')+' '+(cfg.enabled?cfg.totalLot+' lot':'OFF');}).join(' · ') : 'Belum dikonfigurasi');
+    setText('summaryLayers', settings ? ['TF2_SCALPING','TF15_INTRA'].map(mode=>{const cfg=Core.effectiveSettings({...settings,strategyMode:mode},'XAUUSD');return (mode==='TF2_SCALPING'?'TF2':'TF15')+' '+(cfg.enabled?cfg.totalLot+' lot':'OFF');}).join(' · ') : 'Belum dikonfigurasi');
   }
 
   function renderPositions(state) {
@@ -273,7 +273,7 @@
       const pnl = Number(position.profitUsd || 0);
       return `<tr>
         <td><b>${escape(position.symbol)}</b><small>#${escape(position.ticket)}</small></td>
-        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'3'))}</small></td>
+        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'2'))}</small></td>
         <td><b>${escape(position.volume)}</b><small>lot</small></td>
         <td><b>${escape(price(position.entry, position.symbol))} → ${escape(price(position.currentPrice, position.symbol))}</b><small>${escape(timeText(position.openedAt))}</small></td>
         <td><b>${escape(price(position.activeSl, position.symbol))}</b><small>Initial ${escape(price(position.exitPlan?.sl ?? position.initialSl, position.symbol))}</small></td>

@@ -18,7 +18,7 @@ function pullback(side,path,after,through,atr){
  return found;
 }
 function momentum(side,s={}){
- const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema3||s.hema15||{},r=s.reentryContext||{},atr=s.atrReference;
+ const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||s.hema3||s.hema15||{},r=s.reentryContext||{},atr=s.atrReference;
  const nums=[h.fast,h.slow,r.fastPrevious,r.slowPrevious,h.waveTrend1,h.waveTrend2,r.wtGapPrevious,r.previousHigh,r.previousLow,s.price,atr];
  return !!sign&&nums.every(finite)&&atr>0&&
   sign*(h.fast-h.slow)>=atr*.10&&sign*(h.fast-r.fastPrevious)>0&&sign*(h.slow-r.slowPrevious)>0&&

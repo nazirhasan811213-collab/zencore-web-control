@@ -3,8 +3,9 @@ const {createCoalescingDispatcher}=require('./coalescing-dispatcher');
 const {createEntryDecision,entryConfirmationsPass,createManagementDecision}=require('./analysis-execution-contract');
 // A webhook event already contains the analyzed market: no local HTTP reread.
 // Only matching current dashboard confirmations may preserve a queued trigger.
-function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
+function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{},scalpingTimeframe=null}){
  const pending=new Map(),latest=new Map();
+ const accepted=m=>!(scalpingTimeframe==='2'&&String(m?.timeframe)==='2'&&m?.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF2_RIBBON_V1');
  const key=m=>String(m?.symbol||'')+'|'+String(m?.timeframe||'');
  const tick=createCoalescingDispatcher(async()=>{
   let markets;
@@ -14,6 +15,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
    // Events received during a fallback fetch take priority over that fetched copy.
    if(pending.size){markets=[...pending.values()];pending.clear();}
   }
+  if(markets)markets=markets.filter(accepted);
   if(markets)for(const m of markets){const k=key(m),old=latest.get(k);if(!old||Number(m.signalObservedAt||m.receivedAt)>=Number(old.signalObservedAt||old.receivedAt))latest.set(k,m);}
   await dispatch(markets,m=>latest.get(key(m))===m || sameConfirmation(m,latest.get(key(m))));
  },onError);
@@ -21,12 +23,13 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
   if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','3','15'].includes(String(m.timeframe)))return;
+  if(!accepted(m))return;
   const k=key(m),previous=pending.get(k),old=latest.get(k);
   if(old&&Number(m.signalObservedAt||m.receivedAt)<Number(old.signalObservedAt||old.receivedAt)){
    // Independent TradingView alerts can arrive in reverse channel order.
    // Only a fresh authorized execution with still-matching current confirmations survives.
    const matchingExit=!!createManagementDecision(m)&&m.setupKey&&m.setupKey===old.setupKey&&m.strategyNormal?.side===old.strategyNormal?.side;
-   if(!['3','15'].includes(String(m.timeframe))||m.feedChannel!=='EXECUTION'||(!matchingExit&&(!createEntryDecision(m)||!sameConfirmation(m,old))))return;
+   if(!(['3','15'].includes(String(m.timeframe))||String(m.timeframe)==='2'&&m.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1')||m.feedChannel!=='EXECUTION'||(!matchingExit&&(!createEntryDecision(m)||!sameConfirmation(m,old))))return;
   }else latest.set(k,m);
   // Keep a fresh execution event through matching dashboard confirmations only.
   // Changed direction, setup or failed confirmations revoke every pending entry.

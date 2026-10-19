@@ -167,7 +167,7 @@ if (AUTH_ENABLED) {
       sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
       defaultIbCode: DEFAULT_IB_CODE
     });
-    analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
+    analysisAlerts = new AnalysisAlerts({scalpingTimeframe:'2',pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
     if (store.pool) {
       const collector = new SignalOutcomeStore({pool:store.pool,fetchSummary:fetchLocalValidation});
@@ -245,7 +245,7 @@ if (AUTH_ENABLED) {
       console.log(`ZenCore local EA demo-only scoped gate: ${localEaDemoExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
-        scalpingTimeframe: '3',
+        scalpingTimeframe: '2',
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -1419,7 +1419,7 @@ function fetchLocalMarkets() {
         if (response.statusCode !== 200) return reject(new Error(`Market API HTTP ${response.statusCode}`));
         try {
           const parsed = JSON.parse(body);
-          resolve([...(Array.isArray(parsed.markets) ? parsed.markets : []),...require('./strategy-market-hub').markets(),...require('./tf3-market-hub').markets()]);
+          resolve([...(Array.isArray(parsed.markets) ? parsed.markets : []),...require('./strategy-market-hub').markets(),...require('./tf2-market-hub').markets(),...require('./tf3-market-hub').markets()]);
         } catch (_) {
           reject(new Error('Market API returned invalid JSON'));
         }
@@ -1495,6 +1495,7 @@ function startAutoTradeDispatcher() {
   let lastErrorLogAt = 0;
   const {createRealtimeDispatcher}=require('./realtime-dispatcher');
   const dispatcher=createRealtimeDispatcher({
+    scalpingTimeframe: '2',
     fetchMarkets:fetchLocalMarkets,
     dispatch:async (markets,isCurrent)=>{if(autoTradeState.ready){await autoTradeState.service.dispatchMarkets(markets,isCurrent);autoTradeState.dispatchLastSuccessAt=Date.now();autoTradeState.dispatchError=false;}},
     onError:error => {
@@ -1613,9 +1614,11 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_SOP_HEMA23.md') return sendAuthAsset(res, 'docs/LIVE_SOP_HEMA23.md', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
-  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
-  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF3_Scalp.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/tf2-scalping.js') return sendAuthAsset(res, 'tf2-scalping.js', 'application/javascript; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return redirect(res, '/downloads/ZenCore_TF2_Scalp.pine');
   if (req.method === 'GET' && pathname === '/tf15-intraday.js') return sendAuthAsset(res, 'tf15-intraday.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Intraday.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/setup-lifecycle.js') return sendAuthAsset(res, 'setup-lifecycle.js', 'application/javascript; charset=utf-8');

@@ -11,7 +11,7 @@ from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
 EA_VERSION = '2.11'
-CONNECTOR_BUILD = '2.1.3'
+CONNECTOR_BUILD = '2.1.4'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -146,8 +146,8 @@ def command_fields(command, identity):
                 if snap.get(key) != payload.get(key): raise ValueError('ANALYSIS_PRICE_MISMATCH')
             if payload['side'] not in ('BUY','SELL'): raise ValueError('SIDE_REJECTED')
             execution_tf=str(snap.get('executionTimeframe','')).replace('m','')
-            if snap.get('analysisSopVersion') in ('NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'):
-                expected_tf='15' if mode=='TF15_INTRA' else '3'
+            if snap.get('analysisSopVersion') in ('NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'):
+                expected_tf='15' if mode=='TF15_INTRA' else '2' if snap.get('analysisSopVersion')=='NORMAL_20261001_TF2_RIBBON_V1' else '3'
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):

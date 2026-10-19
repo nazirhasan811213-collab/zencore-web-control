@@ -3,7 +3,7 @@ from protocol import command_fields
 from test_protocol import CONTRACT,STRATEGY,SCHEMA,IDENTITY
 class CurrentPineExitTests(unittest.TestCase):
  def test_current_policy_keeps_step_lock_for_entry_and_reentry(self):
-  for tf in ('3','15'):
+  for tf in ('2','3','15'):
    for kind in ('INITIAL','FOLLOWUP'):
     for side in ('BUY','SELL'):
      sign=1 if side=='BUY' else -1

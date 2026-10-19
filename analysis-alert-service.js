@@ -5,8 +5,8 @@ const {prepareTelegram,messageQuality,telegramMessage,entryFresh,entrySopAllowed
 const {notificationKey}=require('./telegram-notification-key');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
-  constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
-    this.pool=pool; this.token=token; this.botName=/^[A-Za-z0-9_]+$/.test(botName)?botName:''; this.fetch=fetchFn;
+  constructor({pool=null,token='',botName='',fetchFn=fetch,scalpingTimeframe=null}={}) {
+    this.scalpingTimeframe=scalpingTimeframe;this.pool=pool; this.token=token; this.botName=/^[A-Za-z0-9_]+$/.test(botName)?botName:''; this.fetch=fetchFn;
     this.notificationKeys=new Set();this.prefs=new Map(); this.states=new Map(); this.events=[]; this.sequence=0; this.queue=Promise.resolve(); this.ready=false;
   }
   async init() {
@@ -130,6 +130,7 @@ class AnalysisAlerts {
     if(!['XAUUSD','GBPUSD','GBPJPY'].includes(m.symbol))return;
     const stateKey=m.symbol+'|'+String(m.timeframe||m.strategyNormal?.tf||'2').replace(/m$/, '');
     const next=signals(m);if(!this.ready||!next)return;
+    if(this.scalpingTimeframe==='2'&&String(m.timeframe)==='3'){next.items=next.items.filter(e=>e.kind!=='ENTRY');next.entry='';}
     const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
         lifecycleVersion:m.strategyNormal.sop?.lifecycleVersion,cycleKind:m.strategyNormal.sop?.cycleKind,reentryContext:m.strategyNormal.sop?.reentryContext,entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
@@ -217,7 +218,7 @@ class AnalysisAlerts {
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           // Apply to every notification, including closes and already queued events.
           if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
-             (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
+             (e.kind!=='ENTRY'||((this.scalpingTimeframe!=='2'||e.timeframe==='15'||e.telegramSop?.version==='NORMAL_20261001_TF2_RIBBON_V1')&&e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
               const stableClaim=await this.pool.query('INSERT INTO zencore_telegram_signal_claims(notification_key,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING notification_key',[e.notificationKey||notificationKey(e),p.telegramId]);

@@ -631,6 +631,12 @@ function captureBody(body){
   let parsed=null;try{parsed=JSON.parse(body)}catch(_){}
   if(!parsed)return;
   parsed=require('./tf2-feed-source').normalizeTf2FeedSource(parsed);
+  if(parsed.feedVersion==='TF2_REALTIME_V1'&&parsed.markets?.some(row=>row?.[66]?.entryRuleVersion==='TF2_SOLID_RIBBON_V1')){
+    const items=require('./tf2-market-hub').ingest(parsed);
+    feedMetadataDiagnostics.record(parsed,items.map(m=>m.symbol));
+    for(const market of items)require('./analysis-alert-bus').emit('market',market);
+    return;
+  }
   if(parsed.feedVersion==='TF3_REALTIME_V1'){
     const items=require('./tf3-market-hub').ingest(parsed);
     feedMetadataDiagnostics.record(parsed,items.map(m=>m.symbol));
@@ -674,18 +680,18 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
   if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({
-    version:'PINE_3TRIGGERS_3OF4_CHOP50_V3',releaseVersion:'TF3_TF15_CHOP50_20261018',
-    activeScalpingTimeframe:'3',activeEntryTimeframes:['3','15'],timeframes:['3','15'],legacyTf2EntryEnabled:false,
-    tf3Policy:require('./tf3-scalping').POLICY,tf15Policy:require('./tf15-intraday').POLICY,
+    version:'PINE_3TRIGGERS_3OF4_CHOP50_V3',releaseVersion:'TF2_TF15_CHOP50_20261019',
+    activeScalpingTimeframe:'2',activeEntryTimeframes:['2','15'],timeframes:['2','15'],legacyTf2EntryEnabled:false,
+    tf2Policy:require('./tf2-scalping').POLICY,tf15Policy:require('./tf15-intraday').POLICY,
     entrySignalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''),
     feedIngress:feedMetadataDiagnostics.snapshot(),observedGoldFeed:{timeframe:latestBySymbol.get('XAUUSD')?.timeframe||null,
       rule:latestBySymbol.get('XAUUSD')?.setupMeta?.entryRuleVersion||null,receivedAt:latestBySymbol.get('XAUUSD')?.receivedAt||null},
     feedRefreshVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',analysisFreshness:'PINE_EMITTED_AT',maxExecutionAgeMs:60000,
     entryReplayProtection:'FRESH_EXECUTION_EVENT_V2',telegramDedupVersion:'SETUP_AND_CHAT_V2',
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
-    checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf3SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
+    checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf2SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
     targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',
-    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.1',eaVersion:'2.11',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF3:'3',TF15:'15'}
+    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.4',eaVersion:'2.11',setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
   }));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);

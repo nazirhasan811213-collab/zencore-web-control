@@ -442,7 +442,7 @@
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
     if (!tradingWindow(settings.tradingSchedule,at).allowed) return null;
     const observed=number(market.signalObservedAt);
-    const modernEvent=['3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
+    const modernEvent=['2','3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
     if(observed!==null&&(at-observed>(modernEvent?60000:30000)||observed>at+5000))return null;
     const validation = validateSettings(settings);
     const selected = validation.value.strategyMode;

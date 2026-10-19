@@ -10,7 +10,7 @@ function fixture(tf='3',side='BUY',kind='FOLLOWUP'){
  const market={symbol:p.symbol,timeframe:tf,setupKey:'CHART-CANDIDATE-3',price:4300,receivedAt:NOW,signalObservedAt:NOW,feedChannel:'EXECUTION',strategyNormal:{entrySopVersion:p.analysisSnapshot.analysisSopVersion,side:'SELL',plan:{entry:4300,tp1:4400}},positionManagement:{action:'HOLD'}};
  return {command,position,market,sign,mode};
 }
-for(const tf of ['3','15'])for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP'])test(`TF${tf} ${side} ${kind} protects its own levels after chart advances`,()=>{
+for(const tf of ['2','3','15'])for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP'])test(`TF${tf} ${side} ${kind} protects its own levels after chart advances`,()=>{
  const {command,position,market,sign}=fixture(tf,side,kind),p=command.payload;
  for(const [quote,target] of [[p.tp1,p.entry+sign*1.5],[p.tp2,p.tp1],[p.tp3,p.tp2],[p.tp3+sign*3.01,p.tp3]]){
   position.currentPrice=quote;const out=P.management(market,[position],command,NOW),m=Core.buildManagementCommand(out);
