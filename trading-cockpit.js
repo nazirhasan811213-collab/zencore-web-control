@@ -5,7 +5,7 @@
  const Live=window.ZenCoreDashboardLive,tape=Live.createTape(),activity=[],activityState=new Map();let flashTimer=null;
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toFixed(symbol==='GBPUSD'?5:3);
- const tfName=tf=>tf===3?'SCALPING':'INTRADAY';
+ const tfName=tf=>tf===2?'SCALPING':'INTRADAY';
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
  function fresh(v){return !failed&&Live.fresh(v);}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
@@ -13,7 +13,7 @@
  function tone(v){return ready(v)?v.market.strategyNormal.side==='BUY'?'buy':'sell':'';}
  function dot(id,live){$(id).classList.toggle('live',live);}
  async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
- function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[3,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
+ function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[2,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
  function liveViews(){return [...views(),...(streamLive?pushedViews:[])];}
  function renderLive(){
   const now=Date.now(),q=Live.quote(liveViews().filter(()=>!failed||streamLive),now),last=tape.points().at(-1);
@@ -60,7 +60,7 @@
   $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'TENGAH MONITOR':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
   $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU CONFIRMATION':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
   $('featuredReason').textContent=fresh(best)?n.reason||'Semak confirmation pada Analysis.':'Feed TF'+best.timeframe+' belum tersedia. Signal akan muncul selepas data segar diterima.';
-  const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));if(s.hemaShape)chips.push(el('span','SHAPE '+s.hemaShape.state,s.hemaShape.pass?'pass':''));for(const h of [best.timeframe,best.timeframe===3?5:best.timeframe===2?3:30])chips.push(el('span','HEMA'+h+' '+(s['hema'+h]?.mode||'WAIT'),s['hema'+h]?.pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
+  const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));if(s.hemaShape)chips.push(el('span','SHAPE '+s.hemaShape.state,s.hemaShape.pass?'pass':''));for(const h of [best.timeframe,best.timeframe===2?5:best.timeframe===2?3:30])chips.push(el('span','HEMA'+h+' '+(s['hema'+h]?.mode||'WAIT'),s['hema'+h]?.pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
   $('featuredEntry').textContent=format(p.entry,best.symbol);$('featuredTp').textContent=format(p.tp1,best.symbol);$('featuredSl').textContent=format(p.sl,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
   const cards=[];
   for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'FOREX'));card.append(head);
@@ -73,7 +73,7 @@
   $('planReason').textContent=!fresh(v)?'Menunggu data segar '+symbol+' TF'+timeframe+'. Paras lama, jika ada, hanya untuk rujukan.':ready(v)?'SOLID '+v.market.strategyNormal.side+' · Semak risiko dan tetapan akaun sebelum execution.':v.market.strategyNormal?.reason||'Setup belum disahkan. Semak checklist dan HEMA.';
  }
  for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};$('planSelector').onchange=render;
- async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF3 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Data tak masuk. Tengah cuba connect balik…';}render();if(!stopped)setTimeout(poll,2000);}
+ async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF2 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Data tak masuk. Tengah cuba connect balik…';}render();if(!stopped)setTimeout(poll,2000);}
  async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings')]);
   if(results[0].status==='fulfilled'){const a=results[0].value;$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';$('tradeState').textContent=state.replaceAll('_',' ');dot('tradeDot',state==='ON');}else{$('mt5State').textContent='STATUS BELUM ADA';$('tradeState').textContent='STATUS BELUM ADA';dot('mt5Dot',false);dot('tradeDot',false);}
   if(results[1].status==='fulfilled'){const p=results[1].value.settings||{};const enabled=p.verified&&p.telegramEnabled&&p.telegramAvailable;$('telegramState').textContent=enabled?'AKTIF':p.telegramAvailable?'BELUM DIAKTIFKAN':'BELUM ADA';dot('telegramDot',!!enabled);}else{$('telegramState').textContent='STATUS BELUM ADA';dot('telegramDot',false);}if(!stopped)setTimeout(connections,5000);

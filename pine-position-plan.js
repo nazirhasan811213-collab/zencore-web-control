@@ -1,6 +1,6 @@
 'use strict';
 // Executed MT5 setup identity owns its exit levels, never the newest chart candidate.
-const VERSIONS=['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'];
+const VERSIONS=['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'];
 const ANCHOR='PINE_SETUP_PLAN_V1';
 function valid(command){
  const p=command?.payload,s=p?.analysisSnapshot,sign=p?.side==='BUY'?1:p?.side==='SELL'?-1:0;

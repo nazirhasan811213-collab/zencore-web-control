@@ -97,6 +97,10 @@
       const adapter=typeof module==='object'&&module.exports?require('./tf15-intraday'):globalThis.ZenCoreTf15;
       return String(market.timeframe)==='15'&&n.tf==='15m'&&n.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&adapter?.confirmations(n.side,s).pass&&adapter.planPass(n.side,n.plan,s);
     }
+    if(n.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1'){
+      const adapter=typeof module==='object'&&module.exports?require('./tf2-ribbon-scalping'):globalThis.ZenCoreTf2Ribbon;
+      return String(market.timeframe)==='2'&&n.tf==='2m'&&n.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&adapter?.confirmations(n.side,s).pass&&adapter.planPass(n.side,n.plan,s);
+    }
     if(n.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
       const adapter=typeof module==='object'&&module.exports?require('./tf3-scalping'):globalThis.ZenCoreTf3;
       return String(market.timeframe)==='3'&&n.tf==='3m'&&n.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&adapter?.confirmations(n.side,s).pass&&adapter.planPass(n.side,n.plan,s);
@@ -157,6 +161,10 @@
     const normal = market.strategyNormal || {};
     if(normal.entrySopVersion==='NORMAL_20261001_TF15_RIBBON_V1'){
       const adapter=typeof module==='object'&&module.exports?require('./tf15-intraday'):globalThis.ZenCoreTf15;
+      const decision=adapter?.entryDecision(market);return decision?deepFreeze(decision):null;
+    }
+    if(normal.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1'){
+      const adapter=typeof module==='object'&&module.exports?require('./tf2-ribbon-scalping'):globalThis.ZenCoreTf2Ribbon;
       const decision=adapter?.entryDecision(market);return decision?deepFreeze(decision):null;
     }
     if(normal.entrySopVersion==='NORMAL_20261001_TF3_RIBBON_V1'){
@@ -273,7 +281,7 @@
     const actions = [];
     const requestedAction = String(management.slMoveAction || 'NONE').toUpperCase();
     // Existing EA uses absolute activeSl for MOVE_SL_TP1; MOVE_SL_ENTRY ignores it.
-    if(['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150','MOVE_SL_TP3'].includes(requestedAction)&&!['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion))return null;
+    if(['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150','MOVE_SL_TP3'].includes(requestedAction)&&!['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion))return null;
     const slMoveAction=['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150'].includes(requestedAction)?'MOVE_SL_TP1':requestedAction==='MOVE_SL_TP3'?'MOVE_SL_TP2':requestedAction;
     if (management.slMoveTriggered === true &&
         ['MOVE_SL_ENTRY', 'MOVE_SL_TP1', 'MOVE_SL_TP2'].includes(slMoveAction)) {
@@ -289,7 +297,7 @@
 
     const exitAction = String(management.action || 'IDLE').toUpperCase();
     if (exitAction === 'CLOSE_50_NOW') {
-      actions.push({ type: 'CLOSE_PERCENT', percent: ['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?100:50, reason: ['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?'EXIT_ALL':'CLOSE_SEPARUH' });
+      actions.push({ type: 'CLOSE_PERCENT', percent: ['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?100:50, reason: ['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?'EXIT_ALL':'CLOSE_SEPARUH' });
     }
     if (['EXIT_REMAINING', 'EXIT_ALL', 'EXIT_SL'].includes(exitAction)) {
       actions.push({ type: 'CLOSE_PERCENT', percent: 100, reason: exitAction });
@@ -300,7 +308,7 @@
       .map(action => `${action.type}:${action.activeSl ?? action.percent ?? ''}:${action.reason || ''}`)
       .join(',');
     return deepFreeze({
-      managementKey: (market.setupKey&&['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(market.strategyNormal?.entrySopVersion)
+      managementKey: (market.setupKey&&['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(market.strategyNormal?.entrySopVersion)
         ?[CONTRACT_VERSION,symbol,String(market.timeframe),market.setupKey,actionKey]:[CONTRACT_VERSION,symbol,receivedAt,actionKey]).join('|'),
       snapshot: {
         contractVersion: CONTRACT_VERSION,
@@ -310,7 +318,7 @@
         schemaVersion: SCHEMA_VERSION,
         symbol,
         executionTimeframe:String(market.timeframe||market.strategyNormal?.tf||'2'),
-        ...(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?{setupKey:market.setupKey,analysisSopVersion:market.strategyNormal.entrySopVersion}:{}),
+        ...(['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(market.strategyNormal?.entrySopVersion)?{setupKey:market.setupKey,analysisSopVersion:market.strategyNormal.entrySopVersion}:{}),
         ...(['LIVE_SIGNAL_PRICE_V1','FILL_PRICE_ATR_V1','PINE_SETUP_PLAN_V1'].includes(management.entryAnchor)?{entryAnchor:management.entryAnchor,entryCommandId:management.entryCommandId}:{}),
         actions,
         reason: String(management.reason || '').slice(0, 180),
