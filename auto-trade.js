@@ -257,7 +257,7 @@
     }
     const settings = state.settings;
     setText('summaryExposure', settings?.totalLot == null ? '—' : Number(settings.totalLot).toFixed(3));
-    setText('summaryLayers', settings ? ['TF2_SCALPING','TF15_INTRA'].map(mode=>{const cfg=Core.effectiveSettings({...settings,strategyMode:mode},'XAUUSD');return (mode==='TF2_SCALPING'?'TF3':'TF15')+' '+(cfg.enabled?cfg.totalLot+' lot':'OFF');}).join(' · ') : 'Belum dikonfigurasi');
+    setText('summaryLayers', settings ? ['TF2_SCALPING','TF15_INTRA'].map(mode=>{const cfg=Core.effectiveSettings({...settings,strategyMode:mode},'XAUUSD');return (mode==='TF2_SCALPING'?'TF2':'TF15')+' '+(cfg.enabled?cfg.totalLot+' lot':'OFF');}).join(' · ') : 'Belum dikonfigurasi');
   }
 
   function renderPositions(state) {

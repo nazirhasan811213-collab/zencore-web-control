@@ -19,7 +19,7 @@
       <header class="portal-top autotrade-top">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-          <div><b>ZenCore Precision Entry</b><span>XAUUSD · TF3 / TF15 · REAL / DEMO</span></div>
+          <div><b>ZenCore Precision Entry</b><span>XAUUSD · TF2 / TF15 · REAL / DEMO</span></div>
         </div>
 
         <nav class="top-nav" aria-label="Navigasi utama">
@@ -42,7 +42,7 @@
             <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
           </div>
           <h1>Kawal Auto Trade XAUUSD.</h1>
-          <p>Pilih strategi, set lot dan layer, lepas tu check connection MT5. TF3 dan TF15 jalan ikut SOP sendiri.</p>
+          <p>Pilih strategi, set lot dan layer, lepas tu check connection MT5. TF2 dan TF15 jalan ikut SOP sendiri.</p>
         </div>
         <div class="hero-mode">
           <span>ROLLOUT MODE</span>
@@ -154,7 +154,7 @@
           <form id="settingsForm" novalidate>
             <div class="settings-fields dual-capital"><label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label></div>
             <div class="dual-trade-settings">
-              <section class="tf-setting-card" aria-labelledby="tf2Heading"><header><h3 id="tf2Heading">Scalping <b>TF3</b></h3><strong id="tf2EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" max="10" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf2Total">—</b></p></section>
+              <section class="tf-setting-card" aria-labelledby="tf2Heading"><header><h3 id="tf2Heading">Scalping <b>TF2</b></h3><strong id="tf2EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" max="10" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf2Total">—</b></p></section>
               <section class="tf-setting-card" aria-labelledby="tf15Heading"><header><h3 id="tf15Heading">Intra <b>TF15</b></h3><strong id="tf15EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="tf15LotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="tf15Layers" type="number" min="1" max="10" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf15Total">—</b></p></section>
             </div>
             <p class="tf-empty-note">Lot atau layer kosong = tiada entry selepas Simpan.</p>
@@ -311,7 +311,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/setup-lifecycle.js?v=20261017-v1" defer></script><script src="/tf15-intraday.js?v=20261017-lifecycle-v1" defer></script><script src="/tf3-scalping.js?v=20261017-lifecycle-v1" defer></script><script src="/analysis-execution-contract.js?v=20261017.pine4of5" defer></script>
+  <script src="/setup-lifecycle.js?v=20261017-v1" defer></script><script src="/tf15-intraday.js?v=20261017-lifecycle-v1" defer></script><script src="/tf2-ribbon-scalping.js?v=20261019" defer></script><script src="/tf3-scalping.js?v=20261017-lifecycle-v1" defer></script><script src="/analysis-execution-contract.js?v=20261017.pine4of5" defer></script>
   <script src="/auto-trade-core.js?v=20261007.news-choice" defer></script>
   <script src="/auto-trade.js?v=20261017-lifecycle-v1" defer></script>
   <script src="/viewer-mode.js?v=1.1" defer></script>

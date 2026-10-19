@@ -39,6 +39,7 @@ function entrySopAllowed(e){
   const s=e.telegramSop;
   if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf2ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
   if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_3OF4_CHOP50_V3'&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF2_RIBBON_V1')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_3OF4_CHOP50_V3'&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
   if(s?.version==='NORMAL_20261001_TF3_RIBBON_V1')return e.timeframe==='3'&&s.tf==='3m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf3-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_3OF4_CHOP50_V3'&&require('./tf3-scalping').planPass(e.side,e.telegramPlan,s);
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&require('./analysis-execution-contract').solid80Tf2Confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power},['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version),s.version==='NORMAL_20261001_TF2_SOLID_HOLD_V16'?5:6);
   if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
@@ -102,7 +103,7 @@ function riskText(value){return String(value||'').replace(/(?:🛑\s*)?JAGA MODA
 function pineContext(s={},tf){
  const d=s.advisor||{},clean=v=>riskText(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
  const short=(v,n=100)=>clean(v).slice(0,n)||'Tiada data';
- const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${tf==='15'?s.hema15?.mode:s.hema3?.mode}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':'5/10/15'}: ${s.mtfScore}`];
+ const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${s['hema'+tf]?.mode||'WAIT_DATA'}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':'5/10/15'}: ${s.mtfScore}`];
  // Keep dashboard facts once; Coach often repeats trend, momentum and advice.
  const seen=new Set(),key=v=>clean(v).replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
  function add(label,value,max=240){const text=clean(value);if(!text)return;const k=key(text);if(!k||seen.has(k))return;seen.add(k);lines.push(`${label}: ${text.slice(0,max)}`);}
@@ -170,7 +171,7 @@ function telegramMessage(e){
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(['NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
+  if(['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     return currentPineMessage(e,p,s,time);
   }

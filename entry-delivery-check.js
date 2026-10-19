@@ -11,7 +11,7 @@ function checkEntryDelivery(command,market,at=Date.now()){
  const fail=(reason,extra={})=>({ok:false,reason,...detail,...extra});
  if(snap.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'&&(!Number.isFinite(snap.entryAuthorizedAt)||at-snap.entryAuthorizedAt>60000||snap.entryAuthorizedAt>at+5000))return fail('ENTRY_EVENT_EXPIRED');
  if(!market)return fail('MARKET_MISSING');
- if(!Number.isFinite(observed)||at-observed>(['3','15'].includes(String(market?.timeframe))&&market?.feedChannel==='EXECUTION'&&market?.entryEvent===true?60000:30000)||observed>at+5000)return fail('MARKET_STALE');
+ if(!Number.isFinite(observed)||at-observed>(['2','3','15'].includes(String(market?.timeframe))&&market?.feedChannel==='EXECUTION'&&market?.entryEvent===true?60000:30000)||observed>at+5000)return fail('MARKET_STALE');
  if(!Core.entryConfirmationsPass(market))return fail('SOP_CONFIRMATION_FAILED',{
   failedGates:(n?.sop?.gates||[]).filter(g=>g.pass===false||g.passed===false).map(g=>g.key).slice(0,10)});
  if(n.side!==p.side)return fail('SIDE_CHANGED');
@@ -23,7 +23,7 @@ function checkEntryDelivery(command,market,at=Date.now()){
  const expected=live?snap.sourceChartPlan:p;
  // Dashboard is a separate Pine instance; its completion tick can differ.
  // Its current SOP/side/setup are checked above; the signed execution plan stays fixed.
- const independentDashboard=['3','15'].includes(String(market.timeframe))&&market.feedChannel==='DASHBOARD'&&snap.analysisSopVersion===`NORMAL_20261001_TF${market.timeframe}_RIBBON_V1`;
+ const independentDashboard=['2','3','15'].includes(String(market.timeframe))&&market.feedChannel==='DASHBOARD'&&snap.analysisSopVersion===`NORMAL_20261001_TF${market.timeframe}_RIBBON_V1`;
  const changed=independentDashboard?[]:keys.filter(k=>!samePrice(current?.[k],expected?.[k]));
  if(changed.length)return fail('PLAN_CHANGED',{changedFields:changed});
  if(live&&!(p.side==='BUY'?market.price>expected.entry&&market.price<expected.tp1:market.price<expected.entry&&market.price>expected.tp1))return fail('PRICE_OUTSIDE_ENTRY_RANGE');
