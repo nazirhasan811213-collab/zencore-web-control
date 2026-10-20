@@ -1197,6 +1197,14 @@ function createAutoTradeService(options = {}) {
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
+    // A queued signal may outlive a heartbeat that reports a fill. Recheck at
+    // delivery as well as dispatch; every layer of this TF must be closed.
+    const deliveryPositions=await store.listPositions(command.userId);
+    if(!Core.permitsPositionEntry({symbol:command.payload?.symbol,
+      timeframe:command.payload?.analysisSnapshot?.executionTimeframe||(mode==='TF15_INTRA'?'15':'2'),
+      strategyNormal:{sop:{entryPolicyVersion:command.payload?.analysisSnapshot?.entryPolicyVersion}}},deliveryPositions)){
+      Object.assign(diagnostic,{ok:false,reason:'POSITION_STILL_OPEN'});return false;
+    }
     if(typeof options.getLatestMarket!=='function')return command.payload?.reentry?false:true;
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?'3':p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;

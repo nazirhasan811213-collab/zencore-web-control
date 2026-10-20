@@ -42,7 +42,7 @@ function createEntryCycleReset(store){
   if(!cache.has(k))cache.set(k,typeof store.lastStrategyCycleReset==='function'?await store.lastStrategyCycleReset(user,pod,mode):null);
   const reset=cache.get(k);
   const s=market.strategyNormal.sop;
-  if(s.lifecycleVersion===Lifecycle.VERSION&&typeof store.latestExecutedSetupForMode==='function'){
+  if(typeof store.latestExecutedSetupForMode==='function'){
     const last=await store.latestExecutedSetupForMode(user,pod,mode);
     if(last&&(!reset||!Number.isFinite(last.acknowledgedAt)||last.acknowledgedAt>=reset.closedAt)){
       recoveryNeeded.add(k);return {allowed:false,reason:'WAIT_MT5_CLOSE_CONFIRMATION'};
