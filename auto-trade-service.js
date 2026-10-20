@@ -1420,6 +1420,7 @@ function createAutoTradeService(options = {}) {
         const specs = hostedAccount ? hostedAccount.symbolSpecs : pod?.symbolSpecs;
         const report = {
           connection: connection.state,
+          diagnosticProfile:crypto.createHash('sha256').update(profile.userId).digest('hex').slice(0,12),
           enabledSymbols: profile.symbols,
           brokerSymbols: Object.keys(specs || {}),
           pairs: allowedDemoSymbols.flatMap(symbol => {
@@ -1435,6 +1436,8 @@ function createAutoTradeService(options = {}) {
               side: market?.strategyNormal?.side || 'WAIT',
               observedAgeSeconds: market?.signalObservedAt ? Math.round((now() - market.signalObservedAt) / 1000) : null,
               feedVersion: market?.feedVersion || null,
+              entryPolicyVersion:sop.entryPolicyVersion||null,scriptRevision:market?.setupMeta?.scriptRevision||null,entryDeliveryVersion:market?.entryDeliveryVersion||null,
+              entrySetupChecks:market?require('./entry-setup-diagnostic').inspect(market,profile,now()).checks:null,
               feedChannel: market?.feedChannel || null,
               setupSolid: normal.solid === true,
               solidStateReason: market?.setupMeta?.solidStateReason || null,
@@ -1508,7 +1511,7 @@ function createAutoTradeService(options = {}) {
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
-        if (!setup || !isCurrent(market)){await reportEntryBlock(profile,market,market.strategyNormal?.lifecycleState==='EVENT_EXPIRED'?'ENTRY_EVENT_EXPIRED':market.entryEvent!==true?'WAIT_EXECUTION_EVENT':'SOP_OR_SETUP_NOT_CURRENT');continue;}
+        if (!setup || !isCurrent(market)){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
         if((String(market.timeframe)==='3'||market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1')&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
         // Current Pine execution events already carry a fixed 60s authorization
