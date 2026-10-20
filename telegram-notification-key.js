@@ -4,7 +4,7 @@ const crypto=require('crypto');
 function notificationKey(e,previous=null){
  const position=previous?.telegramPosition,plan=e.telegramPlan||previous?.activePlan?.plan;
  const setup=e.setupKey||(e.kind==='CLOSE'?(position?.setupKey||previous?.activePlan?.setupKey):null);
- const reentry=e.kind==='ENTRY'&&/^(NORMAL|HIGH)_REENTRY$/.test(e.entryType)?[e.entryType,e.sourceBarTime||null]:null;
+ const reentry=!setup&&e.kind==='ENTRY'&&/^(NORMAL|HIGH)_REENTRY$/.test(e.entryType)?[e.entryType,e.sourceBarTime||null]:null;
  const fallback=e.kind==='ENTRY'
   ? [e.side,plan?.entry??e.anchor??e.message?.match(/Entry:\s*([^|\n]+)/)?.[1]??'UNKNOWN']
   : [position?.anchor||previous?.activePlan?.side||'UNKNOWN'];

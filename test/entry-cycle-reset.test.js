@@ -76,3 +76,17 @@ test('an executed setup without confirmed close still blocks a new TF2 followup 
  const m={timeframe:'2',signalObservedAt:30000,strategyNormal:{side:'SELL',sop:{entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',lifecycleVersion:'PULLBACK_REQUALIFY_V1',cycleKind:'FOLLOWUP',sourceSetupAt:20000,triggerAt:20001,qualifiedAt:30000,reentryContext:{parentQualifiedAt:22000}}}};
  a.equal((await gate.check('u','p',m)).reason,'WAIT_MT5_CLOSE_CONFIRMATION');
 });
+
+test('executed TF2/TF15 require broker close even when lifecycle metadata is missing',async()=>{
+ for(const tf of ['2','15']){
+  const store=new MemoryAutoTradeStore(),gate=createEntryCycleReset(store),mode=tf==='15'?'TF15_INTRA':'TF2_SCALPING';
+  store.commands.set('p',[{id:'filled',userId:'u',podId:'p',type:'PLACE_SETUP',status:'EXECUTED',acknowledgedAt:1000,payload:{symbol:'XAUUSD',strategyMode:mode}}]);
+  const m=market(tf,30000);
+  a.equal((await gate.check('u','p',m)).reason,'WAIT_MT5_CLOSE_CONFIRMATION');
+  await gate.observe('u','p',[pos(mode),pos(mode)],[pos(mode)],20000);
+  a.equal((await gate.check('u','p',m)).allowed,false,'one remaining layer still blocks');
+  await gate.observe('u','p',[pos(mode)],[],25000);
+  a.equal((await gate.check('u','p',m)).allowed,true);
+  a.equal((await gate.check('u','p',market(tf,24000))).allowed,false,'pre-close signal remains blocked');
+ }
+});

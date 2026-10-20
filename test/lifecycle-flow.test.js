@@ -2,19 +2,19 @@
 const test=require('node:test'),a=require('node:assert/strict');
 const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service'),L=require('../setup-lifecycle');
 function frame(tf,side,at,parent,path){
- const sign=side==='BUY'?1:-1,S=require(tf==='3'?'../tf3-scalping':'../tf15-intraday');
+ const sign=side==='BUY'?1:-1,S=require(tf==='2'?'../tf2-ribbon-scalping':tf==='3'?'../tf3-scalping':'../tf15-intraday');
  const row=Array(67).fill(null),entry=parent?4100+sign*3:4100,source=at-900000;
- Object.assign(row,{0:'XAUUSD',1:at-900000,6:entry,13:sign*4,14:sign,16:35,21:4,22:entry,23:entry-sign*4,24:entry-sign*4,25:entry+sign*4,26:entry+sign*8,27:entry+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:70,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
+ Object.assign(row,{0:'XAUUSD',1:at-900000,6:entry,13:sign*4,14:sign,16:35,21:4,22:entry,23:entry-sign*(tf==='2'?3:4),24:entry-sign*(tf==='2'?3:4),25:entry+sign*4,26:entry+sign*8,27:entry+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:70,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
  row[65]={version:`HEMA${tf}_LIVE_V1`,['tf'+tf]:{fast:4100+sign*2,slow:4100+sign,fastPreviousBar:4100+sign,slowPreviousBar:4100+sign*.5}};
- row[66]={entryRuleVersion:S.RULE,exitLockVersion:S.POLICY.exitLockVersion,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:'Fixed R:R',riskPlanVersion:S.RISK,atrPeriod:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:source,sourceSetupAt:source,setupAt:parent?at:source,sourceEntry:4100-sign,solidEligible:true,completedAt:at,completionPrice:entry,riskAtrReference:4,riskTick:.01,entryEvent:true,entryAuthorizedAt:at,entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',lifecycleVersion:L.VERSION,cycleKind:parent?'FOLLOWUP':'INITIAL',reentryContext:{parentQualifiedAt:parent||null,previousHigh:4102,previousLow:4098,fastPrevious:4100+sign,slowPrevious:4100+sign*.5,wtGapPrevious:2,pricePath:path||[]},dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:S.POLICY.mtf,htfRibbonTimeframe:tf}}};
+ row[66]={entryRuleVersion:S.RULE,exitLockVersion:S.POLICY.exitLockVersion,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:'Fixed R:R',riskPlanVersion:S.RISK,atrPeriod:tf==='2'?10:14,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:source,sourceSetupAt:source,setupAt:parent?at:source,sourceEntry:4100-sign,solidEligible:true,completedAt:at,completionPrice:entry,riskAtrReference:4,riskTick:.01,entryEvent:true,entryAuthorizedAt:at,entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',lifecycleVersion:L.VERSION,cycleKind:parent?'FOLLOWUP':'INITIAL',reentryContext:{parentQualifiedAt:parent||null,previousHigh:4102,previousLow:4098,fastPrevious:4100+sign,slowPrevious:4100+sign*.5,wtGapPrevious:2,pricePath:path||[]},dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:S.POLICY.mtf,htfRibbonTimeframe:tf}}};
  const batch={feedVersion:`TF${tf}_REALTIME_V1`,timeframe:tf,schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:at,markets:[row]};
  return {row,batch};
 }
-for(const tf of ['3','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side}: actual close -> post-close pullback -> strong SOP -> one fresh full-layer entry`,async()=>{
- const hubPath=tf==='3'?'../tf3-market-hub':'../tf15-market-hub';delete require.cache[require.resolve(hubPath)];const hub=require(hubPath);
+for(const tf of ['2','3','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side}: actual close -> post-close pullback -> strong SOP -> one fresh full-layer entry`,async()=>{
+ const hubPath=tf==='2'?'../tf2-ribbon-market-hub':tf==='3'?'../tf3-market-hub':'../tf15-market-hub';delete require.cache[require.resolve(hubPath)];const hub=require(hubPath);
  let at=Date.now()+100,current;const initialAt=at,store=new MemoryAutoTradeStore(),user='flow-'+tf+side,token='zcpod_'+(side==='BUY'?'a':'b').repeat(48),hash=tokenHash(token);
  const pod={id:user,userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
- const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'3',allowLocalEaExecution:true,commandSigningKey:'test-signing-key-more-than-thirty-two-bytes',getLatestMarket:()=>current});
+ const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:tf==='2'?'2':'3',allowLocalEaExecution:true,commandSigningKey:'test-signing-key-more-than-thirty-two-bytes',getLatestMarket:()=>current});
  await svc.saveSettings(user,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',riskAcknowledged:true,tradingSchedule:{enabled:false,skipNews:false}});await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
  current=hub.ingest(frame(tf,side,at).batch,at)[0];a.equal(current.strategyNormal.state,'READY');a.equal((await svc.dispatchMarkets([current])).queued,1);
  const first=(await svc.nextCommand(token)).command;a.ok(first);await svc.acknowledgeCommand(token,first.id,{status:'EXECUTED',code:'SETUP_OPENED'});
@@ -80,4 +80,24 @@ for(const tf of ['3','15'])test(`TF${tf} fresh native SOLID after old close can 
  const path=tf==='3'?'../tf3-market-hub':'../tf15-market-hub';delete require.cache[require.resolve(path)];const current=require(path).ingest(f.batch,at)[0];a.equal(current.strategyNormal.state,'READY');
  a.equal((await svc.dispatchMarkets([current])).queued,1);a.equal((await svc.dispatchMarkets([current])).queued,0);
  const command=(await store.listRecentCommands(user))[0];a.equal(command.type,'PLACE_SETUP');a.equal(command.payload.layers,2);a.equal(command.payload.analysisSnapshot.cycleKind,'INITIAL');
+});
+
+for(const tf of ['2','15'])test(`TF${tf}: queued entry is cancelled when heartbeat reveals a remaining layer before delivery; settings stay unchanged`,async()=>{
+ let at=Date.now()+100,current;
+ const store=new MemoryAutoTradeStore(),user='delivery-race-'+tf,token='zcpod_'+'s'.repeat(48),hash=tokenHash(token);
+ const pod={id:user,userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:at,tradeMode:'DEMO',demoExecutionUnlocked:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
+ store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
+ const svc=createAutoTradeService({store,now:()=>at,scalpingTimeframe:'2',allowLocalEaExecution:true,commandSigningKey:'test-signing-key-more-than-thirty-two-bytes',getLatestMarket:()=>current});
+ await svc.saveSettings(user,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',riskAcknowledged:true,tradingSchedule:{enabled:false,skipNews:false}});
+ await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+ const settings=await store.getProfile(user);
+ const hubPath=tf==='2'?'../tf2-ribbon-market-hub':'../tf15-market-hub';delete require.cache[require.resolve(hubPath)];
+ current=require(hubPath).ingest(frame(tf,'BUY',at).batch,at)[0];
+ a.equal((await svc.dispatchMarkets([current])).queued,1);
+ const hb={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64),positions:[{ticket:'123456',symbol:'XAUUSD',side:'BUY',volume:.01,entry:4100,strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING'}],symbolSpecs:[]};
+ at+=10;await svc.heartbeat(token,hb);
+ a.equal((await svc.nextCommand(token)).command,null);
+ a.equal((await svc.dispatchMarkets([current])).queued,0);
+ const after=await store.getProfile(user);
+ for(const key of ['capitalUsd','lotPerLayer','layers','modeSettings','strategyExitPolicies','tradingSchedule','desiredState','effectiveState'])a.deepEqual(after[key],settings[key],key+' remains unchanged');
 });

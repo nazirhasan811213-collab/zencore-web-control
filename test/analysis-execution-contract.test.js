@@ -55,11 +55,11 @@ test('entry requires C+ or higher while position close stays available', () => {
   assert.ok(Contract.createManagementDecision({...low,positionManagement:{action:'EXIT_ALL'}}));
 });
 
-test('active position permits only explicit same-side Normal or High re-entry',()=>{
+test('every entry type waits for the last layer to close',()=>{
   const open=[{symbol:'XAUUSD',side:'SELL'}];
   const base={symbol:'XAUUSD',strategyNormal:{side:'SELL',entryType:'HIGH_REENTRY'}};
-  assert.equal(Core.permitsPositionEntry(base,open),true);
-  assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,entryType:'NORMAL_REENTRY'}},open),true);
+  assert.equal(Core.permitsPositionEntry(base,open),false);
+  assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,entryType:'NORMAL_REENTRY'}},open),false);
   assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,entryType:'SOLID_ENTRY'}},open),false);
   assert.equal(Core.permitsPositionEntry({...base,strategyNormal:{...base.strategyNormal,side:'BUY'}},open),false);
   assert.equal(Core.permitsPositionEntry(base,[...open,{symbol:'XAUUSD',side:'BUY'}]),false);
