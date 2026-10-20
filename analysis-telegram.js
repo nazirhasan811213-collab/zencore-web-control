@@ -83,7 +83,7 @@ function entryFresh(e,now=Date.now()){
   const q=e.telegramMarket;
   if(['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(e.telegramSop?.entryPolicyVersion)){
     const origin=q?.entryAuthorizedAt??q?.signalObservedAt;
-    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=30000;
+    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='2'?60000:30000);
   }
   if(q?.feedMode==='INTRABAR')return Number.isFinite(q.signalObservedAt)&&now-q.signalObservedAt>=-5000&&now-q.signalObservedAt<=30000&&now-e.time>=-5000&&now-e.time<=30000;
   const duration=Number(q?.timeframe)*60000;
