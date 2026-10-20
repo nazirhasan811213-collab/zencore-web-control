@@ -83,6 +83,12 @@ test('Analysis entry, deduplication, OFF and Analysis close use the same local c
  await service.stop(userId);command=(await service.nextCommand(c.podToken)).command;
  assert.equal(command.type,'SYSTEM_STOP');await service.acknowledgeCommand(c.podToken,command.id,{status:'EXECUTED'});
  const managed={...market,receivedAt:1791000000001,positionManagement:{action:'CLOSE_50_NOW',slMoveTriggered:true,slMoveAction:'MOVE_SL_ENTRY',activeSl:2500}};
+ // Unknown fill time and positions younger than 60s must stay locked.
+ assert.equal((await service.dispatchMarkets([managed])).queued,0);
+ const position={ticket:'1234',symbol:'XAUUSD',side:'BUY',volume:0.03,entry:2500,activeSl:2490};
+ await service.heartbeat(c.podToken,{...hb,positions:[{...position,openedAt:1791000000000-59999}]});
+ assert.equal((await service.dispatchMarkets([managed])).queued,0);
+ await service.heartbeat(c.podToken,{...hb,positions:[{...position,openedAt:1791000000000-60000}]});
  assert.equal((await service.dispatchMarkets([managed])).queued,1);
  command=(await service.nextCommand(c.podToken)).command;
  assert.equal(command.type,'MANAGE_POSITION');
