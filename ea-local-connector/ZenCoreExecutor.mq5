@@ -159,6 +159,21 @@ bool FreshLease(){
  if(!ReadFields("lease.tsv"))return false;
  return Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && Get("podId")==ownerPod && Get("eaSession")==eaSession && (long)StringToInteger(Get("expiresAt"))>UtcMs() && Get("desiredState")=="ON";
 }
+// Errante: broker SL and emergency/fill-safety exits remain available.
+// Use broker position time so the lock survives EA/connector restarts.
+bool EntryCloseLocked(ulong ticket){
+ if(!IsOwn(ticket))return false;
+ long opened=PositionGetInteger(POSITION_TIME_MSC),now=(long)TimeCurrent()*1000;
+ return opened<=0 || now<opened+60000;
+}
+bool GroupCloseLocked(string symbol,ulong scope){
+ for(int i=PositionsTotal()-1;i>=0;i--){
+  ulong ticket=PositionGetTicket(i);
+  if(!IsOwn(ticket) || (ulong)PositionGetInteger(POSITION_MAGIC)!=scope || PositionGetString(POSITION_SYMBOL)!=symbol)continue;
+  if(EntryCloseLocked(ticket))return true;
+ }
+ return false;
+}
 bool CloseTicket(ulong ticket,double volume){
  if(!IsManaged(ticket))return false;
  trade.SetExpertMagicNumber((ulong)PositionGetInteger(POSITION_MAGIC));
@@ -362,6 +377,7 @@ void ManageLocalStepLock(){
    if(observed==1 && (buy?quote<=entry+1.50:quote>=entry-1.50))observed=0;
   }
   if(observed>stage){stage=observed;if(!WriteAtomic(stageFile,Row("symbol",symbol)+Row("side",buy?"BUY":"SELL")+Row("stage",(string)stage)))continue;}
+  if(EntryCloseLocked(ticket))continue; // Keep observed stages; defer close and SL tightening for 60s.
   if(fillAnchor && stage>=1){
    string half="half-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done";
    double full=PositionGetDouble(POSITION_VOLUME),step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP),volume=step>0?MathFloor(full*.5/step)*step:0;
@@ -469,6 +485,8 @@ void Process(){
   else FileDelete(channel+"\\command.tsv",FILE_COMMON);
   return;
  }
+ // Leave the command pending; process after the last layer reaches 60 seconds.
+ if(type=="MANAGE_POSITION" && GroupCloseLocked(symbol,scope))return;
  if(!WriteAtomic(id+".started","intent")){armed=false;return;}
  bool ok=false;string code="BROKER_REJECTED";
  if(type=="MANUAL_EXIT_CONFIG"){
