@@ -16,12 +16,15 @@ function fixture(side='BUY'){
   const f=fixture(side);f.row[66].entryPolicyVersion=S.FORECAST_POLICY;
   f.row[16]=99;f.row[66].dashboardAi.mtfScore=0;delete f.row[66].dashboardAi.dashboard;
   const m=Hub.ingest(f.batch,f.now)[0];a.equal(m.strategyNormal.state,'READY');
-  const d=C.createEntryDecision(m,f.now);a.ok(d);a.equal(d.snapshot.entryPolicyVersion,S.FORECAST_POLICY);
+  const d=C.createEntryDecision(m,f.now);a.ok(d);a.equal(d.snapshot.qualificationPolicyVersion,S.FORECAST_POLICY);a.equal(d.snapshot.entryPolicyVersion,S.POLICY.entryPolicyVersion);
   const settings={capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',tradingSchedule:{enabled:false}};
   const before=JSON.stringify(settings);const cmd=Core.buildSetupCommand(m,settings,null,f.now);a.ok(cmd);a.equal(JSON.stringify(settings),before);
   a.equal(Core.permitsPositionEntry(m,[{symbol:'XAUUSD',strategyMode:settings.strategyMode,origin:'ZENCORE'}]),false);
   a.equal(Core.permitsPositionEntry(m,[{symbol:'XAUUSD',strategyMode:settings.strategyMode==='TF2_SCALPING'?'TF15_INTRA':'TF2_SCALPING',origin:'ZENCORE'}]),true);
   a.equal(cmd.payload.analysisSnapshot.exitLockVersion,S.POLICY.exitLockVersion);
+  const cp=require('node:child_process');
+  const protocol=cp.spawnSync('python',['-c',"import sys,json;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123456','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify({id:'00000000-0000-4000-8000-000000000000',type:'PLACE_SETUP',expiresAt:f.now+30000,payload:cmd.payload}),encoding:'utf8'});
+  a.equal(protocol.status,0,protocol.stderr);a.equal(JSON.parse(protocol.stdout).exitLockVersion,S.POLICY.exitLockVersion);
   const s=m.strategyNormal.sop;
   for(const [forecast,power,pass] of [['NEUTRAL',45,false],['NEUTRAL',side==='BUY'?45.01:44.99,true],[side==='BUY'?'BULLISH':'BEARISH',50,false],[side==='BUY'?'BULLISH':'BEARISH',50.01,true],['CHOPPY',99,false],['NEUTRAL',null,false]]){
    a.equal(S.confirmations(side,{...s,forecast,marketPower:power}).gates.find(g=>g.key==='forecast').pass,pass);
@@ -52,12 +55,15 @@ function fixture(side='BUY'){
   const f=fixture(side);f.row[66].entryPolicyVersion=S.FORECAST_POLICY;
   f.row[16]=99;f.row[66].dashboardAi.mtfScore=0;delete f.row[66].dashboardAi.dashboard;
   const m=Hub.ingest(f.batch,f.now)[0];a.equal(m.strategyNormal.state,'READY');
-  const d=C.createEntryDecision(m,f.now);a.ok(d);a.equal(d.snapshot.entryPolicyVersion,S.FORECAST_POLICY);
+  const d=C.createEntryDecision(m,f.now);a.ok(d);a.equal(d.snapshot.qualificationPolicyVersion,S.FORECAST_POLICY);a.equal(d.snapshot.entryPolicyVersion,S.POLICY.entryPolicyVersion);
   const settings={capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF15_INTRA',tradingSchedule:{enabled:false}};
   const before=JSON.stringify(settings);const cmd=Core.buildSetupCommand(m,settings,null,f.now);a.ok(cmd);a.equal(JSON.stringify(settings),before);
   a.equal(Core.permitsPositionEntry(m,[{symbol:'XAUUSD',strategyMode:settings.strategyMode,origin:'ZENCORE'}]),false);
   a.equal(Core.permitsPositionEntry(m,[{symbol:'XAUUSD',strategyMode:settings.strategyMode==='TF2_SCALPING'?'TF15_INTRA':'TF2_SCALPING',origin:'ZENCORE'}]),true);
   a.equal(cmd.payload.analysisSnapshot.exitLockVersion,S.POLICY.exitLockVersion);
+  const cp=require('node:child_process');
+  const protocol=cp.spawnSync('python',['-c',"import sys,json;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123456','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify({id:'00000000-0000-4000-8000-000000000000',type:'PLACE_SETUP',expiresAt:f.now+30000,payload:cmd.payload}),encoding:'utf8'});
+  a.equal(protocol.status,0,protocol.stderr);a.equal(JSON.parse(protocol.stdout).exitLockVersion,S.POLICY.exitLockVersion);
   const s=m.strategyNormal.sop;
   for(const [forecast,power,pass] of [['NEUTRAL',45,false],['NEUTRAL',side==='BUY'?45.01:44.99,true],[side==='BUY'?'BULLISH':'BEARISH',50,false],[side==='BUY'?'BULLISH':'BEARISH',50.01,true],['CHOPPY',99,false],['NEUTRAL',null,false]]){
    a.equal(S.confirmations(side,{...s,forecast,marketPower:power}).gates.find(g=>g.key==='forecast').pass,pass);
