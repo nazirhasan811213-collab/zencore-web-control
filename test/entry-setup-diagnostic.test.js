@@ -16,3 +16,5 @@ test('diagnosis separates stale source, expired authorization and mismatched tim
  a.equal(inspect({...m,receivedAt:at,entryAuthorizedAt:at-61000},settings,at).reason,'ENTRY_EVENT_EXPIRED');
  a.equal(inspect({...m,receivedAt:at,entryAuthorizedAt:at-1},settings,at).reason,'ENTRY_AUTHORIZATION_MISMATCH');
 });
+
+test('missing/null plan cannot interrupt dispatch diagnostics',()=>{const result=inspect({symbol:'XAUUSD',timeframe:'15',strategyNormal:{side:'BUY',plan:null,sop:{}}},settings);a.equal(result.checks.planValid,false);});

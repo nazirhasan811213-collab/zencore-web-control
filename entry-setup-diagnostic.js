@@ -16,7 +16,7 @@ function inspect(market={},profile={},at=Date.now()){
   sourceFresh:fresh(market.receivedAt,30000),authorizationFresh:fresh(market.entryAuthorizedAt,60000),
   qualificationFresh:fresh(s.qualifiedAt,60000),
   authorizationMatches:market.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?market.entryAuthorizedAt===s.qualifiedAt&&market.entryAuthorizedAt<=market.signalObservedAt:market.entryAuthorizedAt===market.signalObservedAt,
-  planValid:!!adapter?.planPass(n.side,n.plan,s),confirmationsPass:!!adapter?.confirmations(n.side,s).pass,
+  planValid:!!adapter?.planPass(n.side,n.plan||{},s),confirmationsPass:!!adapter?.confirmations(n.side,s).pass,
   contractValid:!!Contract.createEntryDecision(market)};
  let reason=!checks.settingsValid?'ENTRY_SETTINGS_INVALID':!checks.modeSelected?'ENTRY_TF_NOT_SELECTED':
   !checks.tfEnabled||!checks.lotConfigured||!checks.layersConfigured?'ENTRY_TF_NOT_CONFIGURED':
