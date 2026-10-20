@@ -34,6 +34,7 @@ function ingest(batch,now=Date.now()){
   d.receivedAt=now;
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
+  require('./indicator-chart-history').history.observe(m,now);
   channels.set(channelKey,m);
   const current=entries.get(d.symbol);
   if(!current||m.signalObservedAt>=current.signalObservedAt)entries.set(d.symbol,m);

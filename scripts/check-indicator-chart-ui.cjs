@@ -1,0 +1,37 @@
+const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('node:assert/strict');
+(async()=>{
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1050}}),errors=[],requests=[];
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push({method:r.method(),url:r.url()}));
+ const now=Date.now(),latest=Math.floor(now/900000)*900000;let stale=false,missing=false;
+ const candles=tf=>Array.from({length:tf===2?48:18},(_,i)=>{const close=4100+Math.sin(i*.4)*3+i*.15;return {time:latest-((tf===2?48:18)-1-i)*tf*60000,timeframe:String(tf),observedAt:now,open:close-.3,high:close+.6,low:close-.8,close,hema20:close-.8,hema40:close-1.6,solid:i===35?'BUY':null};});
+ const views=()=>({ok:true,symbol:'XAUUSD',views:[2,15].map(tf=>({timeframe:tf,status:stale?'STALE':'LIVE',market:missing?null:{symbol:'XAUUSD',timeframe:String(tf),sourceBarTime:latest,receivedAt:now,signalObservedAt:now,open:4106,high:4108,low:4105,close:4107,price:4107,hema20:4106,hema40:4105,strategyNormal:{state:'WAIT',side:tf===2?'BUY':'SELL',solid:true,sop:{triggerAt:latest+1,hema2:{mode:'BUY'},hema15:{mode:'SELL'}},plan:{entry:4107,sl:4104,tp1:4110,tp2:4113,tp3:4116}}}}))});
+ await page.route('**/*',route=>{
+  const u=new URL(route.request().url()),p=u.pathname;
+  if(p==='/analysis')return route.fulfill({body:fs.readFileSync('precision-entry.html','utf8').replace('<head>','<head><script>window.EventSource=undefined</script>').replace('<main class="app dual-app">','<main class="app dual-app"><p>TEST DATA — visual QA only</p>'),contentType:'text/html; charset=utf-8'});
+  if(p==='/api/analysis/timeframes')return route.fulfill({json:views()});
+  if(p==='/api/analysis/chart')return route.fulfill({json:{ok:true,symbol:'XAUUSD',timeframe:u.searchParams.get('tf'),candles:missing?[]:candles(Number(u.searchParams.get('tf')))}});
+  if(p.startsWith('/api/'))return route.fulfill({json:{ok:false}});
+  const file=p.slice(1);if(/^[\w.-]+\.(js|css)$/.test(file)&&fs.existsSync(file))return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.css')?'text/css':'application/javascript'});
+  return route.fulfill({body:''});
+ });
+ await page.goto('http://localhost/analysis');await page.getByText('FEED LIVE',{exact:true}).first().waitFor();
+ assert.equal(await page.locator('.zc-indicator-chart').count(),2);assert.equal(await page.locator('.zc-chart-stage canvas').count(),2);
+ assert.match(await page.locator('[data-timeframe="2"] .zc-chart-ohlc').innerText(),/O 4106.00.*C 4107.00/);
+ assert.match(await page.locator('[data-timeframe="15"] .zc-chart-note').innerText(),/Sejarah sejak server bermula/);
+ assert(await page.locator('.zc-chart-stage canvas').first().evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let green=0,red=0;for(let i=0;i<d.length;i+=4){if(d[i+1]>150&&d[i]<140)green++;if(d[i]>180&&d[i+1]<160)red++;}return green>50&&red>50;}),'canvas draws indicators and levels');
+ const out=process.env.ZENCORE_CHART_PREVIEW_DIR||'.';fs.mkdirSync(out,{recursive:true});
+ await page.screenshot({path:path.join(out,'native-chart-desktop.png'),fullPage:true});
+ await page.getByRole('button',{name:'Besarkan candle TF2',exact:true}).click();
+ await page.getByRole('button',{name:'Tutup chart ZenCore TF2',exact:true}).click();assert(await page.locator('[data-timeframe="2"] .zc-indicator-chart').isHidden());
+ await page.getByRole('button',{name:'Buka chart ZenCore TF2',exact:true}).click();assert(await page.locator('[data-timeframe="2"] .zc-indicator-chart').isVisible());
+ await page.getByRole('button',{name:'TF15 • Intraday',exact:true}).click();assert(await page.locator('[data-timeframe="2"]').isHidden());
+ await page.getByRole('button',{name:'Semua TF',exact:true}).click();
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(out,'native-chart-mobile.png'),fullPage:true});
+ stale=true;await page.waitForFunction(()=>[...document.querySelectorAll('.zc-chart-status')].every(e=>e.textContent==='DATA TERAKHIR'),null,{timeout:6000});
+ assert.equal(await page.locator('.zc-chart-status.is-live').count(),0);
+ missing=true;await page.locator('#pairSelector').dispatchEvent('change');await page.waitForFunction(()=>[...document.querySelectorAll('.zc-chart-status')].every(e=>e.textContent==='TUNGGU FEED'));
+ assert(await page.locator('.zc-chart-empty').first().isVisible());
+ assert(requests.every(r=>r.method==='GET'),'display never sends trade/control/settings writes');assert.deepEqual(errors,[]);
+ console.log('Native chart UI passed: real candle rendering, TF isolation, zoom/toggle, stale/empty states, mobile width, GET-only requests.');await browser.close();
+})().catch(e=>{console.error(e);process.exit(1);});
