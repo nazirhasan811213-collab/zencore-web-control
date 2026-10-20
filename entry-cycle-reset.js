@@ -37,7 +37,7 @@ function createEntryCycleReset(store){
   }
  }
  async function check(user,pod,market){
-  if(![POLICY,'PINE_3TRIGGERS_4OF5_V2'].includes(market?.strategyNormal?.sop?.entryPolicyVersion))return {allowed:true,reason:null};
+  if(![POLICY,'PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4'].includes(market?.strategyNormal?.sop?.entryPolicyVersion))return {allowed:true,reason:null};
   const mode=String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING',k=key(user,pod,mode);
   if(!cache.has(k))cache.set(k,typeof store.lastStrategyCycleReset==='function'?await store.lastStrategyCycleReset(user,pod,mode):null);
   const reset=cache.get(k);
