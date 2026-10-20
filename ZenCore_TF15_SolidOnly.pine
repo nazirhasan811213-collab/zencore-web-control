@@ -40,6 +40,8 @@ varip int zc_hold_closed_at = na
 varip string zc_hold_reason = "NO_NATIVE_SOLID"
 varip int zc_parent_qualified = na
 varip string zc_cycle_kind = "INITIAL"
+// One qualified re-entry candidate per native SOLID; close/price changes never reset it.
+varip bool zc_followup_used = false
 varip int zc_source_setup_at = na
 varip int[] zc_path_times = array.new_int()
 varip float[] zc_path_prices = array.new_float()
@@ -949,9 +951,12 @@ bool universal_reentry_buy = is_hema_bull and not curr_active and price_cross_em
 bool universal_reentry_sell = is_hema_bear and not curr_active and price_cross_ema9_down and wt1 < wt2
 
 var int last_reentry_bar = 0
-bool trigger_reentry = (post_sl_buy or post_sl_sell or pullback_buy or pullback_sell or universal_reentry_buy or universal_reentry_sell) and (bar_index - last_reentry_bar > 5)
+// Use bar-persistent state so realtime label rollback recreates the same bar label.
+var int zc_chart_reentry_source = na
+bool trigger_reentry = (post_sl_buy or post_sl_sell or pullback_buy or pullback_sell or universal_reentry_buy or universal_reentry_sell) and (bar_index - last_reentry_bar > 5) and not na(zc_native_setup) and (na(zc_chart_reentry_source) or zc_chart_reentry_source != zc_native_setup)
 
 if trigger_reentry
+    zc_chart_reentry_source := zc_native_setup
     string re_strength = ""
     color re_bg_col = na
     color re_txt_col = color.black
@@ -1451,6 +1456,7 @@ if zc_close_all_pulse
     zc_hold_active := false
     zc_hold_closed_at := zc_seq_now
 if zc_hold_new_source
+    zc_followup_used := false
     array.push(zc80_seen, zc_seq_key)
     if array.size(zc80_seen) > 500
         array.shift(zc80_seen)
@@ -1547,8 +1553,9 @@ if not na(zc_seq_completed) and array.size(zc_path_times)>0
             if zc_recent_peak-zc_pb_price>=atr*0.10
                 zc_recent_pullback := true
 bool zc_reentry_momentum = draft_ribbon and math.abs(he1-he2) >= atr*0.10 and math.abs(he1-he2) > math.abs(he1[1]-he2[1]) and (zc24_buy ? he1>he1[1] and he2>he2[1] and wt1>wt2 and close>math.max(high[1],math.max(he1,he2)) : he1<he1[1] and he2<he2[1] and wt1<wt2 and close<math.min(low[1],math.min(he1,he2))) and math.abs(wt1-wt2)>math.abs(wt1[1]-wt2[1])
-bool zc_followup = barstate.isrealtime and zc_hold_active and not na(zc_seq_completed) and (not xc_active or zc_seq_now-zc_seq_completed>60000) and zc_recent_pullback and zc_reentry_momentum and zc80_data and zc80_passed>=3
+bool zc_followup = barstate.isrealtime and zc_hold_active and not na(zc_seq_completed) and (not xc_active or zc_seq_now-zc_seq_completed>60000) and zc_recent_pullback and zc_reentry_momentum and zc80_data and zc80_passed>=3 and not zc_followup_used
 if zc_followup
+    zc_followup_used := true
     zc_parent_qualified := zc_seq_completed
     zc_seq_completed := na
     zc_seq_bar := timenow
@@ -1755,7 +1762,7 @@ if array.size(zc_path_times)>0
     for zc_i = 0 to array.size(zc_path_times)-1
         array.push(zc_path_parts,"["+str.tostring(array.get(zc_path_times,zc_i))+","+f_num(array.get(zc_path_prices,zc_i))+"]")
 string zc_reentry_json = "{\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"fastPrevious\":"+f_num(he1[1])+",\"slowPrevious\":"+f_num(he2[1])+",\"wtGapPrevious\":"+f_num(math.abs(wt1[1]-wt2[1]))+",\"pricePath\":["+array.join(zc_path_parts,",")+"]}"
-string zc24_meta_json = "{\"entryRuleVersion\":\"TF15_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF15-PINE-SOLID-3OF4-FORECAST45-2.7\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF15_PINE_PLAN_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"exitLockVersion\":\"PINE_STEPLOCK_BE_TF15_V1\",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"entryRuleVersion\":\"TF15_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF15-PINE-SOLID-3OF4-FORECAST45-2.7-REENTRY1\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF15_PINE_PLAN_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"exitLockVersion\":\"PINE_STEPLOCK_BE_TF15_V1\",\"atrPeriod\":14,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
