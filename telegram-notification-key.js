@@ -8,7 +8,10 @@ function notificationKey(e,previous=null){
  const fallback=e.kind==='ENTRY'
   ? [e.side,plan?.entry??e.anchor??e.message?.match(/Entry:\s*([^|\n]+)/)?.[1]??'UNKNOWN']
   : [position?.anchor||previous?.activePlan?.side||'UNKNOWN'];
- const identity=JSON.stringify(['ZENCORE_NOTIFICATION_V2',e.symbol,String(e.timeframe||'2'),e.kind,e.side||null,setup||fallback,reentry,e.kind==='CLOSE'?Number(e.percent)||100:null]);
+ const parts=['ZENCORE_NOTIFICATION_V2',e.symbol,String(e.timeframe||'2'),e.kind,e.side||null,setup||fallback,reentry,e.kind==='CLOSE'?Number(e.percent)||100:null];
+ if(e.kind==='TP_HIT')parts.push(e.targetNumber);
+ if(e.kind==='PULLBACK')parts.push(e.pullbackStage);
+ const identity=JSON.stringify(parts);
  return crypto.createHash('sha256').update(identity).digest('hex');
 }
 module.exports={notificationKey};
