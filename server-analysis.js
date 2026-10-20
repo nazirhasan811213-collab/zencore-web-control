@@ -24,7 +24,7 @@ const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let globalUserTradeMonitor = null;
 let signalOutcomes = null;
-require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(String(market.timeframe)==='2'?{...market,strategyNormal:{...market.strategyNormal,state:'WAIT'}}:market));
+require('./analysis-alert-bus').on('market', market => require('./analysis-alert-input').ingestMarket(analysisAlerts,market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = Number(process.env.ZENCORE_INTERNAL_V17_PORT || (process.env.NODE_ENV==='test'?PUBLIC_PORT+3:10003));
