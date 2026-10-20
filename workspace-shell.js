@@ -21,11 +21,11 @@
   } else {
     document.body.classList.add('zc-workspace');
     const aside=document.createElement('aside');aside.className='zc-workspace-nav';aside.id='zcWorkspaceNav';
-    const brand=document.createElement('a');brand.className='zc-workspace-brand';brand.href='/app';brand.innerHTML='<b><span class="zc-logo" aria-hidden="true"><i class="zc-logo-ring ring-a"></i><i class="zc-logo-ring ring-b"></i><i class="zc-logo-ring ring-c"></i><i class="zc-logo-shield"></i><i class="zc-logo-z"></i><i class="zc-logo-flare"></i></span><span>ZenCore</span></b><small>XAUUSD · TF2 / TF15</small>';
+    const brand=document.createElement('a');brand.className='zc-workspace-brand';brand.href='/app';brand.innerHTML='<b><span class="zc-logo" aria-hidden="true"><i class="zc-logo-ring ring-a"></i><i class="zc-logo-ring ring-b"></i><i class="zc-logo-ring ring-c"></i><i class="zc-logo-shield"></i><i class="zc-logo-z"></i><i class="zc-logo-flare"></i></span><span>ZenCore Errante</span></b><small>XAUUSD · TF2 / TF15</small>';
     const nav=document.createElement('nav');nav.setAttribute('aria-label','Navigasi utama');links.forEach(l=>nav.append(makeLink(...l)));
     const note=document.createElement('p');note.className='zc-workspace-note';note.textContent='Baca setup. Ikut SOP. Jaga risiko.';
     aside.append(brand,nav,note);document.body.prepend(aside);
-    const menu=document.createElement('button');menu.type='button';menu.className='zc-menu-toggle';menu.textContent='☰ Menu ZenCore';menu.setAttribute('aria-controls',aside.id);menu.setAttribute('aria-expanded','false');
+    const menu=document.createElement('button');menu.type='button';menu.className='zc-menu-toggle';menu.textContent='☰ Menu ZenCore Errante';menu.setAttribute('aria-controls',aside.id);menu.setAttribute('aria-expanded','false');
     function close(){document.body.classList.remove('zc-menu-open');menu.setAttribute('aria-expanded','false');}
     menu.onclick=()=>{const open=document.body.classList.toggle('zc-menu-open');menu.setAttribute('aria-expanded',String(open));};
     document.body.prepend(menu);nav.addEventListener('click',close);document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();menu.focus();}});

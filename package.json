@@ -1,10 +1,10 @@
 {
-  "name": "zencore-web-control",
+  "name": "zencore-errante",
   "version": "1.0.0",
   "private": true,
-  "description": "ZenCore TradingView Pine Script webhook dashboard",
+  "description": "ZenCore Errante isolated broker installation",
   "scripts": {
-    "start": "node -r ./compat-v17.js server-analysis.js",
+    "start": "node errante-bootstrap.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:secure-pod": "python -m unittest mt5-secure-pod/test_secure_pod.py",
     "test:hosted-worker": "PYTHONPATH=hosted-mt5-worker python -m unittest discover -s hosted-mt5-worker -p 'test_*.py'"

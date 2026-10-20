@@ -92,7 +92,7 @@ class AnalysisAlerts {
     const lines=newAlerts.slice(0,12).map(a=>`${a.severity==='error'?'🔴':'🟠'} ${a.component}: ${String(a.message||'').slice(0,160)}`);
     if(newAlerts.length>12)lines.push(`+ ${newAlerts.length-12} lagi amaran dalam panel admin.`);
     if(resolved.length)lines.push(`🟢 ${resolved.length} amaran terdahulu sudah tiada pada semakan ini. Semak panel untuk status terkini.`);
-    await this.telegram(p.telegramId,`ZENCORE • SYSTEM HEALTH\n${stamp} MYT\n${lines.join('\n')}\nhttps://zencore-precision-entry.onrender.com/admin/monitoring`);
+    await this.telegram(p.telegramId,`ZENCORE • SYSTEM HEALTH\n${stamp} MYT\n${lines.join('\n')}\nhttps://zencore-errante.onrender.com/admin/monitoring`);
     p.healthNotificationState=current;await this.put(user,p);
   }
   async telegram(chat,text) {

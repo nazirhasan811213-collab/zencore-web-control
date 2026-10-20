@@ -13,7 +13,7 @@ class InstallEaTests(unittest.TestCase):
     (editor/'metaeditor64.exe').write_bytes(b'editor')
     (data/'origin.txt').write_bytes((str(editor)+'\r\n').encode(encoding))
     (resource/'ZenCoreExecutor.mq5').write_text('new source')
-    target=data/'MQL5'/'Experts'/'ZenCore'/'ZenCoreExecutor.ex5';target.parent.mkdir(parents=True);target.write_bytes(b'old binary')
+    target=data/'MQL5'/'Experts'/'ZenCoreErrante'/'ZenCoreExecutor.ex5';target.parent.mkdir(parents=True);target.write_bytes(b'old binary')
     def compile(args,**kwargs):
      self.assertEqual(args[0],str(editor/'metaeditor64.exe'))
      self.assertFalse(target.exists(),'old binary must be removed before compile')
@@ -25,7 +25,7 @@ class InstallEaTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);(root/'MQL5').mkdir();(root/'metaeditor64.exe').write_bytes(b'editor')
    resource=root/'resource';resource.mkdir();(resource/'ZenCoreExecutor.mq5').write_text('source')
-   target=root/'MQL5'/'Experts'/'ZenCore'/'ZenCoreExecutor.ex5';target.parent.mkdir(parents=True);target.write_bytes(b'old')
+   target=root/'MQL5'/'Experts'/'ZenCoreErrante'/'ZenCoreExecutor.ex5';target.parent.mkdir(parents=True);target.write_bytes(b'old')
    with patch.object(connector,'RESOURCE',resource),patch.object(connector.subprocess,'CREATE_NO_WINDOW',0,create=True),patch.object(connector.subprocess,'run'):
     with self.assertRaisesRegex(RuntimeError,'EA_COMPILE_FAILED'):connector.install_ea(root)
    self.assertFalse(target.exists())

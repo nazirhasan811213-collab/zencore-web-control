@@ -1523,6 +1523,7 @@ const server = http.createServer(async (req, res) => {
   }
   if(req.method==='GET'&&pathname==='/ready'){
     const status=await readiness.snapshot();
+    status.product="ZenCore Errante"; status.preparationMode=true;
     return sendJson(res,status.ok?200:503,{...status,autoEntry:{enabled:AUTOTRADE_EXECUTION_ENABLED||LOCAL_EA_EXECUTION_ENABLED||!!String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS||'').trim(),signalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')},demoEntry:{allUsers:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_ENABLED||''),scoped:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS||'').trim(),mode:'DEMO',accountRestricted:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_ACCOUNT_MASK||'')}});
   }
 

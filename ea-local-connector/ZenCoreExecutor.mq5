@@ -3,8 +3,8 @@
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
-const ulong MAGIC=32603231;
-const ulong MAGIC15=32601545;
+const ulong MAGIC=42603231;
+const ulong MAGIC15=42601545;
 input string GoldBrokerSymbol="";
 string channel,account,server,eaSession,ownerPod,boundMode;
 string keys[],values[];
@@ -540,9 +540,9 @@ bool BindCurrentAccount(){
  if(!AllowedServer() || !SupportedAccount())return false;
  account=currentAccount;server=currentServer;boundMode=AccountMode();ownerPod="";enabledSymbols="";
  string digest=Hash(server+"|"+boundMode);if(digest=="")return false;
- channel="ZenCore\\"+account+"-"+StringSubstr(digest,0,16);
+ channel="ZenCoreErrante\\"+account+"-"+StringSubstr(digest,0,16);
  // Existing folders are valid. The exclusive file open proves writability/ownership.
- FolderCreate("ZenCore",FILE_COMMON);FolderCreate(channel,FILE_COMMON);
+ FolderCreate("ZenCoreErrante",FILE_COMMON);FolderCreate(channel,FILE_COMMON);
  lockHandle=FileOpen(channel+"\\ea.lock",FILE_WRITE|FILE_BIN|FILE_COMMON);
  if(lockHandle==INVALID_HANDLE)return false;
  eaSession=StringSubstr(Hash(account+server+(string)GetMicrosecondCount()+(string)ChartID()),0,32);

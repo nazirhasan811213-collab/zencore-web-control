@@ -168,7 +168,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     });
     assert.equal(response.status, 200);
     const viewerAutoTradePage = await response.text();
-    assert.match(viewerAutoTradePage, /ZenCore Total Trade System/);
+    assert.match(viewerAutoTradePage, /ZenCore Errante Total Trade System/);
     assert.match(viewerAutoTradePage, /viewer-mode\.js/);
 
     response = await fetch(`${BASE}/account`, {
@@ -356,7 +356,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     response = await fetch(`${BASE}/analysis`, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
     const analysisPage = await response.text();
-    assert.match(analysisPage, /ZenCore Precision Entry/);
+    assert.match(analysisPage, /ZenCore Errante Precision Entry/);
     assert.match(analysisPage, /Status Auto Trade MT5/);
     assert.match(analysisPage, /mt5LiveMonitor[^>]+hidden/);
     assert.match(analysisPage, /auto-trade-monitor\.js/);
@@ -365,7 +365,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
     const results = await response.text();
-    assert.match(results, /ZenCore Signal Validation/);
+    assert.match(results, /ZenCore Errante Signal Validation/);
     assert.match(results, /Bukan trade broker atau rekod P\/L MT5/);
 
     response = await fetch(`${BASE}/results-core.js`);
@@ -384,7 +384,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
     const autoTradePage = await response.text();
-    assert.match(autoTradePage, /ZenCore Total Trade System/);
+    assert.match(autoTradePage, /ZenCore Errante Total Trade System/);
     assert.match(autoTradePage, /EMERGENCY CLOSE ALL/);
     assert.match(autoTradePage, /mt5ConnectDialog/);
     assert.match(autoTradePage, /Credential MT5 dienkripsi dalam browser/);

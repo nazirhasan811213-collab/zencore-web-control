@@ -1,6 +1,6 @@
 'use strict';
 const LANDING_URL = 'https://zencore-terminal.magicpeony2.chatgpt.site';
-const SYSTEM_URL = 'https://zencore-precision-entry.onrender.com';
+const SYSTEM_URL = 'https://zencore-errante.onrender.com';
 function whatsappNumber(value) {
   let text = String(value || '').trim().replace(/[\s()+.-]/g, '');
   if (text.startsWith('00')) text = text.slice(2);

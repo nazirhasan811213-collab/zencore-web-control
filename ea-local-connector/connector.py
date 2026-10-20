@@ -21,9 +21,9 @@ import uuid
 from status_view import status_cards
 from protocol import VERSION, EA_VERSION, CONNECTOR_BUILD, validation_code, command_server_time, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat, broker_metadata
 
-BASE = 'https://zencore-precision-entry.onrender.com'
-INSTALL = Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZenCore' / 'Connector'
-COMMON = Path(os.environ.get('APPDATA','.')) / 'MetaQuotes' / 'Terminal' / 'Common' / 'Files' / 'ZenCore'
+BASE = 'https://zencore-errante.onrender.com'
+INSTALL = Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZenCoreErrante' / 'Connector'
+COMMON = Path(os.environ.get('APPDATA','.')) / 'MetaQuotes' / 'Terminal' / 'Common' / 'Files' / 'ZenCoreErrante'
 RESOURCE = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
 
 class Blob(ctypes.Structure):
@@ -81,7 +81,7 @@ class Api:
 def install_ea(data_folder):
     data_folder = Path(data_folder)
     if not (data_folder/'MQL5').is_dir(): raise RuntimeError('Pilih folder melalui MT5: File > Open Data Folder.')
-    experts = data_folder/'MQL5'/'Experts'/'ZenCore'
+    experts = data_folder/'MQL5'/'Experts'/'ZenCoreErrante'
     experts.mkdir(parents=True,exist_ok=True)
     source = experts/'ZenCoreExecutor.mq5'
     shutil.copyfile(RESOURCE/'ZenCoreExecutor.mq5',source)
@@ -113,11 +113,11 @@ def install_app():
     if Path(sys.executable).resolve() != target.resolve(): shutil.copy2(sys.executable,target)
     import winreg
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Run') as key:
-        winreg.SetValueEx(key,'ZenCoreConnector',0,winreg.REG_SZ,'"'+str(target)+'" --background')
+        winreg.SetValueEx(key,'ZenCoreErranteConnector',0,winreg.REG_SZ,'"'+str(target)+'" --background')
     desktop = Path(os.environ['USERPROFILE'])/'Desktop'
     desktop.mkdir(exist_ok=True)
     # .url is a Windows shortcut, no shell/PowerShell invocation required.
-    (desktop/'ZenCore Connector.url').write_text('[InternetShortcut]\nURL='+target.as_uri()+'\n',encoding='utf-8')
+    (desktop/'ZenCore Errante Connector.url').write_text('[InternetShortcut]\nURL='+target.as_uri()+'\n',encoding='utf-8')
 
 def readiness_message(code):
     messages={
@@ -337,7 +337,7 @@ class App:
     def __init__(self,root,test_mode=False):
         self.root=root;self.ui_queue=queue.Queue();self.session_api=None
         self.runner=None;self.runner_thread=None;self.pairing=False;self.switching=False
-        root.title('ZenCore Connect '+CONNECTOR_BUILD+' • EA '+EA_VERSION)
+        root.title('ZenCore Errante Connect '+CONNECTOR_BUILD+' • EA '+EA_VERSION)
         height=min(830,max(620,root.winfo_screenheight()-120))
         root.geometry('880x'+str(height)+'+40+20');root.minsize(760,620)
         bg='#07111d';panel='#101e30';muted='#a9bed3';root.configure(bg=bg)

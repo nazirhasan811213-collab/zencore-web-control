@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZenCore V6 — Decision & AI Coach Terminal</title>
+<title>ZenCore Errante V6 — Decision & AI Coach Terminal</title>
 <link rel="stylesheet" href="/style-v5.css">
 <style>
 .v6-head{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:10px;margin-top:10px}.v6-decision{padding:16px;border:1px solid #27394f;background:linear-gradient(135deg,#0c1724,#081019);border-radius:16px;position:relative;overflow:hidden}.v6-decision:before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:#7c8ea7}.v6-decision.ready:before{background:var(--green)}.v6-decision.sell:before,.v6-decision.stop:before{background:var(--red)}.v6-decision.wait:before{background:var(--amber)}.v6-decision.manage:before{background:var(--blue)}.v6-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}.v6-main-decision{font-size:34px;font-weight:950;letter-spacing:.3px;margin-top:5px}.v6-sub{margin-top:5px;color:#b7c6da;font-size:12px;line-height:1.5}.v6-scorebox{padding:16px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#0f1722,#080d14);display:grid;grid-template-columns:1fr 1fr;gap:10px}.v6-big{font-size:32px;font-weight:950;margin-top:3px}.v6-scorebar{grid-column:1/-1;height:9px;background:#152132;border-radius:99px;overflow:hidden}.v6-scorebar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--amber),var(--green));transition:width .35s ease}.v6-note{grid-column:1/-1;font-size:9px;color:var(--muted);line-height:1.45}.v6-grid{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(360px,.82fr);gap:10px;margin-top:10px}.v6-side{display:flex;flex-direction:column;gap:10px}.gate-list{display:flex;flex-direction:column;gap:7px}.gate{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:9px;border:1px solid var(--line);border-radius:10px;background:#080d14}.gate-num{width:29px;height:29px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:900;background:#111c2a;color:#98aac1}.gate-name{font-size:11px;font-weight:800}.gate-desc{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.35}.gate-status{font-size:9px;font-weight:900;padding:5px 7px;border-radius:999px;border:1px solid var(--line)}.gate.pass .gate-status{color:var(--green);border-color:#32e38d55;background:#32e38d0b}.gate.warn .gate-status{color:var(--amber);border-color:#ffb74b55;background:#ffb74b0b}.gate.fail .gate-status{color:var(--red);border-color:#ff607055;background:#ff60700b}.coach-v6{padding:14px;border:1px solid #51a8ff36;background:linear-gradient(135deg,#0b1724,#08101a);border-radius:13px}.coach-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.coach-title{font-size:16px;font-weight:900}.coach-status{font-size:9px;padding:5px 7px;border-radius:999px;border:1px solid #51a8ff55;color:#8ec8ff}.coach-summary{font-size:13px;line-height:1.55;margin-top:10px;font-weight:700}.coach-section{margin-top:12px;padding-top:10px;border-top:1px solid #ffffff0d}.coach-section h4{font-size:10px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.7px;color:#8fa3bd}.coach-section ul{margin:0;padding-left:17px;color:#c4d1e2;font-size:10px;line-height:1.6}.coach-action{padding:10px;border-radius:10px;background:#51a8ff0b;border:1px solid #51a8ff2c;font-size:11px;line-height:1.55}.coach-avoid{padding:10px;border-radius:10px;background:#ffb74b08;border:1px solid #ffb74b28;font-size:10px;line-height:1.55;color:#d8c39f}.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.plan-item{padding:9px;border:1px solid var(--line);border-radius:9px;background:#070d14}.plan-item b{display:block;font-size:12px;margin-top:3px}.signal-banner{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:8px}.signal-chip{padding:9px;border:1px solid var(--line);border-radius:10px;background:#080d14}.signal-chip b{display:block;margin-top:3px;font-size:12px}.focus-note{padding:10px;border:1px solid #32e38d2d;background:#32e38d08;border-radius:10px;font-size:10px;line-height:1.5}.phase-pill{font-size:9px;border:1px solid #ffffff18;border-radius:999px;padding:5px 8px;color:#899bb2}.performance-later{opacity:.72}.summary{grid-template-columns:repeat(7,1fr)}.summary .card:nth-child(8){display:none}.side .mt5box{display:none}.auto-later{padding:10px;border:1px dashed #ffffff22;border-radius:10px;color:var(--muted);font-size:10px;line-height:1.45}.charttoolbar{gap:8px}.charttoolbar .muted{margin-left:auto}.coach-old{font-size:10px;line-height:1.55;color:#a9bad0}.v6-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.market-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:8px}.market-strip .mini{min-width:0}.market-strip b{white-space:normal}.decision-explain{font-size:10px;color:#9fb0c5;line-height:1.45;margin-top:8px}@media(max-width:1250px){.v6-head,.v6-grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(4,1fr)}}@media(max-width:760px){.v6-main-decision{font-size:27px}.v6-scorebox{grid-template-columns:1fr 1fr}.summary{grid-template-columns:repeat(2,1fr)}.market-strip{grid-template-columns:1fr 1fr}.gate{grid-template-columns:32px 1fr}.gate-status{grid-column:2}.plan-grid{grid-template-columns:1fr}.signal-banner{grid-template-columns:1fr}.charttoolbar .muted{margin-left:0}}
@@ -12,7 +12,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE V6 — DECISION & AI COACH TERMINAL</h1><div class="sub">Analisis jelas • saringan setup • zon entry • AI Coach Bahasa Malaysia • auto trade belum diaktifkan</div></div></div>
+    <div class="brand"><div class="logo">ZC</div><div><h1>ZENCORE ERRANTE V6 — DECISION & AI COACH TERMINAL</h1><div class="sub">Analisis jelas • saringan setup • zon entry • AI Coach Bahasa Malaysia • auto trade belum diaktifkan</div></div></div>
     <div class="statuses">
       <span class="pill"><span class="dot off" id="dot"></span><span id="feed">TUNGGU DATA PINE</span></span>
       <span class="pill" id="feedType">TIADA DATA</span>
@@ -24,9 +24,9 @@
 
   <section class="v6-head">
     <div id="v6DecisionCard" class="v6-decision wait">
-      <div class="v6-label">Keputusan ZenCore Sekarang</div>
+      <div class="v6-label">Keputusan ZenCore Errante Sekarang</div>
       <div id="v6Decision" class="v6-main-decision warn">MENUNGGU ANALISIS</div>
-      <div id="v6DecisionSub" class="v6-sub">ZenCore sedang menunggu data pasaran untuk menentukan sama ada setup layak dipertimbangkan.</div>
+      <div id="v6DecisionSub" class="v6-sub">ZenCore Errante sedang menunggu data pasaran untuk menentukan sama ada setup layak dipertimbangkan.</div>
       <div class="signal-banner">
         <div class="signal-chip"><span class="k">Arah Pasaran</span><b id="v6MarketState">—</b></div>
         <div class="signal-chip"><span class="k">Status Entry</span><b id="v6EntryState">—</b></div>
@@ -55,12 +55,12 @@
   <section class="v6-grid">
     <section class="panel chartpanel">
       <div class="charthead">
-        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">Carta ZenCore dengan Entry / SL / TP dan overlay indikator</div></div>
-        <div class="chips"><span class="chip">ZENCORE</span><span class="chip">ENTRY ZONE</span><span class="chip">SL / TP</span><span class="chip">EMA / HEMA</span><span class="chip">ORDER BLOCK</span><span class="chip">S/R</span></div>
+        <div><div class="symbol"><span id="symbol">—</span> <span class="muted" id="tf"></span></div><div class="price" id="price">—</div><div class="muted" id="chartMeta">Carta ZenCore Errante dengan Entry / SL / TP dan overlay indikator</div></div>
+        <div class="chips"><span class="chip">ZENCORE ERRANTE</span><span class="chip">ENTRY ZONE</span><span class="chip">SL / TP</span><span class="chip">EMA / HEMA</span><span class="chip">ORDER BLOCK</span><span class="chip">S/R</span></div>
       </div>
 
       <div class="charttabs">
-        <button class="charttab active" data-target="zenMapPane">CARTA ZENCORE</button>
+        <button class="charttab active" data-target="zenMapPane">CARTA ZENCORE ERRANTE</button>
         <button class="charttab" data-target="liveMarketPane">LIVE MARKET</button>
       </div>
 
@@ -117,7 +117,7 @@
             </script>
           </div>
         </div>
-        <div class="notice" style="margin-top:8px">Gunakan <b>CARTA ZENCORE</b> untuk signal, Entry, SL, TP, HEMA dan saringan ZenCore. LIVE MARKET ialah carta TradingView berasingan untuk melihat pergerakan pasaran.</div>
+        <div class="notice" style="margin-top:8px">Gunakan <b>CARTA ZENCORE ERRANTE</b> untuk signal, Entry, SL, TP, HEMA dan saringan ZenCore Errante. LIVE MARKET ialah carta TradingView berasingan untuk melihat pergerakan pasaran.</div>
       </div>
     </section>
 
@@ -160,12 +160,12 @@
   <section class="panel sec" style="margin-top:10px">
     <div class="coach-v6">
       <div class="coach-head"><div><div class="k">AI Coach — Panduan Analisis Sekarang</div><div class="coach-title">Apa trader perlu faham sekarang?</div></div><span id="v6CoachBadge" class="coach-status">TUNGGU DATA</span></div>
-      <div id="v6CoachSummary" class="coach-summary">AI Coach akan menterjemahkan bacaan ZenCore kepada panduan ringkas dalam Bahasa Malaysia.</div>
-      <div class="coach-section"><h4>Apa yang ZenCore nampak</h4><ul id="v6CoachNow"><li>Tunggu data pasaran.</li></ul></div>
+      <div id="v6CoachSummary" class="coach-summary">AI Coach akan menterjemahkan bacaan ZenCore Errante kepada panduan ringkas dalam Bahasa Malaysia.</div>
+      <div class="coach-section"><h4>Apa yang ZenCore Errante nampak</h4><ul id="v6CoachNow"><li>Tunggu data pasaran.</li></ul></div>
       <div class="coach-section"><h4>Tindakan yang lebih disiplin</h4><div id="v6CoachAction" class="coach-action">Tunggu sehingga data mencukupi sebelum membuat keputusan.</div></div>
       <div class="coach-section"><h4>Apa yang perlu dielakkan</h4><div id="v6CoachAvoid" class="coach-avoid">Elakkan entry berdasarkan satu indikator sahaja dan elakkan mengejar harga di luar zon entry.</div></div>
-      <div class="coach-section"><h4>Pelan ZenCore</h4><div id="v6Plan" class="plan-grid"><div class="plan-item"><span class="k">Entry</span><b>—</b></div><div class="plan-item"><span class="k">Invalidation / SL</span><b>—</b></div><div class="plan-item"><span class="k">Target</span><b>—</b></div><div class="plan-item"><span class="k">R:R</span><b>—</b></div></div></div>
-      <div class="coach-section"><h4>Nota Pine Coach</h4><div id="tip" class="coach-old">Menunggu nota daripada Pine ZenCore…</div></div>
+      <div class="coach-section"><h4>Pelan ZenCore Errante</h4><div id="v6Plan" class="plan-grid"><div class="plan-item"><span class="k">Entry</span><b>—</b></div><div class="plan-item"><span class="k">Invalidation / SL</span><b>—</b></div><div class="plan-item"><span class="k">Target</span><b>—</b></div><div class="plan-item"><span class="k">R:R</span><b>—</b></div></div></div>
+      <div class="coach-section"><h4>Nota Pine Coach</h4><div id="tip" class="coach-old">Menunggu nota daripada Pine ZenCore Errante…</div></div>
     </div>
   </section>
 
@@ -198,10 +198,10 @@
       <div class="notice" style="margin-top:9px">Performance Engine penuh — win rate, expectancy, profit factor dan prestasi mengikut gred/sesi — akan dibina selepas V6 Decision Engine stabil.</div>
     </section>
 
-    <section class="panel sec"><div class="title">Aktiviti ZenCore Live</div><div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Tunggu signal / TP / trailing…</div></div><div class="notice" style="margin-top:9px">Signal, TP, SL, runner management dan close separuh akan muncul di sini.</div></section>
+    <section class="panel sec"><div class="title">Aktiviti ZenCore Errante Live</div><div id="alertTape" class="scroll" style="max-height:305px"><div class="muted">Tunggu signal / TP / trailing…</div></div><div class="notice" style="margin-top:9px">Signal, TP, SL, runner management dan close separuh akan muncul di sini.</div></section>
   </section>
 
-  <div class="foot">ZenCore V6 • Decision Engine + AI Coach Bahasa Malaysia. Skor dan panduan ialah alat analisis; tiada setup yang menjamin profit.</div>
+  <div class="foot">ZenCore Errante V6 • Decision Engine + AI Coach Bahasa Malaysia. Skor dan panduan ialah alat analisis; tiada setup yang menjamin profit.</div>
 </div>
 <script src="/app-v5.js"></script>
 <script src="/alerts-v3.js"></script>
@@ -306,10 +306,10 @@
     const ul=zc('v6CoachNow');if(ul)ul.innerHTML=now.map(v=>`<li>${v}</li>`).join('');
 
     let action='Tunggu. Jangan buat entry sehingga arah, lokasi dan risiko lebih jelas.';
-    if(x.decision.startsWith('ENTRY'))action=`Setup ${x.dir} berada pada tahap paling kuat V6 sekarang. Semak candle confirmation, pastikan harga masih dekat zon entry dan kekalkan SL pada tahap ZenCore. Jika harga sudah lari jauh, batalkan entry dan tunggu setup baharu.`;
+    if(x.decision.startsWith('ENTRY'))action=`Setup ${x.dir} berada pada tahap paling kuat V6 sekarang. Semak candle confirmation, pastikan harga masih dekat zon entry dan kekalkan SL pada tahap ZenCore Errante. Jika harga sudah lari jauh, batalkan entry dan tunggu setup baharu.`;
     else if(x.decision.startsWith('TUNGGU ENTRY'))action=`Arah ${x.dir} ada, tetapi belum masa terbaik untuk masuk. Fokus tunggu harga kembali ke zon entry atau signal tepat BUY/SELL baru daripada Pine.`;
     else if(x.decision==='NO TRADE')action='Skip setup semasa. Tunggu signal baharu yang mempunyai alignment lebih baik. Tidak trade juga sebahagian daripada disiplin.';
-    else if(x.decision.startsWith('URUS'))action=`Posisi aktif. Utamakan pengurusan risiko: jangan alihkan SL lebih jauh untuk memberi ruang kepada loss. Gunakan TP / trailing yang sudah dirancang oleh ZenCore.`;
+    else if(x.decision.startsWith('URUS'))action=`Posisi aktif. Utamakan pengurusan risiko: jangan alihkan SL lebih jauh untuk memberi ruang kepada loss. Gunakan TP / trailing yang sudah dirancang oleh ZenCore Errante.`;
     setText('v6CoachAction',action);
 
     const avoid=[];

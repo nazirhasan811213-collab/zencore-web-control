@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#061019">
-  <title>Auto Trade — ZenCore Precision Entry</title>
+  <title>Auto Trade — ZenCore Errante Precision Entry</title>
   <link rel="stylesheet" href="/auth.css?v=1.0">
   <link rel="stylesheet" href="/home.css?v=2.0">
   <link rel="stylesheet" href="/auto-trade.css?v=20261007.news-choice">
@@ -19,7 +19,7 @@
       <header class="portal-top autotrade-top">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-          <div><b>ZenCore Precision Entry</b><span>XAUUSD · TF2 / TF15 · REAL / DEMO</span></div>
+          <div><b>ZenCore Errante Precision Entry</b><span>XAUUSD · TF2 / TF15 · REAL / DEMO</span></div>
         </div>
 
         <nav class="top-nav" aria-label="Navigasi utama">
@@ -38,7 +38,7 @@
       <section class="auto-hero">
         <div>
           <div class="hero-line">
-            <span class="eyebrow">ZenCore Total Trade System</span>
+            <span class="eyebrow">ZenCore Errante Total Trade System</span>
             <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
           </div>
           <h1>Kawal Auto Trade XAUUSD.</h1>
@@ -63,7 +63,7 @@
       <aside class="security-banner" aria-label="EA Connector">
         <div>
           <b>Fasa 1: EA + Connector pada PC Windows.</b>
-          <span>Buka ZenCore Connector → klik Pasang EA → login ZenCore → link akaun MT5 pilihan anda. Tak perlu set WebRequest atau API Python. Password broker kekal dalam MT5.</span>
+          <span>Buka ZenCore Errante Connector → klik Pasang EA → login ZenCore Errante → link akaun MT5 pilihan anda. Tak perlu set WebRequest atau API Python. Password broker kekal dalam MT5.</span>
           <span>Stop worker lama sebelum tukar. Bila akaun dah link, pair, lot, layer dan ON/OFF semua set kat sini.</span>
         </div>
       </aside>
@@ -98,7 +98,7 @@
             <div><span>SERVER</span><b id="serverMask">—</b></div>
             <div><span>BROKER</span><b id="brokerMask">—</b></div>
             <div><span>MODE</span><b id="tradeMode">BELUM LINK</b></div>
-            <div><span>HOST</span><b id="podOwner">ZENCORE MANAGED</b></div>
+            <div><span>HOST</span><b id="podOwner">ZENCORE ERRANTE MANAGED</b></div>
           </div>
           <div class="pod-health">
             <div><span>Terminal</span><b id="terminalState">WAIT</b></div>
@@ -109,7 +109,7 @@
             MT5 belum connect. Buka Connector kat PC Windows untuk link akaun.
           </div>
           <div id="pairingActions" class="pairing-actions">
-            <div><b>Sambung dalam ZenCore</b><span>Isi login, password dan server dalam popup. Browser encrypt dulu sebelum hantar.</span></div>
+            <div><b>Sambung dalam ZenCore Errante</b><span>Isi login, password dan server dalam popup. Browser encrypt dulu sebelum hantar.</span></div>
             <button id="connectMt5Button" type="button">SAMBUNG MT5</button>
           </div>
           <div class="pairing-actions">
@@ -161,7 +161,7 @@
             <div hidden><input id="fxLotPerLayer" value="0.01"><input id="fxLayers" value="1"><b id="totalLotPreview"></b><b id="fxTotalLotPreview"></b></div>
             <fieldset class="symbol-fieldset">
               <legend>AUTO EXIT • ENTRY MANUAL</legend><strong id="manualExitStatus">BELUM DISAHKAN EA</strong><p id="manualLayerStatus" role="status" aria-live="polite">Layer aktif: — / 10</p>
-              <label class="risk-ack"><input id="manualExitEnabled" type="checkbox"><span>Saya buka BUY/SELL sendiri. ZenCore urus exit posisi manual XAUUSD baharu.</span></label>
+              <label class="risk-ack"><input id="manualExitEnabled" type="checkbox"><span>Saya buka BUY/SELL sendiri. ZenCore Errante urus exit posisi manual XAUUSD baharu.</span></label>
               <div class="tf-inputs"><label>TP1<input id="manualTp1" type="number" value="2" readonly></label><label>TP2<input id="manualTp2" type="number" value="4" readonly></label><label>TP3<input id="manualTp3" type="number" value="6" readonly></label><label>SL<input id="manualSl" type="number" value="3" readonly></label></div>
               <small>Jarak harga Gold, bukan jumlah untung USD. Contoh jarak 1.00: BUY 4000 → TP 4001. Hanya akaun hedging; posisi lama dan EA lain tidak diambil alih. TP/SL dikira dari entry setiap tiket. Had 10 layer ialah amaran sahaja; posisi tambahan tetap dilindungi. Close separuh tidak mengosongkan slot. Saiz lot ikut entry anda. Tetapan berkuat kuasa selepas EA menerima arahan Simpan. SL sedia ada yang lebih ketat dikekalkan.</small>
             </fieldset>
@@ -175,7 +175,7 @@
 
             <label class="risk-ack">
               <input id="riskAcknowledged" type="checkbox">
-              <span>Saya faham lot dan layer besar boleh naikkan risiko. ZenCore akan bagi warning, tapi order tak dihalang selepas saya confirm.</span>
+              <span>Saya faham lot dan layer besar boleh naikkan risiko. ZenCore Errante akan bagi warning, tapi order tak dihalang selepas saya confirm.</span>
             </label>
             <div id="settingsError" class="form-error" role="alert"></div>
             <button id="saveSettingsButton" class="save-settings" type="submit">SIMPAN KONFIGURASI</button>
@@ -200,7 +200,7 @@
           </div>
           <p id="riskMessage">Tunggu level entry, SL dan info broker dulu untuk kira risiko sebenar.</p>
           <div class="size-recommendation">
-            <div><span>CADANGAN ZENCORE</span><b id="recommendedSize">TUNGGU DATA</b></div>
+            <div><span>CADANGAN ZENCORE ERRANTE</span><b id="recommendedSize">TUNGGU DATA</b></div>
             <small id="recommendationMessage">Cadangan lot/layer perlukan setup aktif dan info saiz lot broker.</small>
             <button id="applyRecommendationButton" type="button" disabled>GUNA CADANGAN</button>
           </div>
@@ -231,7 +231,7 @@
       </section>
       </div>
 
-      <aside class="zc-risk-notice" aria-label="Penafian risiko"><strong>PENAFIAN RISIKO</strong><p>ZenCore tidak menjamin keuntungan; dagangan berisiko tinggi dan boleh menyebabkan kehilangan sebahagian atau seluruh modal.</p></aside>
+      <aside class="zc-risk-notice" aria-label="Penafian risiko"><strong>PENAFIAN RISIKO</strong><p>ZenCore Errante tidak menjamin keuntungan; dagangan berisiko tinggi dan boleh menyebabkan kehilangan sebahagian atau seluruh modal.</p></aside>
       <footer class="portal-foot autotrade-foot">
         <span>Normal SOP V32 • TF mengikut feed • EXIT 32.3 StepLock • Hosted MT5 staged</span>
 
@@ -254,15 +254,15 @@
   <dialog id="mt5ConnectDialog" class="control-dialog mt5-connect-dialog">
     <form method="dialog" autocomplete="off">
       <button class="dialog-close" value="cancel" aria-label="Tutup">×</button>
-      <span class="eyebrow">ZenCore Hosted MT5</span>
+      <span class="eyebrow">ZenCore Errante Hosted MT5</span>
       <h2>Sambungkan akaun MT5 Demo</h2>
       <p id="mt5EncryptionNotice">Memuatkan public encryption key…</p>
       <label><span>MT5 LOGIN ID</span><input id="mt5LoginId" inputmode="numeric" autocomplete="off" maxlength="32"></label>
       <label><span>MT5 PASSWORD</span><input id="mt5Password" type="password" autocomplete="new-password" maxlength="128"></label>
       <label><span>MT5 SERVER</span><input id="mt5Server" autocomplete="off" maxlength="120" placeholder="Contoh: InterStellarFinancial-Demo"></label>
-      <label><span>PASSWORD AKAUN ZENCORE</span><input id="mt5ZenCorePassword" type="password" autocomplete="current-password"></label>
+      <label><span>PASSWORD AKAUN ZENCORE ERRANTE</span><input id="mt5ZenCore ErrantePassword" type="password" autocomplete="current-password"></label>
       <label><span>TAIP CONNECT MT5 DEMO</span><input id="mt5ConnectConfirmation" autocomplete="off" placeholder="CONNECT MT5 DEMO"></label>
-      <div class="credential-boundary"><b>Sebelum submit:</b> Login, password dan server dienkripsi menggunakan RSA-OAEP + AES-256-GCM. ZenCore web hanya menerima ciphertext.</div>
+      <div class="credential-boundary"><b>Sebelum submit:</b> Login, password dan server dienkripsi menggunakan RSA-OAEP + AES-256-GCM. ZenCore Errante web hanya menerima ciphertext.</div>
       <div id="mt5ConnectError" class="form-error" role="alert"></div>
       <div class="dialog-actions"><button value="cancel" class="dialog-cancel">BATAL</button><button id="confirmMt5ConnectButton" value="default" class="dialog-confirm" type="button">ENKRIP &amp; SAMBUNG</button></div>
     </form>
@@ -303,7 +303,7 @@
       <span class="eyebrow danger">Emergency Action</span>
       <h2>Tutup semua posisi MT5?</h2>
       <p>Butang ni akan cuba close semua posisi dan stop entry baru. Order close masih perlukan connection broker.</p>
-      <label><span>PASSWORD AKAUN ZENCORE</span><input id="emergencyPassword" type="password" autocomplete="current-password"></label>
+      <label><span>PASSWORD AKAUN ZENCORE ERRANTE</span><input id="emergencyPassword" type="password" autocomplete="current-password"></label>
       <label><span>TAIP TUTUP SEMUA</span><input id="emergencyConfirmation" autocomplete="off" placeholder="TUTUP SEMUA"></label>
       <div id="emergencyError" class="form-error" role="alert"></div>
       <div class="dialog-actions"><button value="cancel" class="dialog-cancel">BATAL</button><button id="confirmEmergencyButton" value="default" class="dialog-confirm danger" type="button">CLOSE ALL</button></div>
