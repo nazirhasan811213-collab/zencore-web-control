@@ -16,7 +16,7 @@ function configureErrante(env) {
   for (const key of ['ZENCORE_LOCAL_EA_EXECUTION_EMAILS', 'ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS']) env[key] = '';
   env.ZENCORE_ENTRY_SIGNALS_PAUSED = 'true';
   env.ZENCORE_AUTH_ENABLED = 'true';
-  env.ZENCORE_AUTOTRADE_ENABLED = 'true';
+  env.ZENCORE_AUTOTRADE_ENABLED = 'false';
   env.ZENCORE_PRODUCT_NAME = 'ZenCore Errante';
   return env;
 }

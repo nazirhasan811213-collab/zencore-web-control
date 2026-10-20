@@ -17,4 +17,5 @@ test('Errante preparation cannot be armed through inherited execution flags', ()
   assert.equal(env.ZENCORE_AUTOTRADE_EXECUTION_ENABLED, 'false');
   assert.equal(env.ZENCORE_HOSTED_MT5_ENABLED, 'false');
   assert.equal(env.ZENCORE_ENTRY_SIGNALS_PAUSED, 'true');
+  assert.equal(env.ZENCORE_AUTOTRADE_ENABLED, 'false');
 });
