@@ -24,6 +24,8 @@ std::map<string,string> files,fields;
 template<class T> int ArraySize(const std::vector<T>& a){return (int)a.size();}
 template<class T> void ArrayResize(std::vector<T>& a,int n){a.resize(n);}
 ulong GetTickCount64(){return clockMs;}
+bool closeLocked=false;
+bool EntryCloseLocked(ulong){return closeLocked;}
 bool Permissions(){return allowed;}
 int PositionsTotal(){return 1;}
 ulong PositionGetTicket(int){return 77;}
@@ -58,7 +60,7 @@ int main(){
  for(int sign:{1,-1}){
   side=sign==1?POSITION_TYPE_BUY:1;owned=true;allowed=true;closed=false;failModify=true;oldSl=100-sign;clockMs+=1000;files.clear();protectionTickets.clear();protectionTryAt.clear();
   files["risk-setup.tsv"]=Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("tp1",std::to_string(100+sign))+Row("tp2",std::to_string(100+2*sign))+Row("tp3",std::to_string(100+3*sign));
-  quote=100+1.2*sign;ManageLocalStepLock();assert(files.count("lock-77.tsv"));assert(oldSl==100-sign);
+  closeLocked=true;quote=100+1.2*sign;ManageLocalStepLock();assert(oldSl==100-sign);assert(!closed);closeLocked=false;ManageLocalStepLock();assert(files.count("lock-77.tsv"));assert(oldSl==100-sign);
   failModify=false;clockMs+=1000;quote=100+.5*sign;ManageLocalStepLock();assert(oldSl==100); // remembers touch after pullback
   clockMs+=1000;quote=100+2.2*sign;ManageLocalStepLock();assert(oldSl==100+sign);
   clockMs+=1000;quote=100+3.2*sign;ManageLocalStepLock();assert(oldSl==100+2*sign);
