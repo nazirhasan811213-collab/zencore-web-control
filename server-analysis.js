@@ -115,6 +115,10 @@ if (AUTH_ENABLED) {
     });
     if (!authState.ready) {
     await store.init();
+    if (process.env.ZENCORE_ERRANTE_ADMIN_PASSWORD_HASH) {
+      const result = await require('./errante-admin-bootstrap').provisionErranteAdmin(store, process.env);
+      if (result.created) console.log('Errante administrator provisioned.');
+    }
     if (ADMIN_EMAILS.length && typeof store.promoteAdminsByEmail === 'function') {
       const promoted = await store.promoteAdminsByEmail(ADMIN_EMAILS);
       if (promoted) console.log(`ZenCore RBAC promoted ${promoted} configured admin account(s).`);
