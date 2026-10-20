@@ -13,7 +13,7 @@ function inspect(market={},profile={},at=Date.now()){
   modeSelected:validation.value.strategyMode==='BOTH'||validation.value.strategyMode===mode,
   tfEnabled:effective.enabled===true,lotConfigured:effective.lotPerLayer>0,layersConfigured:Number.isInteger(effective.layers)&&effective.layers>0,
   executionChannel:market.feedChannel==='EXECUTION',entryEvent:market.entryEvent===true,
-  sourceFresh:fresh(market.receivedAt,30000),authorizationFresh:fresh(market.entryAuthorizedAt,60000),
+  sourceFresh:fresh(market.receivedAt,require('./entry-data-age').maximumAge(market)),authorizationFresh:fresh(market.entryAuthorizedAt,60000),
   qualificationFresh:fresh(s.qualifiedAt,60000),
   authorizationMatches:market.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?market.entryAuthorizedAt===s.qualifiedAt&&market.entryAuthorizedAt<=market.signalObservedAt:market.entryAuthorizedAt===market.signalObservedAt,
   planValid:!!adapter?.planPass(n.side,n.plan||{},s),confirmationsPass:!!adapter?.confirmations(n.side,s).pass,

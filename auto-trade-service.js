@@ -1430,7 +1430,7 @@ function createAutoTradeService(options = {}) {
             return {
               symbol,
               timeframe: market?.timeframe || null,
-              freshness: market?.receivedAt&&market?.signalObservedAt&&now()-market.receivedAt<=30000&&now()-market.signalObservedAt<=30000&&market.signalObservedAt<=now()+5000?'LIVE':market?.receivedAt?'STALE':'OFFLINE',
+              freshness: market?.receivedAt&&market?.signalObservedAt&&now()-market.receivedAt<=require('./entry-data-age').maximumAge(market)&&now()-market.signalObservedAt<=require('./entry-data-age').maximumAge(market)&&market.signalObservedAt<=now()+5000?'LIVE':market?.receivedAt?'STALE':'OFFLINE',
               ageSeconds: market?.receivedAt ? Math.round((now() - market.receivedAt) / 1000) : null,
               state: market?.strategyNormal?.state || 'WAIT',
               side: market?.strategyNormal?.side || 'WAIT',
@@ -1498,7 +1498,7 @@ function createAutoTradeService(options = {}) {
       for (let market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(['2','3'].includes(options.scalpingTimeframe)&&(![options.scalpingTimeframe,'15'].includes(String(market.timeframe))||String(market.timeframe)==='2'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF2_RIBBON_V1'))continue;
-        if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
+        if (!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market)) continue;
         if (!allowedDemoSymbols.includes(symbol))continue;
         if(!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
         const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
