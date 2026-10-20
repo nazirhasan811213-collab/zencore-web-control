@@ -169,6 +169,14 @@ function closeMessage(e,time){
 function telegramMessage(e){
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
+  if(['TP_HIT','PULLBACK'].includes(e.kind)){
+    if(!require('./telegram-progress').allowed(e))return `ZENCORE | PERGERAKAN TIDAK DISAHKAN\n${footer}`;
+    const p=e.telegramPlan;
+    return [e.kind==='TP_HIT'?`✅ ZENCORE | TP${e.targetNumber} DILEPASI`:'⚠️ ZENCORE | HATI-HATI PULLBACK',
+      `${e.symbol} • TF${e.timeframe} • ${e.side}`,`Entry pelan: ${price(p.entry)}`,
+      e.kind==='TP_HIT'?`Paras TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])}`:`Unduran: ${price(Math.abs(e.bestPrice-e.currentPrice))} • Ambang 0.25 ATR: ${price(e.atrReference*.25)}`,
+      `Harga semasa: ${price(e.currentPrice)}`,e.kind==='PULLBACK'?'Harga mula berundur daripada harga terbaik sejak entry.':'Harga Pine telah mencapai atau melepasi sasaran pelan.',footer].join('\n');
+  }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
   if(['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
