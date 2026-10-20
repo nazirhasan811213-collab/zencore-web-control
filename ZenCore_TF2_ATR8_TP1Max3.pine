@@ -955,10 +955,9 @@ bool universal_reentry_sell = is_hema_bear and not curr_active and price_cross_e
 var int last_reentry_bar = 0
 // Use bar-persistent state so realtime label rollback recreates the same bar label.
 var int zc_chart_reentry_source = na
-bool trigger_reentry = (post_sl_buy or post_sl_sell or pullback_buy or pullback_sell or universal_reentry_buy or universal_reentry_sell) and (bar_index - last_reentry_bar > 5) and not na(zc_native_setup) and (na(zc_chart_reentry_source) or zc_chart_reentry_source != zc_native_setup)
+bool trigger_reentry = (post_sl_buy or post_sl_sell or pullback_buy or pullback_sell or universal_reentry_buy or universal_reentry_sell) and (bar_index - last_reentry_bar > 5)
 
 if trigger_reentry
-    zc_chart_reentry_source := zc_native_setup
     string re_strength = ""
     color re_bg_col = na
     color re_txt_col = color.black
@@ -980,8 +979,10 @@ if trigger_reentry
     float re_y = curr_isBuy ? low - (atr * 0.8) : high + (atr * 0.8)
     string re_style = curr_isBuy ? label.style_label_up : label.style_label_down
     
-    f_addMgmtLabel(bar_index, re_y, re_strength, re_style, re_bg_col, re_txt_col, size.small)
-    zc_native_reentry := re_strength
+    if not na(zc_native_setup) and (na(zc_chart_reentry_source) or zc_chart_reentry_source != zc_native_setup)
+        f_addMgmtLabel(bar_index, re_y, re_strength, re_style, re_bg_col, re_txt_col, size.small)
+        zc_native_reentry := re_strength
+        zc_chart_reentry_source := zc_native_setup
     
     // --- TRIGGER ALERT: RE-ENTRY ---
     string re_alert_dir = (post_sl_buy or pullback_buy or universal_reentry_buy) ? "BUY 🟢" : "SELL 🔴"

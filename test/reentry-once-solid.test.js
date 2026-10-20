@@ -35,7 +35,7 @@ for(const file of ['ZenCore_TF2_ATR8_TP1Max3.pine','ZenCore_TF2_SolidOnly.pine',
  a.match(s,/bool zc_followup = [^\n]+ and not zc_followup_used/);
  a.match(s,/if zc_followup\n    zc_followup_used := true/);
  a.match(s,/var int zc_chart_reentry_source = na/);
- a.match(s,/bool trigger_reentry = [^\n]+zc_chart_reentry_source != zc_native_setup/);
- a.match(s,/if trigger_reentry\n    zc_chart_reentry_source := zc_native_setup/);
+ a.match(s,/if not na\(zc_native_setup\) and \(na\(zc_chart_reentry_source\) or zc_chart_reentry_source != zc_native_setup\)/);
+ a.ok(s.includes('        zc_chart_reentry_source := zc_native_setup'));
  a.match(s,/zc_recent_pullback and zc_reentry_momentum/);
 });
