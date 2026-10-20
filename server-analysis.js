@@ -1695,6 +1695,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/precision-entry.css') return sendAsset(res, 'precision-entry.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-alerts.js') return sendAsset(res, 'analysis-alerts.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-alerts.css') return sendAsset(res, 'analysis-alerts.css', 'text/css; charset=utf-8');
+  if(req.method==='GET'&&['/indicator-chart-core.js','/indicator-chart.js','/indicator-chart.css'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/precision-entry.js') return sendAsset(res, 'precision-entry.js', 'application/javascript; charset=utf-8');
 
   if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
@@ -1831,6 +1832,13 @@ const server = http.createServer(async (req, res) => {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalMarkets()));}
     catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia.'});}
+  }
+
+  if(req.method==='GET' && pathname==='/api/analysis/chart'){
+    if(AUTH_ENABLED && !await requireSession(req,res))return;
+    const symbol=url.searchParams.get('symbol')||'XAUUSD',tf=url.searchParams.get('tf');
+    if(symbol!=='XAUUSD'||!['2','15'].includes(tf))return sendJson(res,400,{ok:false,error:'Chart TF2/TF15 XAUUSD sahaja.'});
+    return sendJson(res,200,require('./indicator-chart-history').history.snapshot(tf));
   }
 
   if(req.method==='GET' && pathname==='/api/analysis/timeframes/events'){
