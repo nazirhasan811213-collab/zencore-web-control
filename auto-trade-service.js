@@ -1582,6 +1582,10 @@ function createAutoTradeService(options = {}) {
           }
         }
         if(!management||!positions.some(p=>p.symbol===symbol&&p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode))continue;
+        // Errante: hold automatic management until every layer in this TF is 60s old.
+        // Emergency close is a separate command and broker SL stays active.
+        if(positions.some(p=>p.symbol===symbol&&p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode&&
+          (!Number.isFinite(Number(p.openedAt))||Number(p.openedAt)<=0||now()<Number(p.openedAt)+60000)))continue;
         const issued = hostedAccount
           ? await issueHostedCommand({
               userId: profile.userId, accountId: hostedAccount.id,
