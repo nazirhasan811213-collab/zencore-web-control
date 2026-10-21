@@ -49,7 +49,7 @@
 
   function populatePairs() {
     if (!pairFilter || !Results) return;
-    pairFilter.insertAdjacentHTML('beforeend', Results.SUPPORTED_MARKETS.map(symbol => (
+    pairFilter.insertAdjacentHTML('beforeend', ['XAUUSD'].map(symbol => (
       `<option value="${escape(symbol)}">${escape(symbol)}</option>`
     )).join(''));
   }
@@ -86,9 +86,9 @@
     pairTableBody.innerHTML = pairs.length ? pairs.map(pair => {
       const rateClass = pair.winRate !== null && pair.resolved >= 20 ? 'good' : 'early';
       return `<tr>
-        <td class="pair-name"><a href="/analysis?pair=${encodeURIComponent(pair.symbol)}">${escape(pair.symbol)}</a></td>
+        <td class="pair-name"><a href="/analysis?pair=${encodeURIComponent(pair.symbol)}">${escape(pair.symbol)} · TF${escape(pair.timeframe||'—')}</a></td>
         <td>${pair.resolved}</td>
-        <td class="pair-record"><span class="wins">${pair.wins}W</span> • <span class="losses">${pair.losses}L</span></td>
+        <td class="pair-record"><span class="wins">${pair.wins} TP1</span> • <span class="losses">${pair.losses} tamat</span></td>
         <td><span class="rate-value ${rateClass}">${percent(pair.winRate)}</span></td>
         <td>${pair.open}</td>
         <td><span class="maturity-badge ${maturityClass(pair)}">${escape(maturityLabel(pair))}</span></td>
@@ -97,6 +97,7 @@
   }
 
   function lockText(row) {
+    if(row.source==='PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL')return 'TP1 '+(row.hitTp1?'✓':'—')+' • TP2 '+(row.hitTp2?'✓':'—')+' • TP3 '+(row.hitTp3?'✓':'—');
     const stage = Number(row.slLockStage) || 0;
     if (stage >= 3) return 'SL → TP2';
     if (stage === 2) return 'SL → TP1';
@@ -106,7 +107,7 @@
 
   function openCard(row) {
     return `<a class="open-card ${escape(row.side.toLowerCase())}" href="/analysis?pair=${encodeURIComponent(row.symbol)}">
-      <div><div class="open-card-head"><b>${escape(row.symbol)}</b><span>${escape(row.side)}</span></div><small>Dibuka ${escape(Results.formatDateTime(row.openedAt))} • SOP ${Math.round(row.score)}/100</small></div>
+      <div><div class="open-card-head"><b>${escape(row.symbol)} · TF${escape(row.timeframe||'—')}</b><span>${escape(row.side)}</span></div><small>Dibuka ${escape(Results.formatDateTime(row.openedAt))} • SOP ${Math.round(row.score)}/100</small></div>
       <div class="open-entry"><span>ENTRY</span><b>${escape(Results.formatPrice(row.entry, row.symbol))}</b></div>
       <div class="open-lock"><span>${escape(lockText(row))}</span><span>TP1 ${row.hitTp1 ? '✓' : '—'} • TP2 ${row.hitTp2 ? '✓' : '—'} • TP3 ${row.hitTp3 ? '✓' : '—'}</span></div>
     </a>`;
@@ -140,7 +141,7 @@
     const locked = row.slLockStage > 0 ? 'locked' : '';
     return `<tr>
       <td>${timeMarkup(row)}</td>
-      <td class="pair-name">${escape(row.symbol)}</td>
+      <td class="pair-name">${escape(row.symbol)} · TF${escape(row.timeframe||'—')}</td>
       <td><span class="side-badge ${escape(row.side.toLowerCase())}">${escape(row.side)}</span></td>
       <td class="price-cell">${escape(Results.formatPrice(row.entry, row.symbol))}</td>
       <td><span class="outcome-badge ${escape(row.tone)}">${escape(row.outcomeLabel)}</span></td>
@@ -152,7 +153,7 @@
 
   function historyLabel(count) {
     const labels = {
-      all: 'Semua keputusan terkini', win: 'Signal menang', loss: 'Signal terkena SL',
+      all: 'Semua rekod terkini',tp1:'Harga mencapai TP1',closed:'Signal tamat direkod', win: 'Signal menang', loss: 'Signal terkena SL',
       protected: 'Result dilindungi StepLock', managed: 'Result exit management',
       ambiguous: 'Candle ambiguous', open: 'Signal masih open'
     };
@@ -178,22 +179,6 @@
     setText('lastUpdated', updated ? `Update ${Results.formatDateTime(updated)}` : 'Belum dikemas kini');
   }
 
-  async function fetchPair(symbol) {
-    const response = await fetch(`/api/strategy-performance/${encodeURIComponent(symbol)}/NORMAL`, {
-      cache: 'no-store',
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' }
-    });
-    if (response.status === 401) {
-      goToLogin();
-      throw new Error('UNAUTHENTICATED');
-    }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    if (!payload?.ok) throw new Error('Invalid result payload');
-    return payload;
-  }
-
   async function refreshResults() {
     if (refreshing || !Results) return;
     refreshing = true;
@@ -203,14 +188,13 @@
     }
     connectionState('connecting', 'MEMUATKAN');
     try {
-      const settled = await Promise.allSettled(Results.SUPPORTED_MARKETS.map(fetchPair));
-      const payloads = settled.filter(item => item.status === 'fulfilled').map(item => item.value);
-      aggregate = Results.aggregatePerformance(payloads);
-      renderAll();
-      refreshDurable();
-      if (payloads.length === Results.SUPPORTED_MARKETS.length) connectionState('live', 'DATA TERKINI');
-      else if (payloads.length) connectionState('partial', `${payloads.length}/9 PAIR`);
-      else connectionState('error', 'DATA GAGAL');
+      const response=await fetch('/api/signal-records',{cache:'no-store',credentials:'same-origin'});
+      if(response.status===401){goToLogin();return;}
+      if(!response.ok)throw Error('Simpanan rekod tidak tersedia');
+      const payload=await response.json();if(!payload.ok)throw Error('Data rekod tidak sah');
+      aggregate=Results.fromStoredRecords(payload);
+      renderAll();refreshDurable();
+      connectionState(payload.lastError||payload.syncPending?'partial':'live',payload.lastError?'SYNC GAGAL • REKOD TERAKHIR':payload.syncPending?'MEMULIHKAN SEJARAH':'REKOD DATABASE');
     } catch (_) {
       connectionState('error', 'CUBA SEMULA');
     } finally {

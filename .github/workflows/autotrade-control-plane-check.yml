@@ -88,12 +88,16 @@ jobs:
       - name: Check native indicator chart UI
         run: node scripts/check-indicator-chart-ui.cjs
 
+      - name: Check durable signal records UI
+        run: node scripts/check-records-ui.cjs
+
       - name: Save Analysis previews
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: analysis-alert-previews
           path: |
+            records-*.png
             native-chart-*.png
             alert-ui-*.png
             pine-ui-*.png
