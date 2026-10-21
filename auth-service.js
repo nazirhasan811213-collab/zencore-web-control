@@ -1,3 +1,4 @@
+const Access=require('./account-access');
 const { whatsappNumber, promotionLinks } = require('./promotion-links');
 const {
   normalizeEmail,
@@ -28,7 +29,8 @@ function safeUser(user) {
     displayName: user.displayName || user.display_name,
     email: user.email,
     role: user.role || ROLE_CLIENT,
-    status: user.status,
+    status: user.status==='active'&&Access.expired(user)?'expired':user.status,
+    ...Access.fields(user),
     createdAt: user.createdAt || user.created_at,
     lastLoginAt: user.lastLoginAt || user.last_login_at || null,
     ibCode: user.ibCode || user.ib_code || null,
@@ -229,7 +231,7 @@ function createAuthService(options = {}) {
     if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
       throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
     }
-    const client = await store.setClientActiveForAdmin(String(clientId), active === true);
+    const client = await store.setClientActiveForAdmin(String(clientId), active === true, user.id);
     if (!client) throw authError('CLIENT_NOT_FOUND', 'Client tidak dijumpai.', 404);
     return client;
   }
@@ -530,6 +532,7 @@ function createAuthService(options = {}) {
       : (await hashPassword(password), false);
     if (valid && userRow.status === 'pending') throw authError('REGISTRATION_PENDING', 'Pendaftaran masih menunggu kelulusan Admin.', 403);
     if (valid && userRow.status === 'rejected') throw authError('REGISTRATION_REJECTED', 'Pendaftaran belum diluluskan. Hubungi Admin atau IB.', 403);
+    if(valid&&Access.expired(userRow))throw authError('ACCOUNT_EXPIRED','Tempoh aktif 14 hari telah tamat. Hubungi Admin untuk aktifkan semula.',403);
     if (!valid || userRow.status !== 'active') {
       throw authError('INVALID_CREDENTIALS', 'E-mel atau password tidak betul.', 401);
     }
@@ -543,7 +546,7 @@ function createAuthService(options = {}) {
     const token = parseCookies(req?.headers?.cookie)[cookieName];
     if (!token) return null;
     const session = await store.findSession(hashSessionToken(token));
-    if (!session) return null;
+    if (!session || !Access.allowed(session.user)) return null;
     return { ...session, token, user: safeUser(session.user) };
   }
 
@@ -551,7 +554,7 @@ function createAuthService(options = {}) {
     const value = String(password || '');
     if (!userId || !value || typeof store.findUserByIdForLogin !== 'function') return false;
     const userRow = await store.findUserByIdForLogin(userId);
-    if (!userRow || userRow.status !== 'active') return false;
+    if (!Access.allowed(userRow)) return false;
     return verifyPassword(value, userRow.password_hash);
   }
 

@@ -1141,9 +1141,10 @@ function createAutoTradeService(options = {}) {
       if(input.terminalConnected===true&&newPositions.length&&['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await store.appendAudit(pod.userId,'MT5_POSITION_OBSERVED',{timeframe:mode==='TF15_INTRA'?'15':options.scalpingTimeframe,observedAt:seenAt,layers:newPositions.length,lifecycleState:'POSITION_OPEN'});
     }
     const profile=await store.getProfile(pod.userId);
+    const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
-    if(input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
+    if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
       fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&
       !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')){
       reentryCapability.set(pod.userId,{podId:pod.id,at:seenAt});
@@ -1153,13 +1154,14 @@ function createAutoTradeService(options = {}) {
     return {
       ok: true,
       podState: connectionState(updated),
-      desiredState: executionAllowed(pod.userId,pod)&&!/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
-      entryBlockedReason: /^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?'GLOBAL_ENTRY_PAUSED':executionAllowed(pod.userId,pod)?null:'EXECUTION_ROLLOUT_LOCKED',
+      desiredState: accountAccessAllowed&&executionAllowed(pod.userId,pod)&&!/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
+      entryBlockedReason: !accountAccessAllowed?'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED':/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?'GLOBAL_ENTRY_PAUSED':executionAllowed(pod.userId,pod)?null:'EXECUTION_ROLLOUT_LOCKED',
       serverTime: seenAt
     };
   }
 
   async function queuedEntryIsCurrent(command, diagnostic = {}){
+    if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&options.entryAccessAllowed&&!await options.entryAccessAllowed(command.userId)){diagnostic.accountAccess='ACCOUNT_EXPIRED_OR_DISABLED';return false;}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
     if(command.type==='MANAGE_POSITION'&&command.payload?.analysisSnapshot?.entryAnchor==='PINE_SETUP_PLAN_V1'){
@@ -1404,6 +1406,7 @@ function createAutoTradeService(options = {}) {
     const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
+      if(options.entryAccessAllowed&&!await options.entryAccessAllowed(profile.userId)){for(const m of markets)await reportEntryBlock(profile,m,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');continue;}
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
       if (!entryWindow.allowed){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
       const [pod, positions, hostedAccount] = await Promise.all([

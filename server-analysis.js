@@ -246,6 +246,7 @@ if (AUTH_ENABLED) {
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         scalpingTimeframe: '2',
+        entryAccessAllowed:async userId=>require('./account-access').allowed(await authState.store.findUserByIdForLogin(userId)),
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -449,6 +450,12 @@ async function requireSession(req, res, redirectTo = null) {
       if (redirectTo) redirect(res, redirectTo);
       else sendJson(res, 401, { ok: false, error: 'Sesi tamat. Sila log masuk semula.' });
       return null;
+    }
+    // End authenticated streams when the client's access period ends as well.
+    const deadline=session.user.role==='client'?new Date(session.user.accessExpiresAt).getTime():NaN;
+    if(Number.isFinite(deadline)&&deadline>Date.now()){
+      const expiryTimer=setTimeout(()=>res.end(),deadline-Date.now());expiryTimer.unref?.();
+      res.once('close',()=>clearTimeout(expiryTimer));
     }
     return session;
   } catch (_) {
@@ -1388,7 +1395,7 @@ async function handlePodProvisioning(req, res) {
   }
   try {
     const user = await authState.store.findUserByIdForLogin(userId);
-    if (!user || user.status !== 'active') {
+    if (!require('./account-access').allowed(user)) {
       return sendJson(res, 404, { ok: false, error: 'Akaun ZenCore tidak dijumpai.' });
     }
     const result = await autoTradeState.service.provisionDemoPod(userId, body.label);
