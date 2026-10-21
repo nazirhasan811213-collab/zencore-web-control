@@ -166,7 +166,7 @@ function closeMessage(e,time){
  ].join('\n');
 }
 
-function telegramMessage(e){
+function telegramMessageBody(e){
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(['TP_HIT','PULLBACK'].includes(e.kind)){
@@ -217,6 +217,12 @@ function telegramMessage(e){
     `Harga feed ketika signal: ${price(e.telegramMarket?.price)}\nFeed: candle ${e.telegramMarket?.timeframe||'3'}M ditutup\n\n`+
     `A+ PROFIT QUALITY\nGred: ${qualityGrade(q.score)} • Quality: ${q.score}/100\nStatus: ${q.high?'POTENSI TINGGI':'VALID SOP • LOW QUALITY'}\n\n`+
     `Ulasan: ${q.high?'SOP READY dan quality tinggi. Semak harga entry, SL dan saiz risiko sebelum execute.':'Signal SOP sah, tetapi quality belum 80/100. Untuk precision mode, pertimbang skip setup ini.'}\n\nQuality menilai setup semasa; bukan jaminan profit.\n\n${footer}`;
+}
+// Plain-text separators render consistently in Telegram without parse-mode markup.
+function telegramMessage(e){
+  const [title,...body]=telegramMessageBody(e).split('\n');
+  const border='━━━━━━━━━━━━━━━━━━';
+  return [border,title,'──────────────────',...body,'',`AKHIR MESEJ • TF${e.timeframe||'2'}`,border].join('\n');
 }
 module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade,entryFresh,entrySopAllowed};
 
