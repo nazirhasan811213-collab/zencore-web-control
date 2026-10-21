@@ -18,6 +18,7 @@ const {chromium}=require('playwright'),fs=require('fs'),a=require('node:assert/s
   await page.goto('http://localhost/results');await page.getByText('REKOD DATABASE',{exact:true}).waitFor();
   a.equal(await page.locator('#summarySample').innerText(),'2');a.equal(await page.locator('#summaryWins').innerText(),'1');a.equal(await page.locator('#summaryWinRate').innerText(),'50.0%');
   a.equal(await page.locator('#historyTableBody tr').count(),2);a.match(await page.locator('#historyTableBody').innerText(),/TF15/);a.match(await page.locator('#historyTableBody').innerText(),/CLOSE SIGNAL/);
+  await page.getByRole('button',{name:'History Signal',exact:true}).click();
   await page.locator('[data-filter="tp1"]').click();a.equal(await page.locator('#historyTableBody tr').count(),1);
   await page.locator('[data-filter="closed"]').click();a.equal(await page.locator('#historyTableBody tr').count(),1);
   const download=page.waitForEvent('download');await page.locator('#exportButton').click();const file=await download;a.match(fs.readFileSync(await file.path(),'utf8'),/Timeframe/);
