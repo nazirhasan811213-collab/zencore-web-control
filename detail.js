@@ -198,7 +198,7 @@
     byId('clientIbCode').textContent = adminView
       ? `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • admin boleh pindahkan assignment`
       : `Code: ${String(client.ibCode || 'nazir').toUpperCase()} • assignment dikunci untuk client/IB`;
-    byId('clientAccessText').textContent = client.status === 'active' ? 'Login Active' : 'Login Disabled';
+    byId('clientAccessText').textContent = (client.accessExpired?'EXPIRED • Hubungi Admin':client.status==='active'?'Login Active':'Login Disabled')+(client.accessExpiresAt?' • Tamat: '+new Date(client.accessExpiresAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'');
 
     if (adminView) {
       if (byId('adminClientName')) byId('adminClientName').value = client.displayName || '';
@@ -210,11 +210,13 @@
     }
 
     const button = byId('toggleClientStatus');
-    button.textContent = client.status === 'active' ? 'DISABLE CLIENT' : 'ACTIVATE CLIENT';
+    button.textContent = client.status === 'active' ? 'DISABLE CLIENT' : 'AKTIFKAN 14 HARI';
     button.className = `table-action ${client.status === 'active' ? 'danger' : 'good'}`;
     button.dataset.active = client.status === 'active' ? 'false' : 'true';
     button.dataset.clientId = client.id || '';
     button.dataset.scope = scope;
+    button.disabled=!adminView&&client.accessExpired===true;
+    if(button.disabled)button.textContent='HANYA ADMIN BOLEH AKTIFKAN';
 
     renderTrading(body.trading);
   }

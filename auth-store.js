@@ -1,3 +1,4 @@
+const Access=require('./account-access');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const { guardPool } = require('./database-recovery');
@@ -14,7 +15,8 @@ function publicUser(row) {
     displayName: row.display_name,
     email: row.email,
     role: row.role || 'client',
-    status: row.status,
+    status: row.status==='active'&&Access.expired(row)?'expired':row.status,
+    ...Access.fields(row),
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
     ibCode: row.ib_code || null,
@@ -51,7 +53,8 @@ function publicClient(row) {
     email: row.email,
     phone: row.phone || '',
     icMasked: maskedIc(row.ic_number),
-    status: row.status,
+    status: row.status==='active'&&Access.expired(row)?'expired':row.status,
+    ...Access.fields(row),
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
     ibCode: row.ib_code || null,
@@ -227,6 +230,8 @@ class PostgresAuthStore {
       VALUES ('registration_enabled', 'true'::jsonb)
       ON CONFLICT (setting_key) DO NOTHING;
     `);
+    const accessMigration=await this.pool.query(require('./account-access-migration'));
+    console.log('ZenCore 14-day access ready; initialized clients:',accessMigration.at?.(-1)?.rows?.[0]?.initialized_clients??0);
     await this.deleteExpiredSessions();
   }
 
@@ -489,7 +494,7 @@ class PostgresAuthStore {
           (SELECT COUNT(*)::int FROM zencore_ib_referrers WHERE code <> $1) AS total_ibs,
           (SELECT COUNT(*)::int FROM zencore_ib_referrers WHERE code <> $1 AND active = TRUE) AS active_ibs,
           (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client') AS total_clients,
-          (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client' AND status = 'active') AS active_clients,
+          (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client' AND status = 'active' AND access_expires_at>NOW()) AS active_clients,
           (SELECT COUNT(*)::int FROM zencore_users WHERE role = 'client' AND created_at >= CURRENT_DATE) AS today_clients`,
         [DEFAULT_IB_CODE]
       ),
@@ -532,7 +537,7 @@ class PostgresAuthStore {
     values.push(Math.max(0, Math.floor(Number(offset) || 0)));
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.created_at, u.last_login_at,
+              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -558,7 +563,7 @@ class PostgresAuthStore {
       this.pool.query(
         `SELECT
           COUNT(*)::int AS total_clients,
-          COUNT(*) FILTER (WHERE status = 'active')::int AS active_clients,
+          COUNT(*) FILTER (WHERE status = 'active' AND access_expires_at>NOW())::int AS active_clients,
           COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today_clients
          FROM zencore_users
          WHERE role = 'client' AND ib_referrer_id = $1`,
@@ -577,7 +582,7 @@ class PostgresAuthStore {
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.created_at, u.last_login_at,
+              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_ib_referrers ref
        JOIN zencore_users u
@@ -612,7 +617,22 @@ class PostgresAuthStore {
     return result.rows[0] ? registrationView(result.rows[0]) : null;
   }
 
-  async setClientActiveForAdmin(clientId, active) {
+  async renewClientAccessForAdmin(clientId,adminId=null) {
+    const c=await this.pool.connect();
+    try{
+      await c.query('BEGIN');
+      const result=await c.query(`UPDATE zencore_users SET status='active',access_activated_at=NOW(),
+        access_expires_at=NOW()+INTERVAL '336 hours' WHERE id=$1 AND role='client' AND status IN ('active','disabled') RETURNING *`,[clientId]);
+      const row=result.rows[0];if(!row){await c.query('ROLLBACK');return null;}
+      await c.query('INSERT INTO zencore_access_renewals(user_id,admin_id,activated_at,expires_at) VALUES($1,$2,$3,$4)',[clientId,adminId,row.access_activated_at,row.access_expires_at]);
+      await c.query('DELETE FROM zencore_sessions WHERE user_id=$1',[clientId]);
+      const enriched=await c.query(`SELECT u.*,ref.code AS ib_code,ref.display_name AS ib_name FROM zencore_users u LEFT JOIN zencore_ib_referrers ref ON ref.id=u.ib_referrer_id WHERE u.id=$1`,[clientId]);
+      await c.query('COMMIT');return publicClient(enriched.rows[0]);
+    }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+  }
+
+  async setClientActiveForAdmin(clientId, active, adminId=null) {
+    if(active===true)return this.renewClientAccessForAdmin(clientId,adminId);
     const result = await this.pool.query(
       `UPDATE zencore_users
        SET status = $2
@@ -666,7 +686,7 @@ class PostgresAuthStore {
       }
       const enriched = await client.query(
         `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-                u.created_at, u.last_login_at,
+                u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
                 ref.code AS ib_code, ref.display_name AS ib_name
          FROM zencore_users u
          LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -757,6 +777,7 @@ class PostgresAuthStore {
        FROM zencore_ib_referrers ref
        WHERE u.id = $2
          AND u.role = 'client' AND u.status IN ('active','disabled')
+         AND ($3='disabled' OR u.access_expires_at>NOW())
          AND u.ib_referrer_id = ref.id
          AND ref.user_id = $1
        RETURNING u.id`,
@@ -789,7 +810,7 @@ class PostgresAuthStore {
   async getClientForAdmin(clientId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.created_at, u.last_login_at,
+              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -803,7 +824,7 @@ class PostgresAuthStore {
   async getClientForIb(ibUserId, clientId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.created_at, u.last_login_at,
+              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_ib_referrers ref
        JOIN zencore_users u
@@ -898,7 +919,7 @@ class PostgresAuthStore {
   async findUserForLogin(email) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
-              u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
+              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE u.email = $1
@@ -911,7 +932,7 @@ class PostgresAuthStore {
   async findUserByIdForLogin(userId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
-              u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
+              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE u.id = $1
@@ -939,14 +960,14 @@ class PostgresAuthStore {
   async findSession(tokenHash) {
     const result = await this.pool.query(
       `SELECT s.id AS session_id, s.expires_at,
-              u.id, u.display_name, u.email, u.role, u.status, u.created_at, u.last_login_at,
+              u.id, u.display_name, u.email, u.role, u.status, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_sessions s
        JOIN zencore_users u ON u.id = s.user_id
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE s.token_hash = $1
          AND s.expires_at > NOW()
-         AND u.status = 'active'
+         AND u.status = 'active' AND (u.role<>'client' OR u.access_expires_at>NOW())
        LIMIT 1`,
       [tokenHash]
     );
@@ -1016,7 +1037,7 @@ class MemoryAuthStore {
     let changed = 0;
     for (const row of this.usersById.values()) {
       if (normalized.has(String(row.email || '').toLowerCase()) && row.role !== 'admin' && row.status === 'active') {
-        row.role = 'admin';
+        row.role = 'admin';Access.roleChanged(row,'client');
         changed += 1;
       }
     }
@@ -1027,7 +1048,7 @@ class MemoryAuthStore {
     if (!USER_ROLES.includes(role)) throw new Error('Invalid user role');
     const row = this.usersById.get(userId);
     if (!row) return null;
-    row.role = role;
+    const oldRole=row.role;row.role = role;Access.roleChanged(row,oldRole);
     return { id: row.id, role };
   }
 
@@ -1134,6 +1155,7 @@ class MemoryAuthStore {
       created_at: now,
       last_login_at: null
     };
+    if(row.role==='client'&&row.status==='active')Access.activate(row);
     this.usersByEmail.set(email, row);
     this.usersById.set(row.id, row);
     if (icNumber) this.usersByIc.set(icNumber, row);
@@ -1182,7 +1204,7 @@ class MemoryAuthStore {
         total_ibs: ibs.filter(item => item.code !== DEFAULT_IB_CODE).length,
         active_ibs: ibs.filter(item => item.code !== DEFAULT_IB_CODE && item.active).length,
         total_clients: allClients.length,
-        active_clients: allClients.filter(item => item.status === 'active').length,
+        active_clients: allClients.filter(item => Access.allowed(item)).length,
         today_clients: allClients.filter(item => new Date(item.created_at).getTime() >= today.getTime()).length
       },
       ibs,
@@ -1223,7 +1245,7 @@ class MemoryAuthStore {
       referrer: publicReferrer(referrer),
       stats: {
         total_clients: clients.length,
-        active_clients: clients.filter(item => item.status === 'active').length,
+        active_clients: clients.filter(item => Access.allowed(item)).length,
         today_clients: clients.filter(item => new Date(item.createdAt).getTime() >= today.getTime()).length
       },
       clients
@@ -1254,12 +1276,23 @@ class MemoryAuthStore {
     const row = this.usersById.get(clientId);
     if (!row || row.role !== 'client' || row.status !== 'pending') return null;
     row.status = decision === 'approve' ? 'active' : 'rejected';
+    if(decision==='approve')Access.activate(row);
     row.registration_decision = decision === 'approve' ? 'approved' : 'rejected';
     row.registration_reviewed_at = new Date(); row.registration_reviewed_by = adminId; row.registration_reason = reason;
     return registrationView(row);
   }
 
-  async setClientActiveForAdmin(clientId, active) {
+  async renewClientAccessForAdmin(clientId,adminId=null) {
+    const row=this.usersById.get(clientId);
+    if(!row||row.role!=='client'||!['active','disabled'].includes(row.status))return null;
+    row.status='active';Access.activate(row);
+    this.accessRenewals||=[];this.accessRenewals.push({userId:clientId,adminId,...Access.fields(row)});
+    for(const [key,session] of this.sessions)if(session.userId===clientId)this.sessions.delete(key);
+    return publicClient(row);
+  }
+
+  async setClientActiveForAdmin(clientId, active, adminId=null) {
+    if(active===true)return this.renewClientAccessForAdmin(clientId,adminId);
     const row = this.usersById.get(clientId);
     if (!row || row.role !== 'client' || !['active','disabled'].includes(row.status)) return null;
     row.status = active === true ? 'active' : 'disabled';
@@ -1290,7 +1323,7 @@ class MemoryAuthStore {
       error.code = 'IB_CODE_EXISTS';
       throw error;
     }
-    row.role = 'ib';
+    row.role = 'ib';Access.roleChanged(row,'client');
     row.status = 'active';
     row.ib_referrer_id = null;
     row.ib_code = null;
@@ -1314,6 +1347,7 @@ class MemoryAuthStore {
     const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
     const row = this.usersById.get(clientId);
     if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id || !['active','disabled'].includes(row.status)) return null;
+    if(active===true&&Access.expired(row))return null;
     row.status = active === true ? 'active' : 'disabled';
     return publicClient(row);
   }
@@ -1443,7 +1477,7 @@ class MemoryAuthStore {
       return null;
     }
     const user = this.usersById.get(session.userId);
-    if (!user || user.status !== 'active') return null;
+    if (!Access.allowed(user)) return null;
     return {
       sessionId: session.sessionId,
       expiresAt: session.expiresAt,

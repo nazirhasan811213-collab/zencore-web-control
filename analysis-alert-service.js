@@ -175,7 +175,7 @@ class AnalysisAlerts {
           queued=true;
           await c.query(`INSERT INTO zencore_telegram_deliveries(event_id,user_id)
             SELECT $1,p.user_id FROM zencore_alert_preferences p JOIN zencore_users u ON u.id=p.user_id
-            WHERE u.status='active' AND u.role<>'viewer' AND p.data->>'telegramEnabled'='true' AND p.data->>'verified'='true'`,[row.id]);
+            WHERE u.status='active' AND u.role<>'viewer' AND p.data->>'telegramEnabled'='true' AND p.data->>'verified'='true' AND (u.role<>'client' OR u.access_expires_at>NOW())`,[row.id]);
         }
       }
       await c.query('COMMIT');
@@ -214,10 +214,10 @@ class AnalysisAlerts {
         let status='skipped';
         try{
           const p=await this.get(row.user_id);
-          const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
+          const u=(await this.pool.query('SELECT status,role,access_expires_at FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           // Apply to every notification, including closes and already queued events.
-          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
+          if(p.telegramEnabled&&p.verified&&require('./account-access').allowed(u)&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
              (!['TP_HIT','PULLBACK'].includes(e.kind)||progressAllowed(e))&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);

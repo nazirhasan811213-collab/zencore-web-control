@@ -56,6 +56,7 @@
     byId('accountEmail').textContent = profile.email || '';
     byId('profileName').textContent = profile.displayName || 'Client';
     byId('profileStatus').textContent = String(profile.status || 'active').toUpperCase();
+    if(byId('accountAccessPeriod'))byId('accountAccessPeriod').textContent=profile.accessExpiresAt?'Tamat: '+new Date(profile.accessExpiresAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Tempoh belum bermula';
     byId('profileIb').textContent = `IB ${String(profile.ibCode || 'nazir').toUpperCase()}`;
     byId('profileDisplayName').value = profile.displayName || '';
     byId('profilePhone').value = profile.phone || '';
