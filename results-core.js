@@ -75,6 +75,8 @@
     if (upper(state) === 'OPEN' || outcome === 'OPEN') {
       return { key: 'open', label: 'MASIH OPEN', tone: 'open', isWin: false, isLoss: false };
     }
+    if(outcome==='CLOSE_SIGNAL')return {key:'other',label:'CLOSE SIGNAL',tone:'other',isWin:false,isLoss:false};
+    if(outcome==='SUPERSEDED')return {key:'other',label:'PELAN DIGANTI',tone:'other',isWin:false,isLoss:false};
     if (outcome === 'SL') return { key: 'loss', label: 'STOP LOSS', tone: 'loss', isWin: false, isLoss: true };
     if (outcome === 'AMBIGUOUS') return { key: 'ambiguous', label: 'AMBIGUOUS', tone: 'ambiguous', isWin: false, isLoss: false };
     if (outcome.includes('PROTECTED')) {
@@ -100,6 +102,7 @@
     return {
       id: String(row.id || `${symbol}-${row.mode || 'NORMAL'}-${row.openedKey || openedAt || 'unknown'}-${outcome || rowState}`),
       symbol,
+      timeframe: row.timeframe==null?null:String(row.timeframe),source:row.source||null,entryType:row.entryType||null,
       mode: upper(row.mode || 'NORMAL'),
       side: ['BUY', 'SELL'].includes(upper(row.side)) ? upper(row.side) : 'WAIT',
       state: rowState,
@@ -204,6 +207,14 @@
     };
   }
 
+  function fromStoredRecords(payload) {
+    const stats=payload.totals||[],rows=(payload.records||[]).map(r=>normaliseRow(r));
+    const pairSummaries=stats.map(r=>({symbol:'XAUUSD',timeframe:String(r.timeframe),available:true,sample:Number(r.sample),resolved:Number(r.resolved),wins:Number(r.tp1),losses:Number(r.resolved),open:Number(r.open),winRate:Number(r.sample)?Number(r.tp1)/Number(r.sample)*100:null,maturity:'PERSISTED'}));
+    const summary=pairSummaries.reduce((s,r)=>{for(const k of ['sample','resolved','wins','losses','open'])s[k]+=r[k];return s;},{sample:0,resolved:0,wins:0,losses:0,open:0});
+    summary.winRate=summary.sample?summary.wins/summary.sample*100:null;summary.available=pairSummaries.length;summary.expected=2;
+    return {summary,pairSummaries,allRows:rows,openRows:rows.filter(r=>r.state==='OPEN'),resolvedRows:rows.filter(r=>r.state==='CLOSED'),generatedAt:payload.lastSync};
+  }
+
   function filterRows(rows, filters = {}) {
     const pair = normaliseSymbol(filters.pair || 'ALL');
     const category = String(filters.category || 'all').toLowerCase();
@@ -212,11 +223,13 @@
     return (Array.isArray(rows) ? rows : []).filter(row => {
       if (pair !== 'ALL' && row.symbol !== pair) return false;
       if (side !== 'ALL' && row.side !== side) return false;
+      if(category==='tp1'&&!row.hitTp1)return false;
+      if(category==='closed'&&row.state!=='CLOSED')return false;
       if (category === 'open' && row.state !== 'OPEN') return false;
       if (category === 'win' && !row.isWin) return false;
       if (category === 'loss' && !row.isLoss) return false;
       if (['protected', 'managed', 'ambiguous', 'timeout'].includes(category) && row.category !== category) return false;
-      if (category !== 'all' && !['open', 'win', 'loss', 'protected', 'managed', 'ambiguous', 'timeout'].includes(category)) return false;
+      if (category !== 'all' && !['tp1','closed','open', 'win', 'loss', 'protected', 'managed', 'ambiguous', 'timeout'].includes(category)) return false;
       if (search) {
         const haystack = `${row.symbol} ${row.side} ${row.outcomeLabel} ${row.reason}`.toLowerCase();
         if (!haystack.includes(search)) return false;
@@ -237,6 +250,7 @@
       'Initial SL', 'Active SL', 'TP1', 'TP2', 'TP3', 'TP1 Hit', 'TP2 Hit',
       'TP3 Hit', 'SL Lock Stage', 'SOP Score', 'Reason'
     ];
+    const withTf=rows.some(row=>row.timeframe);if(withTf)headers.push('Timeframe');
     const lines = [headers.map(csvCell).join(',')];
     for (const row of Array.isArray(rows) ? rows : []) {
       const values = [
@@ -245,13 +259,14 @@
         row.activeSl, row.tp1, row.tp2, row.tp3, row.hitTp1, row.hitTp2, row.hitTp3,
         row.slLockStage, row.score, row.reason
       ];
+      if(withTf)values.push(row.timeframe||'');
       lines.push(values.map(csvCell).join(','));
     }
     return `\uFEFF${lines.join('\r\n')}`;
   }
 
   return {
-    SUPPORTED_MARKETS,
+    SUPPORTED_MARKETS,fromStoredRecords,
     WIN_OUTCOMES,
     number,
     normaliseSymbol,

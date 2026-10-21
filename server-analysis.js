@@ -24,6 +24,7 @@ const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let globalUserTradeMonitor = null;
 let signalOutcomes = null;
+let currentSignalRecords = null;
 require('./analysis-alert-bus').on('market', market => require('./analysis-alert-input').ingestMarket(analysisAlerts,market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
@@ -169,6 +170,11 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    if(store.pool){
+      const records=new (require('./current-signal-records').CurrentSignalRecords)({pool:store.pool});
+      try{await records.init();currentSignalRecords=records;records.start();console.log('Durable TF2/TF15 signal records ready');}
+      catch(_){console.error('Durable TF2/TF15 signal records unavailable');}
+    }
     if (store.pool) {
       const collector = new SignalOutcomeStore({pool:store.pool,fetchSummary:fetchLocalValidation});
       try { await collector.init();collector.start();signalOutcomes=collector; }
@@ -1589,6 +1595,13 @@ const server = http.createServer(async (req, res) => {
         now-sop.sourceBarTime<=420000&&sop.sourceBarTime<=now?sop:null;
       return sendJson(res,200,{symbol,generatedAt:now,targetMap:targetReachMap({symbol,sop:safe})});
     }catch{return sendJson(res,503,{error:'Peta sasaran tidak tersedia.'});}
+  }
+  if(pathname==='/api/signal-records'){
+    if(!await requireSession(req,res))return;
+    if(req.method!=='GET')return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
+    if(!currentSignalRecords)return sendJson(res,503,{error:'Simpanan rekod belum tersedia.'});
+    try{return sendJson(res,200,await currentSignalRecords.read());}
+    catch(_){return sendJson(res,503,{error:'Gagal membaca rekod database. Cuba lagi.'});}
   }
   if (pathname === '/api/signal-outcomes') {
     const session=await requireSession(req,res);if(!session)return;
