@@ -1417,6 +1417,15 @@ async function handlePodProvisioning(req, res) {
   }
 }
 
+// Read-only analysis projection. Never pass this snapshot to order dispatch.
+async function fetchLocalAnalysisMarkets(){
+  const markets=await fetchLocalMarkets();
+  const tf2=require('./tf2-ribbon-market-hub').analysisMarkets();
+  if(!tf2.length)return markets;
+  const symbols=new Set(tf2.map(m=>m.symbol));
+  return markets.filter(m=>!(String(m.timeframe)==='2'&&symbols.has(m.symbol))).concat(tf2);
+}
+
 function fetchLocalMarkets() {
   return new Promise((resolve, reject) => {
     const request = http.get({
@@ -1868,7 +1877,7 @@ const server = http.createServer(async (req, res) => {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();
     if(!require('./analysis-dual-model').SYMBOLS.includes(symbol))return sendJson(res,400,{ok:false,error:'Pair tidak disokong.'});
-    require('./analysis-stream').openAnalysisStream({req,res,symbol,bus:require('./analysis-alert-bus'),fetchMarkets:fetchLocalMarkets});
+    require('./analysis-stream').openAnalysisStream({req,res,symbol,bus:require('./analysis-alert-bus'),fetchMarkets:fetchLocalAnalysisMarkets});
     return;
   }
 
@@ -1876,7 +1885,7 @@ const server = http.createServer(async (req, res) => {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();
     if(!require('./analysis-dual-model').SYMBOLS.includes(symbol))return sendJson(res,400,{ok:false,error:'Pair tidak disokong.'});
-    try{return sendJson(res,200,require('./analysis-dual-model').dualAnalysis(await fetchLocalMarkets(),symbol));}
+    try{return sendJson(res,200,require('./analysis-dual-model').dualAnalysis(await fetchLocalAnalysisMarkets(),symbol));}
     catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia. Cuba lagi.'});}
   }
 

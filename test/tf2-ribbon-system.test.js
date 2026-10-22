@@ -353,3 +353,21 @@ test('ATR10 SL cap covers both sides, modes and volatility without widening or a
   const f=fixture();alter(f);const m=market(f);a.ok(!m||m.strategyNormal.state==='WAIT');if(m)a.equal(C.createEntryDecision(m),null);
  }
 });
+
+
+test('TF2 analysis snapshot follows latest source across channels while execution cache stays unchanged',()=>{
+ const f=fixture();delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const hub=require('../tf2-ribbon-market-hub');
+ const execution=hub.ingest(f.batch,f.now)[0];
+ const dash=JSON.parse(JSON.stringify(f.batch));dash.feedChannel='DASHBOARD';dash.emittedAt=f.now+30000;dash.markets[0][6]=4101;dash.markets[0][66].entryEvent=false;
+ const dashboard=hub.ingest(dash,f.now+30001)[0];a.ok(dashboard);
+ a.equal(hub.analysisMarkets(f.now+30002)[0],dashboard);a.equal(hub.markets()[0],execution);
+ a.equal(C.createEntryDecision(dashboard),null);
+ const view=require('../analysis-dual-model').dualAnalysis(hub.analysisMarkets(f.now+30002),'XAUUSD',f.now+30002).views[0];
+ a.equal(view.market.price,4101);a.equal(view.status,'LIVE');
+ // A delayed execution packet may be newer in arrival time, but older at source.
+ const delayed=JSON.parse(JSON.stringify(f.batch));delayed.emittedAt=f.now+10000;
+ hub.ingest(delayed,f.now+31000);a.equal(hub.analysisMarkets(f.now+31001)[0],dashboard);
+ const next=JSON.parse(JSON.stringify(f.batch));next.emittedAt=f.now+40000;
+ const fresh=hub.ingest(next,f.now+40001)[0];a.equal(hub.analysisMarkets(f.now+40002)[0],fresh);
+ a.equal(hub.analysisMarkets(f.now+18000001+40001).length,0);
+});

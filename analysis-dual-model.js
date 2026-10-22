@@ -4,7 +4,7 @@ function dualAnalysis(markets,symbol,now=Date.now()) {
  if(!SYMBOLS.includes(symbol))throw new Error('INVALID_SYMBOL');
  return {ok:true,symbol,serverTime:now,views:[2,15].map(tf=>{
   const candidates=markets.filter(m=>m.symbol===symbol&&String(m.timeframe).replace(/m$/,'')===String(tf)&&m.strategyNormal?.tf===tf+'m');
-  const market=candidates.sort((a,b)=>Number(b.receivedAt)-Number(a.receivedAt))[0]||null;
+  const market=candidates.sort((a,b)=>(Number(b.signalObservedAt)||Number(b.receivedAt))-(Number(a.signalObservedAt)||Number(a.receivedAt))||Number(b.receivedAt)-Number(a.receivedAt))[0]||null;
   const at=Number(market?.receivedAt)||0;
   const ageMs=at?Math.max(0,now-at):null;
   const emitted=Number(market?.signalObservedAt)||0;
