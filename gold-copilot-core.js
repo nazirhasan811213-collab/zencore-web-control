@@ -4,7 +4,7 @@
  function analyse(views,tf,now=Date.now()){
   const v=views.find(v=>Number(v.timeframe)===Number(tf)),m=v?.market,n=m?.strategyNormal||{},s=n.sop||{},p=n.plan||{};
   const base={chartSignal:s.chartSignal||null,timeframe:tf,higher:tf===2?3:30,method:'Bacaan ni ikut data Pine dan SOP ZenCore.',note:'Skor forecast bukan win rate. Market boleh berubah bila-bila.'};
-  if(!Live.fresh(v,now))return {...base,status:'WAIT_DATA',action:'DATA LAMBAT — TUNGGU DULU',headline:'TF'+tf+' belum ada bacaan fresh.',reason:'Data tak masuk atau dah lebih 30 saat. Jangan entry pakai signal lama.',levels:null,scenarios:[],checks:[]};
+  if(!Live.fresh(v,now))return {...base,status:'WAIT_DATA',action:'DATA LAMBAT — TUNGGU DULU',headline:'TF'+tf+' belum ada bacaan fresh.',reason:'Data tak masuk atau dah lebih '+(Number(tf)===2?'60':'30')+' saat. Jangan entry pakai signal lama.',levels:null,scenarios:[],checks:[]};
   const side=['BUY','SELL'].includes(n.side)?n.side:'WAIT',sign=side==='BUY'?1:side==='SELL'?-1:0;
   const modern=['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(n.entrySopVersion);
   const solid80=['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1','NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(n.entrySopVersion);

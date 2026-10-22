@@ -2,8 +2,8 @@
  'use strict';
  const number=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Number(v):null;
  function fresh(view,now=Date.now()){
-  const m=view?.market,received=number(m?.receivedAt),observed=number(m?.signalObservedAt)??received;
-  return view?.status==='LIVE'&&received>0&&observed>0&&now-received>=-5000&&now-received<=30000&&now-observed>=-5000&&now-observed<=30000;
+  const m=view?.market,received=number(m?.receivedAt),observed=number(m?.signalObservedAt)??received,limit=Number(view?.timeframe)===2?60000:30000;
+  return view?.status==='LIVE'&&received>0&&observed>0&&now-received>=-5000&&now-received<=limit&&now-observed>=-5000&&now-observed<=limit;
  }
  function quote(views,now=Date.now()){
   return views.filter(v=>fresh(v,now)&&number(v.market?.price)>0).sort((a,b)=>(number(b.market.signalObservedAt)??number(b.market.receivedAt))-(number(a.market.signalObservedAt)??number(a.market.receivedAt))||Number(a.timeframe)-Number(b.timeframe))[0]||null;

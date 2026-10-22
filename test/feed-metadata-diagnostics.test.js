@@ -29,3 +29,10 @@ test('bounded SOLID lifecycle evidence identifies inactive source without retain
  assert.equal(x.solidStateReason,'OPPOSITE_RIBBON');assert.equal(x.entryAuthorizedAt,20);assert.equal(x.entryAttempt,2);assert.equal(x.solidHoldActive,false);
  b.markets[0][66].solidStateReason='NEVER_EXPOSE';d.record(b);assert.equal(d.snapshot().channels[0].latest.solidStateReason,null);assert.equal(JSON.stringify(d.snapshot()).includes('NEVER_EXPOSE'),false);
 });
+
+
+test('current TF2 own-timeframe HEMA metadata is recognized in diagnostics',()=>{
+ const b=batch();b.markets[0][65]={version:'HEMA2_LIVE_V1'};
+ const d=createFeedMetadataDiagnostics();d.record(b,['XAUUSD']);
+ assert.equal(d.snapshot().channels[0].latest.hasLiveHema,true);
+});
