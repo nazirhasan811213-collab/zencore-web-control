@@ -28,7 +28,7 @@
     const points=tape.points();$('priceLine').setAttribute('d',Live.sparkline(points));$('liveSampleCount').textContent=points.length+' kemas kini';$('traceNote').textContent=points.length<2?'Tunggu update price kedua untuk graf.':'Kemas kini feed sejak dashboard dibuka · '+new Date(points[0].at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' hingga '+new Date(point.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
    }
    const observed=Number(q.market.signalObservedAt)||Number(q.market.receivedAt),age=Math.max(0,now-observed);
-   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='UMUR DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/30000*100)+'%';
+   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='UMUR DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/(Number(q.timeframe)===2?60000:30000)*100)+'%';
    const delta=tape.points().at(-1)?.delta;$('liveNow').textContent=delta===null?'Price pertama dah masuk.':delta>0?'Price naik berbanding update tadi.':delta<0?'Price turun berbanding update tadi.':'Price masih sama macam update tadi.';
   }else{
    $('liveNow').textContent=last?'Ini price terakhir. Tunggu data fresh sebelum check setup.':'Tunggu price latest masuk dari Pine.';$('freshnessBar').style.width='0%';$('liveAge').textContent=last?'UMUR DATA '+Math.max(0,(now-last.at)/1000).toFixed(1)+'s':'UMUR DATA —';$('liveDelta').textContent=last?'Price tak update — data dah lama.':'Price bergerak akan nampak lepas update kedua.';$('liveDelta').className='';$('livePrice').classList.remove('price-flash');

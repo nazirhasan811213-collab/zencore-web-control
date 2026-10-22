@@ -1862,7 +1862,7 @@ const server = http.createServer(async (req, res) => {
   if(req.method==='GET' && pathname==='/welcome')return sendAuthAsset(res,'welcome.html','text/html; charset=utf-8');
   if(req.method==='GET' && pathname==='/api/trading-cockpit') {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
-    try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalMarkets()));}
+    try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalAnalysisMarkets()));}
     catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia.'});}
   }
 
