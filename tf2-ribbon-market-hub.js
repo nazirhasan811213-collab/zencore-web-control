@@ -45,4 +45,14 @@ function ingest(batch,now=Date.now()){
  return out;
 }
 function markets(){return [...entries.values()].filter(m=>Date.now()-m.receivedAt<=18000000);}
-module.exports={ingest,markets};
+// Analysis can follow either channel; order dispatch retains markets()' execution cache.
+function analysisMarkets(now=Date.now()){
+ const latest=new Map();
+ for(const m of channels.values()){
+  if(now-m.receivedAt>18000000)continue;
+  const old=latest.get(m.symbol);
+  if(!old||m.signalObservedAt>old.signalObservedAt||m.signalObservedAt===old.signalObservedAt&&m.receivedAt>old.receivedAt)latest.set(m.symbol,m);
+ }
+ return [...latest.values()];
+}
+module.exports={ingest,markets,analysisMarkets};
