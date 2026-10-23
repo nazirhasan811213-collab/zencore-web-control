@@ -33,6 +33,7 @@
   }
 
   function statusPill(status) {
+    if(status==='expired')return '<span class="status-pill disabled">EXPIRED</span>';
     if (status === 'pending' || status === 'rejected') return `<span class="status-pill disabled">${status === 'pending' ? 'MENUNGGU ADMIN' : 'DITOLAK'}</span>`;
     const active = status === 'active';
     return `<span class="status-pill ${active ? 'active' : 'disabled'}">${active ? 'ACTIVE' : 'DISABLED'}</span>`;
@@ -40,10 +41,11 @@
 
   function clientAction(client, scope) {
     if (['pending','rejected'].includes(client.status)) return scope === 'admin' ? '<a class="table-action" href="/admin/registrations">SEMAK PENDAFTARAN</a>' : '<span>Kelulusan Admin</span>';
+    if(scope==='ib'&&client.accessExpired)return '<span>Hubungi Admin untuk aktifkan semula</span>';
     const active = client.status === 'active';
     return `<button class="table-action ${active ? 'danger' : 'good'}" type="button"
       data-client-status="${esc(client.id)}" data-active="${active ? 'false' : 'true'}" data-scope="${scope}">
-      ${active ? 'DISABLE' : 'ACTIVATE'}
+      ${active ? 'DISABLE' : scope==='admin'?'AKTIFKAN 14 HARI':'ACTIVATE'}
     </button>`;
   }
 
@@ -93,7 +95,7 @@
       <td><strong>${esc(client.phone || '—')}</strong><small>ID ${esc(client.icMasked || '—')}</small></td>
       <td><strong>${esc(client.ibName || 'Nazir (Admin)')}</strong><small>${esc((client.ibCode || 'nazir').toUpperCase())}</small></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
-      <td>${statusPill(client.status)}</td>
+      <td>${statusPill(client.status)}<small>Tamat: ${esc(client.accessExpiresAt?new Date(client.accessExpiresAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Belum diaktifkan')}</small></td>
       <td>${clientAction(client, 'admin')}</td>
     </tr>`).join('');
   }
@@ -110,7 +112,7 @@
       <td><strong>${esc(client.phone || '—')}</strong><small>${esc(fmtLastLogin(client.lastLoginAt))}</small></td>
       <td><span class="link-code">${esc(client.icMasked || '—')}</span></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
-      <td>${statusPill(client.status)}</td>
+      <td>${statusPill(client.status)}<small>Tamat: ${esc(client.accessExpiresAt?new Date(client.accessExpiresAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Belum diaktifkan')}</small></td>
       <td>${clientAction(client, 'ib')}</td>
     </tr>`).join('');
   }

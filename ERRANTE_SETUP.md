@@ -45,3 +45,11 @@ Three source pools are capped at 5 auth + 5 auto-trade + 3 analysis connections 
 Historical paid-plan estimate (not the chosen Free deployment), checked 20 October 2026: web `0.5c-512mb` USD7/month and database `0.1c-256mb` USD6/month, base USD13/month for the new pair, excluding metered extras/taxes and existing workspace charges. The paid database was subsequently suspended and the actual web/database deployment uses Free plans. Existing production and staging were preserved.
 
 References: https://render.com/pricing , https://render.com/docs/compute-plans , https://render.com/docs/private-network .
+
+## Source synchronization — 23 October 2026
+
+Merged original `main` at `a2192bee1427709ede811413b1102be6936ed4d8` into the Errante branch (18 upstream merge batches since the original clone). This includes dashboard/analysis native ZenCore Chart, fresh TF2 snapshot projection and feed recovery, entry diagnostics and 60-second delivery, latest Pine variants and TF2 ATR8/TP1 cap, Telegram TP/pullback/borders and re-entry deduplication, durable signal records, and 14-day client access with admin renewal and IB/admin exemption.
+
+Errante-specific bootstrap, Free database identity checks, page branding, connector URL and directories, EA magic IDs, health links, and the 60-second post-fill automatic-management lock are preserved. Broker SL and emergency/fill-safety exits remain available. Management fixtures explicitly represent positions aged at least 60 seconds; separate boundary coverage verifies the lock before 60 seconds. No source or configuration on the original branch is changed.
+
+Local validation: 690 Node tests (684 passed; 6 PostgreSQL integration tests skipped because no test database is configured), 67 connector Python tests (66 passed; 1 skipped). Browser UI verification could not run because the browser executable is absent and browser downloads returned invalid archives. MetaEditor compilation and MT5 demo orders have not been verified. Runtime deployment must be checked separately; updating source alone does not prove that the live service or installed EA is updated. Auto-trade remains OFF and entry signals PAUSED through the Errante bootstrap. Database/Telegram/TradingView credentials are not copied from the original installation.

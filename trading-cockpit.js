@@ -15,6 +15,16 @@
  async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
  function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[2,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
  function liveViews(){return [...views(),...(streamLive?pushedViews:[])];}
+ const dashboardCharts=new Map();
+ for(const tf of [2,15]){
+  const host=$('dashboardChart'+tf);if(host)dashboardCharts.set(tf,window.ZenCoreIndicatorChart?.mount(host,tf));
+ }
+ for(const button of document.querySelectorAll('[data-chart-tf]'))button.onclick=()=>{
+  const tf=Number(button.dataset.chartTf);
+  for(const choice of document.querySelectorAll('[data-chart-tf]'))choice.setAttribute('aria-pressed',String(choice===button));
+  for(const frame of [2,15])$('dashboardChart'+frame).hidden=frame!==tf;
+  dashboardCharts.get(tf)?.resize();
+ };
  function renderLive(){
   const now=Date.now(),q=Live.quote(liveViews().filter(()=>!failed||streamLive),now),last=tape.points().at(-1);
   $('marketClock').textContent=new Date(now).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
@@ -25,13 +35,16 @@
     if(point.delta!==null&&point.delta!==0){$('livePrice').classList.remove('price-flash');void $('livePrice').offsetWidth;$('livePrice').classList.add('price-flash');clearTimeout(flashTimer);flashTimer=setTimeout(()=>$('livePrice').classList.remove('price-flash'),900);}
     $('liveDelta').textContent=point.delta===null?'Update price pertama dah masuk.':(point.delta>0?'↑ +':point.delta<0?'↓ −':'→ ')+Math.abs(point.delta).toFixed(3)+' USD / kemas kini';
     $('liveDelta').className=point.delta>0?'buy':point.delta<0?'sell':'';
-    const points=tape.points();$('priceLine').setAttribute('d',Live.sparkline(points));$('liveSampleCount').textContent=points.length+' kemas kini';$('traceNote').textContent=points.length<2?'Tunggu update price kedua untuk graf.':'Kemas kini feed sejak dashboard dibuka · '+new Date(points[0].at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' hingga '+new Date(point.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
    }
    const observed=Number(q.market.signalObservedAt)||Number(q.market.receivedAt),age=Math.max(0,now-observed);
-   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='UMUR DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/30000*100)+'%';
+   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='UMUR DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/(Number(q.timeframe)===2?60000:30000)*100)+'%';
    const delta=tape.points().at(-1)?.delta;$('liveNow').textContent=delta===null?'Price pertama dah masuk.':delta>0?'Price naik berbanding update tadi.':delta<0?'Price turun berbanding update tadi.':'Price masih sama macam update tadi.';
   }else{
    $('liveNow').textContent=last?'Ini price terakhir. Tunggu data fresh sebelum check setup.':'Tunggu price latest masuk dari Pine.';$('freshnessBar').style.width='0%';$('liveAge').textContent=last?'UMUR DATA '+Math.max(0,(now-last.at)/1000).toFixed(1)+'s':'UMUR DATA —';$('liveDelta').textContent=last?'Price tak update — data dah lama.':'Price bergerak akan nampak lepas update kedua.';$('liveDelta').className='';$('livePrice').classList.remove('price-flash');
+  }
+  for(const tf of [2,15]){
+   const latest=liveViews().filter(v=>Number(v.timeframe)===tf&&v.market).sort((a,b)=>Number(b.market.signalObservedAt||b.market.receivedAt)-Number(a.market.signalObservedAt||a.market.receivedAt))[0];
+   dashboardCharts.get(tf)?.update(latest?.market||null,!!latest&&(!failed||streamLive)&&Live.fresh(latest));
   }
   document.dispatchEvent(new CustomEvent('zencore:dashboard',{detail:{views:views(),failed}}));
   $('liveTfSummary').replaceChildren(...views().map(v=>el('span','TF'+v.timeframe+' · '+state(v),tone(v))));

@@ -24,7 +24,8 @@ const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let globalUserTradeMonitor = null;
 let signalOutcomes = null;
-require('./analysis-alert-bus').on('market', market => analysisAlerts?.ingest(String(market.timeframe)==='2'?{...market,strategyNormal:{...market.strategyNormal,state:'WAIT'}}:market));
+let currentSignalRecords = null;
+require('./analysis-alert-bus').on('market', market => require('./analysis-alert-input').ingestMarket(analysisAlerts,market));
 
 const PUBLIC_PORT = Number(process.env.PORT || 8080);
 const V17_PORT = Number(process.env.ZENCORE_INTERNAL_V17_PORT || (process.env.NODE_ENV==='test'?PUBLIC_PORT+3:10003));
@@ -96,7 +97,7 @@ const autoTradeState = {
 
 const adminMonitoring = require('./admin-monitoring-service').createAdminMonitoring({
   auth: authState, trading: autoTradeState, telegram: () => analysisAlerts,
-  fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED, webhook: webhookIngress
+  fetchMarkets: fetchLocalAnalysisMarkets, hostedEnabled: HOSTED_MT5_ENABLED, webhook: webhookIngress
 });
 
 const readiness=require('./service-readiness').createReadiness({auth:authState,trading:autoTradeState,autotradeEnabled:AUTOTRADE_ENABLED,allowMemoryDatabase:process.env.NODE_ENV==='test'&&AUTH_MEMORY,webhook:webhookIngress});
@@ -173,6 +174,11 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    if(store.pool){
+      const records=new (require('./current-signal-records').CurrentSignalRecords)({pool:store.pool});
+      try{await records.init();currentSignalRecords=records;records.start();console.log('Durable TF2/TF15 signal records ready');}
+      catch(_){console.error('Durable TF2/TF15 signal records unavailable');}
+    }
     if (store.pool) {
       const collector = new SignalOutcomeStore({pool:store.pool,fetchSummary:fetchLocalValidation});
       try { await collector.init();collector.start();signalOutcomes=collector; }
@@ -250,6 +256,7 @@ if (AUTH_ENABLED) {
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         scalpingTimeframe: '2',
+        entryAccessAllowed:async userId=>require('./account-access').allowed(await authState.store.findUserByIdForLogin(userId)),
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -453,6 +460,12 @@ async function requireSession(req, res, redirectTo = null) {
       if (redirectTo) redirect(res, redirectTo);
       else sendJson(res, 401, { ok: false, error: 'Sesi tamat. Sila log masuk semula.' });
       return null;
+    }
+    // End authenticated streams when the client's access period ends as well.
+    const deadline=session.user.role==='client'?new Date(session.user.accessExpiresAt).getTime():NaN;
+    if(Number.isFinite(deadline)&&deadline>Date.now()){
+      const expiryTimer=setTimeout(()=>res.end(),deadline-Date.now());expiryTimer.unref?.();
+      res.once('close',()=>clearTimeout(expiryTimer));
     }
     return session;
   } catch (_) {
@@ -1392,7 +1405,7 @@ async function handlePodProvisioning(req, res) {
   }
   try {
     const user = await authState.store.findUserByIdForLogin(userId);
-    if (!user || user.status !== 'active') {
+    if (!require('./account-access').allowed(user)) {
       return sendJson(res, 404, { ok: false, error: 'Akaun ZenCore tidak dijumpai.' });
     }
     const result = await autoTradeState.service.provisionDemoPod(userId, body.label);
@@ -1406,6 +1419,15 @@ async function handlePodProvisioning(req, res) {
   } catch (error) {
     return autoTradeError(res, error);
   }
+}
+
+// Read-only analysis projection. Never pass this snapshot to order dispatch.
+async function fetchLocalAnalysisMarkets(){
+  const markets=await fetchLocalMarkets();
+  const tf2=require('./tf2-ribbon-market-hub').analysisMarkets();
+  if(!tf2.length)return markets;
+  const symbols=new Set(tf2.map(m=>m.symbol));
+  return markets.filter(m=>!(String(m.timeframe)==='2'&&symbols.has(m.symbol))).concat(tf2);
 }
 
 function fetchLocalMarkets() {
@@ -1588,6 +1610,13 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res,200,{symbol,generatedAt:now,targetMap:targetReachMap({symbol,sop:safe})});
     }catch{return sendJson(res,503,{error:'Peta sasaran tidak tersedia.'});}
   }
+  if(pathname==='/api/signal-records'){
+    if(!await requireSession(req,res))return;
+    if(req.method!=='GET')return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
+    if(!currentSignalRecords)return sendJson(res,503,{error:'Simpanan rekod belum tersedia.'});
+    try{return sendJson(res,200,await currentSignalRecords.read());}
+    catch(_){return sendJson(res,503,{error:'Gagal membaca rekod database. Cuba lagi.'});}
+  }
   if (pathname === '/api/signal-outcomes') {
     const session=await requireSession(req,res);if(!session)return;
     if(req.method!=='GET')return sendJson(res,405,{error:'Kaedah tidak dibenarkan.'});
@@ -1620,6 +1649,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_ATR8_TP1Max3.pine') return sendAuthAsset(res, 'ZenCore_TF2_ATR8_TP1Max3.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && ['/downloads/ZenCore_TF2_SolidOnly.pine','/downloads/ZenCore_TF15_SolidOnly.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && ['/downloads/ZenCore_TF2_Forecast45.pine','/downloads/ZenCore_TF15_Forecast45.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/tf2-ribbon-scalping.js') return sendAuthAsset(res, 'tf2-ribbon-scalping.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
@@ -1700,6 +1732,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/precision-entry.css') return sendAsset(res, 'precision-entry.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-alerts.js') return sendAsset(res, 'analysis-alerts.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/analysis-alerts.css') return sendAsset(res, 'analysis-alerts.css', 'text/css; charset=utf-8');
+  if(req.method==='GET'&&['/indicator-chart-core.js','/indicator-chart.js','/indicator-chart.css'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/precision-entry.js') return sendAsset(res, 'precision-entry.js', 'application/javascript; charset=utf-8');
 
   if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
@@ -1834,15 +1867,22 @@ const server = http.createServer(async (req, res) => {
   if(req.method==='GET' && pathname==='/welcome')return sendAuthAsset(res,'welcome.html','text/html; charset=utf-8');
   if(req.method==='GET' && pathname==='/api/trading-cockpit') {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
-    try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalMarkets()));}
+    try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalAnalysisMarkets()));}
     catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia.'});}
+  }
+
+  if(req.method==='GET' && pathname==='/api/analysis/chart'){
+    if(AUTH_ENABLED && !await requireSession(req,res))return;
+    const symbol=url.searchParams.get('symbol')||'XAUUSD',tf=url.searchParams.get('tf');
+    if(symbol!=='XAUUSD'||!['2','15'].includes(tf))return sendJson(res,400,{ok:false,error:'Chart TF2/TF15 XAUUSD sahaja.'});
+    return sendJson(res,200,require('./indicator-chart-history').history.snapshot(tf));
   }
 
   if(req.method==='GET' && pathname==='/api/analysis/timeframes/events'){
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();
     if(!require('./analysis-dual-model').SYMBOLS.includes(symbol))return sendJson(res,400,{ok:false,error:'Pair tidak disokong.'});
-    require('./analysis-stream').openAnalysisStream({req,res,symbol,bus:require('./analysis-alert-bus'),fetchMarkets:fetchLocalMarkets});
+    require('./analysis-stream').openAnalysisStream({req,res,symbol,bus:require('./analysis-alert-bus'),fetchMarkets:fetchLocalAnalysisMarkets});
     return;
   }
 
@@ -1850,7 +1890,7 @@ const server = http.createServer(async (req, res) => {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=String(url.searchParams.get('symbol')||'XAUUSD').toUpperCase();
     if(!require('./analysis-dual-model').SYMBOLS.includes(symbol))return sendJson(res,400,{ok:false,error:'Pair tidak disokong.'});
-    try{return sendJson(res,200,require('./analysis-dual-model').dualAnalysis(await fetchLocalMarkets(),symbol));}
+    try{return sendJson(res,200,require('./analysis-dual-model').dualAnalysis(await fetchLocalAnalysisMarkets(),symbol));}
     catch(_){return sendJson(res,503,{ok:false,error:'Feed tidak tersedia. Cuba lagi.'});}
   }
 

@@ -8,7 +8,7 @@ function decode(row,batch){
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
     ...(['HEMA2_LIVE_V1'].includes(row[65]?.version)?{hemaConfirmation:row[65]}:{}),
-    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,entryDeliveryVersion:row[66]?.entryDeliveryVersion,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupMeta:row[66],nativeChartExitAll:batch.feedChannel==='EXECUTION'&&[S.POLICY.entryPolicyVersion,'PINE_3TRIGGERS_4OF5_V2'].includes(row[66]?.entryPolicyVersion)&&row[66]?.nativeExitAll===true,setupKey:row[66]?.setupAt?`TF2|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
+    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,entryDeliveryVersion:row[66]?.entryDeliveryVersion,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupMeta:row[66],nativeChartExitAll:batch.feedChannel==='EXECUTION'&&[S.POLICY.entryPolicyVersion,'PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(row[66]?.entryPolicyVersion)&&row[66]?.nativeExitAll===true,setupKey:row[66]?.setupAt?`TF2|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
     symbol,timeframe:String(batch.timeframe||'2'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
@@ -25,7 +25,7 @@ function decode(row,batch){
 const entries=new Map(), channels=new Map();
 function ingest(batch,now=Date.now()){
  const out=[];
- if(batch?.feedVersion!=='TF2_REALTIME_V1'||String(batch.timeframe)!=='2'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>(batch.feedChannel==='EXECUTION'&&batch.markets.some(r=>r?.[66]?.entryRuleVersion===S.RULE&&r?.[66]?.entryEvent===true)?60000:30000)||now-batch.emittedAt< -5000)return out;
+ if(batch?.feedVersion!=='TF2_REALTIME_V1'||String(batch.timeframe)!=='2'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>60000||now-batch.emittedAt< -5000)return out;
  for(const row of batch.markets){
   if(!Array.isArray(row)||row.length!==67||row[0]!=='XAUUSD'||row[65]?.version!=='HEMA2_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
   const d=decode(row,batch);if(!d||!Number.isFinite(d.time)||!Number.isFinite(d.close))continue;
@@ -34,6 +34,7 @@ function ingest(batch,now=Date.now()){
   d.receivedAt=now;
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
+  require('./indicator-chart-history').history.observe(m,now);
   channels.set(channelKey,m);
   const current=entries.get(d.symbol);
   // A separate Dashboard instance can complete the same source at another tick.
@@ -44,4 +45,14 @@ function ingest(batch,now=Date.now()){
  return out;
 }
 function markets(){return [...entries.values()].filter(m=>Date.now()-m.receivedAt<=18000000);}
-module.exports={ingest,markets};
+// Analysis can follow either channel; order dispatch retains markets()' execution cache.
+function analysisMarkets(now=Date.now()){
+ const latest=new Map();
+ for(const m of channels.values()){
+  if(now-m.receivedAt>18000000)continue;
+  const old=latest.get(m.symbol);
+  if(!old||m.signalObservedAt>old.signalObservedAt||m.signalObservedAt===old.signalObservedAt&&m.receivedAt>old.receivedAt)latest.set(m.symbol,m);
+ }
+ return [...latest.values()];
+}
+module.exports={ingest,markets,analysisMarkets};

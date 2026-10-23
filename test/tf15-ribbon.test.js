@@ -110,7 +110,7 @@ test('current Telegram layout puts action and own plan before bounded analysis, 
   try{
    await alerts.record(m);const event=alerts.events.find(x=>x.kind==='ENTRY');a.ok(event);
    event.telegramSop.advisor={trend:side==='BUY'?'Uptrend':'Downtrend',momentum:side==='BUY'?'Bullish':'Bearish',mtfSummary:'Ringkasan '.repeat(200),advice:'SETUP KURANG PADU.',proTip:'JAGA MODAL - JANGAN TRADE'};
-   const text=T.telegramMessage(event);a.ok(text.length<4096);a.ok(text.startsWith(side==='BUY'?'🟢':'🔴'));
+   const text=T.telegramMessage(event);a.ok(text.length<4096);a.ok(text.startsWith('━━━━━━━━━━━━━━━━━━\n'+(side==='BUY'?'🟢':'🔴')));
    a.ok(text.indexOf('📌 APA NAK BUAT')<text.indexOf('🎯 PELAN ENTRY'));a.ok(text.indexOf('🎯 PELAN ENTRY')<text.indexOf('📊 ANALYSIS SEMASA'));
    a.match(text,/Jangan tambah entry atau re-entry/);a.match(text,/belum pengesahan order MT5/);
    a.equal((text.match(/Entry:/g)||[]).length,1);a.equal((text.match(/SL:/g)||[]).length,1);a.equal((text.match(/Forecast 10 candle:/g)||[]).length,1);

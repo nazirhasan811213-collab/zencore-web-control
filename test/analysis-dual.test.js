@@ -4,9 +4,9 @@ const {dualAnalysis}=require('../analysis-dual-model');
 const {AnalysisAlerts}=require('../analysis-alert-service');
 const make=(tf,at,side='BUY')=>({symbol:'XAUUSD',timeframe:String(tf),receivedAt:at,strategyNormal:{tf:tf+'m',side,plan:{entry:tf}}});
 test('late webhook delivery cannot make an old Pine observation appear live',()=>{
- const data=dualAnalysis([{...make(2,100000),signalObservedAt:60000},{...make(15,100000),signalObservedAt:98000}],'XAUUSD',100000);
- assert.equal(data.views[0].status,'STALE');assert.equal(data.views[0].sourceAgeMs,40000);
- assert.equal(data.views[0].transportLagMs,40000);assert.equal(data.views[1].status,'LIVE');
+ const data=dualAnalysis([{...make(2,100000),signalObservedAt:39000},{...make(15,100000),signalObservedAt:98000}],'XAUUSD',100000);
+ assert.equal(data.views[0].status,'STALE');assert.equal(data.views[0].sourceAgeMs,61000);
+ assert.equal(data.views[0].transportLagMs,61000);assert.equal(data.views[1].status,'LIVE');
  assert.equal(data.views[1].transportLagMs,2000);
 });
 test('Pine clock in the future is marked invalid and not presented as a fresh signal',()=>{
@@ -40,3 +40,15 @@ test('active plans are retrieved independently for TF2 and TF15',async()=>{
 });
 
 test('only TF2 and TF15 exposed; legacy TF3 never fills missing TF2',()=>{const data=dualAnalysis([make(3,100)],'XAUUSD',100);assert.deepEqual(data.views.map(v=>v.timeframe),[2,15]);assert.equal(data.views[0].market,null);});
+
+
+test('TF2 display honors its existing 60s source limit; TF15 remains 30s and arrival cannot renew age',()=>{
+ for(const age of [30001,59000,60000,60001]){
+  const now=200000,market={...make(2,now),signalObservedAt:now-age};
+  const view=dualAnalysis([market],'XAUUSD',now).views[0];
+  assert.equal(view.freshnessLimitMs,60000);
+  assert.equal(view.status,age<=60000?'LIVE':'STALE');assert.equal(view.sourceAgeMs,age);
+ }
+ const view=dualAnalysis([{...make(15,200000),signalObservedAt:169999}],'XAUUSD',200000).views[1];
+ assert.equal(view.status,'STALE');assert.equal(view.freshnessLimitMs,30000);
+});

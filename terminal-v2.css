@@ -35,3 +35,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,select:focus-visible{
 .zc-risk-notice>strong{display:block;margin:0 0 8px;font-size:12px!important;font-weight:700;letter-spacing:1px;color:#edc77a}
 .zc-risk-notice>p{margin:0;font-size:15px!important;font-weight:500;line-height:1.7!important;color:#f4dfb5!important;white-space:normal}
 @media(max-width:760px){.zc-risk-notice{padding:16px;margin-bottom:116px}.zc-risk-notice>p{font-size:14px!important}}
+
+/* Dashboard uses the same Pine candle chart as Analysis. */
+.dashboard-chart .visual-head{padding-bottom:0;flex-wrap:wrap}.dashboard-chart .zc-indicator-chart{margin:12px 0}.dashboard-chart .zc-chart-stage{height:260px}.dashboard-chart .tf-switch button{font-size:10px}.dashboard-chart [hidden]{display:none!important}.dashboard-chart .zc-chart-top{gap:7px}.dashboard-chart .zc-chart-note{font-size:9px!important}
+@media(max-width:760px){.dashboard-chart .zc-chart-stage{height:280px}.dashboard-chart .visual-head{gap:12px}}

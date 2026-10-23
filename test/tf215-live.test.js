@@ -34,7 +34,7 @@ test('Both dispatches separate strategy commands and management cannot cross tim
  await service.saveSettings('owner',{...settings('BOTH'),riskAcknowledged:true});await store.setControl('owner',{desiredState:'ON',effectiveState:'ON'});
  assert.deepEqual(await service.dispatchMarkets([market('2','XAUUSD'),market('15','XAUUSD')]),{queued:2});
  const rows=store.commands.get('pod-owner');assert.deepEqual(rows.map(r=>r.payload.strategyMode),['TF2_SCALPING','TF15_INTRA']);
- await store.replacePositions('owner',[{ticket:'1',symbol:'XAUUSD',strategyMode:'TF15_INTRA'}],now);
+ await store.replacePositions('owner',[{ticket:'1',symbol:'XAUUSD',strategyMode:'TF15_INTRA',openedAt:now-60000}],now);
  const wrong={...market('2','XAUUSD'),positionManagement:{action:'EXIT_ALL'}};
  assert.deepEqual(await service.dispatchMarkets([wrong]),{queued:0});
  const correct={...wrong,timeframe:'15'};assert.deepEqual(await service.dispatchMarkets([correct]),{queued:1});assert.equal(rows.at(-1).payload.strategyMode,'TF15_INTRA');

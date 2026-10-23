@@ -36,7 +36,7 @@ async function harness(at,positions=[]) {
  return {store,service,market,userId};
 }
 test('dispatcher rejects news entries but continues position management',async()=>{
- const {store,service,market}=await harness(my(20,30),[{symbol:'XAUUSD',ticket:'1',side:'BUY'}]);
+ const {store,service,market}=await harness(my(20,30),[{symbol:'XAUUSD',ticket:'1',side:'BUY',openedAt:my(20,29)}]);
  market.positionManagement={action:'EXIT_ALL',reason:'TEST_CLOSE'};
  assert.deepEqual(await service.dispatchMarkets([market]),{queued:1});
  assert.deepEqual([...store.commands.values()].flat().map(c=>c.type),['MANAGE_POSITION']);

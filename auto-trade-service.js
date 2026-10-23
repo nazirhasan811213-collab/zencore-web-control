@@ -1141,9 +1141,10 @@ function createAutoTradeService(options = {}) {
       if(input.terminalConnected===true&&newPositions.length&&['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await store.appendAudit(pod.userId,'MT5_POSITION_OBSERVED',{timeframe:mode==='TF15_INTRA'?'15':options.scalpingTimeframe,observedAt:seenAt,layers:newPositions.length,lifecycleState:'POSITION_OPEN'});
     }
     const profile=await store.getProfile(pod.userId);
+    const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
-    if(input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
+    if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
       fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&
       !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')){
       reentryCapability.set(pod.userId,{podId:pod.id,at:seenAt});
@@ -1153,13 +1154,14 @@ function createAutoTradeService(options = {}) {
     return {
       ok: true,
       podState: connectionState(updated),
-      desiredState: executionAllowed(pod.userId,pod)&&!/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
-      entryBlockedReason: /^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?'GLOBAL_ENTRY_PAUSED':executionAllowed(pod.userId,pod)?null:'EXECUTION_ROLLOUT_LOCKED',
+      desiredState: accountAccessAllowed&&executionAllowed(pod.userId,pod)&&!/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
+      entryBlockedReason: !accountAccessAllowed?'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED':/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?'GLOBAL_ENTRY_PAUSED':executionAllowed(pod.userId,pod)?null:'EXECUTION_ROLLOUT_LOCKED',
       serverTime: seenAt
     };
   }
 
   async function queuedEntryIsCurrent(command, diagnostic = {}){
+    if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&options.entryAccessAllowed&&!await options.entryAccessAllowed(command.userId)){diagnostic.accountAccess='ACCOUNT_EXPIRED_OR_DISABLED';return false;}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
     if(command.type==='MANAGE_POSITION'&&command.payload?.analysisSnapshot?.entryAnchor==='PINE_SETUP_PLAN_V1'){
@@ -1197,6 +1199,14 @@ function createAutoTradeService(options = {}) {
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
+    // A queued signal may outlive a heartbeat that reports a fill. Recheck at
+    // delivery as well as dispatch; every layer of this TF must be closed.
+    const deliveryPositions=await store.listPositions(command.userId);
+    if(!Core.permitsPositionEntry({symbol:command.payload?.symbol,
+      timeframe:command.payload?.analysisSnapshot?.executionTimeframe||(mode==='TF15_INTRA'?'15':'2'),
+      strategyNormal:{sop:{entryPolicyVersion:command.payload?.analysisSnapshot?.entryPolicyVersion}}},deliveryPositions)){
+      Object.assign(diagnostic,{ok:false,reason:'POSITION_STILL_OPEN'});return false;
+    }
     if(typeof options.getLatestMarket!=='function')return command.payload?.reentry?false:true;
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?'3':p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
@@ -1396,6 +1406,7 @@ function createAutoTradeService(options = {}) {
     const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     for (const profile of profiles) {
+      if(options.entryAccessAllowed&&!await options.entryAccessAllowed(profile.userId)){for(const m of markets)await reportEntryBlock(profile,m,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');continue;}
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
       if (!entryWindow.allowed){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
       const [pod, positions, hostedAccount] = await Promise.all([
@@ -1412,6 +1423,7 @@ function createAutoTradeService(options = {}) {
         const specs = hostedAccount ? hostedAccount.symbolSpecs : pod?.symbolSpecs;
         const report = {
           connection: connection.state,
+          diagnosticProfile:crypto.createHash('sha256').update(profile.userId).digest('hex').slice(0,12),
           enabledSymbols: profile.symbols,
           brokerSymbols: Object.keys(specs || {}),
           pairs: allowedDemoSymbols.flatMap(symbol => {
@@ -1421,12 +1433,14 @@ function createAutoTradeService(options = {}) {
             return {
               symbol,
               timeframe: market?.timeframe || null,
-              freshness: market?.receivedAt&&market?.signalObservedAt&&now()-market.receivedAt<=30000&&now()-market.signalObservedAt<=30000&&market.signalObservedAt<=now()+5000?'LIVE':market?.receivedAt?'STALE':'OFFLINE',
+              freshness: market?.receivedAt&&market?.signalObservedAt&&now()-market.receivedAt<=require('./entry-data-age').maximumAge(market)&&now()-market.signalObservedAt<=require('./entry-data-age').maximumAge(market)&&market.signalObservedAt<=now()+5000?'LIVE':market?.receivedAt?'STALE':'OFFLINE',
               ageSeconds: market?.receivedAt ? Math.round((now() - market.receivedAt) / 1000) : null,
               state: market?.strategyNormal?.state || 'WAIT',
               side: market?.strategyNormal?.side || 'WAIT',
               observedAgeSeconds: market?.signalObservedAt ? Math.round((now() - market.signalObservedAt) / 1000) : null,
               feedVersion: market?.feedVersion || null,
+              entryPolicyVersion:sop.entryPolicyVersion||null,scriptRevision:market?.setupMeta?.scriptRevision||null,entryDeliveryVersion:market?.entryDeliveryVersion||null,
+              entrySetupChecks:market?require('./entry-setup-diagnostic').inspect(market,profile,now()).checks:null,
               feedChannel: market?.feedChannel || null,
               setupSolid: normal.solid === true,
               solidStateReason: market?.setupMeta?.solidStateReason || null,
@@ -1487,10 +1501,10 @@ function createAutoTradeService(options = {}) {
       for (let market of Array.isArray(markets) ? markets : []) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(['2','3'].includes(options.scalpingTimeframe)&&(![options.scalpingTimeframe,'15'].includes(String(market.timeframe))||String(market.timeframe)==='2'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF2_RIBBON_V1'))continue;
-        if (!market?.receivedAt || now() - market.receivedAt > 30000) continue;
+        if (!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market)) continue;
         if (!allowedDemoSymbols.includes(symbol))continue;
         if(!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
-        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
+        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
         const cycle=await entryCycleReset.check(profile.userId,pod?.id,market);
         if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
         if (hostedAccount) {
@@ -1500,7 +1514,7 @@ function createAutoTradeService(options = {}) {
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
-        if (!setup || !isCurrent(market)){await reportEntryBlock(profile,market,market.strategyNormal?.lifecycleState==='EVENT_EXPIRED'?'ENTRY_EVENT_EXPIRED':market.entryEvent!==true?'WAIT_EXECUTION_EVENT':'SOP_OR_SETUP_NOT_CURRENT');continue;}
+        if (!setup || !isCurrent(market)){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
         if((String(market.timeframe)==='3'||market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1')&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
         // Current Pine execution events already carry a fixed 60s authorization

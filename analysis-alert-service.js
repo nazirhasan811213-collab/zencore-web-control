@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const {signals,transitions,defaults} = require('./analysis-alert-core');
 const {prepareTelegram,messageQuality,telegramMessage,entryFresh,entrySopAllowed} = require('./analysis-telegram');
 const {notificationKey}=require('./telegram-notification-key');
+const {progress,allowed:progressAllowed}=require('./telegram-progress');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
   constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
@@ -130,22 +131,22 @@ class AnalysisAlerts {
     if(!['XAUUSD','GBPUSD','GBPJPY'].includes(m.symbol))return;
     const stateKey=m.symbol+'|'+String(m.timeframe||m.strategyNormal?.tf||'2').replace(/m$/, '');
     const next=signals(m);if(!this.ready||!next)return;
-    const notificationEvents=prev=>prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
+    const notificationEvents=prev=>{const base=prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
-        lifecycleVersion:m.strategyNormal.sop?.lifecycleVersion,cycleKind:m.strategyNormal.sop?.cycleKind,reentryContext:m.strategyNormal.sop?.reentryContext,entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
+        lifecycleVersion:m.strategyNormal.sop?.lifecycleVersion,cycleKind:m.strategyNormal.sop?.cycleKind,sourceSetupAt:m.strategyNormal.sop?.sourceSetupAt,reentryContext:m.strategyNormal.sop?.reentryContext,entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,atrPeriod:m.strategyNormal.sop?.atrPeriod,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
         solidHoldActive:m.strategyNormal.sop?.solidHoldActive,solidClosedAt:m.strategyNormal.sop?.solidClosedAt,riskAtrReference:m.strategyNormal.sop?.riskAtrReference,signalObservedAt:m.signalObservedAt,
         chopIndex:m.strategyNormal.sop?.chopIndex,sourceEntry:m.strategyNormal.sop?.sourceEntry,price:m.strategyNormal.sop?.price,triggerAt:m.strategyNormal.sop?.triggerAt,qualifiedAt:m.strategyNormal.sop?.qualifiedAt,
         entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
         m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},
       telegramMarket:{entryAuthorizedAt:m.entryAuthorizedAt,signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
-    }:e).map(e=>({...e,notificationKey:notificationKey(e,prev)}));
+    }:e);const updates=progress(prev,next,m,base);return [...base.filter(e=>e.kind!=='CLOSE'),...updates,...base.filter(e=>e.kind==='CLOSE')].map(e=>({...e,notificationKey:notificationKey(e,prev)}));};
     if(!this.pool){
       const prev=this.states.get(stateKey);if(prev&&next.time<=prev.time)return;
       const events=notificationEvents(prev);
       next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
-        events.find(e=>e.kind==='ENTRY')?.telegramPlan
+        events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate)?.telegramPlan
           ? {side:events.find(e=>e.kind==='ENTRY').side,entryType:events.find(e=>e.kind==='ENTRY').entryType,
-             setupKey:events.find(e=>e.kind==='ENTRY')?.setupKey||null,openedAt:next.time,plan:events.find(e=>e.kind==='ENTRY').telegramPlan}
+             setupKey:events.find(e=>e.kind==='ENTRY')?.setupKey||null,openedAt:next.time,atrReference:events.find(e=>e.kind==='ENTRY').telegramSop?.riskAtrReference||events.find(e=>e.kind==='ENTRY').telegramSop?.atrReference,plan:events.find(e=>e.kind==='ENTRY').telegramPlan}
           : prev?.activePlan||null;
       this.states.set(stateKey,next);
       for(const e of events){
@@ -162,9 +163,9 @@ class AnalysisAlerts {
       const prev=(await c.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[stateKey])).rows[0]?.data;
       if(!prev||next.time>prev.time){
         const events=notificationEvents(prev);
-        const opened=events.find(e=>e.kind==='ENTRY');
+        const opened=events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate);
         next.activePlan=events.some(e=>e.kind==='CLOSE'&&e.percent===100)?null:
-          opened?.telegramPlan?{side:opened.side,entryType:opened.entryType,setupKey:opened.setupKey||null,openedAt:next.time,plan:opened.telegramPlan}:prev?.activePlan||null;
+          opened?.telegramPlan?{side:opened.side,entryType:opened.entryType,setupKey:opened.setupKey||null,openedAt:next.time,atrReference:opened.telegramSop?.riskAtrReference||opened.telegramSop?.atrReference,plan:opened.telegramPlan}:prev?.activePlan||null;
         await c.query('INSERT INTO zencore_alert_states(symbol,data) VALUES($1,$2) ON CONFLICT(symbol) DO UPDATE SET data=$2',[stateKey,next]);
         for(const e of events){
           const claimed=await c.query('INSERT INTO zencore_notification_keys(notification_key) VALUES($1) ON CONFLICT DO NOTHING RETURNING notification_key',[e.notificationKey]);
@@ -174,7 +175,7 @@ class AnalysisAlerts {
           queued=true;
           await c.query(`INSERT INTO zencore_telegram_deliveries(event_id,user_id)
             SELECT $1,p.user_id FROM zencore_alert_preferences p JOIN zencore_users u ON u.id=p.user_id
-            WHERE u.status='active' AND u.role<>'viewer' AND p.data->>'telegramEnabled'='true' AND p.data->>'verified'='true'`,[row.id]);
+            WHERE u.status='active' AND u.role<>'viewer' AND p.data->>'telegramEnabled'='true' AND p.data->>'verified'='true' AND (u.role<>'client' OR u.access_expires_at>NOW())`,[row.id]);
         }
       }
       await c.query('COMMIT');
@@ -213,10 +214,11 @@ class AnalysisAlerts {
         let status='skipped';
         try{
           const p=await this.get(row.user_id);
-          const u=(await this.pool.query('SELECT status,role FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
+          const u=(await this.pool.query('SELECT status,role,access_expires_at FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           // Apply to every notification, including closes and already queued events.
-          if(p.telegramEnabled&&p.verified&&u?.status==='active'&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
+          if(p.telegramEnabled&&p.verified&&require('./account-access').allowed(u)&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
+             (!['TP_HIT','PULLBACK'].includes(e.kind)||progressAllowed(e))&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){

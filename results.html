@@ -40,7 +40,7 @@
             <span id="resultConnection" class="connection-pill connecting"><i></i> MEMUATKAN</span>
           </div>
           <h1>Keputusan signal, jelas tanpa teka-teki.</h1>
-          <p>Check rekod signal: mana kena TP, kena SL, dilindungi StepLock atau masih jalan. Auto Trade sekarang fokus XAUUSD TF2 dan TF15.</p>
+          <p>Check entry, TP dicapai dan signal close yang direkod. Auto Trade sekarang fokus XAUUSD TF2 dan TF15.</p>
         </div>
         <div class="validation-stamp">
           <span>STATUS DATA</span>
@@ -51,27 +51,27 @@
 
       <aside class="data-notice" aria-label="Penerangan data result">
         <i aria-hidden="true">i</i>
-        <div><b>Ini prestasi signal ZenCore Errante, bukan keuntungan akaun.</b><span>Ringkasan ni ikut rekod yang engine sedang pegang. Rekod selesai disimpan berasingan. Jumlah ringkasan boleh mula semula lepas server restart.</span></div>
+        <div><b>Ini prestasi signal ZenCore Errante, bukan keuntungan akaun.</b><span>Entry, TP dan close signal TF2/TF15 disimpan dalam database dan kekal selepas restart. TP dicapai bukan bukti untung; hasil untung/rugi close tidak diandaikan.</span></div>
       </aside>
 
       <section class="result-summary" aria-label="Ringkasan keputusan signal">
-        <article><span>JUMLAH SAMPLE</span><b id="summarySample">0</b><small>Termasuk ambiguous</small></article>
-        <article><span>RESOLVED</span><b id="summaryResolved">0</b><small>Signal sudah dinilai</small></article>
-        <article class="win"><span>WIN</span><b id="summaryWins">0</b><small>TP / protected win</small></article>
-        <article class="loss"><span>LOSS</span><b id="summaryLosses">0</b><small>SL sebelum TP1</small></article>
-        <article class="rate"><span>WIN RATE</span><b id="summaryWinRate">—</b><small>Validation, bukan jaminan</small></article>
-        <article class="open"><span>MASIH OPEN</span><b id="summaryOpen">0</b><small>Signal sedang dipantau</small></article>
+        <article><span>JUMLAH SAMPLE</span><b id="summarySample">0</b><small>Signal entry direkod</small></article>
+        <article><span>RESOLVED</span><b id="summaryResolved">0</b><small>Termasuk setup diganti</small></article>
+        <article class="win"><span>TP1 DICAPAI</span><b id="summaryWins">0</b><small>Harga mencapai TP1</small></article>
+        <article class="loss"><span>SIGNAL TAMAT</span><b id="summaryLosses">0</b><small>Close atau setup diganti</small></article>
+        <article class="rate"><span>KADAR TP1</span><b id="summaryWinRate">—</b><small>TP1 ÷ jumlah signal</small></article>
+        <article class="open"><span>BELUM ADA CLOSE</span><b id="summaryOpen">0</b><small>Belum ada signal close direkod</small></article>
       </section>
 
       <section class="results-overview">
         <article class="result-panel pair-panel">
           <div class="panel-heading">
-            <div><span class="eyebrow">9-Pair Scoreboard</span><h2>Rekod mengikut pair</h2></div>
-            <span id="pairCoverage" class="mini-pill">0/11 tersedia</span>
+            <div><span class="eyebrow">XAUUSD TF2 / TF15</span><h2>Rekod mengikut pair</h2></div>
+            <span id="pairCoverage" class="mini-pill">0/2 tersedia</span>
           </div>
           <div class="pair-table-wrap">
             <table class="pair-table">
-              <thead><tr><th>PAIR</th><th>RESOLVED</th><th>W–L</th><th>WIN RATE</th><th>OPEN</th><th>STATUS</th></tr></thead>
+              <thead><tr><th>PAIR</th><th>RESOLVED</th><th>TP1 / TAMAT</th><th>KADAR TP1</th><th>OPEN</th><th>STATUS</th></tr></thead>
               <tbody id="pairTableBody">
                 <tr><td colspan="6" class="table-empty">Memuatkan scoreboard...</td></tr>
               </tbody>
@@ -93,15 +93,12 @@
       <section class="result-controls" aria-label="Kawalan result">
         <div class="filter-row" role="group" aria-label="Filter outcome">
           <button class="result-filter active" type="button" data-filter="all">SEMUA</button>
-          <button class="result-filter" type="button" data-filter="win">WIN</button>
-          <button class="result-filter" type="button" data-filter="loss">LOSS</button>
-          <button class="result-filter" type="button" data-filter="protected">PROTECTED</button>
-          <button class="result-filter" type="button" data-filter="managed">MANAGED</button>
-          <button class="result-filter" type="button" data-filter="ambiguous">AMBIGUOUS</button>
+          <button class="result-filter" type="button" data-filter="tp1">TP1 DICAPAI</button>
+          <button class="result-filter" type="button" data-filter="closed">SIGNAL TAMAT</button>
           <button class="result-filter" type="button" data-filter="open">OPEN</button>
         </div>
         <div class="control-actions">
-          <label class="select-control" for="pairFilter"><span>PAIR</span><select id="pairFilter"><option value="ALL">SEMUA 9 PAIR</option></select></label>
+          <label class="select-control" for="pairFilter"><span>PAIR</span><select id="pairFilter"><option value="ALL">SEMUA PAIR</option></select></label>
           <label class="select-control" for="sideFilter"><span>ARAH</span><select id="sideFilter"><option value="ALL">BUY + SELL</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select></label>
           <button id="refreshButton" class="action-btn" type="button">REFRESH</button>
           <button id="exportButton" class="action-btn primary" type="button">EXPORT CSV</button>
@@ -116,7 +113,7 @@
         <div class="history-table-wrap">
           <table class="history-table">
             <thead>
-              <tr><th>MASA</th><th>PAIR</th><th>ARAH</th><th>ENTRY</th><th>OUTCOME</th><th>STEPLOCK</th><th>SCORE</th><th>ANALYSIS</th></tr>
+              <tr><th>MASA</th><th>PAIR</th><th>ARAH</th><th>ENTRY</th><th>OUTCOME</th><th>TP DICAPAI</th><th>SCORE</th><th>ANALYSIS</th></tr>
             </thead>
             <tbody id="historyTableBody">
               <tr><td colspan="8" class="table-empty">Memuatkan signal history...</td></tr>
@@ -126,7 +123,7 @@
       </section>
 
       <section class="result-panel history-panel" aria-label="Arkib keputusan signal kekal">
-        <div class="panel-heading"><div><span class="eyebrow">DURABLE SIGNAL AUDIT</span><h2>Arkib validasi selepas restart</h2></div><span id="durableStatus" class="mini-pill">TENGAH CHECK</span></div>
+        <div class="panel-heading"><div><span class="eyebrow">DURABLE SIGNAL AUDIT</span><h2>Arkib validation lama</h2></div><span id="durableStatus" class="mini-pill">TENGAH CHECK</span></div>
         <p class="data-notice">Ini rekod signal selesai yang dah disimpan, bukan profit/loss broker. Rekod lama atau signal yang tak diterima masa sistem down tak boleh direka semula.</p>
         <div class="history-table-wrap"><table class="history-table"><thead><tr><th>MASA</th><th>PAIR</th><th>ARAH</th><th>ENTRY</th><th>HASIL</th><th>SKOR SOP</th></tr></thead><tbody id="durableRows"><tr><td colspan="6">Memuatkan arkib…</td></tr></tbody></table></div>
       </section>

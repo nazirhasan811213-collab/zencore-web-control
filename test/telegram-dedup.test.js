@@ -6,13 +6,13 @@ const {notificationKey}=require('../telegram-notification-key');
 const market=(time,setupKey='setup-A',tf='2')=>({symbol:'XAUUSD',timeframe:tf,setupKey,receivedAt:time,
  strategyNormal:{state:'READY',side:'BUY',sop:{sopGreen:4,forecast:'BULLISH',marketPower:70,gates:[{pass:true},{pass:true}]},plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}},positionManagement:{action:'HOLD'}});
 
-test('notification identity ignores arrival, SL and event IDs, preserves TF, setup and re-entry candle',()=>{
+test('notification identity ignores arrival, SL and event IDs, preserves TF/setup but ignores re-entry relabel and candle retries',()=>{
  const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',side:'BUY',setupKey:'A',telegramPlan:{entry:2000,sl:1990}};
  assert.equal(notificationKey(e),notificationKey({...e,id:999,time:Date.now(),telegramPlan:{entry:2000,sl:1995}}));
  for(const edit of [{timeframe:'15'},{setupKey:'B'},{side:'SELL'}])assert.notEqual(notificationKey(e),notificationKey({...e,...edit}));
  const re={...e,entryType:'HIGH_REENTRY',sourceBarTime:123};
- assert.notEqual(notificationKey(re),notificationKey({...re,sourceBarTime:124}));
- assert.notEqual(notificationKey(e),notificationKey(re));
+ assert.equal(notificationKey(re),notificationKey({...re,sourceBarTime:124}));
+ assert.equal(notificationKey(e),notificationKey(re));
 });
 
 test('replayed setup and full close never notify twice; fresh same-price setups and TF15 remain independent',async()=>{
@@ -88,4 +88,23 @@ test('queued duplicate event IDs and users sharing a chat send one notification,
  batch=[{id:4,event_id:2,user_id:'one'}];await service().deliver();
  assert.equal(sent.length,2);
  assert.deepEqual(statuses,[[1,'sent'],[2,'skipped'],[3,'sent'],[4,'skipped']]);
+});
+
+test('same setup never sends twice after re-entry relabel, new candle, price drift or reconnect',async()=>{
+ const s=new AnalysisAlerts();await s.init();let t=Date.now()-20000;
+ const original=market(++t);
+ try{
+  await s.save('u',{popup:false,sound:false,telegramEnabled:false,telegramId:''});
+  const settings=await s.get('u');
+  await s.record(original);
+  for(const kind of ['NORMAL_REENTRY','HIGH_REENTRY']){
+   await s.record({...original,receivedAt:++t,strategyNormal:{state:'WAIT'}});
+   s.states=new Map(JSON.parse(JSON.stringify([...s.states])));
+   await s.record({...original,receivedAt:++t,sourceBarTime:t,strategyNormal:{...original.strategyNormal,entryType:kind,plan:{...original.strategyNormal.plan,entry:2001,sl:1991}}});
+  }
+  assert.equal(s.events.filter(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).length,1);
+  await s.record({...market(++t,'fresh-qualified-reentry'),strategyNormal:{...original.strategyNormal,entryType:'HIGH_REENTRY'}});
+  assert.equal(s.events.filter(e=>e.kind==='ENTRY'&&!e.telegramDuplicate).length,2);
+  assert.deepEqual(await s.get('u'),settings,'notification settings are unchanged');
+ }finally{clearInterval(s.cleanupTimer);}
 });

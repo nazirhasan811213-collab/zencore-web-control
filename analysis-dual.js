@@ -1,7 +1,7 @@
 (() => {
  'use strict';
  const root=document.getElementById('dualViews'),pair=document.getElementById('pairSelector'),connection=document.getElementById('dualConnection');
- let selected='both',generation=0,controller=null,timer=null,payload=null,failed=false,stream=null,streamLive=false;
+ let selected='both',generation=0,controller=null,timer=null,payload=null,failed=false,stream=null,streamLive=false,lastStreamAt=0;
  const cards=new Map();
  const label=v=>({WAITING:'TUNGGU DATA',WAIT:'TUNGGU',WAIT_DATA:'TUNGGU DATA',STALE:'DATA LAMA',DISCONNECTED:'TERPUTUS',WATCH:'MONITOR DULU',PASS:'LULUS',ABOVE:'DI ATAS',BELOW:'DI BAWAH',INTRABAR:'DALAM CANDLE',BAR_CLOSE:'CANDLE DAH CLOSE'}[v]||v);
  function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
@@ -12,9 +12,14 @@
   const card=el('article',undefined,'tf-card');card.dataset.timeframe=String(tf);
   const header=el('header'),title=el('div');title.append(el('span','XAUUSD / HEMA '+(tf===15?'15 · MTF 15/30/45':String(tf)),'eyebrow'),el('h2','TF'+tf+' • '+(tf===15?'Intraday':'Scalping')));
   const badge=el('span','WAITING','feed-pill');header.append(title,badge);
-  const content=el('div'),chartButton=el('button','Buka chart '+tf+' min'),chart=el('div',undefined,'chart-host');chartButton.type='button';
-  chartButton.onclick=()=>{if(chart.children.length){chart.replaceChildren();chartButton.textContent='Buka chart '+tf+' min';return;}chartButton.textContent='Tutup chart '+tf+' min';const script=document.createElement('script');script.src='https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';script.async=true;script.textContent=JSON.stringify({autosize:true,symbol:'OANDA:'+pair.value,interval:String(tf),timezone:'Asia/Kuala_Lumpur',theme:'dark',style:'1',locale:'en',allow_symbol_change:false,support_host:'https://www.tradingview.com'});chart.append(el('div',undefined,'tradingview-widget-container__widget'),script);};
-  card.append(header,content,chartButton,chart);root.append(card);cards.set(tf,{card,badge,content,chart});
+  const content=el('div'),nativeHost=el('div'),actions=el('div',undefined,'zc-chart-actions'),chart=el('div',undefined,'zc-tv-reference');
+  const nativeChart=window.ZenCoreIndicatorChart?.mount(nativeHost,tf);
+  const chartButton=el('button','Tutup chart ZenCore TF'+tf),referenceButton=el('button','Harga TradingView (rujukan)');chartButton.type=referenceButton.type='button';
+  chartButton.setAttribute('aria-pressed','true');referenceButton.setAttribute('aria-pressed','false');
+  chartButton.onclick=()=>{nativeHost.hidden=!nativeHost.hidden;chartButton.textContent=(nativeHost.hidden?'Buka':'Tutup')+' chart ZenCore TF'+tf;chartButton.setAttribute('aria-pressed',String(!nativeHost.hidden));nativeChart?.resize();};
+  referenceButton.onclick=()=>{if(chart.children.length){chart.replaceChildren();referenceButton.setAttribute('aria-pressed','false');return;}referenceButton.setAttribute('aria-pressed','true');const script=document.createElement('script');script.src='https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';script.async=true;script.textContent=JSON.stringify({autosize:true,symbol:'OANDA:'+pair.value,interval:String(tf),timezone:'Asia/Kuala_Lumpur',theme:'dark',style:'1',locale:'en',allow_symbol_change:false,support_host:'https://www.tradingview.com'});chart.append(el('div',undefined,'tradingview-widget-container__widget'),script);};
+  actions.append(chartButton,referenceButton);
+  card.append(header,nativeHost,actions,chart,content);root.append(card);cards.set(tf,{card,badge,content,chart,nativeChart});
  }
  function render(){
   for(const tf of [2,15]){
@@ -22,7 +27,9 @@
    const view=payload?.views?.find(v=>v.timeframe===tf),m=view?.market,n=m?.strategyNormal||{},s=n.sop||{};
    const age=m?.receivedAt?Math.max(0,Date.now()-m.receivedAt):null;
    const sourceAge=m?.signalObservedAt?Math.max(0,Date.now()-m.signalObservedAt):age;
-   const live=!failed&&view?.status==='LIVE'&&age!==null&&age<=30000&&sourceAge!==null&&sourceAge<=30000;
+   const freshnessLimitMs=tf===2?60000:30000;
+   const live=!failed&&view?.status==='LIVE'&&age!==null&&age<=freshnessLimitMs&&sourceAge!==null&&sourceAge<=freshnessLimitMs;
+   c.nativeChart?.update(m,live);
    c.badge.textContent=label(live?'LIVE':failed?'DISCONNECTED':view?.status==='LIVE'?'STALE':view?.status||'WAITING');c.badge.className='feed-pill'+(live?' live':'');
    const focused=c.content.contains(document.activeElement)?document.activeElement.closest('details')?.dataset.section:null;
    const open=new Set([...c.content.querySelectorAll('details[open]')].map(d=>d.dataset.section));
@@ -59,14 +66,32 @@
   const g=generation;stream?.close();streamLive=false;
   if(!window.EventSource)return;
   const active=new EventSource('/api/analysis/timeframes/events?symbol='+encodeURIComponent(pair.value));stream=active;
-  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;clearTimeout(timer);connection.textContent='Data TF2 & TF15 masuk terus • connection aktif';render();}catch(_){}});
+  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;lastStreamAt=Date.now();clearTimeout(timer);connection.textContent='Data TF2 & TF15 masuk terus • connection aktif';render();}catch(_){}});
   active.addEventListener('unavailable',()=>{if(g===generation&&!controller)poll();});
   active.onerror=()=>{if(g!==generation)return;streamLive=false;connection.textContent='Tengah connect balik • masih check data sementara';if(!controller){clearTimeout(timer);poll();}};
  }
  async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Data TF2 & TF15 masuk terus • connection aktif':'Data TF2 & TF15 • check berkala sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
- pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values())c.chart.replaceChildren();connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
+ // A live TF15 stream must not suppress recovery of a missed TF2 update.
+ function recover(){
+  if(document.visibilityState==='hidden'||controller)return;
+  const now=Date.now();
+  const missingOrStale=[2,15].some(tf=>{
+   const m=payload?.views?.find(v=>v.timeframe===tf)?.market;
+   const at=Number(m?.signalObservedAt)||Number(m?.receivedAt);
+   return !at||now-at>(tf===2?60000:30000);
+  });
+  if(!streamLive||now-lastStreamAt>45000||missingOrStale){clearTimeout(timer);poll();}
+ }
+ function resume(){
+  if(document.visibilityState==='hidden')return;
+  startStream();clearTimeout(timer);if(!controller)poll();
+ }
+ const recoveryTimer=setInterval(recover,15000);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume();});
+ window.addEventListener('online',resume);
+ pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values()){c.chart.replaceChildren();c.nativeChart?.clear();}connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
  const params=new URLSearchParams(location.search);if(['XAUUSD'].includes(params.get('pair')))pair.value=params.get('pair');if(['2','15'].includes(params.get('tf'))){selected=params.get('tf');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));}
  render();startStream();poll();setInterval(render,1000);
- window.addEventListener('pagehide',()=>{generation++;clearTimeout(timer);controller?.abort();stream?.close();});
+ window.addEventListener('pagehide',()=>{generation++;clearTimeout(timer);clearInterval(recoveryTimer);controller?.abort();stream?.close();});
 })();
 

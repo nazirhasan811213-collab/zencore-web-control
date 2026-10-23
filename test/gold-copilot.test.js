@@ -14,7 +14,7 @@ test('TF2 and TF15 evaluate their own direction and HEMA confirmations',()=>{
  assert.equal(analyse([a,b],15,now).forecast.horizonMinutes,150);
 });
 test('fresh receipt and another timeframe cannot revive an old setup',()=>{
- const a=view(),b=view(15);a.market.signalObservedAt=now-31000;
+ const a=view(),b=view(15);a.market.signalObservedAt=now-61000;
  assert.equal(analyse([a,b],2,now).status,'WAIT_DATA');
  assert.equal(analyse([],2,now).status,'WAIT_DATA');
 });

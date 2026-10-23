@@ -8,8 +8,8 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
  const schema='alert_test_'+Date.now();const admin=new Pool({connectionString:url});let pool,a,b;
  try{
   await admin.query(`CREATE SCHEMA ${schema}`);pool=new Pool({connectionString:url,options:`-c search_path=${schema}`});
-  await pool.query('CREATE TABLE zencore_users(id UUID PRIMARY KEY,status TEXT,role TEXT)');
-  const user='11111111-1111-4111-8111-111111111111';await pool.query("INSERT INTO zencore_users VALUES($1,'active','client')",[user]);
+  await pool.query(`CREATE TABLE zencore_users(id UUID PRIMARY KEY,status TEXT,role TEXT,access_expires_at TIMESTAMPTZ DEFAULT (NOW()+INTERVAL '336 hours'))`);
+  const user='11111111-1111-4111-8111-111111111111';await pool.query("INSERT INTO zencore_users(id,status,role) VALUES($1,'active','client')",[user]);
   a=new AnalysisAlerts({pool});await a.init();b=new AnalysisAlerts({pool});await b.init();
   await a.put(user,{popup:true,sound:true,telegramEnabled:true,telegramId:'123456789',verified:true});
   const m=readyMarket({plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}});
@@ -27,7 +27,7 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
   await a.record({...m,receivedAt:m.receivedAt+5,positionManagement:{action:'CLOSE_50_NOW'}});
   assert.equal((await b.feed('0')).events.length,5,'popup keeps both reverted-plan entry and partial-close events');
   const user2='22222222-2222-4222-8222-222222222222';
-  await pool.query("INSERT INTO zencore_users VALUES($1,'active','client')",[user2]);
+  await pool.query("INSERT INTO zencore_users(id,status,role) VALUES($1,'active','client')",[user2]);
   for(const id of [user,user2])await a.put(id,{popup:true,sound:true,telegramEnabled:true,telegramId:'123456789',verified:true});
   await a.record({...m,receivedAt:m.receivedAt+6,positionManagement:{action:'EXIT_ALL'}});
   await a.deliver();assert.equal(sends,1,'one shared chat receives one copy of the event');

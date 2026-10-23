@@ -476,7 +476,7 @@ test('STOPPED users still receive StepLock management for open positions', async
     positions: [{
       ticket: '900002', symbol: 'XAUUSD', side: 'BUY', volume: 0.02,
       entry: 2500, currentPrice: 2510, initialSl: 2495, activeSl: 2500,
-      profitUsd: 20, exitStage: 'TP2_HIT', slLock: 'TP1'
+      profitUsd: 20, exitStage: 'TP2_HIT', slLock: 'TP1', openedAt: 1_790_000_000_000-60000
     }]
   });
   const result = await service.dispatchMarkets([{
@@ -982,4 +982,30 @@ test('worker pool capacity shrink disables only unused slots', async () => {
   const restored = await store.getHostedWorkerPoolOverview();
   assert.equal(restored.hosts[0].slotsTotal, 4);
   assert.equal([...store.workerSlots.values()].filter(slot => slot.status === 'AVAILABLE').length, 4);
+});
+
+test('expired users still receive StepLock management while new entries are blocked', async () => {
+  const { store, token } = await setup();
+  const service=createAutoTradeService({store,commandSigningKey:SIGNING_KEY,allowDemoExecution:true,requiredDemoConnectorVersion:LEGACY_WINDOWS_CONNECTOR,entryAccessAllowed:async()=>false,now:()=>1_790_000_000_000});
+  await service.heartbeat(token, {
+    accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Stellar',
+    tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
+    expertTradeAllowed: true, demoExecutionUnlocked: true,
+    positions: [{
+      ticket: '900002', symbol: 'XAUUSD', side: 'BUY', volume: 0.02,
+      entry: 2500, currentPrice: 2510, initialSl: 2495, activeSl: 2500,
+      profitUsd: 20, exitStage: 'TP2_HIT', slLock: 'TP1', openedAt: 1_790_000_000_000-60000
+    }]
+  });
+  const result = await service.dispatchMarkets([{
+    symbol: 'XAUUSD', receivedAt: 1_790_000_004_000,
+    positionManagement: {
+      action: 'HOLD', slMoveTriggered: true,
+      slMoveAction: 'MOVE_SL_TP1', activeSl: 2505, slLockLabel: 'TP1'
+    }
+  }]);
+  assert.deepEqual(result, { queued: 1 });
+  const command = await service.nextCommand(token);
+  assert.equal(command.command.type, 'MANAGE_POSITION');
+  assert.equal(command.command.payload.actions[0].type, 'MOVE_SL_TP1');
 });

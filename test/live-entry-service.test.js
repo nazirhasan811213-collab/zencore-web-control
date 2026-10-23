@@ -28,7 +28,7 @@ test('price outside original TP1 zone cancels queued live-anchor order',async()=
 test('rebased positions ignore old chart close and use reported TP1 for StepLock',async()=>{
  const f=await setup();await f.service.dispatchMarkets([f.latest]);const cmd=(await f.service.nextCommand(f.c.podToken)).command,p=cmd.payload;
  await f.service.acknowledgeCommand(f.c.podToken,cmd.id,{status:'EXECUTED'});
- const pos={ticket:'1234',origin:'ZENCORE',symbol:'XAUUSD',side:'BUY',strategyMode:'TF2_SCALPING',volume:.03,entry:p.entry,currentPrice:p.entry,activeSl:p.sl,openedAt:clock,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3};
+ const pos={ticket:'1234',origin:'ZENCORE',symbol:'XAUUSD',side:'BUY',strategyMode:'TF2_SCALPING',volume:.03,entry:p.entry,currentPrice:p.entry,activeSl:p.sl,openedAt:clock-60000,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3};
  await f.service.heartbeat(f.c.podToken,{...hb,positions:[pos]});
  f.latest.positionManagement={action:'EXIT_SL',slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:101};
  assert.equal((await f.service.dispatchMarkets([f.latest])).queued,0);

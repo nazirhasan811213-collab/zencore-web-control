@@ -430,13 +430,11 @@
     const symbol=normaliseSymbol(market.symbol);
     const tf=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '');
     const mode=tf==='15'?'TF15_INTRA':'TF2_SCALPING';
-    const open=positions.filter(position=>!(['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion)&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
+    const open=positions.filter(position=>!(['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion)&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
       (position.strategyMode||'TF2_SCALPING')===mode);
-    if (!open.length) return true;
-    const normal=market.strategyNormal||{};
-    return /^(NORMAL|HIGH)_REENTRY$/.test(String(normal.entryType||'')) &&
-      ['BUY','SELL'].includes(normal.side) &&
-      open.every(position=>String(position.side||'').toUpperCase()===normal.side);
+    // Re-entry is a new cycle, never an add-on to a still-open setup.
+    // Keep TF2/TF15 independent and preserve the existing manual-position scope.
+    return open.length === 0;
   }
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
