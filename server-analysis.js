@@ -97,7 +97,7 @@ const autoTradeState = {
 
 const adminMonitoring = require('./admin-monitoring-service').createAdminMonitoring({
   auth: authState, trading: autoTradeState, telegram: () => analysisAlerts,
-  fetchMarkets: fetchLocalMarkets, hostedEnabled: HOSTED_MT5_ENABLED, webhook: webhookIngress
+  fetchMarkets: fetchLocalAnalysisMarkets, hostedEnabled: HOSTED_MT5_ENABLED, webhook: webhookIngress
 });
 
 const readiness=require('./service-readiness').createReadiness({auth:authState,trading:autoTradeState,autotradeEnabled:AUTOTRADE_ENABLED,allowMemoryDatabase:process.env.NODE_ENV==='test'&&AUTH_MEMORY,webhook:webhookIngress});
