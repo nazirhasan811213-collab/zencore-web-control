@@ -5,7 +5,8 @@ test('monitoring HTTP routes enforce admin role and serve the working admin snap
  fs.writeFileSync(preload,`const {MemoryAuthStore}=require(${JSON.stringify(path.join(root,'auth-store'))}); const {hashPassword}=require(${JSON.stringify(path.join(root,'auth-core'))}); const original=MemoryAuthStore.prototype.init;MemoryAuthStore.prototype.init=async function(){await original.call(this);for(const role of ['admin','client']){const u=await this.upsertPublicViewer({displayName:role,email:role+'@monitor.test',passwordHash:await hashPassword('MonitorTest2026!')});await this.setUserRole(u.id,role);}};`);
  fs.appendFileSync(preload,`const hub=require(${JSON.stringify(path.join(root,'tf2-ribbon-market-hub'))});const tf2=require(${JSON.stringify(path.join(root,'tf2-ribbon-scalping'))});const now=Date.now();const row=Array(67).fill(null);row[0]='XAUUSD';row[1]=now-240000;row[6]=4100;row[65]={version:'HEMA2_LIVE_V1',tf2:{}};row[66]={entryRuleVersion:tf2.RULE};const batch={feedVersion:'TF2_REALTIME_V1',timeframe:'2',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now-120000,markets:[row]};hub.ingest(batch,now-120000);hub.ingest({...batch,feedChannel:'DASHBOARD',emittedAt:now},now);`);
  const webhookSecret='http-test-webhook-secret-at-least-32-characters';
- const child=spawn(process.execPath,['-r',preload,'-r','./compat-v17.js','server-analysis.js'],{cwd:root,env:{...process.env,DATABASE_URL:'',PORT:'18791',NODE_ENV:'test',SITE_MODE:'precision-entry',ZENCORE_AUTH_ENABLED:'true',ZENCORE_AUTH_MEMORY:'true',ZENCORE_INSECURE_COOKIE:'true',ZENCORE_AUTOTRADE_ENABLED:'true',ZENCORE_AUTOTRADE_MEMORY:'true',ZENCORE_HOSTED_MT5_ENABLED:'false',ZENCORE_GCP_HOSTED_WORKER_ENABLED:'false',ZENCORE_PUBLIC_VIEWER_ENABLED:'false',ZENCORE_TELEGRAM_BOT_TOKEN:'',ZENCORE_WEBHOOK_SECRET:webhookSecret,ZENCORE_COMMAND_SIGNING_KEY:'monitor-test-signing-key-at-least-32-bytes'},stdio:['ignore','pipe','pipe']});
+ const relaySecret='http-test-relay-secret-at-least-32-characters';
+ const child=spawn(process.execPath,['-r',preload,'-r','./compat-v17.js','server-analysis.js'],{cwd:root,env:{...process.env,DATABASE_URL:'',PORT:'18791',NODE_ENV:'test',SITE_MODE:'precision-entry',ZENCORE_AUTH_ENABLED:'true',ZENCORE_AUTH_MEMORY:'true',ZENCORE_INSECURE_COOKIE:'true',ZENCORE_AUTOTRADE_ENABLED:'true',ZENCORE_AUTOTRADE_MEMORY:'true',ZENCORE_HOSTED_MT5_ENABLED:'false',ZENCORE_GCP_HOSTED_WORKER_ENABLED:'false',ZENCORE_PUBLIC_VIEWER_ENABLED:'false',ZENCORE_TELEGRAM_BOT_TOKEN:'',ZENCORE_WEBHOOK_SECRET:webhookSecret,ZENCORE_RELAY_SECRET:relaySecret,ZENCORE_RELAY_RECEIVE_ENABLED:'true',ZENCORE_RELAY_TARGET_URL:'',ZENCORE_COMMAND_SIGNING_KEY:'monitor-test-signing-key-at-least-32-bytes'},stdio:['ignore','pipe','pipe']});
  try{
   await new Promise((resolve,reject)=>{let output='';const timer=setTimeout(()=>reject(new Error('Test server did not start')),12000);child.stdout.on('data',d=>{output+=d;if(output.includes('Auto Trade control plane ready')){clearTimeout(timer);resolve();}});child.once('exit',()=>{clearTimeout(timer);reject(new Error('Test server exited'));});});
   const postWebhook=body=>fetch(base+'/webhook',{method:'POST',headers:{'Content-Type':'application/json'},body});
@@ -14,6 +15,17 @@ test('monitoring HTTP routes enforce admin role and serve the working admin snap
   assert.equal((await postWebhook('x'.repeat(160001))).status,413);
   const accepted=await postWebhook(JSON.stringify({authToken:webhookSecret,emittedAt:Date.now(),timeframe:'2',markets:[]}));
   assert.equal(accepted.status,200);assert.equal((await accepted.text()).includes(webhookSecret),false);
+  // Relay uses separate HMAC credentials; never reuse TradingView's authToken.
+  const relayBody=JSON.stringify({emittedAt:Date.now(),timeframe:'15',markets:[]});
+  const relayAt=String(Date.now()),relayId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const relayHeaders={'Content-Type':'application/json','x-zencore-relay-at':relayAt,'x-zencore-relay-id':relayId,'x-zencore-relay-signature':require('../feed-relay').signature(relaySecret,relayAt,relayId,relayBody)};
+  assert.equal((await fetch(base+'/relay/webhook',{method:'POST',body:relayBody})).status,401);
+  const relayed=await fetch(base+'/relay/webhook',{method:'POST',headers:relayHeaders,body:relayBody});
+  assert.equal(relayed.status,200);assert(Number(relayed.headers.get('x-zencore-relay-received-at'))>0);await relayed.text();
+  assert.equal((await fetch(base+'/relay/webhook',{method:'POST',headers:relayHeaders,body:relayBody})).status,409);
+  const relayState=(await (await fetch(base+'/ready')).json()).relay;
+  assert.equal(relayState.received,1);assert.equal(relayState.applied,1);assert.equal(relayState.sending,false);assert.equal(relayState.receiving,true);
+
   let ready;
   for(let i=0;i<25;i++){ready=await fetch(base+'/ready');if(ready.status===200)break;await new Promise(r=>setTimeout(r,100));}
   assert.equal(ready.status,200);const readiness=await ready.json();assert.equal(readiness.database,'READY');assert.equal(readiness.dispatcher,'READY');assert.equal(readiness.webhook,'AUTHENTICATED');

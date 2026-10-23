@@ -55,6 +55,7 @@ const POD_PROVISIONING_SECRET = String(process.env.ZENCORE_POD_PROVISIONING_SECR
 const COMMAND_SIGNING_KEY = String(process.env.ZENCORE_COMMAND_SIGNING_KEY || '');
 const {createWebhookIngress,readWebhook}=require('./webhook-ingress');
 const webhookIngress=createWebhookIngress({secret:process.env.ZENCORE_WEBHOOK_SECRET||''});
+const feedRelay=require('./feed-relay').createFeedRelay({target:process.env.ZENCORE_RELAY_TARGET_URL||'',secret:process.env.ZENCORE_RELAY_SECRET||'',receive:/^(1|true)$/i.test(process.env.ZENCORE_RELAY_RECEIVE_ENABLED||'')});
 const AUTOTRADE_DEMO_SYMBOLS = ['XAUUSD'];
 const AUTOTRADE_DEMO_CONNECTOR_VERSION = String(
   process.env.ZENCORE_AUTOTRADE_DEMO_CONNECTOR_VERSION || '2.2.2-gcp-multiuser-multipair'
@@ -1544,12 +1545,21 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
 
   if(req.method==='POST'&&pathname==='/webhook'){
-    try{return proxy(req,res,'/webhook',webhookIngress.validate(await readWebhook(req,webhookIngress.maxBytes)));}
+    try{const body=webhookIngress.validate(await readWebhook(req,webhookIngress.maxBytes));feedRelay.send(body);return proxy(req,res,'/webhook',body);}
     catch(error){return sendJson(res,error.status||400,{ok:false,code:error.code||'WEBHOOK_INVALID',error:'Webhook ditolak.'});}
+  }
+  if(req.method==='POST'&&pathname==='/relay/webhook'){
+    try{
+      const receipt=feedRelay.accept(await readWebhook(req,feedRelay.maxBytes),req.headers);
+      res.once('finish',()=>feedRelay.applied(receipt.sourceAt,res.statusCode));
+      res.setHeader('X-ZenCore-Relay-Received-At',String(receipt.receivedAt));
+      return proxy(req,res,'/webhook',receipt.body);
+    }catch(error){return sendJson(res,error.status||400,{ok:false,code:error.code||'RELAY_INVALID'});}
   }
   if(req.method==='GET'&&pathname==='/ready'){
     const status=await readiness.snapshot();
     status.product="ZenCore Errante"; status.preparationMode=true;
+    status.relay=feedRelay.status();
     return sendJson(res,status.ok?200:503,{...status,autoEntry:{enabled:AUTOTRADE_EXECUTION_ENABLED||LOCAL_EA_EXECUTION_ENABLED||!!String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS||'').trim(),signalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')},demoEntry:{allUsers:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_ENABLED||''),scoped:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS||'').trim(),mode:'DEMO',accountRestricted:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_ACCOUNT_MASK||'')}});
   }
 

@@ -18,6 +18,7 @@ function configureErrante(env) {
   env.ZENCORE_AUTH_ENABLED = 'true';
   env.ZENCORE_AUTOTRADE_ENABLED = 'false';
   env.ZENCORE_PRODUCT_NAME = 'ZenCore Errante';
+  env.ZENCORE_RELAY_TARGET_URL = ''; // Receiver only; never relay back or form a loop.
   return env;
 }
 
