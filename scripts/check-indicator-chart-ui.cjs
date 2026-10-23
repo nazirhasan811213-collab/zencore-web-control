@@ -7,6 +7,9 @@ const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),ass
  const views=()=>({ok:true,symbol:'XAUUSD',views:[2,15].map(tf=>({timeframe:tf,status:stale?'STALE':'LIVE',market:missing?null:{symbol:'XAUUSD',timeframe:String(tf),sourceBarTime:latest,receivedAt:now,signalObservedAt:now,open:4106,high:4108,low:4105,close:4107,price:4107,hema20:4106,hema40:4105,strategyNormal:{state:'WAIT',side:tf===2?'BUY':'SELL',solid:true,sop:{triggerAt:latest+1,hema2:{mode:'BUY'},hema15:{mode:'SELL'}},plan:{entry:4107,sl:4104,tp1:4110,tp2:4113,tp3:4116}}}}))});
  await page.route('**/*',route=>{
   const u=new URL(route.request().url()),p=u.pathname;
+  if(p==='/app')return route.fulfill({body:fs.readFileSync('home.html','utf8').replace('<head>','<head><script>window.EventSource=undefined</script>'),contentType:'text/html; charset=utf-8'});
+  if(p==='/auth/me')return route.fulfill({json:{ok:true,user:{role:'admin',displayName:'Chart QA'}}});
+  if(p==='/api/trading-cockpit')return route.fulfill({json:{ok:true,serverTime:Date.now(),pairs:[{symbol:'XAUUSD',views:views().views.map(v=>({...v,entryReady:false,displayState:'WATCH'}))}]}});
   if(p==='/analysis')return route.fulfill({body:fs.readFileSync('precision-entry.html','utf8').replace('<head>','<head><script>window.EventSource=undefined</script>').replace('<main class="app dual-app">','<main class="app dual-app"><p>TEST DATA — visual QA only</p>'),contentType:'text/html; charset=utf-8'});
   if(p==='/api/analysis/timeframes')return route.fulfill({json:views()});
   if(p==='/api/analysis/chart')return route.fulfill({json:{ok:true,symbol:'XAUUSD',timeframe:u.searchParams.get('tf'),candles:missing?[]:candles(Number(u.searchParams.get('tf')))}});
@@ -32,6 +35,21 @@ const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),ass
  assert.equal(await page.locator('.zc-chart-status.is-live').count(),0);
  missing=true;await page.locator('#pairSelector').dispatchEvent('change');await page.waitForFunction(()=>[...document.querySelectorAll('.zc-chart-status')].every(e=>e.textContent==='TUNGGU FEED'));
  assert(await page.locator('.zc-chart-empty').first().isVisible());
+ // The dashboard session area reuses the same native Pine chart and history.
+ stale=false;missing=false;await page.setViewportSize({width:1440,height:1050});await page.goto('http://localhost/app');
+ await page.locator('#dashboardChart2 .zc-chart-status.is-live').waitFor();
+ assert.equal(await page.locator('.dashboard-chart .zc-indicator-chart').count(),2);
+ assert.equal(await page.locator('#priceTrace').count(),0,'old session-only price trace removed');
+ assert.match(await page.locator('#dashboardChart2 .zc-chart-ohlc').innerText(),/O 4106.00.*C 4107.00/);
+ assert(await page.locator('#dashboardChart15').isHidden());
+ await page.screenshot({path:path.join(out,'native-chart-dashboard-desktop.png'),fullPage:true});
+ await page.locator('[data-chart-tf="15"]').click();assert(await page.locator('#dashboardChart2').isHidden());
+ assert(await page.locator('#dashboardChart15 .zc-chart-stage canvas').isVisible());
+ assert.match(await page.locator('#dashboardChart15 .zc-chart-ohlc').innerText(),/C 4107.00/);
+ await page.locator('[data-chart-tf="2"]').click();
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(out,'native-chart-dashboard-mobile.png'),fullPage:true});
+ stale=true;await page.waitForFunction(()=>document.querySelector('#dashboardChart2 .zc-chart-status').textContent==='DATA TERAKHIR',null,{timeout:6000});
  assert(requests.every(r=>r.method==='GET'),'display never sends trade/control/settings writes');assert.deepEqual(errors,[]);
- console.log('Native chart UI passed: real candle rendering, TF isolation, zoom/toggle, stale/empty states, mobile width, GET-only requests.');await browser.close();
+ console.log('Native chart UI passed: real candle rendering, TF isolation, zoom/toggle, stale/empty states, mobile width, dashboard chart replacement, TF switch and GET-only requests.');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1);});
