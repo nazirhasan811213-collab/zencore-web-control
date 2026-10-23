@@ -31,7 +31,7 @@
    const data=points.slice(-visible),last=data.at(-1);
    empty.hidden=!!last;
    const observed=last?.observedAt||0,age=Date.now()-observed;
-   const fresh=live&&age>=-5000&&age<=30000;
+   const fresh=live&&age>=-5000&&age<=(Number(tf)===2?60000:30000);
    badge.textContent=last?(fresh?'FEED LIVE':'DATA TERAKHIR'):'TUNGGU FEED';badge.className='zc-chart-status'+(fresh?' is-live':'');
    note.textContent=(loadFailed?'Sejarah belum tersedia; paparan daripada feed yang diterima. ':'Sejarah sejak server bermula · maksimum 5 jam. ')+(last?'Candle: '+data.length+' · '+clock(last.time)+' MYT. ':'')+'Pelan indikator, bukan pengesahan order MT5.';
    if(!last){readout.textContent='O —  H —  L —  C —';return;}
