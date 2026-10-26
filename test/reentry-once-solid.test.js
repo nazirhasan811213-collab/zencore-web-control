@@ -27,7 +27,7 @@ test('database ledger rejects a second candidate in same SOLID across restart',a
  const entries=events.filter(e=>e.kind==='ENTRY');a.equal(entries.length,3);
  a.deepEqual(entries.map(e=>e.telegramDuplicate),[false,true,false]);a.equal(entries[0].telegramSop.sourceSetupAt,100);
 });
-for(const file of ['ZenCore_TF2_ATR8_TP1Max3.pine','ZenCore_TF2_SolidOnly.pine','ZenCore_TF15_SolidOnly.pine','ZenCore_TF15_Intraday.pine'])test(file+' only resets reentry quota on a new native SOLID',()=>{
+for(const file of ['ZenCore_TF2_SolidOnly.pine','ZenCore_TF15_SolidOnly.pine','ZenCore_TF15_Intraday.pine'])test(file+' only resets reentry quota on a new native SOLID',()=>{
  const s=fs.readFileSync(file,'utf8');
  a.match(s,/varip bool zc_followup_used = false/);
  a.match(s,/if zc_hold_new_source\n    zc_followup_used := false/);

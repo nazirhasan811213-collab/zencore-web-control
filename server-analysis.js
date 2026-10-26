@@ -169,7 +169,7 @@ if (AUTH_ENABLED) {
       sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
       defaultIbCode: DEFAULT_IB_CODE
     });
-    analysisAlerts = new AnalysisAlerts({pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
+    analysisAlerts = new AnalysisAlerts({reentryAllowed:(user,event)=>autoTradeState.service?.reentrySignalAllowed(user,event)??false,pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
     if(store.pool){
       const records=new (require('./current-signal-records').CurrentSignalRecords)({pool:store.pool});
