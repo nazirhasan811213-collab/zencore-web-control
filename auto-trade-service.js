@@ -1620,7 +1620,21 @@ function createAutoTradeService(options = {}) {
     return { queued };
   }
 
+  async function reentrySignalAllowed(userId,event){
+    const [pod,positions]=await Promise.all([store.getPodForUser(userId),store.listPositions(userId)]);
+    if(!isLocalEa(pod)||!connectionState(pod).ready)return false;
+    const sop=event.telegramSop||{};
+    const market={symbol:event.symbol,timeframe:'2',signalObservedAt:sop.signalObservedAt,
+      strategyNormal:{side:event.side,sop}};
+    if(!Core.permitsPositionEntry(market,positions))return false;
+    // A re-entry signal requires an actual preceding fill and broker close.
+    const last=await store.latestExecutedSetupForMode(userId,pod.id,'TF2_SCALPING');
+    if(!last)return false;
+    const cycle=await entryCycleReset.check(userId,pod.id,market);
+    return cycle.allowed&&Number.isFinite(cycle.closedAt)?{allowed:true,cycleKey:[pod.id,last.id,cycle.closedAt].join('|')}:false;
+  }
   return {
+    reentrySignalAllowed,
     state,
     connectionMonitor,
     userTradeMonitoring,
