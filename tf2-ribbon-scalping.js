@@ -1,7 +1,7 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.ZenCoreTf2Ribbon=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
 'use strict';
 const RULE='TF2_SOLID_RIBBON_V1',VERSION='NORMAL_20261001_TF2_RIBBON_V1',RISK='TF2_PINE_ATR10_MAX3_PLAN_V5';
-const POLICY={feedRule:RULE,version:VERSION,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',timeframe:'2',atrPeriod:10,chartPartialAction:'CLOSE_ALL',mtf:['3', '5', '10'],mandatoryTriggers:['NATIVE_SOLID','DASHBOARD_MOVEMENT','HEMA_TREND'],minimumPassed:3,minimumTotal:4,eventMaxAgeMs:60000,checklistHemaTimeframe:'2',checklistMinimum:4,forecastRequired:false,chopIndexExclusiveMaximum:50,slopeFilter:false,entryPriceRangeRequired:false,planSource:'UPLOADED_PINE_NATIVE_PLAN',slAtr:1,slMinimumPrice:null,slMaximumPrice:3,tpModes:['Fixed R:R','Fibonacci'],fixedRr:[1,2,3],fibonacciRatios:[1.618,2.618,4.236],tp1Cap:null,tp1Lock:1.5,tp3Extension:3,exitLockVersion:'PINE_STEPLOCK_150_TP3_PLUS3_V1',transportMode:'TF2_SCALPING'};
+const POLICY={feedRule:RULE,version:VERSION,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',timeframe:'2',atrPeriod:10,chartPartialAction:'CLOSE_ALL',mtf:['3', '5', '10'],mandatoryTriggers:['NATIVE_SOLID','DASHBOARD_MOVEMENT','HEMA_TREND'],minimumPassed:3,minimumTotal:4,eventMaxAgeMs:60000,checklistHemaTimeframe:'2',checklistMinimum:4,checklistMandatory:true,forecastRequired:false,chopIndexExclusiveMaximum:50,slopeFilter:false,entryPriceRangeRequired:false,planSource:'UPLOADED_PINE_NATIVE_PLAN',slAtr:1,slMinimumPrice:null,slMaximumPrice:3,tpModes:['Fixed R:R','Fibonacci'],fixedRr:[1,2,3],fibonacciRatios:[1.618,2.618,4.236],tp1Cap:null,tp1Lock:1.5,tp3Extension:3,exitLockVersion:'PINE_STEPLOCK_150_TP3_PLUS3_V1',transportMode:'TF2_SCALPING'};
 const Lifecycle=typeof module==='object'&&module.exports?require('./setup-lifecycle'):rootLifecycle();
 function rootLifecycle(){return globalThis.ZenCoreSetupLifecycle;}
 const finite=x=>typeof x==='number'&&Number.isFinite(x),fresh=(x,now,maxAge=60000)=>finite(x)&&x>0&&now-x>=-5000&&now-x<=maxAge;
@@ -22,7 +22,7 @@ function confirmations(side,s={}){
   const values={entry:dataReady&&sign*(s.price-s.sourceEntry)>0,wt:dataReady&&sign*(h.waveTrend1-h.waveTrend2)>0,sop:dataReady&&Number.isInteger(g)&&g>=4&&g<=5,forecast:dataReady&&forecast};
   const names={entry:'Harga lepas entry SOLID',wt:'WT1/WT2',sop:'Checklist Pine 4/5',forecast:'Forecast Neutral45 / BullishBearish50'};
   const gates=Object.entries(values).map(([key,pass])=>({key,label:names[key],pass})),passed=gates.filter(g=>g.pass).length;
-  return {dataReady,movement,ribbon,chopPass:true,gates,passed,total:4,scorePercent:passed/4*100,mandatoryDirectionRemoved:solidOnly,pass:dataReady&&(solidOnly||movement&&ribbon)&&passed>=3};
+  return {dataReady,movement,ribbon,chopPass:true,gates,passed,total:4,scorePercent:passed/4*100,mandatoryDirectionRemoved:solidOnly,checklistMandatory:true,checklistPass:values.sop,pass:dataReady&&(solidOnly||movement&&ribbon)&&passed>=3&&values.sop};
  }
  const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||{},a=s.atrReference,m=s.mtfScore,g=s.sopGreen;
  const dataReady=!!sign&&a>0&&[a,h.fast,h.slow,h.waveTrend1,h.waveTrend2,m,g,s.price,s.sourceEntry].every(finite)&&Number.isInteger(g)&&g>=0&&g<=5&&[1,3,-1,-3].includes(m);
@@ -34,7 +34,7 @@ function confirmations(side,s={}){
  const names={entry:'Harga lepas entry SOLID',wt:'WT1/WT2',sop:'Checklist Pine 4/5',mtf:'MTF 3/5/10'};
  const gates=Object.entries(values).map(([key,pass])=>({key,label:names[key],pass})),passed=gates.filter(g=>g.pass).length;
  const chopPass=finite(s.chopIndex)&&s.chopIndex>=0&&s.chopIndex<50;
- return {dataReady,movement,ribbon,chopPass,gates,passed,total:4,scorePercent:passed/4*100,pass:dataReady&&movement&&ribbon&&passed>=3&&chopPass};
+ return {dataReady,movement,ribbon,chopPass,gates,passed,total:4,scorePercent:passed/4*100,checklistMandatory:true,checklistPass:values.sop,pass:dataReady&&movement&&ribbon&&passed>=3&&chopPass&&values.sop};
 }
 function planPass(side,p={},s={}){
  const sign=side==='BUY'?1:side==='SELL'?-1:0,a=s.riskAtrReference;
@@ -58,7 +58,7 @@ function strategy(d={},now=Date.now()){
  const expired=finite(m.completedAt)&&now-m.completedAt>60000;
  const ready=solid&&c.pass&&valid&&reentryPass&&!expired;
  const lifecycleState=Lifecycle.describe({solid,confirmations:c.pass&&valid&&reentryPass,completedAt:m.completedAt,observedAt:d.signalObservedAt,now,event:d.entryEvent===true,cycleKind:m.cycleKind});
- return {mode:'NORMAL',entrySopVersion:VERSION,tf:'2m',side,lifecycleState,state:ready?'READY':'WAIT',solid,entryType:followup?'REENTRY':'SOLID_ENTRY',plan:valid?p:null,sop:{...s,...c,requiredPassed:3},reason:expired?'Event luput — tunggu pullback dan momentum untuk setup baharu':!reentryPass?'Re-entry tunggu pullback dan momentum kuat':ready?'SOLID '+side+' TF2 — SOP '+c.passed+'/4 lengkap':!solid?'Tunggu SOLID TF2 aktif dan data segar':!c.mandatoryDirectionRemoved&&!c.movement?'Movement dashboard tidak searah SOLID':!c.mandatoryDirectionRemoved&&!c.ribbon?'HEMA Trend tidak searah SOLID':!c.chopPass?'Entry ditolak — Chop Index mesti bawah 50':!valid?'Tunggu pelan ATR'+(isAtr8Risk(s.riskPlanVersion)?'8':'10')+' daripada harga entry yang sah':'Tunggu SOP '+c.passed+'/4'};
+ return {mode:'NORMAL',entrySopVersion:VERSION,tf:'2m',side,lifecycleState,state:ready?'READY':'WAIT',solid,entryType:followup?'REENTRY':'SOLID_ENTRY',plan:valid?p:null,sop:{...s,...c,requiredPassed:3},reason:expired?'Event luput — tunggu pullback dan momentum untuk setup baharu':!reentryPass?'Re-entry tunggu pullback dan momentum kuat':ready?'SOLID '+side+' TF2 — SOP '+c.passed+'/4 lengkap':!solid?'Tunggu SOLID TF2 aktif dan data segar':!c.mandatoryDirectionRemoved&&!c.movement?'Movement dashboard tidak searah SOLID':!c.mandatoryDirectionRemoved&&!c.ribbon?'HEMA Trend tidak searah SOLID':!c.chopPass?'Entry ditolak — Chop Index mesti bawah 50':!c.checklistPass?'Checklist Pine wajib minimum 4/5 — semasa '+s.sopGreen+'/5':!valid?'Tunggu pelan ATR'+(isAtr8Risk(s.riskPlanVersion)?'8':'10')+' daripada harga entry yang sah':'Tunggu SOP '+c.passed+'/4'};
 }
 function entryDecision(m={},now=Date.now()){
  if(typeof process!=='undefined'&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return null;
