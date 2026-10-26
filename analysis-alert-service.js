@@ -6,8 +6,8 @@ const {notificationKey}=require('./telegram-notification-key');
 const {progress,allowed:progressAllowed}=require('./telegram-progress');
 const fail = message => Object.assign(new Error(message), {status:400});
 class AnalysisAlerts {
-  constructor({pool=null,token='',botName='',fetchFn=fetch}={}) {
-    this.pool=pool; this.token=token; this.botName=/^[A-Za-z0-9_]+$/.test(botName)?botName:''; this.fetch=fetchFn;
+  constructor({pool=null,token='',botName='',fetchFn=fetch,reentryAllowed=null}={}) {
+    this.reentryAllowed=reentryAllowed; this.pool=pool; this.token=token; this.botName=/^[A-Za-z0-9_]+$/.test(botName)?botName:''; this.fetch=fetchFn;
     this.notificationKeys=new Set();this.prefs=new Map(); this.states=new Map(); this.events=[]; this.sequence=0; this.queue=Promise.resolve(); this.ready=false;
   }
   async init() {
@@ -133,7 +133,7 @@ class AnalysisAlerts {
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>{const base=prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,telegramSop:{version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
-        lifecycleVersion:m.strategyNormal.sop?.lifecycleVersion,cycleKind:m.strategyNormal.sop?.cycleKind,sourceSetupAt:m.strategyNormal.sop?.sourceSetupAt,reentryContext:m.strategyNormal.sop?.reentryContext,entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,atrPeriod:m.strategyNormal.sop?.atrPeriod,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
+        reentryPolicyVersion:m.strategyNormal.sop?.reentryPolicyVersion,lifecycleVersion:m.strategyNormal.sop?.lifecycleVersion,cycleKind:m.strategyNormal.sop?.cycleKind,sourceSetupAt:m.strategyNormal.sop?.sourceSetupAt,reentryContext:m.strategyNormal.sop?.reentryContext,entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,atrPeriod:m.strategyNormal.sop?.atrPeriod,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
         solidHoldActive:m.strategyNormal.sop?.solidHoldActive,solidClosedAt:m.strategyNormal.sop?.solidClosedAt,riskAtrReference:m.strategyNormal.sop?.riskAtrReference,signalObservedAt:m.signalObservedAt,
         chopIndex:m.strategyNormal.sop?.chopIndex,sourceEntry:m.strategyNormal.sop?.sourceEntry,price:m.strategyNormal.sop?.price,triggerAt:m.strategyNormal.sop?.triggerAt,qualifiedAt:m.strategyNormal.sop?.qualifiedAt,
         entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
@@ -220,9 +220,18 @@ class AnalysisAlerts {
           if(p.telegramEnabled&&p.verified&&require('./account-access').allowed(u)&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
              (!['TP_HIT','PULLBACK'].includes(e.kind)||progressAllowed(e))&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
+            let stableKey=e.notificationKey||notificationKey(e);
+            // Claim one signal for this account's confirmed broker-close cycle.
+            // Pine retries/new candidates cannot consume another slot until a
+            // later executed setup has itself been confirmed fully closed.
+            if(e.kind==='ENTRY'&&e.timeframe==='2'&&e.telegramSop?.cycleKind==='FOLLOWUP'&&e.telegramSop?.reentryPolicyVersion==='TF2_BROKER_CLOSE_CYCLES_V1'){
+              const cycle=this.reentryAllowed&&await this.reentryAllowed(row.user_id,e);
+              if(!cycle?.allowed||!cycle.cycleKey){await this.pool.query('UPDATE zencore_telegram_deliveries SET status=$2 WHERE id=$1',[row.id,'skipped']);continue;}
+              stableKey=notificationKey({...e,brokerCycle:cycle.cycleKey});
+            }
             const claim=await this.pool.query('INSERT INTO zencore_telegram_chat_claims(event_id,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING event_id',[row.event_id,p.telegramId]);
             if(claim.rows.length){
-              const stableClaim=await this.pool.query('INSERT INTO zencore_telegram_signal_claims(notification_key,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING notification_key',[e.notificationKey||notificationKey(e),p.telegramId]);
+              const stableClaim=await this.pool.query('INSERT INTO zencore_telegram_signal_claims(notification_key,chat_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING notification_key',[stableKey,p.telegramId]);
               if(!stableClaim.rows.length){await this.pool.query('UPDATE zencore_telegram_deliveries SET status=$2 WHERE id=$1',[row.id,'skipped']);continue;}
               await this.telegram(p.telegramId,telegramMessage({...e,id:String(row.event_id)}));status='sent';
             }
