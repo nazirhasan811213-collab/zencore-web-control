@@ -117,6 +117,10 @@ if (AUTH_ENABLED) {
     });
     if (!authState.ready) {
     await store.init();
+    if (process.env.ZENCORE_ERRANTE_CLIENT_BOOTSTRAP) {
+      const result=await require('./errante-client-bootstrap').provisionErranteClients(store,process.env);
+      console.log('Errante client provisioning:',JSON.stringify(result));
+    }
     if (process.env.ZENCORE_ERRANTE_ADMIN_PASSWORD_HASH) {
       const result = await require('./errante-admin-bootstrap').provisionErranteAdmin(store, process.env);
       if (result.created) console.log('Errante administrator provisioned.');
