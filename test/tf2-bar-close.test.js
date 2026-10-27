@@ -37,3 +37,25 @@ test('TF2 progress waits for close; frozen retries do not extend original confir
  a.equal(B.confirmed({...m,confirmed:true,signalObservedAt:at+60001}),false);
  a.equal(B.confirmed({...m,confirmed:true,signalObservedAt:at+60000}),true);
 });
+
+test('closing tick true event survives immediate false pulse, without extending authorization',()=>{
+ delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const H=require('../tf2-ribbon-market-hub');
+ const f=fixture();f.row[1]=f.now-120000;f.batch.confirmed=true;
+ Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',decisionTimingVersion:B.VERSION,decisionBarCloseAt:f.now});
+ const first=H.ingest(f.batch,f.now)[0];a.ok(C.createEntryDecision(first,f.now));
+ const cleared=structuredClone(f.batch);cleared.emittedAt+=3;cleared.markets[0][66].entryEvent=false;cleared.markets[0][66].entryAuthorizedAt=null;
+ a.equal(H.ingest(cleared,f.now+3).length,0);
+ const kept=H.markets()[0];a.equal(kept,first);a.equal(kept.receivedAt,f.now);a.ok(C.createEntryDecision(kept,f.now+100));
+ a.equal(S.entryDecision(kept,f.now+60001),null);
+ // A changed close/plan or a genuine exit must still replace the cached entry.
+ const changed=structuredClone(cleared);changed.emittedAt+=1;changed.markets[0][6]-=.01;
+ a.equal(H.ingest(changed,f.now+4).length,1);a.equal(H.markets()[0].entryEvent,false);
+});
+test('same-close exit cannot be hidden by entry preservation',()=>{
+ delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const H=require('../tf2-ribbon-market-hub');
+ const f=fixture();f.row[1]=f.now-120000;f.batch.confirmed=true;
+ Object.assign(f.row[66],{entryDeliveryVersion:'FIXED_EVENT_RETRY_V1',decisionTimingVersion:B.VERSION,decisionBarCloseAt:f.now});
+ H.ingest(f.batch,f.now);
+ const exit=structuredClone(f.batch);exit.emittedAt+=3;Object.assign(exit.markets[0],{48:'CLOSED',49:'EXIT_ALL',52:0});Object.assign(exit.markets[0][66],{entryEvent:false,entryAuthorizedAt:null,nativeExitAll:true});
+ a.equal(H.ingest(exit,f.now+3)[0].positionManagement.action,'EXIT_ALL');
+});

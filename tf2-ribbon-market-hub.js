@@ -32,6 +32,19 @@ function ingest(batch,now=Date.now()){
   const channelKey=d.symbol+'|'+batch.feedChannel;
   const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt))continue;
   d.receivedAt=now;
+  // Pine may recalculate the closing tick after sending its entry pulse.
+  // Keep the original authorization when an otherwise identical close snapshot
+  // immediately clears that pulse. Never carry it into a new candle/plan/exit.
+  if(prev&&prev.entryEvent===true&&d.entryEvent===false&&prev.confirmed&&d.confirmed&&
+    d.feedChannel==='EXECUTION'&&d.time===prev.sourceBarTime&&
+    d.signalObservedAt-prev.signalObservedAt<=1000&&d.setupKey===prev.setupKey&&
+    d.setupMeta?.completedAt===prev.setupMeta?.completedAt&&
+    d.setupMeta?.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&
+    d.setupMeta?.decisionBarCloseAt===prev.setupMeta?.decisionBarCloseAt&&
+    d.close===prev.close&&d.entry===prev.entry&&d.sl===prev.sl&&
+    d.tp1===prev.tp1&&d.tp2===prev.tp2&&d.tp3===prev.tp3&&
+    d.positionExitAction===prev.positionExitAction&&d.nativeChartExitAll===prev.nativeChartExitAll&&
+    S.entryDecision(prev,now)&&S.strategy(d,now).state==='READY')continue;
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
   require('./indicator-chart-history').history.observe(m,now);
