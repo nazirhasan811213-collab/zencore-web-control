@@ -183,7 +183,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', executionError(control.lastError) || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar sesi 7 pagi–3 pagi Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', executionError(control.lastError) || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar waktu aktif trader Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));

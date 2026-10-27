@@ -71,9 +71,15 @@
   const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF15_INTRA', 'BOTH']);
 
   const TRADE_SYMBOLS=Object.freeze(['XAUUSD']);
+  const MALAYSIA_SESSIONS = Object.freeze([
+    {name:'ASIA',start:'08:00',end:'11:30',from:480,to:690},
+    {name:'EURO',start:'13:30',end:'16:30',from:810,to:990},
+    {name:'US',start:'20:00',end:'23:30',from:1200,to:1410},
+    {name:'US_LATE',start:'02:00',end:'03:30',from:120,to:210}
+  ]);
   function malaysiaTradingSchedule(enabled = true, skipNews = enabled) {
     return {enabled: enabled === true, skipNews: skipNews === true, timeZone: 'Asia/Kuala_Lumpur',
-      start: '07:00', end: '03:00', newsPauseMinutes: 30,
+      version:'MYT_ACTIVE_SESSIONS_V1', sessions:MALAYSIA_SESSIONS.map(({name,start,end})=>({name,start,end})), newsPauseMinutes: 30,
       newsTimes: ['20:30', '21:30', '22:00', '02:00']};
   }
 
@@ -85,13 +91,15 @@
     const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(at));
     const part=type=>Number(parts.find(p=>p.type===type).value);
     const minute=part('hour')*60+part('minute');
-    if (sessionEnabled && minute>=180 && minute<420) return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
+    // Use the current canonical sessions even for profiles saved under the old schedule.
+    const activeSession=MALAYSIA_SESSIONS.find(s=>minute>=s.from&&minute<s.to);
+    if(sessionEnabled&&!activeSession)return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
     const newsStarts=skipNews ? [1230,1290,1320,120] : [];
     if (newsStarts.some(start=>minute>=start && minute<start+30))
       return {allowed:false,reason:'NEWS_PAUSE',validUntil:null};
-    const untilMinutes=Math.min(...[...(sessionEnabled ? [180] : []),...newsStarts].map(stop=>(stop-minute+1440)%1440));
+    const untilMinutes=Math.min(...[...(sessionEnabled ? [activeSession.to] : []),...newsStarts].map(stop=>(stop-minute+1440)%1440));
     const validUntil=at+(untilMinutes*60-part('second'))*1000-new Date(at).getUTCMilliseconds();
-    return {allowed:true,reason:'SESSION_OPEN',validUntil};
+    return {allowed:true,reason:'SESSION_OPEN',validUntil,...(sessionEnabled?{session:activeSession.name}:{})};
   }
 
   function effectiveSettings(input = {}, symbol = 'XAUUSD') {
