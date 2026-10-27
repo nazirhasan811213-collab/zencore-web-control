@@ -692,7 +692,7 @@ const server=http.createServer(async(req,res)=>{
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
     checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf2SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
     targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',exitPolicies:{TF2:'PINE_STEPLOCK_150_TP3_PLUS3_V1',TF15:'PINE_STEPLOCK_BE_TF15_V1'},
-    telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.6',eaVersion:'2.13',tf2FillGuard:{version:'TF2_FILL_GUARD_V1',protectedEaVersion:'2.13',legacyEntryEnabled:true,slMaximumPrice:2,entryBeforeTp1:true,lockAtOrBeyondActualFill:true},setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
+    telegramGuideSchedule:{timezone:'Asia/Kuala_Lumpur',tf2Minutes:30,tf15Minutes:60,enabled:true},telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.6',eaVersion:'2.13',tf2FillGuard:{version:'TF2_FILL_GUARD_V1',protectedEaVersion:'2.13',legacyEntryEnabled:true,slMaximumPrice:2,entryBeforeTp1:true,lockAtOrBeyondActualFill:true},setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
   }));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);
