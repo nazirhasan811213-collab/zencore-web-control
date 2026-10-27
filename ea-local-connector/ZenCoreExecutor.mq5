@@ -1,5 +1,5 @@
 #property strict
-#property version "2.13"
+#property version "2.14"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -122,7 +122,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.13")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.14")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V2")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -385,6 +385,14 @@ bool ProtectionAttemptAllowed(ulong ticket){
  int n=ArraySize(protectionTickets);if(n<128){ArrayResize(protectionTickets,n+1);ArrayResize(protectionTryAt,n+1);protectionTickets[n]=ticket;protectionTryAt[n]=now;}
  return true;
 }
+// Only a completed broker M2 candle after this position opened can raise a stage.
+double ClosedTf2Quote(string symbol,long openedAt){
+ MqlRates closedBars[];
+ if(CopyRates(symbol,PERIOD_M2,1,1,closedBars)!=1)return 0;
+ long closedAt=(long)closedBars[0].time+120;
+ if(closedAt>TimeCurrent() || closedAt<=openedAt || closedBars[0].close<=0)return 0;
+ return closedBars[0].close;
+}
 void ManageLocalStepLock(){
  if(!Permissions())return;
  for(int i=0;i<PositionsTotal();i++){
@@ -405,10 +413,11 @@ void ManageLocalStepLock(){
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
-  int observed=buy?(quote>=t3?3:quote>=t2?2:quote>=t1?1:0):(quote<=t3?3:quote<=t2?2:quote<=t1?1:0);
+  double decisionQuote=pineLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME)):quote;
+  int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
   if(pineLock){
-   if(buy?quote>t3+3.0:quote<t3-3.0)observed=4;
-   if(observed==1 && (buy?quote<=entry+1.50:quote>=entry-1.50))observed=0;
+   if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
+   if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;
   }
   if(observed>stage){stage=observed;if(!WriteAtomic(stageFile,Row("symbol",symbol)+Row("side",buy?"BUY":"SELL")+Row("stage",(string)stage)))continue;}
   if(fillAnchor && stage>=1){
@@ -434,7 +443,8 @@ void ManageLocalStepLock(){
   if(!ProtectionAttemptAllowed(ticket))continue;
   // The level was already observed. If broker freeze/delay prevented installing
   // it and price crossed back through it, close this owned position only.
-  if(buy?quote<=sl:quote>=sl){if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore LOCK_EXIT_PENDING retcode=",trade.ResultRetcode());continue;}
+  bool lockBreached=pineLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
+  if(lockBreached){if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore LOCK_EXIT_PENDING retcode=",trade.ResultRetcode());continue;}
   double distance=MathMax(SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL),SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL))*SymbolInfoDouble(symbol,SYMBOL_POINT);
   if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)continue;
   if(!trade.PositionModify(ticket,sl,PositionGetDouble(POSITION_TP)) || !BrokerDone())Print("ZenCore local StepLock pending ticket=",ticket," retcode=",trade.ResultRetcode());
@@ -614,14 +624,14 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=2.13 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=2.14 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTick(){
  if(lockHandle!=INVALID_HANDLE && account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER)){ManageLocalStepLock();ManageManual();}
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 2.13 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 2.14 • menunggu login MT5 / channel tersedia");return;}
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
@@ -630,6 +640,6 @@ void OnTimer(){
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 2.13 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.14 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

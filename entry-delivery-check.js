@@ -11,6 +11,7 @@ function checkEntryDelivery(command,market,at=Date.now()){
  const fail=(reason,extra={})=>({ok:false,reason,...detail,...extra});
  if(snap.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'&&(!Number.isFinite(snap.entryAuthorizedAt)||at-snap.entryAuthorizedAt>60000||snap.entryAuthorizedAt>at+5000))return fail('ENTRY_EVENT_EXPIRED');
  if(!market)return fail('MARKET_MISSING');
+ if(snap.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed(market))return fail('TF2_CANDLE_NOT_CLOSED');
  if(snap.analysisSopVersion==='NORMAL_20261001_TF2_RIBBON_V1'&&market.feedChannel!=='EXECUTION')return fail('EXECUTION_FEED_REQUIRED');
  if(!Number.isFinite(observed)||at-observed>(['2','3','15'].includes(String(market?.timeframe))&&market?.feedChannel==='EXECUTION'&&market?.entryEvent===true?60000:require('./entry-data-age').maximumAge(market))||observed>at+5000)return fail('MARKET_STALE');
  if(!Core.entryConfirmationsPass(market))return fail('SOP_CONFIRMATION_FAILED',{

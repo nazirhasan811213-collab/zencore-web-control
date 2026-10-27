@@ -1,4 +1,4 @@
-#define AppVersion "2.1.6"
+#define AppVersion "2.1.7"
 [Setup]
 AppId=ZenCoreEAConnector
 AppName=ZenCore EA Connector
@@ -9,7 +9,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=ZenCoreSetup-2.1.6
+OutputBaseFilename=ZenCoreSetup-2.1.7
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -20,11 +20,11 @@ SetupLogging=yes
 [Files]
 Source: "..\dist\ZenCoreConnector.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ZenCoreExecutor.mq5"; DestDir: "{app}"; Flags: ignoreversion
-Source: "PANDUAN_INSTALL_2.1.6.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "PANDUAN_INSTALL_2.1.7.txt"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autodesktop}\ZenCore Connector"; Filename: "{app}\ZenCoreConnector.exe"
 Name: "{userprograms}\ZenCore Connector"; Filename: "{app}\ZenCoreConnector.exe"
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ZenCoreConnector"; ValueData: """{app}\ZenCoreConnector.exe"" --background"; Flags: uninsdeletevalue
 [Run]
-Filename: "{app}\ZenCoreConnector.exe"; Description: "Buka ZenCore dan pasang EA 2.13"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ZenCoreConnector.exe"; Description: "Buka ZenCore dan pasang EA 2.14"; Flags: nowait postinstall skipifsilent

@@ -1,0 +1,85 @@
+ZENCORE CONNECT 2.1.7 / EA 2.14
+REAL + DEMO. Satu installer untuk semua client; setiap client pautkan login sendiri.
+
+1. Stop auto entry dalam web. Jangan update ketika order sedang dihantar.
+2. Buka ZenCoreSetup-2.1.7.exe sebagai Windows user yang sama dengan MT5.
+3. Dalam MT5: File > Open Data Folder. Pilih folder itu dalam Connector.
+4. Tekan Pasang / kemas kini EA 2.14. Jika compile gagal, jangan guna EX5 lama.
+5. MT5 Navigator > Refresh > Expert Advisors > ZenCore > ZenCoreExecutor.
+6. Buang EA lama dari chart dan letakkan EA baharu pada SATU chart XAUUSD.
+7. Hidupkan Algo Trading dan Allow Algo Trading. Tidak perlu DLL atau WebRequest.
+8. Isi email/password ZenCore. Password broker hanya dimasukkan dalam MT5.
+9. Cari akaun, semak REAL/DEMO dan server yang betul, kemudian Pautkan akaun.
+10. Semak kad Terminal, Cloud dan Entry. SERVER PAUSED bermaksud sistem pusat
+    mengunci entry, bukan installer rosak. Jangan cuba bypass lock itu.
+11. Lot/layer dan ON/OFF dibuat di web. Installer tidak mengaktifkan trading.
+
+TUKAR AKAUN:
+Tekan Reset link / tukar akaun. Ini STOP dan kosongkan setting web.
+Posisi broker tidak ditutup automatik. Tutup sendiri dalam MT5 jika diperlukan.
+Login akaun baharu dalam MT5, tunggu EA membaca akaun itu, kemudian pautkan
+semula selepas 30 saat. Tiada installer baharu untuk akaun yang berbeza.
+Jika baru membuka Connector, login ZenCore diperlukan sekali untuk reset.
+
+TINGKAP:
+Butang X hanya minimize. Gunakan Keluar Connector untuk menghentikannya.
+PC/VM dan MT5 mesti hidup. Android boleh kawal web, tetapi tidak menjalankan EA.
+
+TP/SL:
+Pelan entry semasa ikut Pine rujukan: SL TF2 = ATR10, maksimum 3.00 unit harga gold; TF15 1 ATR14. Mod Fixed R:R: 1/2/3R;
+mod Fibonacci: ratio dari SL 1.618/2.618/4.236. Entry ialah harga SOP lengkap.
+EA 2.14 menggunakan SL daripada plan Analysis secara lalai. Pengurangan 80%
+hanya untuk preset legacy yang dinyatakan secara eksplisit dalam arahan signed.
+TF2: TP1 -> SL entry pelan Pine +/-1.50; TP2 -> SL TP1; TP3 -> SL TP2.
+TF15: TP1 -> SL entry pelan Pine (BE); TP2 -> SL TP1; TP3 -> SL TP2.
+TF2 sahaja: bila harga melepasi TP3 sebanyak lebih 3.00, SL -> TP3. Tiada broker TP3 close-all.
+Jika target lock belum boleh dipasang kerana harga/jarak SL broker, tunggu
+harga membenarkan; SL tidak dilebarkan. Posisi lama mengekalkan polisi asal.
+Tahap yang pernah dicapai disimpan; jika pemasangan SL tertunda dan harga sudah
+melintasi tahap perlindungan itu, EA cuba tutup posisi ZenCore berkenaan sahaja.
+Close separuh/Bj exit datang daripada Analysis. Tanpa feed/cloud, signal exit
+berasaskan indikator tidak dapat diterima; broker SL dan StepLock tempatan kekal.
+
+JANGAN ANGGAP ONLINE = ENTRY DIBENARKAN.
+Order boleh ditolak kerana Algo, akaun read-only, jarak SL broker, lot tidak sah atau server PAUSED. Semak mesej kod sebenar.
+Entry separa/gagal mungkin meninggalkan beberapa layer: semak MT5, jangan replay.
+
+STATUS UJIAN:
+Windows installer/protokol boleh diuji tanpa broker. MQ5 masih perlu berjaya
+compile dalam MetaEditor dan diuji pada DEMO. Ujian installer bukan bukti profit,
+latensi broker atau pelaksanaan trade sebenar. Installer tidak menukar status ON/OFF sistem.
+
+PAKEJ TF2 + TF15 / PINE 2.4
+Pine: 3 pencetus wajib searah, minimum 3/4 pengesahan, Chop Index <50 wajib.
+Forecast info sahaja. SL TF2=min(ATR10,3.00 unit harga gold); TF15 ATR14 biasa.
+Re-entry selepas MT5 sahkan kosong, pullback dan momentum kuat; ikut SOP semasa.
+Connector tidak menentukan arah, lot atau pelan SL/TP. EA 2.14 tidak diubah.
+
+MONITORING ADMIN
+Connector 2.1.7 melaporkan NAMA PENUH SERVER MT5 (bukan password atau nombor
+akaun penuh) pada endpoint metadata monitor berasingan. Penghantaran best effort
+berjalan pada thread lain dan tidak menunggu/mengubah command polling trading.
+Nama server dipaparkan kepada admin yang sah untuk pemantauan pengguna.
+Nama server sahaja tidak membuktikan akaun itu berada di bawah IB tertentu.
+Pakej lama tetap boleh trade; nama server penuh kekal belum tersedia sehingga
+Connector yang menyokong metadata ini digunakan. Tidak perlu tukar EA 2.14.
+
+PEMBAIKAN 2.1.7 — ENTRY / RE-ENTRY
+Setiap setup memakai entry, SL, TP1/2/3 sendiri daripada SOP lengkap.
+Posisi re-entry tidak mengambil sasaran entry asal. Polisi step-lock kini
+dihantar untuk SOP 3/4 + Chop <50, termasuk re-entry. EA kekal 2.14.
+Kemas kini Connector sahaja apabila tiada order sedang dihantar. Tidak perlu
+reset link akaun atau ubah lot/layer. Jangan buang EA daripada posisi aktif.
+
+TF2 Scalping: gunakan ZenCore_TF2_Scalp.pine pada chart 2 minit. Connector menghantar metadata TF2 ribbon dan Pine StepLock kepada EA 2.14.
+
+Laluan scalping aktif TF2 sahaja, MTF 3/5/10. Gunakan satu alert Unified. Dashboard untuk paparan; ID dan pelan order datang daripada saluran Execution. Posisi TF3 lama kekal diurus mengikut setup asal hingga ditutup.
+
+TF15 EXIT: TP1 -> SL entry (BE); TP2 -> SL TP1; TP3 -> SL TP2. Tiada tambahan lock TP3 selepas +3.00 untuk polisi TF15 ini. Close Separuh / Close All menutup semua posisi setup TF15. TF2 kekal ATR10, SL maksimum 3.00 dan StepLock +1.50 sedia ada.
+Gantikan Pine TF15 dan cipta semula alert Unified. Pasang Connector 2.1.7 dan EA 2.14 supaya perlindungan tempatan mengikut polisi TF15 baharu.
+
+PEMBAIKAN 2.1.7 / EA 2.14
+TF2 menolak harga entry yang sudah mencapai TP1 sebelum setiap layer. SL disemak semula daripada harga fill sebenar, maksimum 2.00 USD dan tidak dilonggarkan. Fill yang tidak boleh dilindungi ditutup segera; slippage/gap masih boleh berlaku. TF15 dan polisi step-lock tidak berubah.
+
+TF2 CANDLE CLOSE
+Gunakan Pine TF2 versi 3.1-BAR-CLOSE dan cipta semula alert Dashboard/Execution. Entry/re-entry, exit Pine dan kenaikan tahap step-lock disahkan apabila candle TF2 tutup. SL broker sedia ada kekal aktif setiap tick. EA 2.14 menggunakan close candle M2 broker untuk menaikkan tahap step-lock; TF15 tidak berubah. Versi lama masih boleh berfungsi tetapi belum menggunakan keseluruhan aturan candle-close.
