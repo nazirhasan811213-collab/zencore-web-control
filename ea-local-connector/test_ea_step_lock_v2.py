@@ -47,6 +47,7 @@ bool SymbolInfoTick(const string&,MqlTick& tick){tick.bid=quote;tick.ask=quote;r
 long SymbolInfoInteger(const string&,int){return 0;}
 double SymbolInfoDouble(const string&,int kind){return kind==SYMBOL_VOLUME_STEP?.01:1;}
 double MathMax(double a,double b){return std::max(a,b);}
+double MathMin(double a,double b){return std::min(a,b);}
 double Price(const string&,double x){return x;}
 int partialCount=0;
 bool CloseTicket(ulong,double v){if(v<positionVolume){positionVolume-=v;partialCount++;}else closed=true;return true;}
@@ -72,6 +73,12 @@ int main(){
   quote=100+sign*1.6;clockMs+=1000;ManageLocalStepLock();assert(oldSl==100+sign*.5);
   quote=100+sign*2.6;clockMs+=1000;ManageLocalStepLock();assert(oldSl==100+sign*1.5);
   positionVolume=.01;
+  // Reproduce late fill: Pine TP1/lock was below actual BUY (above SELL).
+  files.clear();protectionTickets.clear();protectionTryAt.clear();closed=false;failModify=true;oldSl=100-sign*3.64;
+  files["risk-setup.tsv"]=Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("entry",std::to_string(100-sign*1.64))+Row("exitLockVersion","PINE_STEPLOCK_150_TP3_PLUS3_V1")+Row("tp1",std::to_string(100-sign*.14))+Row("tp2",std::to_string(100+sign*.66))+Row("tp3",std::to_string(100+sign*1.86));
+  quote=100+sign*.1;clockMs+=1000;ManageLocalStepLock();assert(!closed);assert(oldSl==100-sign*3.64);
+  quote=100-sign*.2;clockMs+=1000;ManageLocalStepLock();assert(!closed); // no forced loss from stale Pine lock
+  failModify=false;quote=100+sign*.2;clockMs+=1000;ManageLocalStepLock();assert(!closed);assert(oldSl==100); // floor at real fill
  }
 }
 '''
