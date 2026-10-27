@@ -171,6 +171,14 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({reentryAllowed:(user,event)=>autoTradeState.service?.reentrySignalAllowed(user,event)??false,pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    if(analysisAlerts.ready&&analysisAlerts.token){
+      const guideScheduler=require('./telegram-trade-guide').createScheduler({getMarkets:fetchLocalAnalysisMarkets,
+        history:(tf,at)=>require('./indicator-chart-history').history.snapshot(tf,at).candles,
+        record:event=>analysisAlerts.recordGuide(event)});
+      const guideTimer=setInterval(()=>guideScheduler.tick().catch(()=>console.error('Scheduled trade guide unavailable')),15000);
+      guideTimer.unref?.();
+    }
+
     if(store.pool){
       const records=new (require('./current-signal-records').CurrentSignalRecords)({pool:store.pool});
       try{await records.init();currentSignalRecords=records;records.start();console.log('Durable TF2/TF15 signal records ready');}

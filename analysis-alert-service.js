@@ -182,6 +182,29 @@ class AnalysisAlerts {
     }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
     if(queued && this.token)this.deliver().catch(()=>console.error('Telegram delivery unavailable'));
   }
+  async recordGuide(event){
+    if(!this.ready)return false;
+    if(event.kind!=='GUIDE'||event.symbol!=='XAUUSD'||!['2','15'].includes(event.timeframe)||!event.notificationKey||typeof event.guideText!=='string')throw new Error('Invalid scheduled guide');
+    if(!this.pool){
+      if(this.notificationKeys.has(event.notificationKey))return true;
+      this.notificationKeys.add(event.notificationKey);this.events.push({...event,id:++this.sequence});this.events=this.events.slice(-500);return true;
+    }
+    const c=await this.pool.connect();let queued=false;
+    try{
+      await c.query('BEGIN');
+      const claimed=await c.query('INSERT INTO zencore_notification_keys(notification_key) VALUES($1) ON CONFLICT DO NOTHING RETURNING notification_key',[event.notificationKey]);
+      if(claimed.rows.length){
+        const row=(await c.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1) RETURNING id',[event])).rows[0];
+        await c.query(`INSERT INTO zencore_telegram_deliveries(event_id,user_id)
+          SELECT $1,p.user_id FROM zencore_alert_preferences p JOIN zencore_users u ON u.id=p.user_id
+          WHERE u.status='active' AND u.role<>'viewer' AND p.data->>'telegramEnabled'='true' AND p.data->>'verified'='true' AND (u.role<>'client' OR u.access_expires_at>NOW())`,[row.id]);
+        queued=true;
+      }
+      await c.query('COMMIT');
+    }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+    if(queued&&this.token)this.deliver().catch(()=>console.error('Scheduled guide delivery unavailable'));
+    return true;
+  }
   async activePlan(symbol,timeframe=2) {
     if(![2,3,15].includes(timeframe))throw fail('Timeframe tidak sah.');
     if (!/^[A-Z0-9._-]{2,20}$/.test(symbol)) throw fail('Pair tidak sah.');
@@ -199,7 +222,7 @@ class AnalysisAlerts {
     if(after===null){const id=this.pool?(await this.pool.query('SELECT COALESCE(MAX(id),0) AS id FROM zencore_analysis_alerts')).rows[0].id:this.sequence;return {events:[],cursor:String(id)};}
     if(!/^\d{1,18}$/.test(after))throw fail('Cursor tidak sah.');
     const rows=this.pool?(await this.pool.query('SELECT id,data FROM zencore_analysis_alerts WHERE id>$1 ORDER BY id LIMIT 100',[after])).rows.map(r=>({...r.data,id:String(r.id)})):this.events.filter(x=>x.id>Number(after)).slice(0,100);
-    return {events:rows,cursor:rows.length?String(rows.at(-1).id):after};
+    return {events:rows.filter(e=>e.kind!=='GUIDE'),cursor:rows.length?String(rows.at(-1).id):after};
   }
   async deliver() {
     if(this.delivering){this.deliveryRequested=true;return;}this.delivering=true;
@@ -218,6 +241,7 @@ class AnalysisAlerts {
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           // Apply to every notification, including closes and already queued events.
           if(p.telegramEnabled&&p.verified&&require('./account-access').allowed(u)&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
+             (e.kind!=='GUIDE'||(typeof e.guideText==='string'&&Date.now()<e.guideValidUntil))&&
              (!['TP_HIT','PULLBACK'].includes(e.kind)||progressAllowed(e))&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){
             let stableKey=e.notificationKey||notificationKey(e);

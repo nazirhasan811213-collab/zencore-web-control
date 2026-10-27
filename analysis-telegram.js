@@ -167,6 +167,7 @@ function closeMessage(e,time){
 }
 
 function telegramMessageBody(e){
+  if(e.kind==='GUIDE')return e.guideText;
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(['TP_HIT','PULLBACK'].includes(e.kind)){
