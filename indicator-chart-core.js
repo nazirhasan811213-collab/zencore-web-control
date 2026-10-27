@@ -12,7 +12,8 @@ function point(m){
  return {time,timeframe:tf,open:m.open,high:m.high,low:m.low,close:m.close,
    hema20:finite(m.hema20)?m.hema20:finite(h.fast)?h.fast:null,
    hema40:finite(m.hema40)?m.hema40:finite(h.slow)?h.slow:null,
-   basis:finite(m.basis)?m.basis:null,observedAt:finite(m.signalObservedAt)?m.signalObservedAt:0,
+   basis:finite(m.basis)?m.basis:null,confirmed:m.confirmed===true,
+   atr:finite(m.atr)?m.atr:null,waveTrend1:finite(m.waveTrend1)?m.waveTrend1:null,waveTrend2:finite(m.waveTrend2)?m.waveTrend2:null,chopIndex:finite(m.chopIndex)?m.chopIndex:null,observedAt:finite(m.signalObservedAt)?m.signalObservedAt:0,
    solid:marker?side:null,solidAt:marker?solidAt:null};
 }
 function merge(points,next,tf,now=Date.now()){
