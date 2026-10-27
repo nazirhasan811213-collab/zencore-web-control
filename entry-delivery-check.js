@@ -28,6 +28,7 @@ function checkEntryDelivery(command,market,at=Date.now()){
  const changed=independentDashboard?[]:keys.filter(k=>!samePrice(current?.[k],expected?.[k]));
  if(changed.length)return fail('PLAN_CHANGED',{changedFields:changed});
  if(live&&!(p.side==='BUY'?market.price>expected.entry&&market.price<expected.tp1:market.price<expected.entry&&market.price>expected.tp1))return fail('PRICE_OUTSIDE_ENTRY_RANGE');
+ if(snap.confirmationEvidence?.riskPlanVersion==='TF2_PINE_ATR8_SL2_TP150_230_350_CAPS_V1'&&Number.isFinite(market.price)&&!(p.side==='BUY'?market.price<p.tp1:market.price>p.tp1))return fail('TF2_ENTRY_PAST_TP1');
  return {ok:true,reason:null,...detail};
 }
 module.exports={checkEntryDelivery};
