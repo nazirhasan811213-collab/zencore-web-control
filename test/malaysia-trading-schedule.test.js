@@ -5,21 +5,27 @@ const {createAutoTradeService}=require('../auto-trade-service');
 const schedule=Core.malaysiaTradingSchedule(true);
 const my=(hours,minutes=0,seconds=0)=>Date.UTC(2026,9,5,hours-8,minutes,seconds);
 
-test('Malaysia overnight session has exact start/end and all news boundaries',()=>{
- for(const [h,m,s,allowed] of [[6,59,59,false],[7,0,0,true],[0,0,0,true],[2,59,59,true],[3,0,0,false],
-  [20,29,59,true],[20,30,0,false],[20,59,59,false],[21,0,0,true],[21,29,59,true],[21,30,0,false],
-  [21,59,59,false],[22,0,0,false],[22,29,59,false],[22,30,0,true],
-  [1,59,59,true],[2,0,0,false],[2,29,59,false],[2,30,0,true]])
-  assert.equal(Core.tradingWindow(schedule,my(h,m,s)).allowed,allowed,`${h}:${m}:${s}`);
+test('Malaysia active trader sessions have exact inclusive starts and exclusive ends',()=>{
+ const trade=Core.malaysiaTradingSchedule(true,false);
+ for(const [h,m,s,allowed] of [[7,59,59,false],[8,0,0,true],[11,29,59,true],[11,30,0,false],
+ [13,29,59,false],[13,30,0,true],[16,29,59,true],[16,30,0,false],
+ [19,59,59,false],[20,0,0,true],[23,29,59,true],[23,30,0,false],
+ [0,0,0,false],[1,59,59,false],[2,0,0,true],[3,29,59,true],[3,30,0,false]])
+ assert.equal(Core.tradingWindow(trade,my(h,m,s)).allowed,allowed,`${h}:${m}:${s}`);
  assert.equal(Core.tradingWindow(schedule,my(20,30)).reason,'NEWS_PAUSE');
  assert.equal(Core.tradingWindow(schedule,my(4)).reason,'OUTSIDE_SESSION');
  assert.equal(Core.tradingWindow(schedule,NaN).allowed,false);
+ // Legacy profiles adopt new windows without changing ON/OFF or news preference.
+ assert.equal(Core.tradingWindow({enabled:true,start:'07:00',end:'03:00',skipNews:false},my(12)).allowed,false);
 });
-test('queued setup deadline ends precisely at news/session boundary, including midnight',()=>{
+test('queued setup deadlines stop at each active session end or earlier news boundary',()=>{
  assert.equal(Core.tradingWindow(schedule,my(20,29,58)).validUntil,my(20,30));
- assert.equal(Core.tradingWindow(schedule,my(23)).validUntil,my(24+2));
- assert.equal(Core.tradingWindow(schedule,my(2,59,59)).validUntil,my(3));
+ const trade=Core.malaysiaTradingSchedule(true,false);
+ for(const [h,m,endH,endM] of [[11,29,11,30],[16,29,16,30],[23,29,23,30],[3,29,3,30]])
+ assert.equal(Core.tradingWindow(trade,my(h,m,58)).validUntil,my(endH,endM));
  assert.equal(Core.tradingWindow({enabled:false},my(4)).allowed,true);
+ assert.equal(Core.tradingWindow(schedule,my(2)).reason,'NEWS_PAUSE');
+ assert.equal(Core.tradingWindow(schedule,my(2,30)).allowed,true);
 });
 async function harness(at,positions=[]) {
  const store=new MemoryAutoTradeStore(),userId='test-owner';
@@ -66,7 +72,7 @@ test('news choice is independent of overnight session and survives validation',(
  const trade=Core.malaysiaTradingSchedule(true,false);
  assert.equal(Core.tradingWindow(trade,my(20,30)).allowed,true);
  assert.equal(Core.tradingWindow(trade,my(4)).allowed,false);
- assert.equal(Core.tradingWindow(trade,my(20,29,58)).validUntil,my(24+3));
+ assert.equal(Core.tradingWindow(trade,my(20,29,58)).validUntil,my(23,30));
  const skip=Core.malaysiaTradingSchedule(false,true);
  assert.equal(Core.tradingWindow(skip,my(4)).allowed,true);
  assert.equal(Core.tradingWindow(skip,my(20,30)).allowed,false);
@@ -75,4 +81,12 @@ test('news choice is independent of overnight session and survives validation',(
  assert.equal(Core.validateSettings(settings).value.tradingSchedule.skipNews,false);
  settings.tradingSchedule=skip;
  assert.equal(Core.validateSettings(settings).value.tradingSchedule.skipNews,true);
+});
+
+test('outside active sessions new entries are blocked while exit management continues',async()=>{
+ const {store,service,market}=await harness(my(12),[{symbol:'XAUUSD',ticket:'1',side:'BUY'}]);
+ market.positionManagement={action:'EXIT_ALL',reason:'TEST_CLOSE'};
+ assert.deepEqual(await service.dispatchMarkets([market]),{queued:1});
+ assert.deepEqual([...store.commands.values()].flat().map(c=>c.type),['MANAGE_POSITION']);
+ const empty=await harness(my(12));assert.deepEqual(await empty.service.dispatchMarkets([empty.market]),{queued:0});
 });
