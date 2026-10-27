@@ -11,7 +11,7 @@ function fixture(side='BUY'){
 
 
 const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService}=require('../auto-trade-service');
-for(const side of ['BUY','SELL'])test('capped TF2 requires a fresh guarded EA and refuses delivery once TP1 has passed: '+side,async()=>{
+for(const side of ['BUY','SELL'])test('capped TF2 supports old and guarded EAs while refusing delivery once TP1 has passed: '+side,async()=>{
  const f=fixture(side),sign=side==='BUY'?1:-1;
  Object.assign(f.row,{21:2,23:4100-sign*2,24:4100-sign*2,25:4100+sign*1.5,26:4100+sign*2.3,27:4100+sign*3.5});
  Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,riskPlanVersion:S.RISK8_CAPS,atrPeriod:8,riskAtrReference:2});
@@ -23,15 +23,15 @@ for(const side of ['BUY','SELL'])test('capped TF2 requires a fresh guarded EA an
  await service.heartbeat(linked.podToken,{...hb,eaVersion:'2.12'});
  await service.saveSettings(user,{capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});
  await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
- a.equal((await service.dispatchMarkets([m])).queued,0,'old EA cannot receive the capped trade');
- a.ok(JSON.stringify(await store.listAudit(user)).includes('TF2_EA_FILL_GUARD_REQUIRED'),JSON.stringify(await store.listAudit(user)));
+ a.equal((await service.dispatchMarkets([m])).queued,1,'old EA may receive a valid capped trade');
+ a.equal((await service.dispatchMarkets([m])).queued,0,'same event is still deduplicated');
  await service.heartbeat(linked.podToken,{...hb,eaVersion:'2.13'});
- a.equal((await service.dispatchMarkets([m])).queued,1);
+ a.equal((await service.dispatchMarkets([m])).queued,0,'upgrading does not duplicate the queued setup');
  const command=(await service.nextCommand(linked.podToken)).command;a.equal(command.type,'PLACE_SETUP');
  const check=require('../entry-delivery-check').checkEntryDelivery;
  a.equal(check(command,{...m,price:4100+sign*1.5},clock).reason,'TF2_ENTRY_PAST_TP1');
  a.equal(check(command,{...m,price:4100+sign*1.49},clock).ok,true);
- // A downgrade/offline heartbeat revokes a queued order before a retry.
+ // An older EA heartbeat still permits delivery retry within the fixed deadline.
  await service.heartbeat(linked.podToken,{...hb,eaVersion:'2.12'});
- a.equal((await service.nextCommand(linked.podToken)).command,null);
+ a.equal((await service.nextCommand(linked.podToken)).command.id,command.id);
 });

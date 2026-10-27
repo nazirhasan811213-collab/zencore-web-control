@@ -136,9 +136,6 @@ function createAutoTradeService(options = {}) {
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const dispatchDiagnosticAt = new Map();
   const entryCycleReset=require('./entry-cycle-reset').createEntryCycleReset(store);
-  const tf2FillGuardCapability=new Map();
-  function needsTf2FillGuard(snapshot){return snapshot?.analysisSopVersion==='NORMAL_20261001_TF2_RIBBON_V1'&&snapshot?.confirmationEvidence?.riskPlanVersion==='TF2_PINE_ATR8_SL2_TP150_230_350_CAPS_V1';}
-  function hasTf2FillGuard(userId,podId){const cap=tf2FillGuardCapability.get(userId);return cap?.podId===podId&&now()-cap.at<=30000;}
 
   const reentryTracker=new Reentry.Tracker(),reentryCapability=new Map(),heartbeatChains=new Map();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
@@ -1138,8 +1135,6 @@ function createAutoTradeService(options = {}) {
     const seenAt = now();
     const updated = await store.updatePodHeartbeat(pod.id, heartbeatValidation.value, seenAt, pod.tokenHash);
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
-    if(input.eaVersion==='2.13'&&isLocalEa(updated)&&input.terminalConnected===true)tf2FillGuardCapability.set(pod.userId,{podId:pod.id,at:seenAt});
-    else tf2FillGuardCapability.delete(pod.userId);
     const cycleBefore=['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
     for(const mode of ['TF2_SCALPING','TF15_INTRA']){
@@ -1214,7 +1209,6 @@ function createAutoTradeService(options = {}) {
       Object.assign(diagnostic,{ok:false,reason:'POSITION_STILL_OPEN'});return false;
     }
     if(typeof options.getLatestMarket!=='function')return command.payload?.reentry?false:true;
-    if(needsTf2FillGuard(command.payload?.analysisSnapshot)&&!hasTf2FillGuard(command.userId,command.podId)){Object.assign(diagnostic,{ok:false,reason:'TF2_EA_FILL_GUARD_REQUIRED'});return false;}
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?'3':p.strategyMode==='TF15_INTRA'?'15':'2';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
     if(p.reentry?.version===Reentry.VERSION){
@@ -1522,7 +1516,6 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || !isCurrent(market)){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
-        if(needsTf2FillGuard(setup.payload.analysisSnapshot)&&!hasTf2FillGuard(profile.userId,pod?.id)){await reportEntryBlock(profile,market,'TF2_EA_FILL_GUARD_REQUIRED');continue;}
         if((String(market.timeframe)==='3'||market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1')&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
         // Current Pine execution events already carry a fixed 60s authorization
