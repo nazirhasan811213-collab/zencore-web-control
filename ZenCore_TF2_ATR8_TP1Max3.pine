@@ -1,5 +1,5 @@
 //@version=6
-indicator('ZenCore TF2 SOLID + 3/4 + Checklist Wajib 4/5 - ATR8 Caps Candle Close V3.2', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+indicator('ZenCore TF2 SOLID + 3/4 + Checklist Wajib 4/5 - ATR8 Caps Candle Close V3.3', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF2 Web Feed"
@@ -366,7 +366,7 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
     bool isBuy = is_zone_turn_green
     
     float ENTRY = saved_entry_price
-    float native_sl_distance = math.min(atr, 2.0)
+    float native_sl_distance = math.min(atr, 3.0)
     float SL = isBuy ? ENTRY - native_sl_distance : ENTRY + native_sl_distance
 
     if ENTRY != SL
@@ -382,7 +382,7 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
         f_addLineLabel(SL,    x1, x2, colSL,    f_lbl("🛑 Stoploss", SL))
         f_addLineLabel(ENTRY, x1, x2, colEntry, f_lbl("🎯 Entry", ENTRY))
         
-        float initial_risk = atr // ATR8 targets; SL separately capped at 2.00.
+        float initial_risk = atr // ATR8 targets; SL separately capped at 3.00.
         float tp1 = 0.0
         float tp2 = 0.0
         float tp3 = 0.0
@@ -398,7 +398,7 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
             tp3 := isBuy ? ENTRY + (initial_risk * rrTP3) : ENTRY - (initial_risk * rrTP3)
         
         tp1 := isBuy ? ENTRY + math.min(math.abs(tp1-ENTRY),1.5) : ENTRY - math.min(math.abs(tp1-ENTRY),1.5)
-        tp2 := isBuy ? ENTRY + math.min(math.abs(tp2-ENTRY),2.3) : ENTRY - math.min(math.abs(tp2-ENTRY),2.3)
+        tp2 := isBuy ? ENTRY + math.min(math.abs(tp2-ENTRY),2.5) : ENTRY - math.min(math.abs(tp2-ENTRY),2.5)
         tp3 := isBuy ? ENTRY + math.min(math.abs(tp3-ENTRY),3.5) : ENTRY - math.min(math.abs(tp3-ENTRY),3.5)
 
         while array.size(tpLines) > 0
@@ -1541,7 +1541,7 @@ if zc80_new_solid
     zc80_trigger_passed := zc80_passed
     zc80_trigger_hema40 := zc80_hema40
 // Standard ATR(8), anchored once at SOP completion. No swing-distance entry filter.
-float draft_distance = math.min(atr, 2.0) // TF2 SL maximum 2.00 gold price units.
+float draft_distance = math.min(atr, 3.0) // TF2 SL maximum 3.00 gold price units.
 float draft_raw_sl = zc24_buy ? close-draft_distance : close+draft_distance
 float draft_candidate_sl = draft_raw_sl
 bool draft_plan_ok = atr > 0 and draft_candidate_sl > 0 and (zc24_buy ? draft_candidate_sl < close : draft_candidate_sl > close)
@@ -1579,7 +1579,7 @@ if zc_hold_qualify
     zc_seq_tp1 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,1.618) : zc_seq_entry+planSign*zc_seq_risk*rrTP1
     zc_seq_tp1 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp1-zc_seq_entry),1.5)
     zc_seq_tp2 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,2.618) : zc_seq_entry+planSign*zc_seq_risk*rrTP2
-    zc_seq_tp2 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp2-zc_seq_entry),2.3)
+    zc_seq_tp2 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp2-zc_seq_entry),2.5)
     zc_seq_tp3 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,4.236) : zc_seq_entry+planSign*zc_seq_risk*rrTP3
     zc_seq_tp3 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp3-zc_seq_entry),3.5)
 // Chart labels are candidates, not MT5 execution confirmations. Repaint the
@@ -1776,7 +1776,7 @@ if array.size(zc_path_times)>0
     for zc_i = 0 to array.size(zc_path_times)-1
         array.push(zc_path_parts,"["+str.tostring(array.get(zc_path_times,zc_i))+","+f_num(array.get(zc_path_prices,zc_i))+"]")
 string zc_reentry_json = "{\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"fastPrevious\":"+f_num(he1[1])+",\"slowPrevious\":"+f_num(he2[1])+",\"wtGapPrevious\":"+f_num(math.abs(wt1[1]-wt2[1]))+",\"pricePath\":["+array.join(zc_path_parts,",")+"]}"
-string zc24_meta_json = "{\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-PINE-SOLID-3OF4-FORECAST45-ATR8-CAPS150-230-350-SL2-3.2-CLOSE-EVENT\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF2_PINE_ATR8_SL2_TP150_230_350_CAPS_V1\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"TF2_BROKER_CLOSE_CYCLES_V1\",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-PINE-SOLID-3OF4-FORECAST45-ATR8-CAPS150-250-350-SL3-3.3-SL3-TP250\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF2_PINE_ATR8_SL3_TP150_250_350_CAPS_V2\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"TF2_BROKER_CLOSE_CYCLES_V1\",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))

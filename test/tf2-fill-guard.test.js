@@ -11,10 +11,10 @@ function fixture(side='BUY'){
 
 
 const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService}=require('../auto-trade-service');
-for(const side of ['BUY','SELL'])test('capped TF2 supports old and guarded EAs while refusing delivery once TP1 has passed: '+side,async()=>{
+for(const updated of [false,true])for(const side of ['BUY','SELL'])test('capped TF2 supports old and guarded EAs while refusing delivery once TP1 has passed: '+side+' '+(updated?'SL3 TP250':'SL2 TP230'),async()=>{
  const f=fixture(side),sign=side==='BUY'?1:-1;
- Object.assign(f.row,{21:2,23:4100-sign*2,24:4100-sign*2,25:4100+sign*1.5,26:4100+sign*2.3,27:4100+sign*3.5});
- Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,riskPlanVersion:S.RISK8_CAPS,atrPeriod:8,riskAtrReference:2});
+ Object.assign(f.row,{21:2,23:4100-sign*2,24:4100-sign*2,25:4100+sign*1.5,26:4100+sign*(updated?2.5:2.3),27:4100+sign*3.5});
+ Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,riskPlanVersion:updated?S.RISK8_CAPS3:S.RISK8_CAPS,atrPeriod:8,riskAtrReference:2});
  const m=Hub.ingest(f.batch,f.now)[0];a.ok(C.createEntryDecision(m,f.now));
  let clock=f.now;const store=new MemoryAutoTradeStore(),user='11111111-1111-4111-8111-111111111111';
  const service=createAutoTradeService({store,now:()=>clock,scalpingTimeframe:'2',allowDemoExecution:true,localEaExecutionUserIds:[user],commandSigningKey:'fill-guard-test-signing-key-longer-than-32-bytes',getLatestMarket:()=>m});
