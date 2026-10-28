@@ -1544,9 +1544,13 @@ function startAutoTradeDispatcher() {
   setTimeout(tick, 1000).unref?.();
 }
 
+const signalDeskRoutes = require('./signal-desk-routes');
+const signalDeskEnabled = signalDeskRoutes.enabled();
+const handleSignalDesk = signalDeskRoutes.createHandler({active:signalDeskEnabled,requireSession,sendAsset,sendJson});
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
+  if (await handleSignalDesk(req,res,pathname)) return;
 
   if(req.method==='POST'&&pathname==='/webhook'){
     try{const body=webhookIngress.validate(await readWebhook(req,webhookIngress.maxBytes));feedRelay.send(body);return proxy(req,res,'/webhook',body);}
@@ -1859,6 +1863,7 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/analysis') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
+    if (signalDeskEnabled) return signalDeskRoutes.sendHtml(res,signalDeskRoutes.analysisHtml(fs.readFileSync(path.join(__dirname,'precision-entry.html'),'utf8')));
     return sendAsset(res, 'precision-entry.html', 'text/html; charset=utf-8');
   }
 
