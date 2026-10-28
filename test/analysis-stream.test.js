@@ -21,5 +21,7 @@ test('event arriving before initial HTTP fetch is never overwritten by its older
 });
 test('disconnected clients remove subscriptions and late fetch cannot write to closed stream',async()=>{
  let resolve;const x=fixture(()=>new Promise(r=>resolve=r));await flush();x.req.emit('close');
- resolve([frame(2,100000)]);await flush();x.bus.emit('market',frame(2,100000));assert.equal(x.writes.length,0);assert.equal(x.bus.listenerCount('market'),0);
+ resolve([frame(2,100000)]);await flush();x.bus.emit('market',frame(2,100000));assert.deepEqual(x.writes,['retry: 1000\n: connected\n\n']);assert.equal(x.bus.listenerCount('market'),0);
 });
+
+test("SSE headers flush before the initial reader finishes and response close removes listeners",()=>{let flushed=false;const req=new EventEmitter(),res=new EventEmitter(),bus=new EventEmitter();res.writeHead=()=>{};res.flushHeaders=()=>flushed=true;res.write=()=>{};const x=openAnalysisStream({req,res,bus,symbol:"XAUUSD",fetchMarkets:()=>new Promise(()=>{})});assert.equal(flushed,true);assert.equal(bus.listenerCount("market"),1);res.emit("close");assert.equal(bus.listenerCount("market"),0);x.close();});

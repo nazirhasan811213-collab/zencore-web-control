@@ -17,6 +17,8 @@ function openAnalysisStream({req,res,symbol,bus,fetchMarkets,now=Date.now}){
  function send(){if(!closed)res.write('event: timeframes\ndata: '+JSON.stringify(dualAnalysis([...markets.values()],symbol,now()))+'\n\n');}
  function event(m){if(m?.symbol!==symbol||!['2','15'].includes(String(m?.timeframe)))return;update([m]);send();}
  res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+ res.flushHeaders?.();
+ res.write('retry: 1000\n: connected\n\n');
  bus.on('market',event);
  const keepalive=setInterval(()=>{
   if(closed)return;
@@ -25,7 +27,7 @@ function openAnalysisStream({req,res,symbol,bus,fetchMarkets,now=Date.now}){
   res.write(': keepalive\n\n');
  },15000);keepalive.unref?.();
  function close(){if(closed)return;closed=true;clearInterval(keepalive);bus.removeListener('market',event);}
- req.on('close',close);res.on('error',close);
+ req.on('close',close);res.on('close',close);res.on('error',close);
  Promise.resolve().then(fetchMarkets).then(items=>{if(closed)return;update(items);send();}).catch(()=>{if(!closed)res.write('event: unavailable\ndata: {}\n\n');});
  return {close};
 }
