@@ -5,7 +5,7 @@ test('Native bridge fetches only same-origin GET data in paired mode and validat
  const vm=require('node:vm'),handlers={},requests=[],packets=[],parent={},status={style:{},setAttribute(){}};
  let mode='sample',tf='2',interval;
  const desk={getView:()=>mode,getTimeframe:()=>tf,setTimeframe:value=>{tf=value;},acceptHostPacket:packet=>packets.push(packet)};
- const context={window:{ZenCoreFusionDesk:desk,addEventListener:(name,fn)=>handlers[name]=fn},parent,location:{origin:'https://errante.test'},document:{hidden:false,createElement:()=>status,querySelector:selector=>selector.startsWith('meta')?{content:'errante'}:{after(){}},addEventListener:(name,fn)=>handlers[name]=fn},AbortController,Date,setTimeout,clearTimeout,setInterval:fn=>{interval=fn;},fetch:async(url,opts)=>{requests.push({url,opts});return {ok:true,json:async()=>url.includes('/chart')?{ok:true,symbol:'XAUUSD',timeframe:tf,source:'PINE_FEED',candles:[]}:{ok:true,symbol:'XAUUSD',views:[{timeframe:Number(tf),market:{symbol:'XAUUSD',timeframe:tf,close:100,receivedAt:1000,signalObservedAt:999,account:{private:'excluded'}}}]}};}};
+ const context={window:{ZenCoreFusionDesk:desk,addEventListener:(name,fn)=>handlers[name]=fn},parent,location:{origin:'https://errante.test',search:''},URLSearchParams,document:{hidden:false,createElement:()=>status,querySelector:selector=>selector.startsWith('meta')?{content:'errante'}:{after(){}},addEventListener:(name,fn)=>handlers[name]=fn},AbortController,Date,setTimeout,clearTimeout,setInterval:fn=>{interval=fn;},fetch:async(url,opts)=>{requests.push({url,opts});return {ok:true,json:async()=>url.includes('/chart')?{ok:true,symbol:'XAUUSD',timeframe:tf,source:'PINE_FEED',candles:[]}:{ok:true,symbol:'XAUUSD',views:[{timeframe:Number(tf),market:{symbol:'XAUUSD',timeframe:tf,close:100,receivedAt:1000,signalObservedAt:999,account:{private:'excluded'}}}]}};}};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../signal-desk-native/native-host.js'),'utf8'),context);
  assert.equal(requests.length,0,'sample view never fetches account data');
  handlers.message({origin:'https://wrong.test',source:parent,data:{type:'zencore-desk-timeframe',tf:'15'}});assert.equal(tf,'2');
@@ -17,7 +17,7 @@ test('Native bridge fetches only same-origin GET data in paired mode and validat
 test('Signal Desk is limited to authenticated Errante; bundle integrity matches shared source',()=>{
  assert.equal(routes.enabled({ZENCORE_AUTH_ENABLED:'true',ZENCORE_PRODUCT_NAME:'ZenCore Errante'}),true);
  for(const env of [{},{ZENCORE_AUTH_ENABLED:'true'},{ZENCORE_PRODUCT_NAME:'ZenCore Errante'},{ZENCORE_AUTH_ENABLED:'false',ZENCORE_PRODUCT_NAME:'ZenCore Errante'}])assert.equal(routes.enabled(env),false);
- const manifest=require('../signal-desk/bundle-manifest.json');assert.equal(Object.keys(manifest.files).length,6);
+ const manifest=require('../signal-desk/bundle-manifest.json');assert.equal(Object.keys(manifest.files).length,7);
  for(const [file,hash]of Object.entries(manifest.files))assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname,'../signal-desk',file))).digest('hex'),hash);
  const F=require('../signal-desk/fusion');
  const now=Date.now(),time=now-240000,packet={mode:'ZENCORE_READONLY',pine:{symbol:'XAUUSD',timeframe:'2',signalObservedAt:now,receivedAt:now,close:100},history:{symbol:'XAUUSD',timeframe:'2',candles:[{time,open:100,high:101,low:99,close:100}]}};
@@ -43,7 +43,7 @@ test('HTTP integration requires login for document and every asset, allows only 
   const login=await fetch(base+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:base,Accept:'application/json'},body:JSON.stringify({email:'test-admin@example.com',password:'AdminFixture2026!'})});assert.equal(login.status,200);
   const headers={Cookie:login.headers.get('set-cookie').split(';')[0]};
   let r=await fetch(base+'/analysis',{headers});assert.equal(r.status,200);assert.match(await r.text(),/signal-desk\/native-mount.js/);
-  r=await fetch(base+'/signal-desk/?embed=1',{headers});assert.equal(r.status,200);assert.equal(r.headers.get('x-frame-options'),'SAMEORIGIN');assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'self'/);const html=await r.text();assert.match(html,/name="zencore-desk-host"/);assert.match(html,/data-view="sample" aria-pressed="true"/);assert.match(html,/id="fusion-panel" hidden/);
+  r=await fetch(base+'/signal-desk/?embed=1',{headers});assert.equal(r.status,200);assert.equal(r.headers.get('x-frame-options'),'SAMEORIGIN');assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'self'/);const html=await r.text();assert.match(html,/name="zencore-desk-host"/);assert.match(html,/data-view="live" aria-pressed="true"/);assert.match(html,/id="fusion-panel" hidden/);
   for(const asset of ['styles.css','app.js','evidence.js','fusion.js','fusion-ui.js','native-host.js','native-mount.js','native-mount.css']){r=await fetch(base+'/signal-desk/'+asset,{headers});assert.equal(r.status,200,asset);}
   r=await fetch(base+'/signal-desk/no-file.js',{headers});assert.equal(r.status,404);
   r=await fetch(base+'/signal-desk/',{method:'POST',headers});assert.equal(r.status,405);
