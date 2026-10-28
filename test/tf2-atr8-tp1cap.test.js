@@ -9,7 +9,7 @@ function fixture(side='BUY'){
  return {row,now,batch:{feedVersion:'TF2_REALTIME_V1',timeframe:'2',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
 }
 
-for(const side of ['BUY','SELL'])for(const planMode of ['Fixed R:R','Fibonacci'])test('ATR8 '+side+' '+planMode+' caps TP1 and SL at 3; preserves full flow and ATR10 compatibility',async()=>{
+for(const updated of [false,true])for(const side of ['BUY','SELL'])for(const planMode of ['Fixed R:R','Fibonacci'])test('ATR8 '+side+' '+planMode+' caps TP1 and SL at 3; preserves full flow and ATR10 compatibility',async()=>{
  for(const atr of [.5,2,3,8,20]){
   const f=fixture(side),sign=side==='BUY'?1:-1,entry=4100,sl=entry-sign*Math.min(atr,3);
   const targets=planMode==='Fibonacci'?[1.618,2.618,4.236].map(r=>sl+(entry-sl)*r):[1,2,3].map(r=>entry+sign*atr*r);
@@ -33,24 +33,24 @@ for(const side of ['BUY','SELL'])for(const planMode of ['Fixed R:R','Fibonacci']
 test('Pine ATR8 chart and execution TP1 share the cap; metadata and download match',()=>{
  const fs=require('node:fs'),source=fs.readFileSync('ZenCore_TF2_ATR8_TP1Max3.pine','utf8');
  a.match(source,/atr\s*= ta\.atr\(8\)/);a.doesNotMatch(source,/atr\s*= ta\.atr\(10\)/);
- a.ok(source.includes('\\"atrPeriod\\":8'));a.match(source,/TF2_PINE_ATR8_SL2_TP150_230_350_CAPS_V1/);
+ a.ok(source.includes('\\"atrPeriod\\":8'));a.match(source,/TF2_PINE_ATR8_SL3_TP150_250_350_CAPS_V2/);
  a.match(source,/zc_seq_tp1 := zc_seq_entry\+planSign\*math\.min\(math\.abs\(zc_seq_tp1-zc_seq_entry\),1\.5\)/);
  a.match(source,/tp1 := isBuy \? ENTRY \+ math\.min/);
  a.match(fs.readFileSync('server-analysis.js','utf8'),/downloads\/ZenCore_TF2_ATR8_TP1Max3\.pine/);
 });
 
-for(const side of ['BUY','SELL'])for(const planMode of ['Fixed R:R','Fibonacci'])test('ATR8 '+side+' '+planMode+' caps TP1/TP2/TP3 at 1.5/2.3/3.5 and SL at 2; preserves exit SOP',async()=>{
+for(const updated of [false,true])for(const side of ['BUY','SELL'])for(const planMode of ['Fixed R:R','Fibonacci'])test('ATR8 '+side+' '+planMode+' cap version '+(updated?'SL3 TP250':'SL2 TP230')+' preserves exit SOP',async()=>{
  for(const atr of [.5,2,3,8,20]){
-  const f=fixture(side),sign=side==='BUY'?1:-1,entry=4100,sl=entry-sign*Math.min(atr,2);
+  const f=fixture(side),sign=side==='BUY'?1:-1,entry=4100,sl=entry-sign*Math.min(atr,updated?3:2);
   const targets=planMode==='Fibonacci'?[1.618,2.618,4.236].map(r=>sl+(entry-sl)*r):[1,2,3].map(r=>entry+sign*atr*r);
-  targets.forEach((v,i)=>targets[i]=entry+sign*Math.min(Math.abs(v-entry),[1.5,2.3,3.5][i]));
+  targets.forEach((v,i)=>targets[i]=entry+sign*Math.min(Math.abs(v-entry),[1.5,updated?2.5:2.3,3.5][i]));
   Object.assign(f.row,{21:atr,23:sl,24:sl,25:targets[0],26:targets[1],27:targets[2]});
-  Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,riskPlanVersion:S.RISK8_CAPS,atrPeriod:8,riskAtrReference:atr,planMode});
+  Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,riskPlanVersion:updated?S.RISK8_CAPS3:S.RISK8_CAPS,atrPeriod:8,riskAtrReference:atr,planMode});
   const m=Hub.ingest(f.batch,f.now)[0];a.equal(m.strategyNormal.state,'READY');
   const d=C.createEntryDecision(m);a.ok(d);a.equal(d.snapshot.confirmationEvidence.atrPeriod,8);
-  a.ok(Math.abs(d.snapshot.sl-d.snapshot.entry)<=2+1e-8);
-  for(const [i,key] of ['tp1','tp2','tp3'].entries()){a.ok(Math.abs(d.snapshot[key]-entry)<=[1.5,2.3,3.5][i]+1e-8);a.equal(S.planPass(side,{...m.strategyNormal.plan,[key]:entry+sign*([1.5,2.3,3.5][i]+.01)},m.strategyNormal.sop),false);}
-  a.equal(d.snapshot.confirmationEvidence.riskPlanVersion,S.RISK8_CAPS);
+  a.ok(Math.abs(d.snapshot.sl-d.snapshot.entry)<=(updated?3:2)+1e-8);
+  for(const [i,key] of ['tp1','tp2','tp3'].entries()){a.ok(Math.abs(d.snapshot[key]-entry)<=[1.5,updated?2.5:2.3,3.5][i]+1e-8);a.equal(S.planPass(side,{...m.strategyNormal.plan,[key]:entry+sign*([1.5,updated?2.5:2.3,3.5][i]+.01)},m.strategyNormal.sop),false);}
+  a.equal(d.snapshot.confirmationEvidence.riskPlanVersion,updated?S.RISK8_CAPS3:S.RISK8_CAPS);
   a.equal(d.snapshot.exitLockVersion,'PINE_STEPLOCK_150_TP3_PLUS3_V1');
   const settings={capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING'};
   const before=JSON.stringify(settings),cmd=Core.buildSetupCommand(m,settings,null,f.now);a.ok(cmd);a.equal(JSON.stringify(settings),before);

@@ -1,5 +1,5 @@
 #property strict
-#property version "2.14"
+#property version "2.15"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -232,7 +232,7 @@ double Tf2EntryStop(bool buy,double fill,double plannedSl,double maximumRisk){
 }
 bool Tf2EntryRiskAllowed(bool buy,double fill,double sl,double maximumRisk){
  double risk=buy?fill-sl:sl-fill;
- return fill>0 && sl>0 && maximumRisk>0 && maximumRisk<=2.0 && risk>0 && risk<=maximumRisk+1e-8;
+ return fill>0 && sl>0 && maximumRisk>0 && maximumRisk<=3.0 && risk>0 && risk<=maximumRisk+1e-8;
 }
 // End pure TF2 entry price rules.
 bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion=""){
@@ -251,7 +251,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(side!="BUY" && side!="SELL")return RejectEntry("SIDE_REJECTED");
  bool buy=side=="BUY";
  bool guardedTf2=strategyMode=="TF2_SCALPING" && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
- double guardRisk=guardedTf2?MathMin(MathAbs(entry-sl),2.0):0;
+ double guardRisk=guardedTf2?MathMin(MathAbs(entry-sl),3.0):0;
  if(guardedTf2 && guardRisk<=0)return RejectEntry("TF2_FILL_RISK_INVALID");
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
