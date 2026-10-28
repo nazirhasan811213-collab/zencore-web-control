@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
 const PREFIX='/signal-desk/';
-const bundle=['styles.css','app.js','evidence.js','fusion.js','fusion-ui.js','live.js'];
+const bundle=['styles.css','app.js','evidence.js','fusion.js','fusion-ui.js','live.js','website.js','visual-live.js'];
 const native=['native-host.js','native-mount.js','native-mount.css'];
 const enabled=(env=process.env)=>/^(1|true|yes|on)$/i.test(env.ZENCORE_AUTH_ENABLED||'')&&env.ZENCORE_PRODUCT_NAME==='ZenCore Errante';
 const deskCsp="default-src 'self'; base-uri 'none'; connect-src 'self'; frame-ancestors 'self'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'";

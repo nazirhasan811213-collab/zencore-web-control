@@ -3,11 +3,11 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const routes=require('../signal-desk-routes');
 test('Native bridge fetches only same-origin GET data in paired mode and validates parent messages',async()=>{
  const vm=require('node:vm'),handlers={},requests=[],packets=[],parent={},status={style:{},setAttribute(){}};
- let mode='sample',tf='2',interval;
+ let mode='inactive',tf='2',interval;
  const desk={getView:()=>mode,getTimeframe:()=>tf,setTimeframe:value=>{tf=value;},acceptHostPacket:packet=>packets.push(packet)};
  const context={window:{ZenCoreFusionDesk:desk,addEventListener:(name,fn)=>handlers[name]=fn},parent,location:{origin:'https://errante.test',search:''},URLSearchParams,document:{hidden:false,createElement:()=>status,querySelector:selector=>selector.startsWith('meta')?{content:'errante'}:{after(){}},addEventListener:(name,fn)=>handlers[name]=fn},AbortController,Date,setTimeout,clearTimeout,setInterval:fn=>{interval=fn;},fetch:async(url,opts)=>{requests.push({url,opts});return {ok:true,json:async()=>url.includes('/chart')?{ok:true,symbol:'XAUUSD',timeframe:tf,source:'PINE_FEED',candles:[]}:{ok:true,symbol:'XAUUSD',views:[{timeframe:Number(tf),market:{symbol:'XAUUSD',timeframe:tf,close:100,receivedAt:1000,signalObservedAt:999,account:{private:'excluded'}}}]}};}};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../signal-desk-native/native-host.js'),'utf8'),context);
- assert.equal(requests.length,0,'sample view never fetches account data');
+ assert.equal(requests.length,0,'inactive reports do not fetch data');
  handlers.message({origin:'https://wrong.test',source:parent,data:{type:'zencore-desk-timeframe',tf:'15'}});assert.equal(tf,'2');
  handlers.message({origin:context.location.origin,source:{},data:{type:'zencore-desk-timeframe',tf:'15'}});assert.equal(tf,'2');
  mode='paired';await interval();assert.equal(requests.length,2);assert.equal(packets.length,1);assert.equal(packets[0].pine.account,undefined);assert.equal(packets[0].pine.signalObservedAt,999);assert.equal(packets[0].pine.confirmed,undefined);
@@ -17,7 +17,7 @@ test('Native bridge fetches only same-origin GET data in paired mode and validat
 test('Signal Desk is limited to authenticated Errante; bundle integrity matches shared source',()=>{
  assert.equal(routes.enabled({ZENCORE_AUTH_ENABLED:'true',ZENCORE_PRODUCT_NAME:'ZenCore Errante'}),true);
  for(const env of [{},{ZENCORE_AUTH_ENABLED:'true'},{ZENCORE_PRODUCT_NAME:'ZenCore Errante'},{ZENCORE_AUTH_ENABLED:'false',ZENCORE_PRODUCT_NAME:'ZenCore Errante'}])assert.equal(routes.enabled(env),false);
- const manifest=require('../signal-desk/bundle-manifest.json');assert.equal(Object.keys(manifest.files).length,7);
+ const manifest=require('../signal-desk/bundle-manifest.json');assert.equal(Object.keys(manifest.files).length,9);
  for(const [file,hash]of Object.entries(manifest.files))assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname,'../signal-desk',file))).digest('hex'),hash);
  const F=require('../signal-desk/fusion');
  const now=Date.now(),time=now-240000,packet={mode:'ZENCORE_READONLY',pine:{symbol:'XAUUSD',timeframe:'2',signalObservedAt:now,receivedAt:now,close:100},history:{symbol:'XAUUSD',timeframe:'2',candles:[{time,open:100,high:101,low:99,close:100}]}};
