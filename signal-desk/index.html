@@ -13,6 +13,8 @@
   <script defer src="app.js"></script>
   <script defer src="fusion-ui.js"></script>
   <script defer src="live.js"></script>
+  <script defer src="visual-live.js"></script>
+  <script defer src="website.js"></script>
 </head>
 <body>
   <a class="skip" href="#main">Terus ke laporan</a>
@@ -43,7 +45,7 @@
 
       <div class="report-caption"><span id="report-caption"></span><span class="sample-tag">SAMPEL · BUKAN LIVE</span></div>
 
-      <div class="analysis-view-switch" role="group" aria-label="Jenis analisis"><button data-view="live" aria-pressed="true">Data sebenar</button><button data-view="paired" aria-pressed="false"><i data-icon="layers"></i>Pine + teknikal</button><button data-view="sample" aria-pressed="false">Contoh laporan</button></div>
+      <div class="analysis-view-switch" role="group" aria-label="Jenis analisis"><button data-view="live" aria-pressed="true">Data sebenar</button><button data-view="paired" aria-pressed="false"><i data-icon="layers"></i>Pine + teknikal</button><button data-view="sample" aria-pressed="false">Contoh laporan · data live</button></div>
 
       <section id="fusion-panel" hidden class="fusion-panel panel" aria-labelledby="fusion-title">
         <div class="fusion-header"><div><div class="eyebrow">ZENCORE FUSION · MODEL UJIAN V1</div><h2 id="fusion-title">Satu analisis. Semak dari beberapa sudut.</h2><p>Pine beri setup. Teknikal semak arah, ruang dan risiko.</p></div><button class="button outline" id="open-pine-import"><i data-icon="database"></i>Buka data Pine</button></div>
@@ -90,7 +92,7 @@
       <section class="scenarios-panel panel"><div class="section-header"><div><h2>Pergerakan susulan yang perlu dijangka.</h2><p>Jangkaan utama, senario berlawanan dan risiko “libas”.</p></div><span id="scenario-window" class="neutral-tag"></span></div><div class="scenario-grid" id="scenario-grid"></div></section>
       </div>
       <details class="sources-panel panel" id="sources"><summary><span><i data-icon="database"></i><strong>Sumber & bukti</strong><small id="sources-summary">Semakan sumber · 28 Okt 2026</small></span><span class="source-open-label">Lihat <i data-icon="arrowRight"></i></span></summary><div class="source-intro">Sumber berlainan ada fungsi berlainan. Dokumen dan berita tidak menggantikan harga broker.</div><div class="source-grid" id="source-grid"></div><div class="news-review"><div class="news-review-heading"><i data-icon="clock"></i><strong>Berita yang perlu diperhatikan</strong><span id="calendar-state"></span></div><div id="calendar-events"></div><p>Jadual diperiksa 28 Okt 2026. Bukan feed berita automatik atau kalendar lengkap.</p></div><div class="validation-note"><i data-icon="shield"></i><div><strong>Ketepatan belum diukur dengan feed sebenar.</strong><p>Rekod signal → semak hasil selepas 30 minit / 1 jam → kira selepas spread dan slippage. Carta sampel ini tidak digunakan sebagai bukti untung.</p></div></div></details>
-      <div class="report-note"><i data-icon="shield"></i><p>Laporan bersyarat untuk rujukan, bukan arahan trade. Paparan Contoh laporan menggunakan data rekaan. Tiada kebarangkalian untung dipaparkan tanpa ujian. Semak spread, slippage dan feed broker sebelum menggunakan setup sebenar. R:R belum termasuk spread / slippage.</p></div>
+      <div class="report-note"><i data-icon="shield"></i><p>Laporan bersyarat untuk rujukan, bukan arahan trade. Paparan laporan visual menggunakan data Pine/Errante sebenar. Tiada kebarangkalian untung dipaparkan tanpa ujian. Semak spread, slippage dan feed broker sebelum menggunakan setup sebenar. R:R belum termasuk spread / slippage.</p></div>
       <footer><span>ZENCORE <b>Signal Desk</b><em>•</em>Rancang. Sahkan. Disiplin.</span><button data-dialog="data">Maklumat data <i data-icon="arrowUpRight"></i></button></footer>
     </main>
   </div>

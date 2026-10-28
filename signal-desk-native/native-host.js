@@ -20,7 +20,7 @@
   return response.json();
  }
  async function refresh(){
-  if((document.hidden&&!bridge)||!['live','paired'].includes(desk.getView())||busy)return;
+  if((document.hidden&&!bridge)||!['live','paired','sample'].includes(desk.getView())||busy)return;
   const tf=desk.getTimeframe();if(lastTf===tf&&Date.now()-lastAt<5000)return;
   busy=true;lastTf=tf;lastAt=Date.now();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
   try{

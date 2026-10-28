@@ -433,6 +433,7 @@ const reports={
 };
 
 function render(){
+ if(window.ZenCoreVisual&&window.ZenCoreFusionDesk?.getView()==='sample'){window.ZenCoreVisual.render();return;}
  const m=markets[state.tf],r=reports[`${state.tf}-${state.period}`];
  document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tf===state.tf)));
  document.querySelectorAll('[data-period]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.period===state.period)));
@@ -475,17 +476,20 @@ function render(){
  const params=new URLSearchParams({tf:state.tf,period:state.period}),currentParams=new URLSearchParams(location.search);
  if(currentParams.get('embed')==='1')params.set('embed','1');
  if(currentParams.get('bridge')==='1')params.set('bridge','1');
+ if(currentParams.get('layout')==='website')params.set('layout','website');
  if(['sample','paired','live'].includes(currentParams.get('view')))params.set('view',currentParams.get('view'));
  history.replaceState(null,'',`${location.pathname}?${params}${location.hash}`);
  if(typeof window!=='undefined'&&window.ZenCoreFusionDesk)window.ZenCoreFusionDesk.render();
 }
 function renderPosition(){
+ if(window.ZenCoreVisual&&window.ZenCoreFusionDesk?.getView()==='sample'){window.ZenCoreVisual.render();return;}
  const r=reports[`${state.tf}-${state.period}`];
  document.querySelectorAll('[data-position]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.position===state.position)));
  $('position-title').textContent=r[state.position].title;$('position-text').textContent=r[state.position].text;
 }
 
 function renderForecast(){
+ if(window.ZenCoreVisual&&window.ZenCoreFusionDesk?.getView()==='sample'){window.ZenCoreVisual.render();return;}
  const m=markets[state.tf],r=reports[`${state.tf}-${state.period}`],f=r.forecast;
  const failed=state.scenario==='failed',selected=failed?f.failedPath:f.mainPath,color=failed?'#df918b':'#d8b56c';
  const steps=failed?f.failedStages:f.stages;
@@ -575,14 +579,14 @@ const dialogs={
 let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3500);}
 let dialogOpener;
-function openDialog(key,opener){const d=dialogs[key];dialogOpener=opener;$('dialog-eyebrow').textContent=d.eyebrow;$('dialog-title').textContent=d.title;$('dialog-body').innerHTML=d.body;$('info-dialog').showModal();$('info-dialog').scrollTop=0;}
+function openDialog(key,opener){if(key==='data'){dialogs.data={eyebrow:'SUMBER DATA LIVE',title:'Data Pine/Errante sebenar.',body:'<p>Harga, candle dan pelan asal datang daripada sesi Errante yang disambungkan. Laporan visual tidak menggunakan harga sampel.</p><p>Data lama dan bahagian yang belum lengkap ditanda Tunggu. Berita, kos dan win rate belum disahkan. Tiada order dihantar.</p>'};}const d=dialogs[key];dialogOpener=opener;$('dialog-eyebrow').textContent=d.eyebrow;$('dialog-title').textContent=d.title;$('dialog-body').innerHTML=d.body;$('info-dialog').showModal();$('info-dialog').scrollTop=0;}
 function closeDialog(){$('info-dialog').close();}
 function reportText(){
  const m=markets[state.tf],r=reports[`${state.tf}-${state.period}`];
  return `ZENCORE · LAPORAN SAMPEL (BUKAN SIGNAL LIVE)\nXAUUSD | TF${state.tf} ${m.label} | ${r.outlook}\nSnapshot simulasi: 28 Okt 2026, 10:00 MYT\nTetingkap contoh: 10:00–${state.period==='30'?'10:30':'11:00'} MYT\n\n${r.status}: ${r.title}\n${r.summary}\n\nJANGKAAN SELEPAS LAPORAN:\n${r.forecast.stages.map(s=>`${s[0]}. ${s[1]}: ${s[2]}`).join('\n')}\n\nJANGKAAN KEKAL JIKA: ${r.forecast.condition}\nJIKA JANGKAAN GAGAL: ${r.forecast.failure}\n\nASAS JANGKAAN: ${r.context}\n\n${state.position==='flat'?'BELUM ENTRY':state.position==='buy'?'SEDANG BUY':'SEDANG SELL'}: ${r[state.position].title}\n${r[state.position].text}\n\nEntry bersyarat: ${format(m.entry[0])}–${format(m.entry[1])}\nEntry-line: ${format(m.line)} (candle close TF${state.tf})\nSL / batal setup: ${format(m.stop)}\nTP1: ${format(m.tp[0])} | TP2: ${format(m.tp[1])} | TP3: ${format(m.tp[2])}\n\nS/R LOKAL TF${state.tf}:\n${m.levels.map(l=>`${l.name} ${l.type}: ${format(l.price)} | jarak $${Math.abs(l.price-m.price).toFixed(2)} (${(Math.abs(l.price-m.price)/m.atr).toFixed(2)}× ATR)`).join('\n')}\n\nDATA DISAHKAN (${m.checks.filter(c=>c.ok).length}/5; bukan kadar ketepatan):\n${m.checks.map(c=>`${c.ok?'✓':'○'} ${c.label}: ${c.status}`).join('\n')}\n\nPELAN BERSYARAT:\n${r.scenarios.map(s=>`${s[1]} · ${s[2]}: ${s[3]}`).join('\n')}\n\nSTATUS SIGNAL SEBENAR: TUNGGU DATA. Versi SOP aktif belum disahkan. Ketepatan belum diukur.\nSumber disemak: panduan ZenCore, kod Errante, kalendar Fed/BLS dan World Gold Council. Sumber rujukan bukan feed harga broker.\n\nPanduan pendidikan menggunakan data rekaan. Feed live belum disambungkan; tiada order dihantar. Semak SOP ZenCore dan risiko broker sebelum trade sebenar.`;
 }
 
-document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{state.tf=b.dataset.tf;state.period=state.tf==='2'?'30':'60';state.scenario='main';state.step=0;render();announce(`TF${state.tf} ${markets[state.tf].label}, ${state.period==='30'?'30 minit':'1 jam'}. Laporan sampel dikemas kini.`);}));
+document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{state.tf=b.dataset.tf;state.period=state.tf==='2'?'30':'60';state.scenario='main';state.step=0;render();announce(`TF${state.tf} ${markets[state.tf].label}, ${state.period==='30'?'30 minit':'1 jam'}. Laporan dikemas kini.`);}));
 document.querySelectorAll('[data-period]').forEach(b=>b.addEventListener('click',()=>{state.period=b.dataset.period;state.scenario='main';state.step=0;render();announce(`Horizon ${state.period==='30'?'30 minit':'1 jam'}, candle kekal TF${state.tf}.`);}));
 document.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>{state.scenario=b.dataset.scenario;state.step=0;renderForecast();announce(state.scenario==='main'?'Skema jangkaan utama dipaparkan.':'Skema jika jangkaan gagal dipaparkan.');}));
 $('forecast-stages').addEventListener('click',e=>{const button=e.target.closest('[data-step]');if(!button)return;state.step=Number(button.dataset.step);renderForecast();$('forecast-stages').querySelector(`[data-step="${state.step}"]`).focus({preventScroll:true});announce(`Langkah ${state.step+1} dipilih pada carta.`);});
