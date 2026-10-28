@@ -7,6 +7,8 @@ name: Auto Trade control plane checks
       - "analysis-telegram.js"
       - "pine-insights.*"
       - "analysis-dual.*"
+      - "analysis-live-read.js"
+      - "analysis-stream.js"
       - "gold-copilot.js"
       - "home.html"
       - "auth*"

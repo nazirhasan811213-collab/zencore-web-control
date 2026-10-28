@@ -3,6 +3,7 @@
  const root=document.getElementById('dualViews'),pair=document.getElementById('pairSelector'),connection=document.getElementById('dualConnection');
  let selected='both',generation=0,controller=null,timer=null,payload=null,failed=false,stream=null,streamLive=false,lastStreamAt=0;
  const cards=new Map();
+ const delivery=document.createElement('p');delivery.className='dual-note';delivery.setAttribute('aria-label','Masa penghantaran feed');connection.after(delivery);
  const label=v=>({WAITING:'TUNGGU DATA',WAIT:'TUNGGU',WAIT_DATA:'TUNGGU DATA',STALE:'DATA LAMA',DISCONNECTED:'TERPUTUS',WATCH:'MONITOR DULU',PASS:'LULUS',ABOVE:'DI ATAS',BELOW:'DI BAWAH',INTRABAR:'DALAM CANDLE',BAR_CLOSE:'CANDLE DAH CLOSE'}[v]||v);
  function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
  function metric(label,value){const n=el('div',undefined,'metric');n.append(el('small',label),el('b',value));return n;}
@@ -52,6 +53,8 @@
    nodes.push(el('p',m?'Diterima '+new Date(m.receivedAt).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Tiada data • TF'+tf,'stamp'));c.content.replaceChildren(...nodes);if(focused)c.content.querySelector('details[data-section="'+focused+'"] summary')?.focus({preventScroll:true});
   }
   root.classList.toggle('single',selected!=='both');
+  const lags=[2,15].map(tf=>{const lag=payload?.views?.find(v=>v.timeframe===tf)?.transportLagMs;return 'TF'+tf+' '+(Number.isFinite(lag)?(lag/1000).toFixed(2)+'s':'—');});
+  delivery.textContent='Pine → server: '+lags.join(' · ')+'. Laman semak semula setiap 5s. Masa ini tidak termasuk sela antara alert Pine.';
  }
  for(const button of document.querySelectorAll('[data-view]'))button.onclick=()=>{selected=button.dataset.view;document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};
  function acceptPayload(j){
@@ -66,27 +69,22 @@
   const g=generation;stream?.close();streamLive=false;
   if(!window.EventSource)return;
   const active=new EventSource('/api/analysis/timeframes/events?symbol='+encodeURIComponent(pair.value));stream=active;
-  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;lastStreamAt=Date.now();clearTimeout(timer);connection.textContent='Data TF2 & TF15 masuk terus • connection aktif';render();}catch(_){}});
+  active.addEventListener('timeframes',e=>{if(g!==generation)return;try{acceptPayload(JSON.parse(e.data));streamLive=true;lastStreamAt=Date.now();clearTimeout(timer);connection.textContent='Push aktif • semak semula setiap 5s';render();}catch(_){}});
   active.addEventListener('unavailable',()=>{if(g===generation&&!controller)poll();});
   active.onerror=()=>{if(g!==generation)return;streamLive=false;connection.textContent='Tengah connect balik • masih check data sementara';if(!controller){clearTimeout(timer);poll();}};
  }
- async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Data TF2 & TF15 masuk terus • connection aktif':'Data TF2 & TF15 • check berkala sementara';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
- // A live TF15 stream must not suppress recovery of a missed TF2 update.
+ async function poll(){const g=generation;const activeController=new AbortController();controller=activeController;const timeout=setTimeout(()=>activeController.abort(),8000);try{const r=await fetch('/api/analysis/timeframes?symbol='+encodeURIComponent(pair.value),{credentials:'same-origin',cache:'no-store',signal:activeController.signal});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(g!==generation)return;acceptPayload(j);connection.textContent=streamLive?'Push aktif • semak semula setiap 5s':'Data TF2 & TF15 • semakan berkala aktif';}catch(e){if(g!==generation)return;if(!streamLive){failed=true;connection.textContent='Feed terputus. Tengah cuba connect balik…';}}finally{clearTimeout(timeout);if(g===generation){controller=null;render();if(!streamLive)timer=setTimeout(poll,1000);}}}
+ // Reconcile both TFs every five seconds even when SSE appears healthy.
+ // Waiting for the source to become stale adds 30–60s to a missed update.
  function recover(){
   if(document.visibilityState==='hidden'||controller)return;
-  const now=Date.now();
-  const missingOrStale=[2,15].some(tf=>{
-   const m=payload?.views?.find(v=>v.timeframe===tf)?.market;
-   const at=Number(m?.signalObservedAt)||Number(m?.receivedAt);
-   return !at||now-at>(tf===2?60000:30000);
-  });
-  if(!streamLive||now-lastStreamAt>45000||missingOrStale){clearTimeout(timer);poll();}
+  clearTimeout(timer);poll();
  }
  function resume(){
   if(document.visibilityState==='hidden')return;
   startStream();clearTimeout(timer);if(!controller)poll();
  }
- const recoveryTimer=setInterval(recover,15000);
+ const recoveryTimer=setInterval(recover,5000);
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume();});
  window.addEventListener('online',resume);
  pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values()){c.chart.replaceChildren();c.nativeChart?.clear();}connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
