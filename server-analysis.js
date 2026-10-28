@@ -1711,7 +1711,7 @@ const server = http.createServer(async (req, res) => {
     if (authState.ready && authState.service) {
       try {
         const session = await authState.service.sessionFromRequest(req);
-        if (session) return redirect(res, landingForRole(session.user.role));
+        if (session) return redirect(res, signalDeskEnabled&&pathname==='/login'&&url.searchParams.get('desk')==='1'?'/signal-desk/?bridge=1&view=live':landingForRole(session.user.role));
       } catch (_) {}
     }
     if (pathname === '/register') {

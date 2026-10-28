@@ -19,7 +19,8 @@ function createHandler({active,requireSession,sendAsset,sendJson,root=__dirname}
  return async function handle(req,res,pathname){
   if(pathname!=='/signal-desk'&&!pathname.startsWith(PREFIX))return false;
   if(!active){sendJson(res,404,{ok:false,error:'Not found'});return true;}
-  if(!await requireSession(req,res,req.method==='GET'?'/login':null))return true;
+  const bridge=(pathname===PREFIX||pathname===PREFIX+'index.html')&&new URL(req.url||pathname,'http://localhost').searchParams.get('bridge')==='1';
+  if(!await requireSession(req,res,req.method==='GET'?(bridge?'/login?desk=1':'/login'):null))return true;
   if(req.method!=='GET'){sendJson(res,405,{ok:false,error:'Paparan baca sahaja.'},{Allow:'GET'});return true;}
   if(pathname==='/signal-desk'){res.writeHead(302,{Location:PREFIX,'Cache-Control':'no-store'});res.end();return true;}
   const file=pathname.slice(PREFIX.length);
