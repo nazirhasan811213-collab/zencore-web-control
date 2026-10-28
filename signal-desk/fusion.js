@@ -48,7 +48,7 @@ function normalize(input,options={}){
   if(t+Number(tf)*60000>asOf){excludedOpen++;continue;}
   candles.push({time:t,open:c.open,high:c.high,low:c.low,close:c.close});
  }
- if(!candles.length)throw new Error('Belum ada candle yang sudah tutup pada masa signal.');
+ if(!candles.length&&!(input.mode==='ZENCORE_READONLY'&&options.originVerified===true))throw new Error('Belum ada candle yang sudah tutup pada masa signal.');
  const m=p.setupMeta||{},strategy=p.strategyNormal||{},dash=m.dashboardAi?.dashboard||{};
  const hema=p.hemaConfirmation?.['tf'+tf]||strategy.sop?.['hema'+tf]||{};
  const price=p.normal3Close??p.close;
@@ -81,9 +81,9 @@ function structure(c,price,a){
 }
 function analyze(data,now=Date.now(),horizon=30,calendar=[]){
  const c=data.candles,closes=c.map(x=>x.close),e20=ema(closes,20),e40=ema(closes,40),rs=rsi(closes),at=atr(c),a=at.at(-1),last=c.at(-1),side=data.side;
- const trend=e20.at(-1)!==null&&e40.at(-1)!==null?(e20.at(-1)>e40.at(-1)&&e20.at(-1)>e20.at(-2)?'BUY':e20.at(-1)<e40.at(-1)&&e20.at(-1)<e20.at(-2)?'SELL':'RANGE'):'WAIT';
- const s=structure(c,data.price,a),r=rs.at(-1),warm=c.length>=METHODS.warmup;
- const gap=Math.abs(data.price-last.close),matched=data.barTime===last.time&&gap<=.01+1e-9;
+ const trend=num(e20.at(-1))&&num(e40.at(-1))?(e20.at(-1)>e40.at(-1)&&e20.at(-1)>e20.at(-2)?'BUY':e20.at(-1)<e40.at(-1)&&e20.at(-1)<e20.at(-2)?'SELL':'RANGE'):'WAIT';
+ const s=structure(c,data.price,a),r=rs.at(-1)??null,warm=c.length>=METHODS.warmup;
+ const gap=last?Math.abs(data.price-last.close):Infinity,matched=!!last&&data.barTime===last.time&&gap<=.01+1e-9;
  const gaps=c.some((v,i)=>i&&v.time-c[i-1].time!==Number(data.tf)*60000);
  const fresh=num(data.receivedAt)&&now-data.receivedAt>=-5000&&now-data.receivedAt<=(data.tf==='2'?60000:30000)&&now-data.asOf>=-5000&&now-data.asOf<=(data.tf==='2'?60000:30000);
  const sign=side==='BUY'?1:side==='SELL'?-1:0,p=data.plan;
@@ -96,7 +96,7 @@ function analyze(data,now=Date.now(),horizon=30,calendar=[]){
  const rr=planOK&&costsKnown?netReward/(sign*(p.entry-p.sl)+costs):null;
  const newsOK=[30,60].includes(Number(horizon))&&data.newsClear&&data.newsCoverage==='REPORT_WINDOW'&&num(data.newsCheckedAt)&&now-data.newsCheckedAt>=0&&now-data.newsCheckedAt<=15*60000&&data.newsStart<=data.asOf&&data.newsEnd>=data.asOf+Number(horizon)*60000;
  const knownEvents=calendar.filter(e=>{const at=timestamp(e.at);return num(at)&&at>=data.asOf&&at<=data.asOf+Number(horizon)*60000;});
- const lastLarge=num(a)&&last.high-last.low>=1.5*a;
+ const lastLarge=!!last&&num(a)&&last.high-last.low>=1.5*a;
  const hemaDirection=num(data.hemaFast)&&num(data.hemaSlow)?data.hemaFast>data.hemaSlow?'BUY':data.hemaFast<data.hemaSlow?'SELL':'RANGE':'WAIT';
  const row=(name,status,value,detail)=>({name,status,value,detail});
  const rows=[
@@ -109,7 +109,7 @@ function analyze(data,now=Date.now(),horizon=30,calendar=[]){
  ];
  const conflicts=rows.filter(x=>x.status==='CONFLICT'),waiting=rows.filter(x=>x.status==='WAIT');
  const aligned=warm&&!gaps&&matched&&data.confirmed&&fresh&&rows.every(x=>x.status==='PASS');
- let title=!warm?'Tunggu candle yang cukup.':!matched?'Tunggu padanan Pine yang sah.':!fresh?'Data lama. Tunggu data baharu.':conflicts.length?'Bacaan bercanggah. Tunggu.':waiting.length?'Semakan belum lengkap.':aligned?'Sehala · calon untuk diuji.':'Tunggu data yang lengkap.';
+ let title=!fresh?'Data lama. Tunggu data baharu.':!warm?'Tunggu candle yang cukup.':!matched?'Tunggu padanan Pine yang sah.':conflicts.length?'Bacaan bercanggah. Tunggu.':waiting.length?'Semakan belum lengkap.':aligned?'Sehala · calon untuk diuji.':'Tunggu data yang lengkap.';
  if(data.mode==='SAMPLE')title='CONTOH · '+title;
  else title=(data.mode==='ZENCORE_READONLY'?'ZENCORE · BACA SAHAJA · ':'IMPORT MANUAL · ')+title;
  return {version:VERSION,mode:data.mode,title,aligned,liveSignal:false,orderExecution:false,side,rows,trend,structure:s,ema20:e20.at(-1),ema40:e40.at(-1),rsi:r,atr:a,netRR:rr,warmup:c.length,warmupRequired:METHODS.warmup,gaps,matched,fresh,excludedOpen:data.excludedOpen,

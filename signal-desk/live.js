@@ -23,13 +23,17 @@ function model(packet,now,horizon,F){
  return {packet:x,tf,fresh,ready,side,planValid,plan:p,price:m.close,asOf:m.signalObservedAt,receivedAt:m.receivedAt,validUntil:m.signalObservedAt+Number(horizon)*60000,candles:c,atr,levels,title:!fresh?'Data lama. Tunggu feed baharu.':!planValid?'Tunggu pelan Pine yang lengkap.':ready?'Setup '+side+' pada server. Sahkan sebelum entry.':'Belum ada setup yang sedia. Tunggu.',confirmation:m.confirmed};
 }
 function mount(){
- const $=id=>document.getElementById(id),F=window.ZenCoreFusion,packets=new Map();let popup=null,connection='Belum tersambung ke sesi Errante.';
+ const $=id=>document.getElementById(id),F=window.ZenCoreFusion,packets=new Map();let popup=null,connection='Belum tersambung. Tekan Sambung Errante, login dan biarkan tetingkap sambungan terbuka.',pairingError='';
  const section=document.createElement('section');section.id='live-report';section.className='panel live-report';section.setAttribute('aria-label','Laporan data sebenar');$('fusion-panel').before(section);
  const num=n=>finite(n)?new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n):'—';
  const time=n=>new Intl.DateTimeFormat('ms-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'medium'}).format(new Date(n))+' MYT';
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const native=document.querySelector('meta[name="zencore-desk-host"]')?.content==='errante';
+ const connectionBar=document.createElement('div');connectionBar.className='feed-connection-bar';connectionBar.innerHTML='<div><strong>Sambungan data sebenar</strong><p id="feed-connection-status" role="status"></p></div><button type="button" class="button gold-button" id="feed-connect">Sambung Errante ↗</button>';document.querySelector('.analysis-view-switch').after(connectionBar);$('feed-connect').hidden=native;$('feed-connect').addEventListener('click',connect);
  function renderLive(){
+ if(popup?.closed)connection='Tetingkap Errante ditutup. Tekan Sambung Errante untuk sambung semula.';
+ $('feed-connection-status').textContent=connection+(pairingError?' Semakan teknikal: '+pairingError:'');
+ $('feed-connect').textContent=popup&&!popup.closed?'Buka semula Errante ↗':'Sambung Errante ↗';
  const active=window.ZenCoreFusionDesk.getView()==='live';section.hidden=!active;if(!active){window.ZenCoreVisual?.render();return;}
  document.querySelectorAll('[data-nav]').forEach(a=>a.href='#live-report');
  $('sample-reports').hidden=true;$('fusion-panel').hidden=true;$('fusion-performance').hidden=true;
@@ -52,7 +56,7 @@ function mount(){
  const lines=c.map((b,i)=>`<path d="M${x(i)} ${y(b.high)}V${y(b.low)}M${x(i)-3} ${y(b.open)}H${x(i)}V${y(b.close)}H${x(i)+3}" stroke="${b.close>=b.open?'#70cbb5':'#ed9d93'}" fill="none"><title>${esc(new Date(b.time).toISOString())} · O ${n(b.open)} H ${n(b.high)} L ${n(b.low)} C ${n(b.close)}</title></path>`).join('');
  return `<h3>Candle Pine sebenar · TF${r.tf}</h3><svg viewBox="0 0 800 220" role="img" aria-label="Carta OHLC Pine TF${r.tf}, ${c.length} candle tutup">${lines}<text x="30" y="212" fill="#a7b2ba">${esc(time(c[0].time))}</text><text x="780" y="16" fill="#a7b2ba" text-anchor="end">${n(hi)}</text><text x="780" y="185" fill="#a7b2ba" text-anchor="end">${n(lo)}</text></svg>`;
  }
- function accept(packet){const p=project(packet);packets.set(p.pine.timeframe,p);try{window.ZenCoreFusionDesk.acceptReadOnlyData?.(p);}catch{}connection='Data daripada sesi Analysis Errante · baca sahaja.';renderLive();if(typeof renderSources==='function')renderSources();}
+ function accept(packet){const p=project(packet);packets.set(p.pine.timeframe,p);try{window.ZenCoreFusionDesk.acceptReadOnlyData?.(p);pairingError='';}catch(error){pairingError=error.message;}connection='Data daripada sesi Analysis Errante · baca sahaja.';renderLive();if(typeof renderSources==='function')renderSources();}
  window.addEventListener('message',event=>{if(event.origin!==ORIGIN||!popup||event.source!==popup||event.data?.type!=='zencore-real-data')return;try{accept(event.data.packet);}catch(error){connection=error.message;renderLive();}});
  window.ZenCoreLive={render:renderLive,connect,connectionStatus:()=>connection,modelFor:(tf,horizon)=>{const p=packets.get(String(tf));return p?model(p,Date.now(),horizon,F):null;},status:message=>{connection=String(message);renderLive();},snapshot:()=>{const p=packets.get(window.ZenCoreFusionDesk.getTimeframe());return p?{tf:p.pine.timeframe,asOf:p.pine.signalObservedAt,receivedAt:p.pine.receivedAt}:null;},acceptHost:packet=>{if(!native)throw Error('Host tidak disahkan.');accept(packet);},project,report:()=>{const tf=window.ZenCoreFusionDesk.getTimeframe(),p=packets.get(tf);if(!p)return 'ZENCORE · TUNGGU DATA SEBENAR · TF'+tf;const r=model(p,Date.now(),Number(new URLSearchParams(location.search).get('period')||30),F);return `ZENCORE · DATA PINE SEBENAR · TF${tf}\n${time(r.asOf)}\n${r.title}\nHarga ${num(r.price)}\nEntry ${num(r.planValid?r.plan.entry:null)} · SL ${num(r.planValid?r.plan.sl:null)} · TP1 ${num(r.planValid?r.plan.tp1:null)}\nData ${r.fresh?'segar':'lama'}. Tiada jaminan untung. Tiada order dihantar.`;}};
  const original=window.ZenCoreFusionDesk.report;window.ZenCoreFusionDesk.report=()=>window.ZenCoreFusionDesk.getView()!=='paired'?window.ZenCoreLive.report():original();
