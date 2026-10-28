@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111518">
+  <meta name="description" content="Meja laporan peribadi ZenCore. Panduan XAUUSD untuk TF2 scalping dan TF15 intraday dengan data simulasi yang dilabel jelas.">
+  <title>ZenCore · Signal Desk</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23d8b56c'/%3E%3Cpath d='M11 12h18L12 28h17' fill='none' stroke='%23111518' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="evidence.js"></script>
+  <script defer src="fusion.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="fusion-ui.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Terus ke laporan</a>
+  <aside class="sidebar">
+    <a class="brand" href="#" aria-label="ZenCore Signal Desk"><span class="brand-mark">Z<span></span></span><span>ZENCORE<small>SIGNAL DESK</small></span></a>
+    <div class="workspace-label">RUANG TRADER <span>PRIVATE</span></div>
+    <nav aria-label="Navigasi utama">
+      <a href="#main" class="nav-link active" data-nav="main"><i data-icon="grid"></i>Laporan signal<span class="nav-dot"></span></a>
+      <a href="#entry" class="nav-link" data-nav="entry"><i data-icon="target"></i>Pelan entry</a>
+      <a href="#levels" class="nav-link" data-nav="levels"><i data-icon="layers"></i>Peta paras</a>
+      <a href="#sop" class="nav-link" data-nav="sop"><i data-icon="check"></i>SOP & risiko</a>
+    </nav>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-label">INSTRUMEN</div>
+    <div class="instrument"><span class="gold-icon">Au</span><div><strong>XAUUSD</strong><small>Gold / US Dollar</small></div><span class="instrument-dot"></span></div>
+    <div class="desk-note"><div class="eyebrow">PRINSIP ZENCORE</div><p>Data semasa lebih penting daripada label lama.</p><span>Sahkan dahulu. Baru bertindak.</span></div>
+    <div class="sidebar-bottom"><button class="quiet-button" data-dialog="data"><i data-icon="database"></i>Tentang data<i data-icon="arrowUpRight"></i></button><div class="owner"><span class="avatar">ZN</span><div><strong>ZenCore Workspace</strong><small><i data-icon="lock"></i>Akses peribadi</small></div></div></div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>Laporan signal</strong></div><div class="topbar-right"><span class="timezone"><i data-icon="clock"></i>Waktu Malaysia · MYT</span><span class="private-pill"><i data-icon="lock"></i>Private</span><span class="mini-avatar">ZN</span></div></header>
+    <main id="main" tabindex="-1">
+      <div class="page-heading"><div><div class="eyebrow"><span class="tiny-line"></span> ZENCORE · PANDUAN TRADER</div><h1>Harga lepas ini?</h1><p>Lihat arah. Tunggu zon. Sahkan entry.</p></div><div class="heading-actions"><a class="button outline open-zencore" href="https://zencore-errante.onrender.com/analysis" target="_blank" rel="noopener noreferrer">Buka dalam ZenCore <i data-icon="arrowUpRight"></i></a><button class="button outline" id="copy-report"><i data-icon="copy"></i>Salin laporan</button></div></div>
+
+      <div class="sample-banner"><span class="sample-icon"><i data-icon="flask"></i></span><p id="data-banner-text">Contoh sahaja. Harga dan laluan ialah rekaan.</p><button data-dialog="data">Semak sumber <i data-icon="arrowUpRight"></i></button></div>
+
+      <section class="report-controls" aria-label="Pilihan laporan"><div class="control-group"><span class="control-label">TIMEFRAME</span><div class="segmented timeframe" role="group" aria-label="Timeframe"><button data-tf="2" aria-pressed="true"><strong>TF2</strong><span>Scalping</span></button><button data-tf="15" aria-pressed="false"><strong>TF15</strong><span>Intraday</span></button></div></div><span class="control-divider"></span><div class="control-group period-group"><span class="control-label">TEMPOH LAPORAN</span><div class="segmented period" role="group" aria-label="Tempoh laporan"><button data-period="30" aria-pressed="true">30 minit</button><button data-period="60" aria-pressed="false">1 jam</button></div></div><div class="snapshot"><span class="snapshot-dot"></span><div>Snapshot simulasi<strong>28 Okt 2026 · 10:00 MYT</strong></div><button class="icon-button" data-dialog="data" aria-label="Maklumat snapshot"><i data-icon="info"></i></button></div></section>
+
+      <div class="report-caption"><span id="report-caption"></span><span class="sample-tag">SAMPEL · BUKAN LIVE</span></div>
+
+      <div class="analysis-view-switch" role="group" aria-label="Jenis analisis"><button data-view="paired" aria-pressed="false"><i data-icon="layers"></i>Pine + teknikal</button><button data-view="sample" aria-pressed="true">Contoh laporan</button></div>
+
+      <section id="fusion-panel" hidden class="fusion-panel panel" aria-labelledby="fusion-title">
+        <div class="fusion-header"><div><div class="eyebrow">ZENCORE FUSION · MODEL UJIAN V1</div><h2 id="fusion-title">Satu analisis. Semak dari beberapa sudut.</h2><p>Pine beri setup. Teknikal semak arah, ruang dan risiko.</p></div><button class="button outline" id="open-pine-import"><i data-icon="database"></i>Buka data Pine</button></div>
+        <div class="fusion-flow" aria-label="Aliran analisis"><span><i data-icon="database"></i>Data Pine</span><i data-icon="arrowRight"></i><span><i data-icon="layers"></i>5 semakan teknikal</span><i data-icon="arrowRight"></i><span><i data-icon="shield"></i>Satu keputusan</span></div>
+        <div class="fusion-decision"><span class="fusion-decision-icon"><i data-icon="clock"></i></span><div><strong id="fusion-decision">Tunggu data Pine yang sebenar.</strong><p id="fusion-reason">Belum ada harga dan candle untuk dipadankan.</p><small id="fusion-origin">Feed live: belum disambungkan.</small></div><button class="text-button" id="fusion-demo">Lihat contoh kiraan <i data-icon="arrowRight"></i></button></div>
+        <div class="fusion-rows" id="fusion-rows"></div>
+        <div class="fusion-reference" id="fusion-reference"></div>
+        <div class="fusion-data-note" id="fusion-data-note"></div>
+        <details class="fusion-methods" id="fusion-methods"><summary>Kaedah & sumber teknikal <i data-icon="arrowRight"></i></summary><p>Formula EMA, RSI dan ATR dirujuk kepada dokumentasi rasmi. Penapis V1 ialah cadangan untuk diuji. Belum ada bukti ia menaikkan win rate.</p><div id="fusion-source-links"></div><p>Trend dikumpulkan dalam satu semakan. ATR mengukur saiz gerak, bukan arah. Data candle yang belum tutup tidak digunakan. Paras SL/TP asal Pine tidak diubah.</p><p>Sejarah chart Errante yang disemak menyimpan sekitar 5 jam sejak server bermula. Itu mungkin belum cukup untuk TF15. Model ini memerlukan sekurang-kurangnya 80 candle tutup bagi setiap TF.</p><p>Win rate dikira mengikut setup, selepas kos dan pada horizon yang dipilih. Semua calon perlu direkod. Julat Wilson ialah anggaran binomial dengan andaian hasil bebas; ia bukan kebarangkalian signal seterusnya.</p></details>
+      </section>
+
+      <section class="fusion-performance panel" id="fusion-performance" hidden><div class="section-header"><div><h2>Bukti win rate</h2><p>Rekod ujian luar sampel, selepas kos trading.</p></div><button class="text-button" id="open-results-import">Buka rekod ujian <i data-icon="arrowUpRight"></i></button></div><div class="performance-grid" id="performance-grid"></div><div class="performance-foot" id="performance-foot">Belum ada rekod untuk model gabungan ini. Bilangan indikator bukan peratus menang.</div></section>
+
+      <div id="sample-reports">
+
+      <section class="forecast-panel panel" aria-labelledby="forecast-title">
+        <div class="forecast-topline"><span class="eyebrow"><i data-icon="trend"></i>JANGKAAN SELEPAS LAPORAN</span><span class="neutral-tag" id="forecast-window"></span></div>
+        <div class="forecast-heading"><h2 id="forecast-title"></h2><span class="forecast-bias" id="forecast-bias"></span></div>
+        <p class="forecast-summary" id="forecast-summary"></p>
+        <div class="quick-map" id="quick-map" aria-label="Ringkasan lima saat"></div>
+        <div class="forecast-body"><div><div class="stage-label" id="stage-label">3 LANGKAH MUDAH</div><div class="forecast-stages" id="forecast-stages" role="group" aria-label="Langkah jangkaan"></div></div><div class="forecast-visual"><div class="forecast-switch" role="group" aria-label="Senario jangkaan"><button data-scenario="main" aria-pressed="true">Jangkaan utama</button><button data-scenario="failed" aria-pressed="false">Jika gagal</button></div><svg id="forecast-chart" viewBox="0 0 560 224" role="img" aria-label="Laluan jangkaan bersyarat"></svg><p class="forecast-chart-note">Contoh laluan harga. Garis putus bukan harga yang pasti berlaku.</p></div></div>
+        <div class="forecast-conditions"><div><span><i data-icon="tick"></i>IKUT PELAN JIKA</span><p id="forecast-condition"></p></div><div><span><i data-icon="warning"></i>BATAL / TUKAR PELAN JIKA</span><p id="forecast-failure"></p></div></div>
+        <div class="forecast-foot"><i data-icon="clock"></i><span id="forecast-validity"></span></div>
+      </section>
+
+      <section class="real-gate" aria-label="Status signal sebenar"><span class="gate-stop"><i data-icon="lock"></i></span><div><strong>Signal sebenar: TUNGGU DATA</strong><p>Harga broker belum masuk. Versi SOP live belum disahkan.</p></div><button data-dialog="data">Kenapa tunggu? <i data-icon="arrowRight"></i></button></section>
+
+      <section class="overview-grid" aria-label="Ringkasan laporan">
+        <article class="guidance-card panel"><div class="card-topline"><span class="eyebrow">TINDAKAN UNTUK PERGERAKAN SETERUSNYA</span><span class="status-chip" id="status-chip"></span></div><div class="guidance-heading"><span class="guidance-symbol"><i data-icon="crosshair"></i></span><h2 id="guidance-title"></h2></div><p class="guidance-summary" id="guidance-summary"></p><div class="position-tabs" role="group" aria-label="Kedudukan trader"><button data-position="flat" aria-pressed="true">Belum entry</button><button data-position="buy" aria-pressed="false">Sedang BUY</button><button data-position="sell" aria-pressed="false">Sedang SELL</button></div><div class="position-advice" aria-live="polite"><i data-icon="arrowRight"></i><div><strong id="position-title"></strong><p id="position-text"></p></div></div><div class="guidance-bottom"><span><i data-icon="shield"></i>Pengesahan candle close <strong id="close-tf">TF2</strong></span><button class="text-button" data-dialog="sop">Baca SOP <i data-icon="arrowRight"></i></button></div></article>
+        <article class="market-card panel"><div class="card-topline"><span class="eyebrow">ASAS KEPADA JANGKAAN</span><span class="soft-chip" id="context-chip"></span></div><div class="price-block"><div class="price-pair"><span class="gold-icon small">Au</span><strong>XAUUSD</strong><span>HARGA RUJUKAN</span></div><div class="price-row"><span class="price" id="price"></span><span class="price-unit">USD / oz</span></div><div class="price-meta"><span class="up" id="price-change"></span><span id="price-change-caption"></span></div></div><div class="market-stats"><div><span>Struktur</span><strong id="structure"></strong></div><div><span id="hema-label"></span><strong class="cyan" id="hema-value"></strong></div><div><span>Risiko pasaran</span><strong id="market-risk"></strong></div></div><div class="market-take"><i data-icon="activity"></i><p id="market-context"></p></div></article>
+      </section>
+
+      <section class="detail-grid">
+        <article class="chart-panel panel"><div class="section-header"><div><h2>Peta pergerakan harga <span class="neutral-tag" id="chart-tf">TF2</span></h2><p id="chart-subtitle">Struktur terdekat untuk scalping.</p></div><span class="chart-sample"><span></span>Carta simulasi</span></div><div class="chart-legend"><span><b class="legend-dot teal"></b>Harga</span><span><b class="legend-dash gold"></b>Zon entry</span><span><b class="legend-dash cyan-bg"></b>Sokongan</span><span><b class="legend-dash coral-bg"></b>Rintangan</span></div><div class="chart-wrap"><svg id="price-chart" viewBox="0 0 800 306" role="img" aria-label="Carta candle simulasi XAUUSD"></svg><div class="chart-tooltip" id="chart-tooltip" hidden></div></div><div class="chart-footer"><span><i data-icon="mouse"></i>Sentuh atau halakan pada candle untuk OHLC</span><span id="chart-atr"></span></div></article>
+
+        <article class="entry-panel panel" id="entry"><div class="section-header"><div><h2>Pelan entry</h2><p id="entry-subtitle"></p></div><span class="direction-tag" id="direction-tag"></span></div><div class="entry-zone"><div><i data-icon="target"></i><span>ZON ENTRY BERSYARAT</span></div><strong id="entry-range"></strong><p id="entry-trigger"></p></div><div class="price-ladder"><div class="ladder-stop"><span><b>SL</b> Batal setup</span><strong id="stop-price"></strong></div><div><span><b>TP1</b> Sasaran pertama</span><strong id="tp1"></strong></div><div><span><b>TP2</b> Sasaran kedua</span><strong id="tp2"></strong></div><div><span><b>TP3</b> Sasaran lanjutan</span><strong id="tp3"></strong></div></div><div class="entry-note"><i data-icon="info"></i><p id="entry-note"></p></div><div class="rr-bar"><span>R:R indikatif ke TP1</span><strong id="risk-reward"></strong></div></article>
+      </section>
+
+      <section class="lower-grid">
+        <article class="levels-panel panel" id="levels"><div class="section-header"><div><h2>Paras yang dekat, bukan jauh.</h2><p id="levels-subtitle"></p></div><span class="neutral-tag" id="levels-tf"></span></div><div class="levels-heading"><span>PARAS / JENIS</span><span>HARGA</span><span>JARAK DARI HARGA</span></div><div id="level-rows"></div><div class="levels-footnote"><i data-icon="layers"></i><p id="levels-footnote"></p></div></article>
+        <article class="sop-panel panel" id="sop"><div class="section-header"><div><h2>Boleh guna signal sebenar?</h2><p>Semua data ini perlu disahkan dahulu.</p></div><span class="sop-count" id="sop-count"></span></div><div class="sop-progress"><span id="sop-progress"></span></div><div id="sop-rows"></div><button class="sop-link" data-dialog="sop">Faham syarat ZenCore<i data-icon="arrowUpRight"></i></button></article>
+      </section>
+
+      <section class="scenarios-panel panel"><div class="section-header"><div><h2>Pergerakan susulan yang perlu dijangka.</h2><p>Jangkaan utama, senario berlawanan dan risiko “libas”.</p></div><span id="scenario-window" class="neutral-tag"></span></div><div class="scenario-grid" id="scenario-grid"></div></section>
+      </div>
+      <details class="sources-panel panel" id="sources"><summary><span><i data-icon="database"></i><strong>Sumber & bukti</strong><small id="sources-summary">Semakan sumber · 28 Okt 2026</small></span><span class="source-open-label">Lihat <i data-icon="arrowRight"></i></span></summary><div class="source-intro">Sumber berlainan ada fungsi berlainan. Dokumen dan berita tidak menggantikan harga broker.</div><div class="source-grid" id="source-grid"></div><div class="news-review"><div class="news-review-heading"><i data-icon="clock"></i><strong>Berita yang perlu diperhatikan</strong><span id="calendar-state"></span></div><div id="calendar-events"></div><p>Jadual diperiksa 28 Okt 2026. Bukan feed berita automatik atau kalendar lengkap.</p></div><div class="validation-note"><i data-icon="shield"></i><div><strong>Ketepatan belum diukur dengan feed sebenar.</strong><p>Rekod signal → semak hasil selepas 30 minit / 1 jam → kira selepas spread dan slippage. Carta sampel ini tidak digunakan sebagai bukti untung.</p></div></div></details>
+      <div class="report-note"><i data-icon="shield"></i><p>Semua paras ialah contoh pendidikan, bukan arahan trade. Tiada kebarangkalian untung dipaparkan tanpa ujian. Semak spread, slippage dan feed broker sebelum menggunakan setup sebenar. R:R belum termasuk spread / slippage.</p></div>
+      <footer><span>ZENCORE <b>Signal Desk</b><em>•</em>Rancang. Sahkan. Disiplin.</span><button data-dialog="data">Maklumat data <i data-icon="arrowUpRight"></i></button></footer>
+    </main>
+  </div>
+
+  <dialog id="info-dialog" aria-labelledby="dialog-title"><div class="dialog-header"><span class="eyebrow" id="dialog-eyebrow"></span><button class="icon-button" id="close-dialog" aria-label="Tutup dialog"><i data-icon="x"></i></button></div><h2 id="dialog-title"></h2><div id="dialog-body"></div><button class="button gold-button" id="dialog-done">Faham, kembali ke laporan <i data-icon="arrowRight"></i></button></dialog>
+  <div class="toast" id="toast" role="status"></div>
+  <dialog id="pine-import-dialog" aria-labelledby="pine-import-title"><div class="dialog-header"><span class="eyebrow">DATA UNTUK PADANAN</span><button class="icon-button" id="close-pine-import" aria-label="Tutup import"><i data-icon="x"></i></button></div><h2 id="pine-import-title">Buka data Pine + candle.</h2><p class="import-description" id="pine-import-description">Gunakan export analisis dan sejarah candle pada TF yang sama. Import manual kekal berlabel belum disahkan; ia tidak mengaktifkan feed live.</p><label for="pine-json" class="import-label">Tampal JSON tanpa token, password atau maklumat akaun.</label><textarea id="pine-json" rows="9" spellcheck="false" placeholder='{"pine": {"symbol":"XAUUSD","timeframe":"2", ...}, "history": {"symbol":"XAUUSD","timeframe":"2","candles":[...]}}'></textarea><p id="pine-import-error" class="import-error" role="alert"></p><details class="import-help"><summary>Format data & maksud rekod ujian</summary><p>Padanan: pine ialah objek market daripada analisis ZenCore. history ialah snapshot chart dengan candle OHLC. sourceBarTime/time, signalObservedAt, receivedAt, confirmed dan versi SOP diperlukan. Kos diletakkan dalam costs: spread, slippageRoundTrip, commissionPrice (unit harga). news perlu clear, checkedAt, windowStartsAt, windowEndsAt dan coverage: REPORT_WINDOW. Tempoh mesti meliputi horizon yang dipilih. Semakan ini tidak mengesahkan asal-usul import.</p><p>Rekod ujian: {"trades":[...]}. Setiap rekod perlu id, variant: ZENCORE_FUSION_RESEARCH_V1, timeframe, horizonMinutes (30/60), split: OOS, labelGeneratedAt, openedAt, closedAt, grossR, costR, netR dan exitKind (SOP/HORIZON). netR = grossR − costR. Satu rekod bagi satu setup termasuk semua layer. Rekod perlu tersusun, unik dan tidak bertindih. Hasil dinilai pada exit SOP atau akhir horizon; hasil tertangguh tidak dilabel menang.</p></details><div class="import-actions"><button class="button outline" id="clear-fusion-data">Kosongkan data</button><button class="button gold-button" id="apply-pine-import">Semak data <i data-icon="arrowRight"></i></button></div><small class="import-privacy">Data diproses dalam pelayar. Tiada order dihantar. Muat semula halaman akan mengosongkan import.</small></dialog>
+</body>
+</html>
