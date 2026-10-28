@@ -474,7 +474,8 @@ function render(){
  document.title=`TF${state.tf} · ${state.period==='30'?'30 minit':'1 jam'} | ZenCore Signal Desk`;
  const params=new URLSearchParams({tf:state.tf,period:state.period}),currentParams=new URLSearchParams(location.search);
  if(currentParams.get('embed')==='1')params.set('embed','1');
- if(['sample','paired'].includes(currentParams.get('view')))params.set('view',currentParams.get('view'));
+ if(currentParams.get('bridge')==='1')params.set('bridge','1');
+ if(['sample','paired','live'].includes(currentParams.get('view')))params.set('view',currentParams.get('view'));
  history.replaceState(null,'',`${location.pathname}?${params}${location.hash}`);
  if(typeof window!=='undefined'&&window.ZenCoreFusionDesk)window.ZenCoreFusionDesk.render();
 }
@@ -518,7 +519,7 @@ function renderForecast(){
 }
 function renderSources(){
  const review=calendarReview();
- const host=window.ZenCoreFusionDesk?.getHostSnapshot?.();
+ const host=window.ZenCoreFusionDesk?.getHostSnapshot?.()||window.ZenCoreLive?.snapshot?.();
  $('sources-summary').textContent=host?'6 semakan sumber · data Analysis ZenCore TF'+host.tf:'6 semakan sumber · feed live belum masuk';
  $('source-grid').innerHTML=sourceReview.sources.map(original=>{
   const src=host&&original.name==='Harga & candle Errante'?{...original,status:'DATA SERVER',kind:'reference',detail:'Bacaan daripada sesi Analysis ZenCore. Masa data dan semakan candle ditunjukkan dalam Pine + teknikal.'}:original;

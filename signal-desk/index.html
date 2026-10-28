@@ -12,6 +12,7 @@
   <script defer src="fusion.js"></script>
   <script defer src="app.js"></script>
   <script defer src="fusion-ui.js"></script>
+  <script defer src="live.js"></script>
 </head>
 <body>
   <a class="skip" href="#main">Terus ke laporan</a>
@@ -36,13 +37,13 @@
     <main id="main" tabindex="-1">
       <div class="page-heading"><div><div class="eyebrow"><span class="tiny-line"></span> ZENCORE · PANDUAN TRADER</div><h1>Harga lepas ini?</h1><p>Lihat arah. Tunggu zon. Sahkan entry.</p></div><div class="heading-actions"><a class="button outline open-zencore" href="https://zencore-errante.onrender.com/analysis" target="_blank" rel="noopener noreferrer">Buka dalam ZenCore <i data-icon="arrowUpRight"></i></a><button class="button outline" id="copy-report"><i data-icon="copy"></i>Salin laporan</button></div></div>
 
-      <div class="sample-banner"><span class="sample-icon"><i data-icon="flask"></i></span><p id="data-banner-text">Contoh sahaja. Harga dan laluan ialah rekaan.</p><button data-dialog="data">Semak sumber <i data-icon="arrowUpRight"></i></button></div>
+      <div class="sample-banner"><span class="sample-icon"><i data-icon="flask"></i></span><p id="data-banner-text">Tunggu sambungan data sebenar.</p><button data-dialog="data">Semak sumber <i data-icon="arrowUpRight"></i></button></div>
 
       <section class="report-controls" aria-label="Pilihan laporan"><div class="control-group"><span class="control-label">TIMEFRAME</span><div class="segmented timeframe" role="group" aria-label="Timeframe"><button data-tf="2" aria-pressed="true"><strong>TF2</strong><span>Scalping</span></button><button data-tf="15" aria-pressed="false"><strong>TF15</strong><span>Intraday</span></button></div></div><span class="control-divider"></span><div class="control-group period-group"><span class="control-label">TEMPOH LAPORAN</span><div class="segmented period" role="group" aria-label="Tempoh laporan"><button data-period="30" aria-pressed="true">30 minit</button><button data-period="60" aria-pressed="false">1 jam</button></div></div><div class="snapshot"><span class="snapshot-dot"></span><div>Snapshot simulasi<strong>28 Okt 2026 · 10:00 MYT</strong></div><button class="icon-button" data-dialog="data" aria-label="Maklumat snapshot"><i data-icon="info"></i></button></div></section>
 
       <div class="report-caption"><span id="report-caption"></span><span class="sample-tag">SAMPEL · BUKAN LIVE</span></div>
 
-      <div class="analysis-view-switch" role="group" aria-label="Jenis analisis"><button data-view="paired" aria-pressed="false"><i data-icon="layers"></i>Pine + teknikal</button><button data-view="sample" aria-pressed="true">Contoh laporan</button></div>
+      <div class="analysis-view-switch" role="group" aria-label="Jenis analisis"><button data-view="live" aria-pressed="true">Data sebenar</button><button data-view="paired" aria-pressed="false"><i data-icon="layers"></i>Pine + teknikal</button><button data-view="sample" aria-pressed="false">Contoh laporan</button></div>
 
       <section id="fusion-panel" hidden class="fusion-panel panel" aria-labelledby="fusion-title">
         <div class="fusion-header"><div><div class="eyebrow">ZENCORE FUSION · MODEL UJIAN V1</div><h2 id="fusion-title">Satu analisis. Semak dari beberapa sudut.</h2><p>Pine beri setup. Teknikal semak arah, ruang dan risiko.</p></div><button class="button outline" id="open-pine-import"><i data-icon="database"></i>Buka data Pine</button></div>
@@ -56,7 +57,7 @@
 
       <section class="fusion-performance panel" id="fusion-performance" hidden><div class="section-header"><div><h2>Bukti win rate</h2><p>Rekod ujian luar sampel, selepas kos trading.</p></div><button class="text-button" id="open-results-import">Buka rekod ujian <i data-icon="arrowUpRight"></i></button></div><div class="performance-grid" id="performance-grid"></div><div class="performance-foot" id="performance-foot">Belum ada rekod untuk model gabungan ini. Bilangan indikator bukan peratus menang.</div></section>
 
-      <div id="sample-reports">
+      <div id="sample-reports" hidden>
 
       <section class="forecast-panel panel" aria-labelledby="forecast-title">
         <div class="forecast-topline"><span class="eyebrow"><i data-icon="trend"></i>JANGKAAN SELEPAS LAPORAN</span><span class="neutral-tag" id="forecast-window"></span></div>
@@ -89,7 +90,7 @@
       <section class="scenarios-panel panel"><div class="section-header"><div><h2>Pergerakan susulan yang perlu dijangka.</h2><p>Jangkaan utama, senario berlawanan dan risiko “libas”.</p></div><span id="scenario-window" class="neutral-tag"></span></div><div class="scenario-grid" id="scenario-grid"></div></section>
       </div>
       <details class="sources-panel panel" id="sources"><summary><span><i data-icon="database"></i><strong>Sumber & bukti</strong><small id="sources-summary">Semakan sumber · 28 Okt 2026</small></span><span class="source-open-label">Lihat <i data-icon="arrowRight"></i></span></summary><div class="source-intro">Sumber berlainan ada fungsi berlainan. Dokumen dan berita tidak menggantikan harga broker.</div><div class="source-grid" id="source-grid"></div><div class="news-review"><div class="news-review-heading"><i data-icon="clock"></i><strong>Berita yang perlu diperhatikan</strong><span id="calendar-state"></span></div><div id="calendar-events"></div><p>Jadual diperiksa 28 Okt 2026. Bukan feed berita automatik atau kalendar lengkap.</p></div><div class="validation-note"><i data-icon="shield"></i><div><strong>Ketepatan belum diukur dengan feed sebenar.</strong><p>Rekod signal → semak hasil selepas 30 minit / 1 jam → kira selepas spread dan slippage. Carta sampel ini tidak digunakan sebagai bukti untung.</p></div></div></details>
-      <div class="report-note"><i data-icon="shield"></i><p>Semua paras ialah contoh pendidikan, bukan arahan trade. Tiada kebarangkalian untung dipaparkan tanpa ujian. Semak spread, slippage dan feed broker sebelum menggunakan setup sebenar. R:R belum termasuk spread / slippage.</p></div>
+      <div class="report-note"><i data-icon="shield"></i><p>Laporan bersyarat untuk rujukan, bukan arahan trade. Paparan Contoh laporan menggunakan data rekaan. Tiada kebarangkalian untung dipaparkan tanpa ujian. Semak spread, slippage dan feed broker sebelum menggunakan setup sebenar. R:R belum termasuk spread / slippage.</p></div>
       <footer><span>ZENCORE <b>Signal Desk</b><em>•</em>Rancang. Sahkan. Disiplin.</span><button data-dialog="data">Maklumat data <i data-icon="arrowUpRight"></i></button></footer>
     </main>
   </div>

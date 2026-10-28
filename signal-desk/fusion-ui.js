@@ -1,9 +1,9 @@
 'use strict';
 
 const fusionData=new Map();
-let fusionView='sample',fusionRecords=[],fusionImportKind='pine';
+let fusionView='live',fusionRecords=[],fusionImportKind='pine';
 const deskParams=new URLSearchParams(location.search);
-if(['sample','paired'].includes(deskParams.get('view')))fusionView=deskParams.get('view');
+if(['sample','paired','live'].includes(deskParams.get('view')))fusionView=deskParams.get('view');
 if(deskParams.get('embed')==='1')document.documentElement.dataset.layout='embedded';
 const F=window.ZenCoreFusion;
 const fusionSnapshotMarkup=document.querySelector('.snapshot>div').innerHTML;
@@ -31,6 +31,7 @@ function renderFusion(){
  $('fusion-data-note').textContent=result?`${result.warmup}/${result.warmupRequired} candle minimum · ${result.excludedOpen} candle belum tutup diketepikan${result.gaps?' · Ada jurang masa':''}. Bacaan ini tidak menggantikan signal server atau mengesahkan win rate.`:'Tiada angka ramalan atau paras harga direka untuk mengisi data yang belum ada.';
  $('fusion-source-links').innerHTML=F.SOURCES.map(src=>`<a href="${src.url}" target="_blank" rel="noopener noreferrer">${src.name}<i>${icon('arrowUpRight')}</i></a>`).join('');
  renderFusionPerformance();
+ if(window.ZenCoreLive)window.ZenCoreLive.render();
 }
 function renderFusionPerformance(){
  const s=F.performance(fusionRecords,state.tf,state.period);
@@ -90,6 +91,7 @@ $('apply-pine-import').addEventListener('click',()=>{
 window.ZenCoreFusionDesk={
  render:renderFusion,report:()=>fusionView==='paired'?fusionReportText():reportText(),
  getView:()=>fusionView,getTimeframe:()=>state.tf,
+ acceptReadOnlyData:packet=>{const data=F.normalize({...packet,mode:"ZENCORE_READONLY"},{originVerified:true});fusionData.set(data.tf,data);renderFusion();},
  getHostSnapshot:()=>{const data=fusionData.get(state.tf);return data?.mode==='ZENCORE_READONLY'?{asOf:data.asOf,receivedAt:data.receivedAt,tf:data.tf}:null;},
  setTimeframe:tf=>{if(!['2','15'].includes(String(tf)))return;state.tf=String(tf);state.period=state.tf==='2'?'30':'60';state.step=0;state.scenario='main';render();},
  acceptHostPacket:packet=>{
