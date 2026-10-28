@@ -26,6 +26,8 @@
   }
 
   function landingForRole(role) {
+    // One fixed same-origin destination; never accept an arbitrary return URL.
+    if (page === 'login' && new URLSearchParams(window.location.search).get('desk') === '1') return '/signal-desk/?bridge=1&view=live';
     return '/app';
   }
 
