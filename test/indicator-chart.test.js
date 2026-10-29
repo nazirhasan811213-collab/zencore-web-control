@@ -34,3 +34,7 @@ test('confirmed close survives newer intrabar snapshot and persists across histo
   const restored=new ChartHistory();await restored.init(pool,now);try{assert.equal(restored.snapshot('2',now).candles.length,1);assert.equal(restored.snapshot('2',now).candles[0].atr,2);}finally{clearInterval(restored.timer);}
  }finally{clearInterval(h.timer);}
 });
+
+test('legacy history without confirmed flag still accepts newer live chart OHLC',()=>{
+ const old=Core.point(frame());delete old.confirmed;const next={...Core.point(frame()),confirmed:false,observedAt:old.observedAt+1,open:4101,close:4103};const merged=Core.merge([old],next,'2',now);assert.equal(merged[0].close,4103);assert.equal(merged[0].open,4101);
+});

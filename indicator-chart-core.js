@@ -21,7 +21,7 @@ function merge(points,next,tf,now=Date.now()){
  for(const p of [...(Array.isArray(points)?points:[]),...(Array.isArray(next)?next:next?[next]:[])]){
   if(!p||String(p.timeframe)!==String(tf)||!finite(p.time)||p.time<now-MAX_AGE||p.time>now+5000||
    ![p.open,p.high,p.low,p.close].every(v=>finite(v)&&v>0)||p.high<Math.max(p.open,p.close)||p.low>Math.min(p.open,p.close)||p.low>p.high)continue;
-  const old=map.get(p.time);if(!old||(p.confirmed===true&&old.confirmed!==true)||(p.confirmed===old.confirmed&&p.observedAt>=old.observedAt))map.set(p.time,{...p,
+  const old=map.get(p.time);if(!old||(p.confirmed===true&&old.confirmed!==true)||((p.confirmed===true)===(old.confirmed===true)&&p.observedAt>=old.observedAt))map.set(p.time,{...p,
     solid:p.solid||old?.solid||null,solidAt:p.solidAt||old?.solidAt||null});
  }
  return [...map.values()].sort((a,b)=>a.time-b.time).slice(-MAX_BARS);
