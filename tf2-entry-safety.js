@@ -25,7 +25,7 @@ function message(e){
  if(!['CHOP_BLOCK','CHOP_RELEASE'].includes(e?.event))return null;
  return [e.event==='CHOP_BLOCK'?'⛔ TF2 — SEKAT ENTRY':'✅ TF2 — SEKATAN DILEPASKAN','XAUUSD · Candle sudah tutup',
  'ATR8: '+price(e.atr)+' · Pertukaran arah: '+e.flips+'/6 candle',
- e.event==='CHOP_BLOCK'?(e.atr>4.5?'ATR tinggi + candle bertukar arah.':'ATR rendah + candle bertukar arah.'):'Syarat sekatan tidak lagi dipenuhi.',
+ e.event==='CHOP_BLOCK'?(e.atr>4.5?'ATR tinggi + candle bertukar arah. Market sangat volatile, mudah libas. Entry disekat.':'ATR rendah + candle bertukar arah. Market terlalu perlahan dan berulang-alik, mudah libas. Entry disekat.'):'Syarat sekatan tidak lagi dipenuhi.',
  'Panduan ZenCore — '+(e.event==='CHOP_BLOCK'?'Tunggu. Jangan buka BUY / SELL atau re-entry.':'Entry kembali ikut SOP asal dan signal baharu yang sah. Ini bukan arahan entry.')].join('\n');
 }
 function signal(m,now=Date.now()){
