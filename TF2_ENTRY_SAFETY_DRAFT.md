@@ -1,66 +1,31 @@
-# ZenCore TF2 — sekatan libas dan pergerakan besar (DRAF)
+# ZenCore TF2 — ATR + pertukaran arah sahaja (DRAF V2)
 
-Versi ujian 3.4, belum merge/deploy dan belum dipasang pada TradingView.
-TF15, EA, Connector dan tetapan akaun tidak diubah.
+Belum live. Versi ini menggantikan semua penapis tambahan dalam draf sebelumnya.
 
-## Peraturan
+## Dua pencetus sahaja
 
-- Semua penilaian selepas candle TF2 tutup. Enam candle pertama ialah pemanasan.
-- Libas: sekurang-kurangnya 3 perubahan arah badan candle dalam 6 candle tertutup. Arah menggunakan close berbanding open sebenar; doji diabaikan dalam kiraan perubahan arah.
-- Bekukan zon daripada high tertinggi dan low terendah enam candle pencetus. Jangan gerakkan zon semasa menunggu pengesahan.
-- Sekat kedua-dua BUY/SELL, termasuk re-entry. Dua candle searah dalam zon tidak melepaskan sekatan.
-- Satu close di luar zon memulakan pengesahan. Candle berikutnya mesti seluruhnya di luar zon pada arah sama, termasuk wick. Sentuhan sempadan juga gagal.
-- Jika gagal, kekalkan zon dan tunggu percubaan breakout baharu. Candle yang gagal tidak terus dianggap breakout pengganti.
-- Selepas pelepasan, kumpul enam candle bermula dengan candle pengesahan sebelum menguji pencetus libas baharu; jangan guna semula candle libas lama.
-- Pergerakan besar: lebih daripada 6.00 unit harga XAUUSD, bukan kerugian akaun atau USD bagi lot tertentu. Tepat 6.00 tidak mencetuskan.
-- Leg BUY bermula pada open candle bullish pertama; jejak high tertinggi sepanjang candle bullish berturut-turut. SELL simetri. Sebelum ambang, candle badan bertentangan menamatkan leg kecil. Selepas ambang, leg dikekalkan merentasi pullback.
-- Jejak BUY dan SELL secara berasingan supaya reversal besar turut disekat. Sekatan besar BUY tidak membenarkan SELL secara automatik; SELL masih memerlukan SOP sendiri dan bebas sekatan SELL/libas.
-- Selepas ambang, tunggu candle kemudian tutup pada retracement sekurang-kurangnya 40% daripada leg. Candle pencetus >6 tidak boleh terus mengesahkan pullback sendiri.
-- Kemudian tunggu candle berasingan searah: BUY close melepasi high candle sebelumnya; SELL close di bawah low sebelumnya. Jika extreme baharu terbentuk sebelum pelepasan, pengesahan pullback ditetapkan semula.
-- Kedua-dua sekatan mesti lulus untuk arah yang hendak didagangkan. Pelepasan hanya membuka semakan SOP; bukan arahan membuka order. Event entry lama tidak diperbaharui atau dipanjangkan.
-- SL, TP, native exit dan pengurusan posisi terbuka terus berjalan. Penapis ini tidak menutup posisi dengan sendirinya.
+1. **ATR8 >4.50 DAN minimum 2 pertukaran arah dalam 6 candle TF2 tertutup.**
+2. **ATR8 <1.50 DAN minimum 2 pertukaran arah dalam 6 candle TF2 tertutup.**
 
-## Signal chart dan Telegram
+Paras 1.50 dan 4.50 tepat termasuk julat biasa; tidak mencetuskan. “ATR 1.5” ditafsirkan sebagai bawah 1.5 mengikut perbincangan asal. Arah daripada close berbanding open sebenar; doji tidak menambah pertukaran arah. Semua penilaian selepas candle tutup.
 
-Tujuh keadaan: sekat libas, breakout menunggu pengesahan, breakout gagal, pengesahan zon lulus, sekat kejar >6, pullback 40% dicapai, dan pullback + momentum disahkan.
+BUY/SELL dan re-entry disekat hanya apabila salah satu gabungan dipenuhi. ATR luar julat sahaja atau pertukaran arah sahaja tidak menyekat.
 
-Telegram menggunakan saluran Execution, candle confirmed, data segar <=60 saat, dan notification key versi + masa candle + jenis kejadian. Retry kejadian yang sama tidak menghasilkan mesej kedua. Tetapan penerima dan tempoh akses sedia ada dikekalkan. Tiada mesej ujian dihantar.
+## Pelepasan
 
-Contoh (harga ilustrasi):
+Setiap candle tertutup dinilai semula. Jika ATR kembali 1.50–4.50 ATAU bilangan pertukaran arah dalam enam candle terkini kurang 2, sekatan dilepaskan. Tiada zon beku, breakout atau candle pengesahan di luar zon. Tiada syarat USD6, pullback 40%, atau pencetus 3 pertukaran arah berasingan.
 
-> ⛔ SEKAT ENTRY — MARKET LIBAS
-> XAUUSD · TF2 · Candle sudah tutup
-> Zon libas: 4021.00 – 4025.00
-> BUY / SELL disekat. Tunggu breakout dan satu candle penuh di luar zon.
-> Panduan ZenCore — Jangan entry ketika harga masih berulang-alik.
+Pelepasan membenarkan semakan SOP entry asal dan signal baharu yang sah, bukan automatik membuka order atau menghidupkan event lama. SOP asal, SL/TP, exit, tetapan pengguna dan TF15 kekal. Enam candle dan ATR sah diperlukan untuk memanaskan penapis.
 
-> ⛔ BREAKOUT GAGAL — SEKATAN KEKAL
-> XAUUSD · TF2 · Candle sudah tutup
-> Zon libas: 4021.00 – 4025.00
-> BUY / SELL disekat. Tunggu breakout dan satu candle penuh di luar zon.
-> Panduan ZenCore — Jangan entry ketika harga masih berulang-alik.
+## Signal chart / Telegram
 
-> ⚠️ PERGERAKAN LEBIH USD6 — JANGAN KEJAR
-> XAUUSD · TF2 · Candle sudah tutup
-> Sekat kejar BUY. Tunggu pullback 40% dan momentum kembali.
-> Panduan ZenCore — Jangan kejar harga. Ini bukan signal entry.
+- ⛔ TF2 — SEKAT ENTRY: ATR8, bilangan pertukaran arah dan sebab ATR tinggi/rendah.
+- ✅ TF2 — SEKATAN DILEPASKAN: syarat tidak lagi dipenuhi; ikut SOP asal.
 
-> ✅ PULLBACK DAN MOMENTUM DISAHKAN
-> XAUUSD · TF2 · Candle sudah tutup
-> Panduan ZenCore — Sekatan ini selesai. Entry masih perlu signal baharu dan SOP lengkap.
+Signal pada perubahan status sahaja; retry sama didedup menggunakan versi + masa candle + jenis signal. Hanya Execution confirmed, data segar maksimum 60 saat dan penerima Telegram sedia ada yang layak. Tiada mesej ujian dihantar.
 
-## Integrasi
+## Fail dan status
 
-- Pine: `ZenCore_TF2_ATR8_TP1Max3.pine` draf V3.4, plot zon dan label Melayu, metadata `setupMeta.entrySafety`, gate initial/re-entry/ready.
-- Server: `tf2-ribbon-scalping.js` menyemak bukti sekatan pada strategy dan entry contract, termasuk jika READY dipaksa.
-- Signal: `tf2-entry-safety.js` mengandungi mesin replay, validator, pembina mesej dan semakan freshness.
-- Telegram: `analysis-alert-service.js` menggunakan stor notification/delivery sedia ada untuk mesej panduan sekatan, tanpa menjadikannya signal entry atau close.
-- Feed lama tanpa metadata kekal serasi. Oleh itu memasang server sahaja tidak mengaktifkan perlindungan untuk Pine lama.
+Pine `ZenCore_TF2_ATR8_TP1Max3.pine` draf V3.4; metadata `TF2_ATR_REVERSALS_V2`. `tf2-entry-safety.js` menyediakan replay logik, validator dan mesej. Server strategy, entry contract, queued delivery dan Telegram memeriksa bukti yang sama. Feed lama tanpa metadata kekal serasi dan tidak mempunyai penapis ini.
 
-## Pengesahan dan had
-
-Ujian automatik meliputi gagal breakout, wick masuk semula, doji, multi-candle >6 dua arah, reversal besar, pullback/momentum, data intrabar/berulang/lama, gate kontrak entry, kesinambungan exit dan dedup signal.
-
-Ini ujian logik, bukan bukti prestasi atau win rate. Pine belum disahkan oleh compiler TradingView dan replay chart sebenar belum dibuat. Screenshot tidak mencukupi untuk backtest tepat. Penapis selepas candle tutup tidak boleh mengelakkan pergerakan pertama yang berlaku sebelum candle tutup atau menjamin breakout seterusnya berjaya.
-
-Sebelum live: compile Pine V3.4 di TradingView, replay OHLC sejarah secara berurutan, semak data split Dashboard/Execution dan demo, kemudian deploy server serta cipta semula kedua-dua alert menggunakan Pine baharu. Jangan gunakan Pine ini dengan server lama kerana server lama tidak menyemak metadata sekatan.
+Ujian logik bukan bukti win rate atau jaminan mengelakkan libas. Pine belum compile/replay di TradingView; perlu pengesahan sebelum live. Server dan Pine baharu mesti digunakan bersama. EA dan Connector tidak diubah.

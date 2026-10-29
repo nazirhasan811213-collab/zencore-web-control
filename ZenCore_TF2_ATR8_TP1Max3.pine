@@ -1,5 +1,5 @@
 //@version=6
-indicator('ZenCore TF2 SOLID + 3/4 + Checklist Wajib 4/5 - ATR8 Caps Candle Close V3.4 LIBAS DRAFT', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+indicator('ZenCore TF2 SOLID + 3/4 + Checklist Wajib 4/5 - ATR8 Caps Candle Close V3.4 ATR REVERSALS DRAFT', dynamic_requests=true, max_bars_back=650, overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF2 Web Feed"
@@ -1558,130 +1558,36 @@ if not na(zc_seq_completed) and array.size(zc_path_times)>0
             if zc_recent_peak-zc_pb_price>=atr*0.10
                 zc_recent_pullback := true
 bool zc_reentry_momentum = draft_ribbon and math.abs(he1-he2) >= atr*0.10 and math.abs(he1-he2) > math.abs(he1[1]-he2[1]) and (zc24_buy ? he1>he1[1] and he2>he2[1] and wt1>wt2 and close>math.max(high[1],math.max(he1,he2)) : he1<he1[1] and he2<he2[1] and wt1<wt2 and close<math.min(low[1],math.min(he1,he2))) and math.abs(wt1-wt2)>math.abs(wt1[1]-wt2[1])
-// TF2 entry safety V1 — draft. Closed candles only; exits remain independent.
-var int zs_count = 0
+// TF2 ATR reversals V2 — only two requested trigger combinations.
 var int zs_last_bar = na
-var int zs_zone_release_bar = na
-var float zs_zone_low = na
-var float zs_zone_high = na
-var int zs_breakout = 0
-var float zs_buy_origin = na
-var float zs_buy_extreme = na
-var bool zs_buy_big = false
-var bool zs_buy_pulled = false
-var float zs_sell_origin = na
-var float zs_sell_extreme = na
-var bool zs_sell_big = false
-var bool zs_sell_pulled = false
+var bool zs_chop = false
+var bool zs_ready = false
+var int zs_flips = 0
+var float zs_atr = na
 var string zs_event = ""
 if barstate.isconfirmed and (na(zs_last_bar) or zs_last_bar != time)
     zs_last_bar := time
-    zs_count += 1
-    zs_event := ""
-    int zs_body = close > open ? 1 : close < open ? -1 : 0
-    if not na(zs_zone_low)
-        int zs_out = close > zs_zone_high ? 1 : close < zs_zone_low ? -1 : 0
-        if zs_breakout != 0
-            if zs_out == zs_breakout and (zs_out == 1 ? low > zs_zone_high : high < zs_zone_low)
-                zs_zone_low := na
-                zs_zone_high := na
-                zs_breakout := 0
-                zs_zone_release_bar := bar_index
-                zs_event := "CHOP_RELEASE"
-            else
-                zs_breakout := 0
-                zs_event := "BREAKOUT_FAILED"
-        else if zs_out != 0
-            zs_breakout := zs_out
-            zs_event := "BREAKOUT_WAIT"
-    else if zs_count >= 6 and (na(zs_zone_release_bar) or bar_index-zs_zone_release_bar >= 5)
-        int zs_previous = 0
-        int zs_flips = 0
-        float zs_low6 = low
-        float zs_high6 = high
+    bool zs_was_blocked = zs_chop
+    bool zs_was_high = nz(zs_atr,0) > 4.5
+    zs_atr := atr
+    zs_ready := bar_index >= 5 and not na(atr) and atr > 0
+    zs_flips := 0
+    int zs_previous = 0
+    if zs_ready
         for zs_i = 0 to 5
             int zs_j = 5-zs_i
             int zs_d = close[zs_j] > open[zs_j] ? 1 : close[zs_j] < open[zs_j] ? -1 : 0
-            zs_low6 := math.min(zs_low6,low[zs_j])
-            zs_high6 := math.max(zs_high6,high[zs_j])
             if zs_d != 0
                 if zs_previous != 0 and zs_d != zs_previous
                     zs_flips += 1
                 zs_previous := zs_d
-        if zs_flips >= 3
-            zs_zone_low := zs_low6
-            zs_zone_high := zs_high6
-            zs_breakout := 0
-            zs_event := "CHOP_BLOCK"
-    if na(zs_buy_origin) and zs_body == 1
-        zs_buy_origin := open
-        zs_buy_extreme := high
-    if not na(zs_buy_origin)
-        float zs_buy_old = zs_buy_extreme
-        zs_buy_extreme := math.max(zs_buy_extreme,high)
-        float zs_buy_distance = 1*(zs_buy_extreme-zs_buy_origin)
-        float zs_buy_pullback = 1*(zs_buy_extreme-close)
-        if zs_buy_big and zs_buy_pulled and 1*(zs_buy_extreme-zs_buy_old) > 0
-            zs_buy_pulled := false
-        if not zs_buy_big and zs_buy_distance > 6.0
-            zs_buy_big := true
-            zs_buy_pulled := false
-            zs_event := "BIG_BLOCK"
-        else if zs_buy_big and not zs_buy_pulled and zs_buy_pullback >= zs_buy_distance*0.40
-            zs_buy_pulled := true
-            zs_event := "PULLBACK_READY"
-        else if zs_buy_big and zs_buy_pulled and zs_body == 1 and close > high[1]
-            zs_buy_big := false
-            zs_buy_pulled := false
-            zs_buy_origin := na
-            zs_buy_extreme := na
-            zs_event := "BIG_RELEASE"
-        else if not zs_buy_big and zs_body != 0 and zs_body != 1
-            zs_buy_origin := na
-            zs_buy_extreme := na
-    if na(zs_sell_origin) and zs_body == -1
-        zs_sell_origin := open
-        zs_sell_extreme := low
-    if not na(zs_sell_origin)
-        float zs_sell_old = zs_sell_extreme
-        zs_sell_extreme := math.min(zs_sell_extreme,low)
-        float zs_sell_distance = -1*(zs_sell_extreme-zs_sell_origin)
-        float zs_sell_pullback = -1*(zs_sell_extreme-close)
-        if zs_sell_big and zs_sell_pulled and -1*(zs_sell_extreme-zs_sell_old) > 0
-            zs_sell_pulled := false
-        if not zs_sell_big and zs_sell_distance > 6.0
-            zs_sell_big := true
-            zs_sell_pulled := false
-            zs_event := "BIG_BLOCK"
-        else if zs_sell_big and not zs_sell_pulled and zs_sell_pullback >= zs_sell_distance*0.40
-            zs_sell_pulled := true
-            zs_event := "PULLBACK_READY"
-        else if zs_sell_big and zs_sell_pulled and zs_body == -1 and close < low[1]
-            zs_sell_big := false
-            zs_sell_pulled := false
-            zs_sell_origin := na
-            zs_sell_extreme := na
-            zs_event := "BIG_RELEASE"
-        else if not zs_sell_big and zs_body != 0 and zs_body != -1
-            zs_sell_origin := na
-            zs_sell_extreme := na
-bool zs_chop = not na(zs_zone_low)
-bool zs_ready = zs_count >= 6
-bool zs_pass = zs_ready and not zs_chop and not (zc_seq_side == "BUY" ? zs_buy_big : zs_sell_big)
-plot(zs_zone_low,"LIBAS zone low",color=color.orange,style=plot.style_linebr)
-plot(zs_zone_high,"LIBAS zone high",color=color.orange,style=plot.style_linebr)
-bgcolor(zs_chop ? color.new(color.orange,92) : na,title="Sekatan libas")
-string zs_label = switch zs_event
-    "CHOP_BLOCK" => "SEKAT ENTRY - MARKET LIBAS"
-    "BREAKOUT_WAIT" => "KELUAR ZON - TUNGGU SAH"
-    "BREAKOUT_FAILED" => "BREAKOUT GAGAL - KEKAL SEKAT"
-    "CHOP_RELEASE" => "KELUAR ZON DISAHKAN"
-    "BIG_BLOCK" => "LEBIH USD6 - JANGAN KEJAR"
-    "PULLBACK_READY" => "PULLBACK 40% - TUNGGU MOMENTUM"
-    "BIG_RELEASE" => "PULLBACK + MOMENTUM SAH"
-    => ""
+    zs_chop := zs_ready and zs_flips >= 2 and (atr > 4.5 or atr < 1.5)
+    zs_event := zs_chop and (not zs_was_blocked or zs_was_high != (atr > 4.5)) ? "CHOP_BLOCK" : zs_was_blocked and not zs_chop and zs_ready ? "CHOP_RELEASE" : ""
+bool zs_pass = zs_ready and not zs_chop
+bgcolor(zs_chop ? color.new(color.orange,92) : na,title="ATR + pertukaran arah")
 if barstate.isconfirmed and zs_event != ""
-    label.new(bar_index,high,"TF2 " + zs_label,style=label.style_label_down,color=zs_chop or zs_buy_big or zs_sell_big ? color.orange : color.teal,textcolor=color.white,size=size.tiny)
+    string zs_label = zs_chop ? (zs_atr > 4.5 ? "SEKAT ATR >4.5 + 2 ARAH" : "SEKAT ATR <1.5 + 2 ARAH") : "SEKATAN LEPAS - IKUT SOP"
+    label.new(bar_index,high,zs_label,style=label.style_label_down,color=zs_chop ? color.orange : color.teal,textcolor=color.white,size=size.tiny)
 
 bool zc_followup = zs_pass and barstate.isconfirmed and barstate.isrealtime and zc_hold_active and not na(zc_seq_completed) and (not xc_active and not na(zc_virtual_closed_at)) and zc_recent_pullback and zc_reentry_momentum and zc80_data and zc80_passed>=3 and zc24_greens>=4
 if zc_followup
@@ -1833,7 +1739,7 @@ if barstate.islast
     table.cell(zc24_table, 0, 6, "Forecast Neutral45 / BullBear50", text_color=color.white)
     table.cell(zc24_table, 1, 6, zc24_forecast ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 7, "SOP " + str.tostring(zc80_passed) + "/4", text_color=color.white)
-    table.cell(zc24_table, 1, 7, not zs_ready ? "TUNGGU 6 CANDLE" : zs_chop ? "SEKAT LIBAS - TUNGGU KELUAR ZON" : not zs_pass ? "JANGAN KEJAR - TUNGGU PULLBACK" : zc_pending_key != "" ? "SOLID BARU · SEMAK PENCETUS" : not na(zc_seq_completed) and timenow-zc_seq_completed>60000 ? "EVENT LUPUT · TUNGGU PULLBACK + MOMENTUM" : zc24_ready ? "SOP LENGKAP · SEMAK STATUS ORDER DI WEB" : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
+    table.cell(zc24_table, 1, 7, not zs_ready ? "TUNGGU 6 CANDLE" : zs_chop ? (zs_atr > 4.5 ? "SEKAT ATR >4.5 + 2 ARAH" : "SEKAT ATR <1.5 + 2 ARAH") : not zs_pass ? "TUNGGU DATA ATR" : zc_pending_key != "" ? "SOLID BARU · SEMAK PENCETUS" : not na(zc_seq_completed) and timenow-zc_seq_completed>60000 ? "EVENT LUPUT · TUNGGU PULLBACK + MOMENTUM" : zc24_ready ? "SOP LENGKAP · SEMAK STATUS ORDER DI WEB" : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
     table.cell(zc24_table, 0, 9, "SOLID wajib", text_color=color.white)
     table.cell(zc24_table, 1, 9, zc24_solid ? "AKTIF" : "WAIT", text_color=zc24_solid ? color.lime : color.gray)
     table.cell(zc24_table, 0, 10, "Pelan asal Pine · " + tpModeStr, text_color=color.white)
@@ -1901,9 +1807,9 @@ if array.size(zc_path_times)>0
     for zc_i = 0 to array.size(zc_path_times)-1
         array.push(zc_path_parts,"["+str.tostring(array.get(zc_path_times,zc_i))+","+f_num(array.get(zc_path_prices,zc_i))+"]")
 string zc_reentry_json = "{\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"fastPrevious\":"+f_num(he1[1])+",\"slowPrevious\":"+f_num(he2[1])+",\"wtGapPrevious\":"+f_num(math.abs(wt1[1]-wt2[1]))+",\"pricePath\":["+array.join(zc_path_parts,",")+"]}"
-string zs_sides = "["+(zs_buy_big ? f_quote("BUY") : "")+(zs_buy_big and zs_sell_big ? "," : "")+(zs_sell_big ? f_quote("SELL") : "")+"]"
-string zs_json = "{\"version\":\"TF2_ENTRY_SAFETY_V1\",\"barTime\":"+f_int(zs_last_bar)+",\"ready\":"+f_bool(zs_ready)+",\"chopBlocked\":"+f_bool(zs_chop)+",\"zone\":"+(zs_chop ? "{\"low\":"+f_num(zs_zone_low)+",\"high\":"+f_num(zs_zone_high)+"}" : "null")+",\"breakoutSide\":"+str.tostring(zs_breakout)+",\"bigBlocked\":"+f_bool(zs_buy_big or zs_sell_big)+",\"bigSides\":"+zs_sides+",\"event\":"+f_quote(zs_event)+"}"
-string zc24_meta_json = "{\"entrySafety\":"+zs_json+",\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-PINE-SOLID-3OF4-FORECAST45-ATR8-CAPS150-250-350-SL3-3.4-LIBAS-DRAFT\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF2_PINE_ATR8_SL3_TP150_250_350_CAPS_V2\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"TF2_BROKER_CLOSE_CYCLES_V1\",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zs_reason = zs_chop ? (zs_atr > 4.5 ? "HIGH_ATR_REVERSALS" : "LOW_ATR_REVERSALS") : "NONE"
+string zs_json = "{\"version\":\"TF2_ATR_REVERSALS_V2\",\"barTime\":"+f_int(zs_last_bar)+",\"ready\":"+f_bool(zs_ready)+",\"chopBlocked\":"+f_bool(zs_chop)+",\"atr\":"+f_num(zs_atr)+",\"flips\":"+str.tostring(zs_flips)+",\"reason\":"+f_quote(zs_reason)+",\"event\":"+f_quote(zs_event)+"}"
+string zc24_meta_json = "{\"entrySafety\":"+zs_json+",\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-PINE-SOLID-3OF4-FORECAST45-ATR8-CAPS150-250-350-SL3-3.4-ATR-REVERSALS-V2-DRAFT\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF2_PINE_ATR8_SL3_TP150_250_350_CAPS_V2\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"TF2_BROKER_CLOSE_CYCLES_V1\",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote("XAUUSD"))
