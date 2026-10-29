@@ -17,8 +17,7 @@ function step(previous,bar){
   }else if(outside){s.candidate=outside;emit('BREAKOUT_WAIT');}
  }else if(s.bars.length===6){
   let last=0,flips=0;for(const b of s.bars){const d=Math.sign(b.close-b.open);if(d){if(last&&last!==d)flips++;last=d;}}
-  const highAtr=Number.isFinite(bar.atr)&&bar.atr>4.5&&flips>=2;
-  if(flips>=3||highAtr){s.zone={low:Math.min(...s.bars.map(b=>b.low)),high:Math.max(...s.bars.map(b=>b.high)),at:bar.time,reason:highAtr?'HIGH_ATR_REVERSALS':'REVERSALS',atrAtTrigger:Number.isFinite(bar.atr)?bar.atr:null,flips};s.candidate=0;emit('CHOP_BLOCK');}
+  if(flips>=3){s.zone={low:Math.min(...s.bars.map(b=>b.low)),high:Math.max(...s.bars.map(b=>b.high)),at:bar.time};s.candidate=0;emit('CHOP_BLOCK');}
  }
  for(const side of ['BUY','SELL']){
   const d=side==='BUY'?1:-1,l=s.legs[side];
@@ -45,7 +44,6 @@ function message(e){
  const titles={CHOP_BLOCK:'⛔ SEKAT ENTRY — MARKET LIBAS',BREAKOUT_WAIT:'⏳ HARGA KELUAR ZON — TUNGGU PENGESAHAN',BREAKOUT_FAILED:'⛔ BREAKOUT GAGAL — SEKATAN KEKAL',CHOP_RELEASE:'✅ PENGESAHAN KELUAR ZON LULUS',BIG_BLOCK:'⚠️ PERGERAKAN LEBIH USD6 — JANGAN KEJAR',PULLBACK_READY:'⏳ PULLBACK 40% DICAPAI — TUNGGU MOMENTUM',BIG_RELEASE:'✅ PULLBACK DAN MOMENTUM DISAHKAN'};
  if(!titles[e?.event])return null;
  const lines=[titles[e.event],'XAUUSD · TF2 · Candle sudah tutup'];
- if(e.zone?.reason==='HIGH_ATR_REVERSALS')lines.push('ATR8 '+price(e.zone.atrAtTrigger)+' >4.50 + '+e.zone.flips+' pertukaran arah.');
  if(e.zone)lines.push('Zon libas: '+price(e.zone.low)+' – '+price(e.zone.high));
  if(e.bigBlocked)lines.push('Sekat kejar '+e.bigSides.join(' / ')+'. Tunggu pullback 40% dan momentum kembali.');
  if(e.chopBlocked)lines.push('BUY / SELL disekat. Tunggu breakout dan satu candle penuh di luar zon.');

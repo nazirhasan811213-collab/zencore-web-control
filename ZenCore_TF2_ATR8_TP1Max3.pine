@@ -1564,9 +1564,6 @@ var int zs_last_bar = na
 var int zs_zone_release_bar = na
 var float zs_zone_low = na
 var float zs_zone_high = na
-var string zs_zone_reason = ""
-var float zs_zone_atr = na
-var int zs_zone_flips = 0
 var int zs_breakout = 0
 var float zs_buy_origin = na
 var float zs_buy_extreme = na
@@ -1611,11 +1608,7 @@ if barstate.isconfirmed and (na(zs_last_bar) or zs_last_bar != time)
                 if zs_previous != 0 and zs_d != zs_previous
                     zs_flips += 1
                 zs_previous := zs_d
-        bool zs_high_atr_chop = atr > 4.5 and zs_flips >= 2
-        if zs_flips >= 3 or zs_high_atr_chop
-            zs_zone_reason := zs_high_atr_chop ? "HIGH_ATR_REVERSALS" : "REVERSALS"
-            zs_zone_atr := atr
-            zs_zone_flips := zs_flips
+        if zs_flips >= 3
             zs_zone_low := zs_low6
             zs_zone_high := zs_high6
             zs_breakout := 0
@@ -1679,7 +1672,7 @@ plot(zs_zone_low,"LIBAS zone low",color=color.orange,style=plot.style_linebr)
 plot(zs_zone_high,"LIBAS zone high",color=color.orange,style=plot.style_linebr)
 bgcolor(zs_chop ? color.new(color.orange,92) : na,title="Sekatan libas")
 string zs_label = switch zs_event
-    "CHOP_BLOCK" => zs_zone_reason == "HIGH_ATR_REVERSALS" ? "SEKAT - ATR TINGGI + LIBAS" : "SEKAT ENTRY - MARKET LIBAS"
+    "CHOP_BLOCK" => "SEKAT ENTRY - MARKET LIBAS"
     "BREAKOUT_WAIT" => "KELUAR ZON - TUNGGU SAH"
     "BREAKOUT_FAILED" => "BREAKOUT GAGAL - KEKAL SEKAT"
     "CHOP_RELEASE" => "KELUAR ZON DISAHKAN"
@@ -1840,7 +1833,7 @@ if barstate.islast
     table.cell(zc24_table, 0, 6, "Forecast Neutral45 / BullBear50", text_color=color.white)
     table.cell(zc24_table, 1, 6, zc24_forecast ? "PASS" : "WAIT", text_color=color.white)
     table.cell(zc24_table, 0, 7, "SOP " + str.tostring(zc80_passed) + "/4", text_color=color.white)
-    table.cell(zc24_table, 1, 7, not zs_ready ? "TUNGGU 6 CANDLE" : zs_chop ? (zs_zone_reason == "HIGH_ATR_REVERSALS" ? "SEKAT ATR >4.5 + LIBAS" : "SEKAT LIBAS - TUNGGU KELUAR ZON") : not zs_pass ? "JANGAN KEJAR - TUNGGU PULLBACK" : zc_pending_key != "" ? "SOLID BARU · SEMAK PENCETUS" : not na(zc_seq_completed) and timenow-zc_seq_completed>60000 ? "EVENT LUPUT · TUNGGU PULLBACK + MOMENTUM" : zc24_ready ? "SOP LENGKAP · SEMAK STATUS ORDER DI WEB" : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
+    table.cell(zc24_table, 1, 7, not zs_ready ? "TUNGGU 6 CANDLE" : zs_chop ? "SEKAT LIBAS - TUNGGU KELUAR ZON" : not zs_pass ? "JANGAN KEJAR - TUNGGU PULLBACK" : zc_pending_key != "" ? "SOLID BARU · SEMAK PENCETUS" : not na(zc_seq_completed) and timenow-zc_seq_completed>60000 ? "EVENT LUPUT · TUNGGU PULLBACK + MOMENTUM" : zc24_ready ? "SOP LENGKAP · SEMAK STATUS ORDER DI WEB" : zc_hold_active ? "SOLID DIPEGANG · TUNGGU SOP" : "TUNGGU SOLID BAHARU", text_color=zc24_ready ? color.lime : color.orange)
     table.cell(zc24_table, 0, 9, "SOLID wajib", text_color=color.white)
     table.cell(zc24_table, 1, 9, zc24_solid ? "AKTIF" : "WAIT", text_color=zc24_solid ? color.lime : color.gray)
     table.cell(zc24_table, 0, 10, "Pelan asal Pine · " + tpModeStr, text_color=color.white)
@@ -1909,7 +1902,7 @@ if array.size(zc_path_times)>0
         array.push(zc_path_parts,"["+str.tostring(array.get(zc_path_times,zc_i))+","+f_num(array.get(zc_path_prices,zc_i))+"]")
 string zc_reentry_json = "{\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"fastPrevious\":"+f_num(he1[1])+",\"slowPrevious\":"+f_num(he2[1])+",\"wtGapPrevious\":"+f_num(math.abs(wt1[1]-wt2[1]))+",\"pricePath\":["+array.join(zc_path_parts,",")+"]}"
 string zs_sides = "["+(zs_buy_big ? f_quote("BUY") : "")+(zs_buy_big and zs_sell_big ? "," : "")+(zs_sell_big ? f_quote("SELL") : "")+"]"
-string zs_json = "{\"version\":\"TF2_ENTRY_SAFETY_V1\",\"barTime\":"+f_int(zs_last_bar)+",\"ready\":"+f_bool(zs_ready)+",\"chopBlocked\":"+f_bool(zs_chop)+",\"zone\":"+(zs_chop ? "{\"low\":"+f_num(zs_zone_low)+",\"high\":"+f_num(zs_zone_high)+",\"reason\":"+f_quote(zs_zone_reason)+",\"atrAtTrigger\":"+f_num(zs_zone_atr)+",\"flips\":"+str.tostring(zs_zone_flips)+"}" : "null")+",\"breakoutSide\":"+str.tostring(zs_breakout)+",\"bigBlocked\":"+f_bool(zs_buy_big or zs_sell_big)+",\"bigSides\":"+zs_sides+",\"event\":"+f_quote(zs_event)+"}"
+string zs_json = "{\"version\":\"TF2_ENTRY_SAFETY_V1\",\"barTime\":"+f_int(zs_last_bar)+",\"ready\":"+f_bool(zs_ready)+",\"chopBlocked\":"+f_bool(zs_chop)+",\"zone\":"+(zs_chop ? "{\"low\":"+f_num(zs_zone_low)+",\"high\":"+f_num(zs_zone_high)+"}" : "null")+",\"breakoutSide\":"+str.tostring(zs_breakout)+",\"bigBlocked\":"+f_bool(zs_buy_big or zs_sell_big)+",\"bigSides\":"+zs_sides+",\"event\":"+f_quote(zs_event)+"}"
 string zc24_meta_json = "{\"entrySafety\":"+zs_json+",\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-PINE-SOLID-3OF4-FORECAST45-ATR8-CAPS150-250-350-SL3-3.4-LIBAS-DRAFT\",\"entryPolicyVersion\":\"PINE_SOLID_3OF4_FORECAST45_V5\",\"riskPlanVersion\":\"TF2_PINE_ATR8_SL3_TP150_250_350_CAPS_V2\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"TF2_BROKER_CLOSE_CYCLES_V1\",\"lifecycleVersion\":\"PULLBACK_REQUALIFY_V1\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zc_reentry_json+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()

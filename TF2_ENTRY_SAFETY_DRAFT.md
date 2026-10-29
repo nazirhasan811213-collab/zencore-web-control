@@ -7,7 +7,6 @@ TF15, EA, Connector dan tetapan akaun tidak diubah.
 
 - Semua penilaian selepas candle TF2 tutup. Enam candle pertama ialah pemanasan.
 - Libas: sekurang-kurangnya 3 perubahan arah badan candle dalam 6 candle tertutup. Arah menggunakan close berbanding open sebenar; doji diabaikan dalam kiraan perubahan arah.
-- Tambahan ATR tinggi: ATR8 **>4.50** pada candle tertutup + sekurang-kurangnya **2** perubahan arah dalam 6 candle turut mencetuskan zon yang sama. ATR tinggi sahaja tidak menyekat. Tepat 4.50 menggunakan peraturan biasa 3 perubahan. Ini parameter awal, belum ditentukur melalui backtest. Bacaan ATR turun semula tidak membuka sekatan; breakout dan candle pengesahan masih wajib. Chart dan Telegram memaparkan sebab ATR tinggi, ATR pencetus serta bilangan perubahan arah.
 - Bekukan zon daripada high tertinggi dan low terendah enam candle pencetus. Jangan gerakkan zon semasa menunggu pengesahan.
 - Sekat kedua-dua BUY/SELL, termasuk re-entry. Dua candle searah dalam zon tidak melepaskan sekatan.
 - Satu close di luar zon memulakan pengesahan. Candle berikutnya mesti seluruhnya di luar zon pada arah sama, termasuk wick. Sentuhan sempadan juga gagal.
