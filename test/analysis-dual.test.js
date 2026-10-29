@@ -52,3 +52,8 @@ test('TF2 display honors its existing 60s source limit; TF15 remains 30s and arr
  const view=dualAnalysis([{...make(15,200000),signalObservedAt:169999}],'XAUUSD',200000).views[1];
  assert.equal(view.status,'STALE');assert.equal(view.freshnessLimitMs,30000);
 });
+
+
+test('dual analysis exposes independent next-horizon guide for TF2 and TF15',()=>{
+ const assert=require('node:assert/strict');const {dualAnalysis}=require('../analysis-dual-model');const out=dualAnalysis([],'XAUUSD',Date.now());assert.equal(out.views[0].guide.timeframe,'2');assert.equal(out.views[1].guide.timeframe,'15');assert.match(out.views[0].guide.guideText,/PANDUAN 30 MINIT/);assert.match(out.views[1].guide.guideText,/PANDUAN 1 JAM/);
+});

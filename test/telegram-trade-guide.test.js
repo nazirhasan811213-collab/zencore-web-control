@@ -4,16 +4,16 @@ const start=Date.UTC(2026,9,27,2,0),market=(tf,t=start)=>({symbol:'XAUUSD',timef
 const candles=(tf='2',count=8)=>Array.from({length:count},(_,i)=>({time:start-(count-i)*Number(tf)*60000,timeframe:tf,confirmed:true,observedAt:start-(count-i-1)*Number(tf)*60000,open:100,close:100.5,high:102+(i===3?.2:0),low:99-(i===4?.2:0),hema20:100,hema40:99,waveTrend1:4,waveTrend2:1,atr:2,chopIndex:40}));
 test('MYT half-hour/hour schedules are independent, run once, and never modify market/trade state',async()=>{
  let at=start;const output=[],markets=[market('2'),market('15')],before=JSON.stringify(markets);
- const scheduler=G.createScheduler({now:()=>at,getMarkets:async()=>markets,history:()=>[],record:async e=>output.push(e)});
+ const scheduler=G.createScheduler({now:()=>at,getMarkets:async()=>markets,history:tf=>candles(tf).map(c=>({...c,time:c.time+(at-start),observedAt:c.observedAt+(at-start)})),record:async e=>output.push(e)});
  await scheduler.tick();await scheduler.tick();a.deepEqual(output.map(e=>e.timeframe),['2','15']);a.match(output[0].guideText,/10:00–10:30 MYT/);a.match(output[1].guideText,/10:00–11:00 MYT/);
- at+=30*60000;await scheduler.tick();a.deepEqual(output.map(e=>e.timeframe),['2','15','2']);
- at+=30*60000;await scheduler.tick();a.deepEqual(output.map(e=>e.timeframe),['2','15','2','2','15']);a.equal(JSON.stringify(markets),before);
+ at+=30*60000;markets.forEach(m=>m.signalObservedAt=at);await scheduler.tick();a.deepEqual(output.map(e=>e.timeframe),['2','15','2']);
+ at+=30*60000;markets.forEach(m=>m.signalObservedAt=at);await scheduler.tick();a.deepEqual(output.map(e=>e.timeframe),['2','15','2','2','15']);a.deepEqual(markets.map(m=>({...m,signalObservedAt:start})),JSON.parse(before));
 });
 test('missed windows do not replay old reports, failed persistence retries, overlapping ticks serialize',async()=>{
  let at=start+3*60000,calls=0,release;const promise=new Promise(r=>release=r);
  const s=G.createScheduler({now:()=>at,getMarkets:async()=>{await promise;return [];},history:()=>[],record:async()=>++calls>1});
  await s.tick();a.equal(calls,0);
- at=start+30*60000;const pending=s.tick();await s.tick();release();await pending;a.equal(calls,1);await s.tick();a.equal(calls,2);await s.tick();a.equal(calls,2);
+ at=start+30*60000+105000;const pending=s.tick();await s.tick();release();await pending;a.equal(calls,1);await s.tick();a.equal(calls,2);await s.tick();a.equal(calls,2);
 });
 test('stale and invalid data never generate a directional guide or a made-up profit probability',()=>{
  for(const tf of ['2','15'])for(const m of [null,{...market(tf),signalObservedAt:start-61000},{...market(tf),signalObservedAt:start+6000},{...market(tf),atr:0}]){
@@ -25,7 +25,7 @@ test('closed candle evidence and current indicators explain dangerous whipsaw; l
  const whipsaw=Array.from({length:6},(_,i)=>({time:start-(i+1)*2*60000,timeframe:'2',confirmed:true,observedAt:start-i*2*60000,hema20:100.05,hema40:100,waveTrend1:0,waveTrend2:1,atr:2,chopIndex:65,open:100,close:i%2?99.9:100.1,high:101,low:99}));
  const m={...market('2'),hema20:100.05,hema40:100,waveTrend1:0,waveTrend2:1,chopIndex:65};
  const e=G.buildGuide('2',m,whipsaw,start);a.match(e.guideText,/MARKET BAHAYA/);a.match(e.guideText,/Candle kerap bertukar arah/);a.match(e.guideText,/Jangan tambah posisi atau longgarkan SL/);
- a.match(G.buildGuide('15',market('15'),candles('15',3),start).guideText,/SEJARAH DATA MASIH TERHAD/);
+ a.match(G.buildGuide('15',market('15'),candles('15',2),start).guideText,/SEJARAH DATA MASIH TERHAD/);
 });
 test('durable guide slot is claimed once across restart, with Telegram recipients preserving existing opt-ins',async()=>{
  const keys=new Set(),events=[],sqls=[];
@@ -76,4 +76,13 @@ test('closed indicators drive direction independently of intrabar market changes
  const t15=candles('15').map(c=>({...c,hema20:98,hema40:99,waveTrend1:-4,waveTrend2:-1}));
  a.equal(G.assess(market('15'),t15,start,'15').side,'SELL');
  const text=G.buildGuide('15',market('15'),t15,start).guideText;a.match(text,/candle TF15 tutup/);a.match(text,/Pandangan turun terbatal/);
+});
+
+test('scheduler retries initially missing data before claiming a valid report in same slot',async()=>{
+ let at=start,ready=false;const output=[];const s=G.createScheduler({now:()=>at,getMarkets:async()=>ready?[market('2',at),market('15',at)]:[],history:tf=>ready?candles(tf):[],record:async e=>output.push(e)});
+ await s.tick();a.equal(output.length,0);at+=15000;ready=true;await s.tick();a.equal(output.length,2);a.ok(output.every(e=>e.guideFresh));await s.tick();a.equal(output.length,2);
+});
+test('forecast names conditional next direction and tolerates 45-second dashboard cadence for analysis only',()=>{
+ const m=market('15',start-45000),report=G.buildGuide('15',m,candles('15'),start);a.equal(report.guideFresh,true);a.match(report.guideText,/JANGKAAN PERGERAKAN SETERUSNYA/);a.match(report.guideText,/Senario utama/);a.match(report.guideText,/Pandangan naik terbatal/);
+ a.equal(G.buildGuide('15',{...m,signalObservedAt:start-90001},candles('15'),start).guideFresh,false);
 });

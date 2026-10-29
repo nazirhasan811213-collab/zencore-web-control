@@ -14,6 +14,7 @@ function checkEntryDelivery(command,market,at=Date.now()){
  if(snap.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed(market))return fail('TF2_CANDLE_NOT_CLOSED');
  if(snap.analysisSopVersion==='NORMAL_20261001_TF2_RIBBON_V1'&&market.feedChannel!=='EXECUTION')return fail('EXECUTION_FEED_REQUIRED');
  if(!Number.isFinite(observed)||at-observed>(['2','3','15'].includes(String(market?.timeframe))&&market?.feedChannel==='EXECUTION'&&market?.entryEvent===true?60000:require('./entry-data-age').maximumAge(market))||observed>at+5000)return fail('MARKET_STALE');
+ if(String(market.timeframe)==='2'&&n?.sop?.entrySafety&&!require('./tf2-entry-safety').allowed(n.sop.entrySafety,p.side,market.sourceBarTime??market.time))return fail('TF2_ENTRY_SAFETY_BLOCKED');
  if(!Core.entryConfirmationsPass(market))return fail('SOP_CONFIRMATION_FAILED',{
   failedGates:(n?.sop?.gates||[]).filter(g=>g.pass===false||g.passed===false).map(g=>g.key).slice(0,10)});
  if(n.side!==p.side)return fail('SIDE_CHANGED');

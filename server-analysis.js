@@ -171,6 +171,7 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({reentryAllowed:(user,event)=>autoTradeState.service?.reentrySignalAllowed(user,event)??false,pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    try{await require('./indicator-chart-history').history.init(store.pool);}catch(_){console.error('Guide history restore unavailable; collecting live candles');}
     if(analysisAlerts.ready&&analysisAlerts.token){
       const guideScheduler=require('./telegram-trade-guide').createScheduler({getMarkets:fetchLocalAnalysisMarkets,
         history:(tf,at)=>require('./indicator-chart-history').history.snapshot(tf,at).candles,
