@@ -74,3 +74,13 @@ test('delivery and Telegram independently reject blocked safety evidence',async(
  const delivery=require('../entry-delivery-check').checkEntryDelivery({payload:{side:'BUY',analysisSnapshot:d.snapshot}},m,f.now);a.equal(delivery.reason,'TF2_ENTRY_SAFETY_BLOCKED');
  a.equal(require('../analysis-telegram').entrySopAllowed({timeframe:'2',side:'BUY',telegramSop:{entrySafety:e},telegramMarket:{sourceBarTime:m.sourceBarTime}}),false);
 });
+
+for(const [atr,blocked] of [[4.5,false],[4.5001,true],[1.4,false],[undefined,false]])test('ATR '+atr+' with two flips triggers only strictly above 4.5',()=>{
+ let s=Safety.create();for(const [o,c] of [[100,101],[101,102],[102,101],[101,100],[100,101],[101,102]])s=Safety.step(s,{...candle(o,c),atr});
+ a.equal(!!s.zone,blocked);if(blocked){a.equal(s.zone.reason,'HIGH_ATR_REVERSALS');a.equal(s.zone.flips,2);a.match(Safety.message(Safety.evidence(s)),/ATR8/);}
+});
+test('high ATR without frequent reversals does not block; lower ATR never releases latched zone',()=>{
+ let trend=Safety.create();for(let i=0;i<6;i++)trend=Safety.step(trend,{...candle(100+i*.2,100+(i+1)*.2),atr:5});a.equal(trend.zone,null);
+ let s=Safety.create();for(const [o,c] of [[100,101],[101,102],[102,101],[101,100],[100,101],[101,102]])s=Safety.step(s,{...candle(o,c),atr:5});
+ const zone={...s.zone};s=Safety.step(s,{...candle(101,101.5),atr:1});a.deepEqual(s.zone,zone);a.equal(Safety.allowed(Safety.evidence(s),'BUY',s.last),false);
+});
