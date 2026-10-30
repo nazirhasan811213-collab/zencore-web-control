@@ -8,10 +8,10 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`progress ${tf}
  let previous={activePlan:{side,setupKey:'A',plan,atrReference:4}},clock=now;
  function tick(distance,events=[]){clock++;const next={time:clock,timeframe:tf,symbol:'XAUUSD'};const result=progress(previous,next,{signalObservedAt:clock,price:100+sign*distance,high:999,low:1},events,clock);previous={...next,activePlan:events.some(e=>e.kind==='CLOSE')?null:previous.activePlan};return result;}
  a.deepEqual(tick(0),[]);let e=tick(2);a.equal(e[0].targetNumber,1);a.ok(allowed(e[0],clock));a.match(telegramMessage(e[0]),/TP1 DILEPASI/);
- a.deepEqual(tick(2),[]);a.deepEqual(tick(1.01),[]);e=tick(1);a.equal(e[0].kind,'PULLBACK');a.ok(allowed(e[0],clock));a.match(telegramMessage(e[0]),/HATI-HATI/);a.deepEqual(tick(.5),[]);
+ a.deepEqual(tick(2),[]);a.deepEqual(tick(1.01),[]);e=tick(1);a.deepEqual(e,[],'distance alone no longer announces a turn');a.deepEqual(tick(.5),[]);
  previous=JSON.parse(JSON.stringify(previous));a.deepEqual(tick(1),[]);
  e=tick(6);a.deepEqual(e.map(x=>x.targetNumber),[2,3]);a.notEqual(notificationKey(e[0]),notificationKey(e[1]));
- a.equal(tick(5)[0].pullbackStage,3);a.deepEqual(tick(4),[]);
+ a.deepEqual(tick(5),[]);a.deepEqual(tick(4),[]);
  tick(3,[{kind:'CLOSE',percent:100}]);a.equal(previous.telegramProgress,null);a.deepEqual(tick(8),[]);
 });
 test('freshness, frozen plan, no entry and distinct setup',()=>{
@@ -45,5 +45,5 @@ test('actual entry pipeline persists plan, then dashboard emits TP without entry
  a.deepEqual(service.events.map(e=>e.kind),['ENTRY','TP_HIT','TP_HIT']);
  const restored=new AnalysisAlerts();restored.ready=true;restored.states=new Map(JSON.parse(JSON.stringify([...service.states])));
  await ingestMarket(restored,{...market,feedChannel:'DASHBOARD',receivedAt:f.now+2,signalObservedAt:f.now+2,price:plan.tp2});a.equal(restored.events.length,0);
- await ingestMarket(restored,{...market,feedChannel:'DASHBOARD',receivedAt:f.now+3,signalObservedAt:f.now+3,price:plan.tp2-1});a.equal(restored.events[0].kind,'PULLBACK');
+ await ingestMarket(restored,{...market,feedChannel:'DASHBOARD',receivedAt:f.now+3,signalObservedAt:f.now+3,price:plan.tp2-1});a.equal(restored.events.length,0,'retracement without closed reversal evidence is suppressed');
 });

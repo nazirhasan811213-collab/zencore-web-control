@@ -1,4 +1,5 @@
 'use strict';
+const Turn=require('./telegram-turn-confirmation');
 const MAX_AGE={'2':60000,'15':30000};
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 function fresh(time,at,maximum){return finite(time)&&time>0&&at-time>=-5000&&at-time<=maximum;}
@@ -9,13 +10,11 @@ function validPlan(side,p){
 }
 function allowed(e,at=Date.now()){
  const maximum=MAX_AGE[String(e.timeframe)];
- if(e.telegramProgressVersion!==1||e.symbol!=='XAUUSD'||!maximum||!validPlan(e.side,e.telegramPlan)||
+ if(![1,2].includes(e.telegramProgressVersion)||e.symbol!=='XAUUSD'||!maximum||!validPlan(e.side,e.telegramPlan)||
   !fresh(e.time,at,maximum)||!fresh(e.observedAt,at,maximum)||!finite(e.currentPrice)||e.currentPrice<=0||!e.setupKey)return false;
  const sign=e.side==='BUY'?1:-1;
  if(e.kind==='TP_HIT')return [1,2,3].includes(e.targetNumber)&&sign*(e.currentPrice-e.telegramPlan['tp'+e.targetNumber])>=0;
- if(e.kind==='PULLBACK')return Number.isInteger(e.pullbackStage)&&e.pullbackStage>=0&&e.pullbackStage<=3&&
-  finite(e.atrReference)&&e.atrReference>0&&finite(e.bestPrice)&&
-  sign*(e.bestPrice-e.telegramPlan.entry)>=0&&sign*(e.bestPrice-e.currentPrice)>=e.atrReference*.25;
+ if(e.kind==='PULLBACK')return e.telegramProgressVersion===2&&Number.isInteger(e.pullbackStage)&&e.pullbackStage>=0&&e.pullbackStage<=3&&Turn.allowed(e);
  return false;
 }
 function progress(previous,next,market,events,at=Date.now()){
@@ -29,7 +28,8 @@ function progress(previous,next,market,events,at=Date.now()){
   next.telegramProgress=closed?null:state;return [];
  }
  const key=active.setupKey||['PLAN',tf,active.side,...['entry','sl','tp1','tp2','tp3'].map(k=>active.plan[k])].join('|');
- if(!state||state.setupKey!==key)state={setupKey:key,side:active.side,plan:{...active.plan},atrReference:active.atrReference||null,bestPrice:active.plan.entry,hits:[],warned:[],observedAt:0};
+ if(!state||state.setupKey!==key)state={setupKey:key,side:active.side,plan:{...active.plan},atrReference:active.atrReference||null,bestPrice:active.plan.entry,hits:[],warned:[],observedAt:0,turnBars:[],turnBestPrice:active.plan.entry};
+ if(state.turnVersion!==Turn.VERSION){state.turnVersion=Turn.VERSION;state.turnBars=[];state.turnBestPrice=state.plan.entry;state.warned=[];}
  const observed=market.signalObservedAt,price=market.price;
  if(!fresh(next.time,at,maximum)||!fresh(observed,at,maximum)||observed<=state.observedAt||!finite(price)||price<=0){
   next.telegramProgress=closed?null:state;return [];
@@ -43,9 +43,17 @@ function progress(previous,next,market,events,at=Date.now()){
   state.hits.push(targetNumber);result.push({...base,kind:'TP_HIT',targetNumber,message:`${next.symbol} • TF${tf} • TP${targetNumber} DILEPASI • ${state.side}`});
  }
  const stage=state.hits.length?Math.max(...state.hits):0;
- if(!closed&&finite(state.atrReference)&&state.atrReference>0&&!state.warned.includes(stage)&&sign*(state.bestPrice-price)>=state.atrReference*.25){
-  state.warned.push(stage);result.push({...base,kind:'PULLBACK',pullbackStage:stage,atrReference:state.atrReference,bestPrice:state.bestPrice,message:`${next.symbol} • TF${tf} • HATI-HATI PULLBACK • ${state.side}`});
+ const bar=Turn.point(market,tf);
+ if(bar&&bar.time>(state.turnBars?.at(-1)?.time||0)){
+  state.turnBars=[...(state.turnBars||[]),bar].slice(-3);
+  const best=finite(state.turnBestPrice)?state.turnBestPrice:state.plan.entry;
+  state.turnBestPrice=sign*price>sign*best?price:best;
+  const evidence=Turn.confirm(state.side,state.turnBestPrice,state.turnBars);
+  if(!closed&&!state.warned.includes(stage)&&evidence){
+   state.warned.push(stage);result.push({...base,kind:'PULLBACK',telegramProgressVersion:2,pullbackStage:stage,atrReference:bar.atr,bestPrice:state.turnBestPrice,reversalEvidence:evidence,message:`${next.symbol} • TF${tf} • HARGA MULA BERBALIK • SECURE POSISI ${state.side}`});
+  }
  }
+
  next.telegramProgress=closed?null:state;
  return result;
 }

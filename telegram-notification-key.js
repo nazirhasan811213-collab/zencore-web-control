@@ -18,7 +18,7 @@ function notificationKey(e,previous=null){
   : [position?.anchor||previous?.activePlan?.side||'UNKNOWN'];
  const parts=['ZENCORE_NOTIFICATION_V2',e.symbol,String(e.timeframe||'2'),e.kind,e.side||null,setup||fallback,reentry,e.kind==='CLOSE'?Number(e.percent)||100:null];
  if(e.kind==='TP_HIT')parts.push(e.targetNumber);
- if(e.kind==='PULLBACK')parts.push(e.pullbackStage);
+ if(e.kind==='PULLBACK'){parts.push(e.pullbackStage);if(e.reversalEvidence?.version)parts.push(e.reversalEvidence.version);}
  const identity=JSON.stringify(parts);
  return crypto.createHash('sha256').update(identity).digest('hex');
 }
