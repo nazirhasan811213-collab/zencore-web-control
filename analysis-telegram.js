@@ -34,6 +34,7 @@ const {entryQuality}=require('./analysis-execution-contract');
 function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
+ if(e.timeframe==='2'&&e.telegramSop?.entryCandle&&!require('./tf2-ribbon-scalping').candlePass(e.telegramSop.entryCandle,e.side,e.telegramMarket?.sourceBarTime))return false;
  if(e.timeframe==='2'&&e.telegramSop?.entrySafety&&!require('./tf2-entry-safety').allowed(e.telegramSop.entrySafety,e.side,e.telegramMarket?.sourceBarTime))return false;
  if(e.timeframe==='2'&&e.telegramSop?.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed({...e.telegramMarket,strategyNormal:{sop:e.telegramSop}}))return false;
  if(e.telegramSop?.lifecycleVersion==='PULLBACK_REQUALIFY_V1'&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
@@ -126,6 +127,7 @@ function currentPineMessage(e,p,s,time){
   `${e.symbol} • ${e.side} / ${buy?'BELI':'JUAL'}`,
   '',
   `✅ SOP ${passed}/4 • Chop ${price(s.chopIndex)}% (<50%)`,
+  ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'} ZenCore + badan searah • SUDAH TUTUP`]:[]),
   '',
   '📌 APA NAK BUAT',action,
   ...(reentry?[]:[`Masih pegang posisi TF${tf}? Jangan tambah entry atau re-entry.`]),
