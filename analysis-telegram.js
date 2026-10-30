@@ -116,6 +116,20 @@ function pineContext(s={},tf){
  add('Nasihat',d.advice,180);add('Coach tips',d.proTip,180);
  return lines.join('\n');
 }
+function entryAnalysis(e,s){
+ const buy=e.side==='BUY',parts=[];
+ if(s.solid===true)parts.push(`SOLID ${e.side} aktif`);
+ const gates=Array.isArray(s.gates)?s.gates:[];
+ const pass=key=>gates.some(g=>g.key===key&&g.pass===true);
+ if(pass('entry'))parts.push(`harga ${buy?'di atas':'di bawah'} entry SOLID`);
+ if(pass('wt'))parts.push(`momentum menyokong ${e.side}`);
+ if(pass('forecast'))parts.push(`unjuran menyokong ${e.side}`);
+ if(pass('mtf'))parts.push(`TF lain menyokong ${e.side}`);
+ const lines=[`Sebab entry: ${parts.length?parts.join('; '):'Syarat SOP entry telah lulus'}.`];
+ const waiting=gates.filter(g=>g.pass===false).map(g=>({entry:'harga belum lepas entry SOLID',wt:'momentum belum searah',forecast:'unjuran belum menyokong',sop:'checklist belum cukup',mtf:'TF lain belum searah'})[g.key]).filter(Boolean);
+ if(waiting.length)lines.push(`Perhatian: ${waiting.join('; ')}.`);
+ return lines;
+}
 function currentPineMessage(e,p,s={},time){
  const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
  const gates=s.gates||[],passed=gates.filter(g=>g.pass===true).length,green=numeric(s.green??s.sopGreen);
@@ -123,9 +137,12 @@ function currentPineMessage(e,p,s={},time){
   `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'CALON RE-ENTRY':'SOLID ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
   `${e.symbol} • ${e.side}`,
   ...(gates.length?[`SOP: ${passed}/${gates.length}${green!==null?` • Checklist: ${green}/5`:''}`]:green!==null?[`Checklist: ${green}/5`]:[]),
+  ...entryAnalysis(e,s),
   ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'} ZenCore • tutup`]:[]),
+  '',
   `Entry: ${price(p.entry)} | SL: ${price(p.sl)}`,
   `TP1: ${price(p.tp1)} | TP2: ${price(p.tp2)} | TP3: ${price(p.tp3)}`,
+  '',
   'Panduan ZenCore — '+(reentry?`Tunggu semua posisi TF${tf} disahkan tutup di MT5. Guna pelan re-entry ini.`:'Ikut lot/layer anda. Jangan tambah entry atau re-entry.'),
   'Signal sahaja • semak order MT5.',
   `🕒 ${time} MYT • ZC-${e.id}`
