@@ -58,5 +58,5 @@ test('Telegram closed Execution only, fresh and deduplicated; delivery independe
  }finally{clearInterval(alerts.cleanupTimer);}
 });
 test('Pine has only ATR reversal trigger; obsolete safety states removed',()=>{
- const pine=require('node:fs').readFileSync('ZenCore_TF2_ATR8_TP1Max3.pine','utf8');a.match(pine,/zs_flips >= 2 and \(atr > 4.5 or atr < 1.5\)/);a.doesNotMatch(pine,/zs_zone|zs_buy_big|zs_sell_big|BIG_BLOCK|BREAKOUT_WAIT|PULLBACK_READY/);a.match(pine,/bool zc_followup = zs_pass and barstate.isconfirmed/);a.match(pine,/bool zc_hold_qualify = zs_pass and barstate.isconfirmed/);
+ const pine=require('node:fs').readFileSync('ZenCore_TF2_ATR8_TP1Max3.pine','utf8');a.match(pine,/zs_flips >= 2 and \(atr > 4.5 or atr < 1.5\)/);a.doesNotMatch(pine,/zs_zone|zs_buy_big|zs_sell_big|BIG_BLOCK|BREAKOUT_WAIT|PULLBACK_READY/);a.match(pine,/bool zc_followup = zs_pass and zc_entry_candle_pass and barstate.isconfirmed/);a.match(pine,/bool zc_hold_qualify = zs_pass and zc_entry_candle_pass and barstate.isconfirmed/);
 });
