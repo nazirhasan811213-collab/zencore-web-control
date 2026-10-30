@@ -23,7 +23,7 @@ function checkEntryDelivery(command,market,at=Date.now()){
   failedGates:(n?.sop?.gates||[]).filter(g=>g.pass===false||g.passed===false).map(g=>g.key).slice(0,10)});
  if(n.side!==p.side)return fail('SIDE_CHANGED');
  if(snap.setupKey&&market.setupKey!==snap.setupKey)return fail('SETUP_CHANGED');
- if(snap.lifecycleVersion==='PULLBACK_REQUALIFY_V1'&&snap.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(n.side,n.sop,n.sop?.reentryContext?.parentQualifiedAt,observed))return fail('REENTRY_MOMENTUM_CHANGED');
+ if(require('./setup-lifecycle').supported(snap.lifecycleVersion)&&snap.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(n.side,n.sop,n.sop?.reentryContext?.parentQualifiedAt,observed))return fail('REENTRY_MOMENTUM_CHANGED');
  const keys=['entry','sl','tp1','tp2','tp3'];
  const live=snap.entryAnchor==='LIVE_SIGNAL_PRICE_V1';
  const current=live?n.plan?.sourceChartPlan:n.plan;

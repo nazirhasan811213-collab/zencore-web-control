@@ -37,12 +37,13 @@ function entrySopAllowed(e){
  if(e.timeframe==='2'&&e.telegramSop?.entryCandle&&!require('./tf2-ribbon-scalping').candlePass(e.telegramSop.entryCandle,e.side,e.telegramMarket?.sourceBarTime))return false;
  if(e.timeframe==='2'&&e.telegramSop?.entrySafety&&!require('./tf2-entry-safety').allowed(e.telegramSop.entrySafety,e.side,e.telegramMarket?.sourceBarTime))return false;
  if(e.timeframe==='2'&&e.telegramSop?.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed({...e.telegramMarket,strategyNormal:{sop:e.telegramSop}}))return false;
- if(e.telegramSop?.lifecycleVersion==='PULLBACK_REQUALIFY_V1'&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
+ if(require('./setup-lifecycle').supported(e.telegramSop?.lifecycleVersion)&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
   if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
   const s=e.telegramSop;
+ if(s?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'&&(!require('./setup-lifecycle').supported(s.lifecycleVersion)||s.lifecycleVersion!=='CLOSED_PAUSE_RESUME_V2'||!['INITIAL','FOLLOWUP'].includes(s.cycleKind)||s.currentBar?.confirmed!==true||(e.timeframe==='2'&&(!s.entryCandle||!s.entrySafety))))return false;
   if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf2ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
-  if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(s.entryPolicyVersion)&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
-  if(s?.version==='NORMAL_20261001_TF2_RIBBON_V1')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(s.entryPolicyVersion)&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(s.entryPolicyVersion)&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF2_RIBBON_V1')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(s.entryPolicyVersion)&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
   if(s?.version==='NORMAL_20261001_TF3_RIBBON_V1')return e.timeframe==='3'&&s.tf==='3m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf3-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_3OF4_CHOP50_V3'&&require('./tf3-scalping').planPass(e.side,e.telegramPlan,s);
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&require('./analysis-execution-contract').solid80Tf2Confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power},['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version),s.version==='NORMAL_20261001_TF2_SOLID_HOLD_V16'?5:6);
   if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
@@ -84,9 +85,9 @@ function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':
 // Entry transport expires 30 seconds after both reception and candle close.
 function entryFresh(e,now=Date.now()){
   const q=e.telegramMarket;
-  if(['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(e.telegramSop?.entryPolicyVersion)){
+  if(['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(e.telegramSop?.entryPolicyVersion)){
     const origin=q?.entryAuthorizedAt??q?.signalObservedAt;
-    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='2'?60000:30000);
+    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='2'||e.telegramSop?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'?60000:30000);
   }
   if(q?.feedMode==='INTRABAR')return Number.isFinite(q.signalObservedAt)&&now-q.signalObservedAt>=-5000&&now-q.signalObservedAt<=30000&&now-e.time>=-5000&&now-e.time<=30000;
   const duration=Number(q?.timeframe)*60000;
@@ -122,6 +123,7 @@ function entryAnalysis(e,s){
  const gates=Array.isArray(s.gates)?s.gates:[];
  const pass=key=>gates.some(g=>g.key===key&&g.pass===true);
  if(pass('entry'))parts.push(`harga ${buy?'di atas':'di bawah'} entry SOLID`);
+ if(pass('hema'))parts.push(`HEMA ${buy?'hijau':'merah'}`);
  if(pass('wt'))parts.push(`momentum menyokong ${e.side}`);
  if(pass('forecast'))parts.push(`unjuran menyokong ${e.side}`);
  if(pass('mtf'))parts.push(`TF lain menyokong ${e.side}`);
@@ -132,7 +134,7 @@ function entryAnalysis(e,s){
 }
 function currentPineMessage(e,p,s={},time){
  const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
- const gates=s.gates||[],passed=gates.filter(g=>g.pass===true).length,green=numeric(s.green??s.sopGreen);
+ const gates=s.gates||[],passed=gates.filter(g=>g.pass===true).length,green=s.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'?null:numeric(s.green??s.sopGreen);
  return [
   `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'CALON RE-ENTRY':'SOLID ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
   `${e.symbol} • ${e.side}`,

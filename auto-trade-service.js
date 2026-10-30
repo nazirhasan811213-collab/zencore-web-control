@@ -1505,7 +1505,7 @@ function createAutoTradeService(options = {}) {
         if (!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market)) continue;
         if (!allowedDemoSymbols.includes(symbol))continue;
         if(!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
-        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
+        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
         const cycle=await entryCycleReset.check(profile.userId,pod?.id,market);
         if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
         if (hostedAccount) {
@@ -1625,11 +1625,11 @@ function createAutoTradeService(options = {}) {
     const [pod,positions]=await Promise.all([store.getPodForUser(userId),store.listPositions(userId)]);
     if(!isLocalEa(pod)||!connectionState(pod).ready)return false;
     const sop=event.telegramSop||{};
-    const market={symbol:event.symbol,timeframe:'2',signalObservedAt:sop.signalObservedAt,
+    const market={symbol:event.symbol,timeframe:event.timeframe||'2',signalObservedAt:sop.signalObservedAt,
       strategyNormal:{side:event.side,sop}};
     if(!Core.permitsPositionEntry(market,positions))return false;
     // A re-entry signal requires an actual preceding fill and broker close.
-    const last=await store.latestExecutedSetupForMode(userId,pod.id,'TF2_SCALPING');
+    const last=await store.latestExecutedSetupForMode(userId,pod.id,String(event.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING');
     if(!last)return false;
     const cycle=await entryCycleReset.check(userId,pod.id,market);
     return cycle.allowed&&Number.isFinite(cycle.closedAt)?{allowed:true,cycleKey:[pod.id,last.id,cycle.closedAt].join('|')}:false;
