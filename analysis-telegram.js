@@ -116,71 +116,47 @@ function pineContext(s={},tf){
  add('Nasihat',d.advice,180);add('Coach tips',d.proTip,180);
  return lines.join('\n');
 }
-function currentPineMessage(e,p,s,time){
- const tf=e.timeframe,reentry=s.cycleKind==='FOLLOWUP',label=tf==='15'?'INTRADAY':'SCALPING',buy=e.side==='BUY';
- const title=reentry?'CALON RE-ENTRY':'SOLID ENTRY',passed=s.gates.filter(g=>g.pass).length;
- const action=reentry
-   ? `Semua layer TF${tf} mesti ditutup dan disahkan MT5 sebelum re-entry.`
-   : `Tiada posisi TF${tf} → setup boleh diproses ikut setting user.`;
+function currentPineMessage(e,p,s={},time){
+ const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
+ const gates=s.gates||[],passed=gates.filter(g=>g.pass===true).length,green=numeric(s.green??s.sopGreen);
  return [
-  `${buy?'🟢':'🔴'} ZENCORE | ${title} TF${tf} • ${label}`,
-  `${e.symbol} • ${e.side} / ${buy?'BELI':'JUAL'}`,
-  '',
-  `✅ SOP ${passed}/4 • Chop ${price(s.chopIndex)}% (<50%)`,
-  ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'} ZenCore + badan searah • SUDAH TUTUP`]:[]),
-  '',
-  '📌 APA NAK BUAT',action,
-  ...(reentry?[]:[`Masih pegang posisi TF${tf}? Jangan tambah entry atau re-entry.`]),
-  'Auto Trade semak izin MT5, lot/layer dan setting user sebelum buka order.',
-  '',
-  `🎯 PELAN ${reentry?'RE-ENTRY BAHARU':'ENTRY'}`,
-  `Entry: ${price(p.entry)}`,
-  `🛑 SL: ${price(p.sl)}`,
-  `TP1: ${price(p.tp1)}`,
-  `TP2: ${price(p.tp2)}`,
-  `TP3: ${price(p.tp3)}`,
-  `Pelan Pine: ${s.planMode}`,
-  ...(reentry?['Guna paras re-entry ini; pelan entry lama tidak digunakan.']:[]),
-  '',
-  pineContext(s,tf),
-  '',
-  'ℹ️ Signal Analysis — belum pengesahan order MT5.',
-  `🕒 ${time} MYT`,
-  `Rujukan: ZC-${e.id}`
- ].join('\n');
-}
-function closeMessage(e,time){
- const tf=e.timeframe||'2',half=e.percent===50;
- const raw=String(e.message||'').split('\n');
- // The first legacy line repeats pair, timeframe and action already in the header.
- const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,240);
- return [
-  `🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,
-  `${e.symbol} • ${tf==='15'?'INTRADAY':'SCALPING'}`,
-  '',
-  '📌 TINDAKAN',
-  half?`Tutup 50% posisi ZenCore TF${tf}.`:`Tutup semua baki posisi ZenCore TF${tf}.`,
-  'Auto Trade: semak pengesahan close di MT5.',
-  `Jangan buka setup baharu selagi masih ada layer TF${tf} terbuka.`,
-  ...(reason?['',`Sebab: ${reason}`]:[]),
-  '',
-  'ℹ️ Arahan exit Analysis — belum pengesahan posisi MT5 ditutup.',
-  `🕒 ${time} MYT`,
-  `Rujukan: ZC-${e.id}`
+  `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'CALON RE-ENTRY':'SOLID ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
+  `${e.symbol} • ${e.side}`,
+  ...(gates.length?[`SOP: ${passed}/${gates.length}${green!==null?` • Checklist: ${green}/5`:''}`]:green!==null?[`Checklist: ${green}/5`]:[]),
+  ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'} ZenCore • tutup`]:[]),
+  `Entry: ${price(p.entry)} | SL: ${price(p.sl)}`,
+  `TP1: ${price(p.tp1)} | TP2: ${price(p.tp2)} | TP3: ${price(p.tp3)}`,
+  'Panduan ZenCore — '+(reentry?`Tunggu semua posisi TF${tf} disahkan tutup di MT5. Guna pelan re-entry ini.`:'Ikut lot/layer anda. Jangan tambah entry atau re-entry.'),
+  'Signal sahaja • semak order MT5.',
+  `🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
 
+function closeMessage(e,time){
+ const tf=e.timeframe||'2',half=e.percent===50,raw=String(e.message||'').split('\n');
+ const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,90);
+ return [`🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,e.symbol,
+  half?`Tutup 50% posisi TF${tf}.`:`Tutup semua baki posisi TF${tf}.`,
+  ...(reason?[`Sebab: ${reason==='Native chart close signal'?'Signal exit carta.':reason}`]:[]),
+  'Panduan ZenCore — Semak close di MT5 sebelum entry baharu.',
+  'Arahan sahaja • belum pengesahan close MT5.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
+}
+
 function telegramMessageBody(e){
-  if(e.kind==='GUIDE')return e.guideText;
-  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
+  if(e.kind==='GUIDE')return e.guideCompactText||e.guideText;
+  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(['TP_HIT','PULLBACK'].includes(e.kind)){
     if(!require('./telegram-progress').allowed(e))return `ZENCORE | PERGERAKAN TIDAK DISAHKAN\n${footer}`;
     const p=e.telegramPlan;
-    return [e.kind==='TP_HIT'?`✅ ZENCORE | TP${e.targetNumber} DILEPASI`:'⚠️ ZENCORE | HATI-HATI — HARGA MULA BERBALIK',
-      `${e.symbol} • TF${e.timeframe} • ${e.side}`,`Entry pelan: ${price(p.entry)}`,
-      e.kind==='TP_HIT'?`Paras TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])}`:`Unduran harga tutup: ${price(Math.abs(e.bestPrice-e.currentPrice))}`,
-      `Harga semasa: ${price(e.currentPrice)}`,e.kind==='PULLBACK'?[(e.side==='BUY'?'Tekanan jual mula muncul pada setup BUY.':'Tekanan beli mula muncul pada setup SELL.'),e.reversalEvidence?.priceBreak?(e.side==='BUY'?'Bukti harga: candle bearish tutup bawah low candle sebelumnya.':'Bukti harga: candle bullish tutup atas high candle sebelumnya.'):'Bukti harga: dua close berturut-turut melawan arah posisi.',e.reversalEvidence?.momentumAgainst?'Momentum WT berlawanan posisi.':'Momentum WT searah posisi semakin lemah.','🛡️ PANDUAN ZENCORE — Jika masih untung, secure profit mengikut SOP. Jangan longgarkan SL atau tambah layer.','Amaran risiko selepas candle tutup; belum pengesahan trend bertukar. Bukan signal entry lawan.'].join('\n'):'Harga Pine telah mencapai atau melepasi sasaran pelan.',footer].join('\n');
+    if(e.kind==='TP_HIT')return [`✅ ZENCORE | TP${e.targetNumber} DILEPASI`,`${e.symbol} • TF${e.timeframe} • ${e.side}`,
+     `TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])} | Harga: ${price(e.currentPrice)}`,
+     'Panduan ZenCore — Jaga profit ikut SOP.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
+    return ['⚠️ ZENCORE | HARGA MULA BERBALIK',`${e.symbol} • TF${e.timeframe} • Posisi ${e.side}`,
+     `Harga: ${price(e.currentPrice)} | Entry: ${price(p.entry)}`,
+     e.side==='BUY'?'Harga mula turun. Momentum BUY melemah.':'Harga mula naik. Momentum SELL melemah.',
+     'Panduan ZenCore — Jika untung, secure profit ikut SOP. Jangan tambah layer.',
+     'Candle tutup • amaran, belum sah trend bertukar.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
   }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
@@ -225,9 +201,14 @@ function telegramMessageBody(e){
 }
 // Plain-text separators render consistently in Telegram without parse-mode markup.
 function telegramMessage(e){
-  const [title,...body]=telegramMessageBody(e).split('\n');
+  let message=telegramMessageBody(e);
+  if(e.kind==='ENTRY'&&e.telegramPlan&&!message.includes('ENTRY TIDAK DISAHKAN')){
+   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
+   message=currentPineMessage(e,e.telegramPlan,e.telegramSop||{},time);
+  }
+  const [title,...body]=message.split('\n');
   const border='━━━━━━━━━━━━━━━━━━';
-  return [border,title,'──────────────────',...body,'',`AKHIR MESEJ • TF${e.timeframe||'2'}`,border].join('\n');
+  return [border,title,'──────────────────',...body,border].join('\n');
 }
 module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade,entryFresh,entrySopAllowed};
 

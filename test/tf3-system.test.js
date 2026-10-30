@@ -97,7 +97,7 @@ test('Unified Pine uses one execution stream with heartbeat budget and explicit 
  a.match(text,/input.string\("Unified", "Feed channel"/);
  a.match(text,/zc24_channel == "Dashboard" \? "DASHBOARD" : "EXECUTION"/);
  a.match(text,/zc24_count < 6/);a.match(text,/zc24_count < 12/);
- a.match(require('node:fs').readFileSync(require.resolve('../analysis-telegram'),'utf8'),/belum pengesahan order MT5/);
+ a.match(require('node:fs').readFileSync(require.resolve('../analysis-telegram'),'utf8'),/Signal sahaja/);
 });
 
 test('newer dashboard does not suppress a matching execution close event',async()=>{
@@ -241,7 +241,7 @@ test('signed TF3 order survives an 11s poll without extending the original event
 });
 
 
-test('current Telegram layout puts action and own plan before bounded analysis, without claiming an MT5 fill',async()=>{
+test('short Telegram layout keeps prices and action without coach text or MT5 fill claims',async()=>{
  for(const side of ['BUY','SELL']){
   const f=fixture(side);delete require.cache[require.resolve('../tf3-market-hub')];
   const m=require('../tf3-market-hub').ingest(f.batch,f.now)[0],alerts=new Alerts.AnalysisAlerts();a.ok(m);await alerts.init();
@@ -249,12 +249,12 @@ test('current Telegram layout puts action and own plan before bounded analysis, 
    await alerts.record(m);const event=alerts.events.find(x=>x.kind==='ENTRY');a.ok(event);
    event.telegramSop.advisor={trend:side==='BUY'?'Uptrend':'Downtrend',momentum:side==='BUY'?'Bullish':'Bearish',mtfSummary:'Ringkasan '.repeat(200),advice:'SETUP KURANG PADU.',proTip:'JAGA MODAL - JANGAN TRADE'};
    const text=T.telegramMessage(event);a.ok(text.length<4096);a.ok(text.startsWith('━━━━━━━━━━━━━━━━━━\n'+(side==='BUY'?'🟢':'🔴')));
-   a.ok(text.indexOf('📌 APA NAK BUAT')<text.indexOf('🎯 PELAN ENTRY'));a.ok(text.indexOf('🎯 PELAN ENTRY')<text.indexOf('📊 ANALYSIS SEMASA'));
-   a.match(text,/Jangan tambah entry atau re-entry/);a.match(text,/belum pengesahan order MT5/);
-   a.equal((text.match(/Entry:/g)||[]).length,1);a.equal((text.match(/SL:/g)||[]).length,1);a.equal((text.match(/Forecast 10 candle:/g)||[]).length,1);
-   a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,1);
+   a.ok(text.indexOf('Entry:')<text.indexOf('TP1:'));a.ok(text.indexOf('TP1:')<text.indexOf('Panduan ZenCore'));a.ok(text.length<850);
+   a.match(text,/Jangan tambah entry atau re-entry/);a.match(text,/Signal sahaja/);
+   a.equal((text.match(/Entry:/g)||[]).length,1);a.equal((text.match(/SL:/g)||[]).length,1);a.equal((text.match(/Forecast 10 candle:/g)||[]).length,0);
+   a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,0);
    a.doesNotMatch(text,/ORDER DIBUKA|ORDER EXECUTED|STATUS: SETUP ANALYSIS|undefined|NaN/);
-   a.match(text,/Rujukan: ZC-/);a.match(text,/MYT/);
+   a.match(text,/ZC-/);a.match(text,/MYT/);
   }finally{clearInterval(alerts.cleanupTimer);}
  }
 });

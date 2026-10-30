@@ -86,7 +86,19 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
    a.highRisk?'Market kuat libas. Jaga modal dahulu. Jangan tambah posisi atau longgarkan SL.':'Elakkan entry di tengah kawasan sempit atau dekat halangan. Jangan tambah posisi untuk cover rugi.',
    '', '% profit belum disahkan. Skor indikator bukan kebarangkalian untung.', 'Panduan terbatal lebih awal jika struktur berubah.');
  }
- return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
+ const compact=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`🕒 ${clock(slot)}–${clock(end)} MYT`];
+ if(!a.fresh)compact.push('Data belum cukup. Tunggu data sah.','Panduan ZenCore — Jangan entry berdasarkan laporan ini.');
+ else{
+  const support=a.levels.supports[0],resistance=a.levels.resistances[0];
+  compact.push(`Harga: ${price(m.price)}`,a.highRisk?'Jangkaan: mudah ulang-alik / libas.':a.outlook==='BUY'?'Jangkaan: cenderung naik.':a.outlook==='SELL'?'Jangkaan: cenderung turun.':'Jangkaan: arah belum jelas.',
+   `Support: ${finite(support)?price(support):'belum jelas'} | Resistance: ${finite(resistance)?price(resistance):'belum jelas'}`);
+  if(finite(resistance))compact.push(`Tutup atas ${price(resistance)}: peluang sambung naik.`);
+  if(finite(support))compact.push(`Tutup bawah ${price(support)}: risiko sambung turun.`);
+  if(a.outlook==='BUY'&&finite(support))compact.push(`Pandangan naik batal bawah ${price(support)}.`);
+  if(a.outlook==='SELL'&&finite(resistance))compact.push(`Pandangan turun batal atas ${price(resistance)}.`);
+  compact.push('Panduan ZenCore — '+(a.highRisk?'Market kuat libas. Tunggu, jaga modal.':a.late||a.nearBarrier?'Jangan kejar harga. Tunggu pullback dan SOP.':'Tunggu SOP. Jika pegang posisi, jaga profit.'));
+ }
+ return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideCompactText:compact.join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
 }
 function createScheduler({getMarkets,history,record,now=Date.now}){
  let running=false;const done=new Set();
