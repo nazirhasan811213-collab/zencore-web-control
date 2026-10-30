@@ -14,7 +14,7 @@ int main(){
  assert(!Tf2EntryPriceAllowed(false,4014.00,4014.14));
  assert(!Tf2EntryPriceAllowed(true,4015.86,4015.86));
  assert(Tf2EntryPriceAllowed(true,4015.50,4015.86));
- for(bool buy:{false,true})for(double risk:{0.1,0.5,1.0,2.0,2.5,3.0})for(double drift:{-1.0,0.0,0.2,1.5,3.0}){
+ for(bool buy:{false,true})for(double risk:{0.1,0.5,1.0,2.0,2.5,3.0,3.5,4.0})for(double drift:{-1.0,0.0,0.2,1.5,3.0}){
   double sign=buy?1:-1,planned=4000-sign*risk,fill=4000+sign*drift;
   double stop=Tf2EntryStop(buy,fill,planned,risk);
   if(sign*(fill-planned)>0){assert(Tf2EntryRiskAllowed(buy,fill,stop,risk));assert(sign*(stop-planned)>=-1e-8);}
@@ -22,8 +22,10 @@ int main(){
  }
  assert(!Tf2EntryRiskAllowed(true,4016,4012.36,2));
  assert(Tf2EntryRiskAllowed(true,4016,Tf2EntryStop(true,4016,4012.36,2),2));
- assert(!Tf2EntryRiskAllowed(true,100,97,3.01));
+ assert(!Tf2EntryRiskAllowed(true,100,96,4.01));
  assert(Tf2EntryRiskAllowed(true,100,97,3));
+ assert(Tf2EntryRiskAllowed(true,100,96,4));
+ assert(!Tf2EntryRiskAllowed(true,100,95.99,4));
  assert(!Tf2EntryRiskAllowed(true,100,96.99,3));
  assert(!Tf2EntryRiskAllowed(true,100,101,2));
  assert(!Tf2EntryPriceAllowed(true,NAN,101));
