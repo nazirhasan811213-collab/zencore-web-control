@@ -19,7 +19,7 @@ test('stale and invalid data never generate a directional guide or a made-up pro
  for(const tf of ['2','15'])for(const m of [null,{...market(tf),signalObservedAt:start-61000},{...market(tf),signalObservedAt:start+6000},{...market(tf),atr:0}]){
   const e=G.buildGuide(tf,m,[],start);a.equal(e.guideFresh,false);a.match(e.guideText,/DATA BELUM CUKUP/);a.doesNotMatch(e.guideText,/Harga cenderung/);
  }
- const text=telegramMessage(G.buildGuide('2',market('2'),candles(),start));a.match(text,/PANDUAN ZENCORE/);a.match(text,/% profit belum disahkan/);a.match(text,/AKHIR MESEJ • TF2/);a.doesNotMatch(text,/CLOSE ALL|SOLID ENTRY|\d+%/);
+ const text=telegramMessage(G.buildGuide('2',market('2'),candles(),start));a.match(text,/Panduan ZenCore/);a.doesNotMatch(text,/% profit|AKHIR MESEJ/);a.ok(text.endsWith('━━━━━━━━━━━━━━━━━━'));a.ok(text.length<900);a.doesNotMatch(text,/CLOSE ALL|SOLID ENTRY|\d+%/);
 });
 test('closed candle evidence and current indicators explain dangerous whipsaw; limited history is disclosed',()=>{
  const whipsaw=Array.from({length:6},(_,i)=>({time:start-(i+1)*2*60000,timeframe:'2',confirmed:true,observedAt:start-i*2*60000,hema20:100.05,hema40:100,waveTrend1:0,waveTrend2:1,atr:2,chopIndex:65,open:100,close:i%2?99.9:100.1,high:101,low:99}));

@@ -38,7 +38,7 @@ test('management commands deduplicate by setup and action across receipts and re
 });
 test('Telegram entry prices use exactly two decimals; exit messages label half and all',()=>{
  const x=data('SELL'),n=E.strategy(x),msg=T.telegramMessage({kind:'ENTRY',id:1,time:Date.now(),timeframe:'2',symbol:'XAUUSD',side:'SELL',telegramPlan:n.plan,telegramSop:{...n.sop,version:E.VERSION,tf:'2m',green:5,power:60}});
- for(const key of ['Entry','SL','TP1','TP2','TP3'])a.match(msg,new RegExp(key+': [0-9,]+\\.[0-9]{2}(?:\\n|$)'));
+ for(const key of ['Entry','SL','TP1','TP2','TP3'])a.match(msg,new RegExp(String.raw`${key}: [0-9,]+\.[0-9]{2}(?=\s|$)`));
  a.doesNotMatch(msg,/[0-9]+\\.[0-9]{3,}/);
  for(const percent of [50,100])a.match(T.telegramMessage({kind:'CLOSE',percent,timeframe:'2',symbol:'XAUUSD',time:Date.now(),id:2,message:'Chart exit'}),percent===50?/CLOSE SEPARUH/:/CLOSE ALL/);
 });

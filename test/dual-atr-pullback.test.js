@@ -62,7 +62,7 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side
  assert.ok(command);assert.equal(command.payload.layers,tf==='15'?2:3);assert.equal(command.payload.sl,d.initialSl);
  const s=m.strategyNormal.sop,event={symbol:'XAUUSD',side,timeframe:tf,kind:'ENTRY',id:'TEST',time:Date.now(),telegramQuality:{score:70,grade:'B+'},telegramPlan:m.strategyNormal.plan,
   telegramSop:{version:m.strategyNormal.entrySopVersion,tf:tf+'m',solid:true,green:s.sopGreen,gates:s.gates,pullback:s.pullback,forecast:s.forecast,power:s.marketPower,...Object.fromEntries(Object.entries(s).filter(([k])=>k.startsWith('hema')))}};
- assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('SOLID ENTRY TF'+tf));assert.match(telegramMessage(event),/Pullback: 40%/);
+ assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('SOLID ENTRY TF'+tf));assert.match(telegramMessage(event),/Panduan ZenCore/);assert.doesNotMatch(telegramMessage(event),/Pullback: 40%/);
  assert.equal(entrySopAllowed({...event,telegramSop:{...event.telegramSop,pullback:{pass:false}}}),false);
  assert.equal(Contract.createEntryDecision({...m,strategyNormal:{...m.strategyNormal,sop:{...s,pullback:{pass:false}}}}),null);
 });

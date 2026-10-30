@@ -20,7 +20,7 @@ test('BUY and SELL can authorize with opposite, flat or missing HEMA3; HEMA2 and
   const decision=C.createEntryDecision(market);assert.ok(decision);assert.deepEqual(decision.snapshot.confirmationEvidence.hemaRequiredTimeframes,['2']);
   const e={kind:'ENTRY',id:1,time:at,timeframe:'2',symbol:'XAUUSD',side,telegramQuality:C.entryQuality(market),telegramPlan:market.strategyNormal.plan,
    telegramSop:{version:x.version,tf:'2m',solid:true,green:3,gates:x.gates,forecast:x.forecast,power:x.power,hema2:x.hema2,hema3:x.hema3,atrReference:1,pullback:x.pullback}};
-  assert.equal(T.entrySopAllowed(e),true);assert.doesNotMatch(T.telegramMessage(e),/HEMA TF3/);assert.match(T.telegramMessage(e),/HEMA TF2:/);
+  assert.equal(T.entrySopAllowed(e),true);assert.doesNotMatch(T.telegramMessage(e),/HEMA TF3/);assert.match(T.telegramMessage(e),/SOLID ENTRY TF2/);assert.doesNotMatch(T.telegramMessage(e),/HEMA TF2:/);
   const thin={...d,hemaConfirmation:{...d.hemaConfirmation,tf2:{fast:100+sign*.01,slow:100}}};assert.equal(evaluateEntrySop(thin,'2').standardReady,false);
   assert.equal(evaluateEntrySop({...d,normal3Forecast:side==='BUY'?'BEARISH':'BULLISH'},'2').standardReady,false);
   const stale={...market,signalObservedAt:at-31000,entryAuthorizedAt:at-31000};assert.equal(C.createEntryDecision(stale),null);

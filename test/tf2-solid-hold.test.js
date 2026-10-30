@@ -67,7 +67,7 @@ test('alert service retains hold proof and deduplicates ENTRY without sending me
  const x=data();x.setupKey='TF2|XAUUSD|BUY|held';x.strategyNormal=E.strategy(x);
  await service.ingest(x);a.equal(service.events.length,1);a.equal(service.events[0].kind,'ENTRY');
  const event=service.events[0];a.equal(event.telegramSop.solidHoldActive,true);a.equal(event.telegramSop.riskAtrReference,3);a.ok(T.entrySopAllowed(event));
- a.match(T.telegramMessage(event),/SOLID HOLD/);
+ a.match(T.telegramMessage(event),/SOLID ENTRY TF2/);
  const later={...x,receivedAt:x.receivedAt+1,entryEvent:false};await service.ingest(later);a.equal(service.events.length,1);
  const closed={...x,receivedAt:x.receivedAt+2,entryEvent:false,setupMeta:{...x.setupMeta,solidHoldActive:false,solidClosedAt:x.receivedAt+2},positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};
  closed.strategyNormal=E.strategy(closed);await service.ingest(closed);a.equal(service.events.at(-1).kind,'CLOSE');a.equal(service.events.at(-1).percent,100);

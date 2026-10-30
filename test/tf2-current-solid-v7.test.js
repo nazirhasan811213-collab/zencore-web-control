@@ -49,7 +49,7 @@ test('execution and Telegram agree on V7, reject stale events and cached READY w
   const x=evaluateEntrySop(d,'2'),e={kind:'ENTRY',time:Date.now(),id:1,timeframe:'2',symbol:'XAUUSD',side,
    telegramSop:{version:VERSION,tf:'2m',solid:true,green:x.green,forecast:x.forecast,power:x.power,hema2:x.hema2,gates:x.gates},
    telegramMarket:{price:m.price,timeframe:'2'},telegramQuality:C.entryQuality(m),telegramPlan:m.strategyNormal.plan};
-  assert.equal(T.entrySopAllowed(e),true);assert.match(T.telegramMessage(e),/SOLID: AKTIF/);assert.doesNotMatch(T.telegramMessage(e),/SETUP DIPEGANG|HEMA TF3|Pullback/);
+  assert.equal(T.entrySopAllowed(e),true);assert.match(T.telegramMessage(e),/SOLID ENTRY TF2/);assert.doesNotMatch(T.telegramMessage(e),/SETUP DIPEGANG|HEMA TF3|Pullback/);
   const badPrice=(x.hema2.fast+x.hema2.slow)/2;assert.equal(C.createEntryDecision({...m,price:badPrice}),null);
   assert.equal(T.entrySopAllowed({...e,telegramMarket:{...e.telegramMarket,price:badPrice}}),false);
   assert.equal(C.createEntryDecision({...m,feedChannel:'DASHBOARD'}),null);

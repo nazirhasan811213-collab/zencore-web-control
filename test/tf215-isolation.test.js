@@ -60,7 +60,7 @@ test('Telegram entries and close state are separate for TF2 and TF15',async()=>{
  try{
  await alerts.record(market('2','BUY',at));await alerts.record(market('15','SELL',at));
  const entries=alerts.events.filter(e=>e.kind==='ENTRY');assert.equal(entries.length,2);
- for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('SOLID ENTRY TF'+e.timeframe));assert.match(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'2':'30')));assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'30':'3')+':'));}
+ for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('SOLID ENTRY TF'+e.timeframe));assert.match(msg,/Panduan ZenCore/);assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'30':'3')+':'));}
  const close=market('2','BUY',at+1);close.strategyNormal.state='WATCH';close.positionManagement={action:'EXIT_ALL',reason:'EXIT_ALL'};
  await alerts.record(close);assert.equal(await alerts.activePlan('XAUUSD',2),null);assert.equal((await alerts.activePlan('XAUUSD',15)).side,'SELL');
  assert.match(telegramMessage(alerts.events.at(-1)),/CLOSE ALL TF2/);
