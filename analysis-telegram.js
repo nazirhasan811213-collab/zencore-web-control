@@ -175,10 +175,10 @@ function telegramMessageBody(e){
   if(['TP_HIT','PULLBACK'].includes(e.kind)){
     if(!require('./telegram-progress').allowed(e))return `ZENCORE | PERGERAKAN TIDAK DISAHKAN\n${footer}`;
     const p=e.telegramPlan;
-    return [e.kind==='TP_HIT'?`✅ ZENCORE | TP${e.targetNumber} DILEPASI`:'⚠️ ZENCORE | HATI-HATI PULLBACK',
+    return [e.kind==='TP_HIT'?`✅ ZENCORE | TP${e.targetNumber} DILEPASI`:'⚠️ ZENCORE | HATI-HATI — HARGA MULA BERBALIK',
       `${e.symbol} • TF${e.timeframe} • ${e.side}`,`Entry pelan: ${price(p.entry)}`,
-      e.kind==='TP_HIT'?`Paras TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])}`:`Unduran: ${price(Math.abs(e.bestPrice-e.currentPrice))} • Ambang 0.25 ATR: ${price(e.atrReference*.25)}`,
-      `Harga semasa: ${price(e.currentPrice)}`,e.kind==='PULLBACK'?'Harga mula berundur daripada harga terbaik sejak entry.':'Harga Pine telah mencapai atau melepasi sasaran pelan.',footer].join('\n');
+      e.kind==='TP_HIT'?`Paras TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])}`:`Unduran harga tutup: ${price(Math.abs(e.bestPrice-e.currentPrice))}`,
+      `Harga semasa: ${price(e.currentPrice)}`,e.kind==='PULLBACK'?[(e.side==='BUY'?'Tekanan jual mula muncul pada setup BUY.':'Tekanan beli mula muncul pada setup SELL.'),e.reversalEvidence?.priceBreak?(e.side==='BUY'?'Bukti harga: candle bearish tutup bawah low candle sebelumnya.':'Bukti harga: candle bullish tutup atas high candle sebelumnya.'):'Bukti harga: dua close berturut-turut melawan arah posisi.',e.reversalEvidence?.momentumAgainst?'Momentum WT berlawanan posisi.':'Momentum WT searah posisi semakin lemah.','🛡️ PANDUAN ZENCORE — Jika masih untung, secure profit mengikut SOP. Jangan longgarkan SL atau tambah layer.','Amaran risiko selepas candle tutup; belum pengesahan trend bertukar. Bukan signal entry lawan.'].join('\n'):'Harga Pine telah mencapai atau melepasi sasaran pelan.',footer].join('\n');
   }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
