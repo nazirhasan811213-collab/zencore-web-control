@@ -1663,6 +1663,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && ['/downloads/ZenCore_TF2_SOP_V6.pine','/downloads/ZenCore_TF15_SOP_V6.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_ATR8_TP1Max3.pine') return sendAuthAsset(res, 'ZenCore_TF2_ATR8_TP1Max3.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && ['/downloads/ZenCore_TF2_SolidOnly.pine','/downloads/ZenCore_TF15_SolidOnly.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
   if (req.method === 'GET' && ['/downloads/ZenCore_TF2_Forecast45.pine','/downloads/ZenCore_TF15_Forecast45.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
