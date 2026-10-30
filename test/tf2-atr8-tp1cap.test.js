@@ -33,7 +33,7 @@ for(const updated of [false,true])for(const side of ['BUY','SELL'])for(const pla
 test('Pine ATR8 chart and execution TP1 share the cap; metadata and download match',()=>{
  const fs=require('node:fs'),source=fs.readFileSync('ZenCore_TF2_ATR8_TP1Max3.pine','utf8');
  a.match(source,/atr\s*= ta\.atr\(8\)/);a.doesNotMatch(source,/atr\s*= ta\.atr\(10\)/);
- a.ok(source.includes('\\"atrPeriod\\":8'));a.match(source,/TF2_PINE_ATR8_SL3_TP150_250_350_CAPS_V2/);
+ a.ok(source.includes('\\"atrPeriod\\":8'));a.match(source,/TF2_PINE_ATR8_SL4_TP150_250_350_CAPS_V3/);
  a.match(source,/zc_seq_tp1 := zc_seq_entry\+planSign\*math\.min\(math\.abs\(zc_seq_tp1-zc_seq_entry\),1\.5\)/);
  a.match(source,/tp1 := isBuy \? ENTRY \+ math\.min/);
  a.match(fs.readFileSync('server-analysis.js','utf8'),/downloads\/ZenCore_TF2_ATR8_TP1Max3\.pine/);
@@ -62,4 +62,18 @@ for(const updated of [false,true])for(const side of ['BUY','SELL'])for(const pla
   a.equal(S.planPass(side,{...m.strategyNormal.plan,tp1:entry+sign*3.01},m.strategyNormal.sop),false);
  }
  const old=fixture(side),legacy=Hub.ingest(old.batch,old.now)[0];a.ok(S.entryDecision(legacy,old.now));a.equal(legacy.strategyNormal.sop.atrPeriod,10);
+});
+
+for(const side of ['BUY','SELL'])for(const mode of ['Fixed R:R','Fibonacci'])test('new SL4 version '+side+' '+mode+' permits four while preserving old SL3 and TP caps',()=>{
+ const sign=side==='BUY'?1:-1;
+ for(const atr of [.5,2,3,3.5,4,6]){
+  const f=fixture(side),entry=4100,sl=entry-sign*Math.min(atr,4),targets=mode==='Fibonacci'?[1.618,2.618,4.236].map(r=>sl+(entry-sl)*r):[1,2,3].map(r=>entry+sign*atr*r);
+  targets.forEach((v,i)=>targets[i]=entry+sign*Math.min(Math.abs(v-entry),[1.5,2.5,3.5][i]));
+  Object.assign(f.row,{21:atr,23:sl,24:sl,25:targets[0],26:targets[1],27:targets[2]});
+  Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,riskPlanVersion:S.RISK8_CAPS4,atrPeriod:8,riskAtrReference:atr,planMode:mode});
+  const m=Hub.ingest(f.batch,f.now)[0],decision=C.createEntryDecision(m);a.ok(decision);a.equal(decision.snapshot.confirmationEvidence.slMaximumPrice,4);a.equal(decision.snapshot.confirmationEvidence.tp2MaximumPrice,2.5);
+  const command=Core.buildSetupCommand(m,{capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING'},null,f.now);a.ok(command);a.equal(command.payload.sl,sl);
+  a.equal(S.planPass(side,{...m.strategyNormal.plan,sl:entry-sign*4.01},m.strategyNormal.sop),false);
+  if(atr>3)a.equal(S.planPass(side,m.strategyNormal.plan,{...m.strategyNormal.sop,riskPlanVersion:S.RISK8_CAPS3}),false);
+ }
 });
