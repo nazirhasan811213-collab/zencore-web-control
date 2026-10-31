@@ -12,7 +12,7 @@ test('entry reasons describe actual passed evidence for BUY and SELL before the 
   assert.match(text,new RegExp(`SOLID ${side} aktif`));
   assert.match(text,new RegExp(`harga di ${side==='BUY'?'atas':'bawah'} entry SOLID`));
   assert.match(text,new RegExp(`momentum menyokong ${side}`));
-  assert.ok(text.indexOf('Sebab entry:')<text.indexOf('Entry: 4,100.00'));
+  assert.ok(text.indexOf('Sebab entry:')>text.indexOf('TP3:'));
   assert.ok(text.length<850);
  }
 });

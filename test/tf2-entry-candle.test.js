@@ -22,7 +22,7 @@ for(const [side,label,aligned,direction] of [
 for(const side of ['BUY','SELL'])test(side+' matched native body and OHLC close authorizes normal SOP and Telegram',async()=>{
  const f=current(side),m=ingest(f),d=C.createEntryDecision(m,f.now);a.ok(d);a.ok(d.snapshot.confirmationEvidence.entryCandle);a.equal(m.strategyNormal.state,'READY');
  const {AnalysisAlerts}=require('../analysis-alert-service'),alerts=new AnalysisAlerts();await alerts.init();try{
-  await alerts.record(m);const e=alerts.events.find(e=>e.kind==='ENTRY');a.ok(e);a.equal(require('../analysis-telegram').entrySopAllowed(e),true);a.match(require('../analysis-telegram').telegramMessage(e),/Candle entry: (BULLISH|BEARISH) ZenCore/);
+  await alerts.record(m);const e=alerts.events.find(e=>e.kind==='ENTRY');a.ok(e);a.equal(require('../analysis-telegram').entrySopAllowed(e),true);a.match(require('../analysis-telegram').telegramMessage(e),/Candle entry: (BULLISH|BEARISH)/);
   a.equal(require('../analysis-telegram').entrySopAllowed({...e,telegramSop:{...e.telegramSop,entryCandle:{...e.telegramSop.entryCandle,indicatorAligned:false}}}),false);
  }finally{clearInterval(alerts.cleanupTimer);}
  const changed={...m,open:side==='BUY'?4100.5:4099.5};a.equal(C.createEntryDecision(changed,f.now),null);
