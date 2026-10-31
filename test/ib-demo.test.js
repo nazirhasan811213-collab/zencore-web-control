@@ -41,6 +41,7 @@ test('presentation reuses production assets and only serves an explicit safe API
  a.equal(V.asset('analysis-dual.css'),fs.readFileSync(require.resolve('../analysis-dual.css'),'utf8'));a.equal(V.asset('server-analysis.js'),null);a.equal(V.asset('../auth-store.js'),null);
  a.match(V.html('precision-entry.html'),/\/demo\/ib\/assets\/indicator-chart.js/);a.match(V.asset('detail.js'),/ZenCoreDemoLocation.pathname/);
  const v=await V.api(s,'/api/analysis/timeframes?symbol=XAUUSD','GET',{},now);a.equal(v.views.length,2);a.equal((await V.api(s,'/api/analysis/chart?tf=2','GET',{},now)).candles.length,90);
+ const records=await V.api(s,'/api/signal-records','GET',{},now);a.equal(require('../results-core').fromStoredRecords(records).summary.sample,40);a.equal((await V.api(s,'/api/signal-outcomes','GET',{},now)).records.length,40);
  const cs=await V.api(s,'/api/ib/overview','GET',{},now);a.equal(cs.clients.length,12);a.equal((await V.api(s,'/api/ib/connections','GET',{},now)).accounts.length,12);
  await a.rejects(V.api(s,'/api/admin/clients','GET',{},now),{status:403});await a.rejects(V.api(s,'/api/auto-trade/hosted-account','POST',{password:'not-stored'},now),{status:403});a.equal(JSON.stringify(s).includes('not-stored'),false);
  await V.api(s,'/api/auto-trade/stop','POST',{},now);a.equal((await V.api(s,'/api/auto-trade/state','GET',{},now)).control.effectiveState,'STOPPED');
