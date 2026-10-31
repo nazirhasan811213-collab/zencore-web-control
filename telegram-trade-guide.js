@@ -86,18 +86,29 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
    a.highRisk?'Market kuat libas. Jaga modal dahulu. Jangan tambah posisi atau longgarkan SL.':'Elakkan entry di tengah kawasan sempit atau dekat halangan. Jangan tambah posisi untuk cover rugi.',
    '', '% profit belum disahkan. Skor indikator bukan kebarangkalian untung.', 'Panduan terbatal lebih awal jika struktur berubah.');
  }
- const compact=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`🕒 ${clock(slot)}–${clock(end)} MYT`];
- if(!a.fresh)compact.push('Data belum cukup. Tunggu data sah.','Panduan ZenCore — Jangan entry berdasarkan laporan ini.');
+ const compact=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`${date} • XAUUSD`,`🕒 ${clock(slot)}–${clock(end)} MYT`];
+ if(!a.fresh)compact.push('Data belum cukup. Tunggu data sah.','Jika pegang posisi: semak SL dan sambungan MT5.','Panduan ZenCore — Jangan entry berdasarkan laporan ini.');
  else{
-  const support=a.levels.supports[0],resistance=a.levels.resistances[0];
-  compact.push(`Harga: ${price(m.price)}`,a.highRisk?'Jangkaan: mudah ulang-alik / libas.':a.outlook==='BUY'?'Jangkaan: cenderung naik.':a.outlook==='SELL'?'Jangkaan: cenderung turun.':'Jangkaan: arah belum jelas.',
-   `Support: ${finite(support)?price(support):'belum jelas'} | Resistance: ${finite(resistance)?price(resistance):'belum jelas'}`);
-  if(finite(resistance))compact.push(`Tutup atas ${price(resistance)}: peluang sambung naik.`);
-  if(finite(support))compact.push(`Tutup bawah ${price(support)}: risiko sambung turun.`);
-  if(a.outlook==='BUY'&&finite(support))compact.push(`Pandangan naik batal bawah ${price(support)}.`);
-  if(a.outlook==='SELL'&&finite(resistance))compact.push(`Pandangan turun batal atas ${price(resistance)}.`);
-  compact.push('Panduan ZenCore — '+(a.highRisk?'Market kuat libas. Tunggu, jaga modal.':a.late||a.nearBarrier?'Jangan kejar harga. Tunggu pullback dan SOP.':'Tunggu SOP. Jika pegang posisi, jaga profit.'));
+  const support=a.levels.supports[0],resistance=a.levels.resistances[0],last=closedRows(candles,now,tf).at(-1);
+  const hema=a.sign===1?'HEMA hijau':a.sign===-1?'HEMA merah':'HEMA belum jelas';
+  const wt=last.waveTrend1>last.waveTrend2?'WT menyokong BUY':last.waveTrend1<last.waveTrend2?'WT menyokong SELL':'WT mendatar';
+  compact.push('',`Harga: ${price(m.price)}`,
+   a.highRisk?'Risiko: TINGGI — harga mudah libas.':a.limited?'Risiko: data struktur masih terhad.':a.nearBarrier?'Risiko: harga dekat halangan.':'Risiko: pantau pecahan paras dekat.',
+   a.highRisk?'Jangkaan: mudah ulang-alik / libas.':a.outlook==='BUY'?'Jangkaan: cenderung naik.':a.outlook==='SELL'?'Jangkaan: cenderung turun.':'Jangkaan: arah belum jelas.',
+   `Sebab: ${hema}; ${wt}; momentum ${a.momentum}.`,...a.reasons.slice(0,2),
+   '',`Support: ${finite(support)?price(support):'belum jelas'} | Resistance: ${finite(resistance)?price(resistance):'belum jelas'}`);
+  if(finite(resistance))compact.push(`Tutup atas ${price(resistance)} dan bertahan: peluang sambung naik.`);
+  if(finite(support))compact.push(`Tutup bawah ${price(support)} dan bertahan: risiko sambung turun.`);
+  if(a.outlook==='BUY'&&finite(support))compact.push(`Pandangan naik batal jika candle TF${tf} tutup bawah ${price(support)}.`);
+  if(a.outlook==='SELL'&&finite(resistance))compact.push(`Pandangan turun batal jika candle TF${tf} tutup atas ${price(resistance)}.`);
+  compact.push('',finite(support)?`Pegang BUY: jika ${price(support)} pecah, awasi tekanan turun. Jaga SL.`:'Pegang BUY: support dekat belum jelas; ikut SL dan signal exit.',
+   finite(resistance)?`Pegang SELL: jika ${price(resistance)} ditembusi, awasi tekanan naik. Jaga SL.`:'Pegang SELL: resistance dekat belum jelas; ikut SL dan signal exit.',
+   a.late?'Belum entry: harga sudah lepas TP1 setup asal. Tunggu setup baharu.':'Belum entry: tunggu signal SOP; jangan kejar candle panjang.',
+   'Panduan ZenCore — '+(a.highRisk?'Market kuat libas. Tunggu, jaga modal.':a.late||a.nearBarrier?'Jangan kejar harga. Tunggu pullback dan SOP.':'Tunggu SOP. Jika pegang posisi, jaga profit.'),
+   `Data: ${clock(m.signalObservedAt)} MYT • Candle TF${tf} tutup ${clock(a.closedAt)} MYT.`,
+   'Panduan sahaja • bukan signal entry atau jaminan arah.');
  }
+
  return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideCompactText:compact.join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
 }
 function createScheduler({getMarkets,history,record,now=Date.now}){

@@ -134,20 +134,19 @@ function entryAnalysis(e,s){
 }
 function currentPineMessage(e,p,s={},time){
  const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
- const gates=s.gates||[],passed=gates.filter(g=>g.pass===true).length,green=s.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'?null:numeric(s.green??s.sopGreen);
+ const reason=entryAnalysis(e,s).map(x=>x.replace(/^Sebab entry: /,'').replace(/; (HEMA|momentum)/,';\n$1')).join('\n');
+ const risk=Math.abs(p.entry-p.sl),reward=Math.abs(p.tp1-p.entry);
+ const summary=`Setup ${e.side} lulus pengesahan semasa. TP1 berjarak ${price(reward)} USD; risiko ke SL ${price(risk)} USD.`;
+ const tips=reentry?`Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup. Jangan tambah layer di luar tetapan.`:'Ikut lot/layer dan SL yang ditetapkan. Jangan tambah posisi untuk cover rugi.';
  return [
-  `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'CALON RE-ENTRY':'SOLID ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
-  `${e.symbol} • ${e.side}`,
-  ...(gates.length?[`SOP: ${passed}/${gates.length}${green!==null?` • Checklist: ${green}/5`:''}`]:green!==null?[`Checklist: ${green}/5`]:[]),
-  ...entryAnalysis(e,s),
-  ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'} ZenCore • tutup`]:[]),
-  '',
-  `Entry: ${price(p.entry)} | SL: ${price(p.sl)}`,
-  `TP1: ${price(p.tp1)} | TP2: ${price(p.tp2)} | TP3: ${price(p.tp3)}`,
-  '',
-  'Panduan ZenCore — '+(reentry?`Tunggu semua posisi TF${tf} disahkan tutup di MT5. Guna pelan re-entry ini.`:'Ikut lot/layer anda. Jangan tambah entry atau re-entry.'),
-  'Signal sahaja • semak order MT5.',
-  `🕒 ${time} MYT • ZC-${e.id}`
+  `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'RE-ENTRY':'ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
+  `${e.symbol} • ${e.side}`,'',
+  `Entry: ${price(p.entry)}`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)}`,`TP2: ${price(p.tp2)}`,`TP3: ${price(p.tp3)}`,'',
+  'Sebab entry:',reason,
+  ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'}`]:[]),'',
+  'Rumusan AI ZenCore:',summary,
+  'Coach Tips:',tips,'',
+  'Signal sahaja • semak order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
 
@@ -171,11 +170,17 @@ function telegramMessageBody(e){
     if(e.kind==='TP_HIT')return [`✅ ZENCORE | TP${e.targetNumber} DILEPASI`,`${e.symbol} • TF${e.timeframe} • ${e.side}`,
      `TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])} | Harga: ${price(e.currentPrice)}`,
      'Panduan ZenCore — Jaga profit ikut SOP.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
-    return ['⚠️ ZENCORE | HARGA MULA BERBALIK',`${e.symbol} • TF${e.timeframe} • Posisi ${e.side}`,
-     `Harga: ${price(e.currentPrice)} | Entry: ${price(p.entry)}`,
-     e.side==='BUY'?'Harga mula turun. Momentum BUY melemah.':'Harga mula naik. Momentum SELL melemah.',
-     'Panduan ZenCore — Jika untung, secure profit ikut SOP. Jangan tambah layer.',
-     'Candle tutup • amaran, belum sah trend bertukar.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
+    const buy=e.side==='BUY',proof=e.reversalEvidence;
+    const cause=proof.priceBreak?`Candle tutup ${buy?'di bawah low':'di atas high'} candle sebelumnya.`:`Dua candle berturut-turut tutup ${buy?'menurun':'menaik'}.`;
+    const momentum=proof.momentumAgainst?`WT sudah melawan posisi ${e.side}.`:`Kekuatan WT ${e.side} berkurang.`;
+    const profitable=buy?e.currentPrice>p.entry:e.currentPrice<p.entry;
+    return ['⚠️ ZENCORE | HARGA MULA PULLBACK',`${e.symbol} • TF${e.timeframe}`,`Posisi ${e.side}`,'',
+     `Harga Sekarang: ${price(e.currentPrice)}`,`Harga Entry: ${price(p.entry)}`,'',
+     buy?'Harga mula turun. → Momentum BUY melemah.':'Harga mula naik. → Momentum SELL melemah.',
+     'Kenapa Pullback:',cause+' '+momentum,'',
+     'Rumusan AI ZenCore:',(profitable?'Profit mula susut.':'Posisi sedang tertekan.')+' Candle tutup menunjukkan tekanan melawan posisi; belum sah trend bertukar.',
+     'Coach Tips:',profitable?'Lindungi profit ikut SOP. Jangan tambah layer atau longgarkan SL.':'Ikut SL dan signal exit. Jangan tambah layer untuk cover rugi.',
+     `🕒 ${time} MYT • ZC-${e.id}`].join('\n');
   }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
