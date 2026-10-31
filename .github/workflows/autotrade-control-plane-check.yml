@@ -13,6 +13,8 @@ name: Auto Trade control plane checks
       - "register.html"
       - "admin-registrations.*"
       - "admin-telegram*"
+      - "ib-demo*"
+      - "scripts/check-ib-demo-ui.cjs"
       - "scripts/check-admin-telegram-ui.cjs"
       - "management.js"
       - "scripts/check-registration-ui.cjs"
@@ -84,6 +86,9 @@ jobs:
       - name: Check user trade monitoring UI
         run: node scripts/check-user-trade-ui.cjs
 
+      - name: Check isolated IB demo UI
+        run: node scripts/check-ib-demo-ui.cjs
+
       - name: Check admin Telegram messaging UI
         run: node scripts/check-admin-telegram-ui.cjs
 
@@ -102,6 +107,7 @@ jobs:
         with:
           name: analysis-alert-previews
           path: |
+            ib-demo-*.png
             admin-telegram-*.png
             records-*.png
             native-chart-*.png
