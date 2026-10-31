@@ -174,7 +174,7 @@ function telegramMessageBody(e){
      'Panduan ZenCore — Jaga profit ikut SOP.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
     const buy=e.side==='BUY',proof=e.reversalEvidence;
     const cause=proof.priceBreak?`Candle tutup ${buy?'di bawah low':'di atas high'} candle sebelumnya.`:`Dua candle berturut-turut tutup ${buy?'menurun':'menaik'}.`;
-    const momentum=proof.momentumAgainst?`WT sudah melawan posisi ${e.side}.`:`Kekuatan WT ${e.side} berkurang.`;
+    const momentum=proof.momentumAgainst?`WT tidak lagi menyokong posisi ${e.side}.`:`Kekuatan WT ${e.side} berkurang.`;
     const profitable=buy?e.currentPrice>p.entry:e.currentPrice<p.entry;
     return ['⚠️ ZENCORE | HARGA MULA PULLBACK',`${e.symbol} • TF${e.timeframe}`,`Posisi ${e.side}`,'',
      `Harga Sekarang: ${price(e.currentPrice)}`,`Harga Entry: ${price(p.entry)}`,'',
