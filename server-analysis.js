@@ -1563,9 +1563,11 @@ function startAutoTradeDispatcher() {
   setTimeout(tick, 1000).unref?.();
 }
 
+const ibDemoHandler=require('./ib-demo-server').createDemoHandler({secure:process.env.ZENCORE_INSECURE_COOKIE!=='true'});
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
+  if(await ibDemoHandler(req,res,pathname))return;
 
   if(req.method==='POST'&&pathname==='/webhook'){
     try{const body=webhookIngress.validate(await readWebhook(req,webhookIngress.maxBytes));feedRelay.send(body);return proxy(req,res,'/webhook',body);}
