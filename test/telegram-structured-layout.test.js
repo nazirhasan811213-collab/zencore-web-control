@@ -16,3 +16,7 @@ test('pullback states the actual closed-price and momentum trigger before safe m
   a.ok(event);const text=telegramMessage(event);a.match(text,/HARGA MULA PULLBACK/);a.match(text,/Harga Sekarang:/);a.match(text,/Harga Entry:/);a.match(text,/Kenapa Pullback:/);a.match(text,/Rumusan AI ZenCore:/);a.match(text,/Coach Tips:/);a.match(text,/belum sah trend bertukar/);a.match(text,side==='BUY'?/di bawah low/:/di atas high/);a.ok(text.length<1400);
  }
 });
+test('TF15 candle label reports actual OHLC body rather than assuming the entry direction',()=>{
+ const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:'15',side:'SELL',time:Date.now(),id:'BODY',telegramPlan:{entry:100,sl:104,tp1:96,tp2:92,tp3:88},telegramSop:{version:'SOLID_TF15_3GREEN_HEMA1545_2L_V1',tf:'15m',solid:true,green:5,currentBar:{open:99,close:100},gates:Array.from({length:6},()=>({pass:true}))}};
+ a.match(telegramMessage(e),/Candle entry: BULLISH/);a.doesNotMatch(telegramMessage(e),/Candle entry: BEARISH/);
+});

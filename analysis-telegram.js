@@ -135,6 +135,8 @@ function entryAnalysis(e,s){
 function currentPineMessage(e,p,s={},time){
  const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
  const reason=entryAnalysis(e,s).map(x=>x.replace(/^Sebab entry: /,'').replace(/; (HEMA|momentum)/,';\n$1')).join('\n');
+ const bar=s.entryCandle||s.currentBar;
+ const candle=bar&&Number.isFinite(bar.open)&&Number.isFinite(bar.close)?(bar.close>bar.open?'BULLISH':bar.close<bar.open?'BEARISH':'DOJI'):s.entryCandle?(buy?'BULLISH':'BEARISH'):null;
  const risk=Math.abs(p.entry-p.sl),reward=Math.abs(p.tp1-p.entry);
  const summary=`Setup ${e.side} lulus pengesahan semasa. TP1 berjarak ${price(reward)} USD; risiko ke SL ${price(risk)} USD.`;
  const tips=reentry?`Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup. Jangan tambah layer di luar tetapan.`:'Ikut lot/layer dan SL yang ditetapkan. Jangan tambah posisi untuk cover rugi.';
@@ -143,7 +145,7 @@ function currentPineMessage(e,p,s={},time){
   `${e.symbol} • ${e.side}`,'',
   `Entry: ${price(p.entry)}`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)}`,`TP2: ${price(p.tp2)}`,`TP3: ${price(p.tp3)}`,'',
   'Sebab entry:',reason,
-  ...(s.entryCandle?[`Candle entry: ${buy?'BULLISH':'BEARISH'}`]:[]),'',
+  ...(candle?[`Candle entry: ${candle}`]:[]),'',
   'Rumusan AI ZenCore:',summary,
   'Coach Tips:',tips,'',
   'Signal sahaja • semak order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
