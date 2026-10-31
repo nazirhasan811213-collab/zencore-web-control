@@ -35,3 +35,14 @@ test('demo login, sessions and controls are isolated from live routes and from o
   a.equal((await request('/demo/ib/app.js')).status,200);a.equal((await request('/demo/ib-not-a-demo')).status,418);
  }finally{await new Promise(r=>server.close(r));}
 });
+test('presentation reuses production assets and only serves an explicit safe API model',async()=>{
+ const V=require('../ib-demo-real-view'),fs=require('node:fs'),s={data:dataset(),messages:[]},now=Date.now();
+ a.equal(V.page('/demo/ib/view/analysis'),'precision-entry.html');a.equal(V.page('/demo/ib/view/ib'),'ib.html');a.equal(V.page('/demo/ib/view/admin'),null);
+ a.equal(V.asset('analysis-dual.css'),fs.readFileSync(require.resolve('../analysis-dual.css'),'utf8'));a.equal(V.asset('server-analysis.js'),null);a.equal(V.asset('../auth-store.js'),null);
+ a.match(V.html('precision-entry.html'),/\/demo\/ib\/assets\/indicator-chart.js/);a.match(V.asset('detail.js'),/ZenCoreDemoLocation.pathname/);
+ const v=await V.api(s,'/api/analysis/timeframes?symbol=XAUUSD','GET',{},now);a.equal(v.views.length,2);a.equal((await V.api(s,'/api/analysis/chart?tf=2','GET',{},now)).candles.length,90);
+ const cs=await V.api(s,'/api/ib/overview','GET',{},now);a.equal(cs.clients.length,12);a.equal((await V.api(s,'/api/ib/connections','GET',{},now)).accounts.length,12);
+ await a.rejects(V.api(s,'/api/admin/clients','GET',{},now),{status:403});await a.rejects(V.api(s,'/api/auto-trade/hosted-account','POST',{password:'not-stored'},now),{status:403});a.equal(JSON.stringify(s).includes('not-stored'),false);
+ await V.api(s,'/api/auto-trade/stop','POST',{},now);a.equal((await V.api(s,'/api/auto-trade/state','GET',{},now)).control.effectiveState,'STOPPED');
+ const signals=await V.api(s,'/api/demo/signals','GET',{},now);a.ok(signals.signals.every(x=>!/dummy/i.test(x.text)));a.equal(signals.signals.length,18);
+});

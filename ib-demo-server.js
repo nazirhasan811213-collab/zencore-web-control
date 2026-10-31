@@ -2,21 +2,22 @@
 const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),{dataset}=require('./ib-demo-data');
 const EMAIL='ib.demo@zencore.invalid',SALT='89f9f0ccdfa9321d8419ed9b77fc68f7',HASH='480d95aef7bb5e6ab179aa4b8bf1cd152f50db2d898b9003f692f10aa5ed89cd7d633fce799bc539892c7f4c5c2b402ecafc4650bec1748154e42c16a222ae8b',TTL=8*60*60*1000;
 function createDemoHandler({now=Date.now,secure=true,credentials={email:EMAIL,salt:SALT,hash:HASH}}={}){
- const sessions=new Map(),attempts=new Map();
+ const sessions=new Map(),attempts=new Map(),presentation=require('./ib-demo-real-view');
  const reply=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body));};
  const cookie=(req,value,age)=>`zc_ib_demo=${value}; Path=/demo; HttpOnly; SameSite=Strict; Max-Age=${age}${secure?'; Secure':''}`;
  async function json(req){let body='';for await(const c of req){body+=c;if(body.length>8192)throw Object.assign(Error('Permintaan terlalu besar.'),{status:413});}try{const x=JSON.parse(body);if(!x||typeof x!=='object'||Array.isArray(x))throw Error();return x;}catch{throw Object.assign(Error('Permintaan tidak sah.'),{status:400});}}
  return async function handle(req,res,pathname){
   if(!pathname.startsWith('/demo/ib')||!(/^\/demo\/ib(?:\/|$)/.test(pathname)))return false;
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Robots-Tag','noindex, nofollow');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');
-  res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+  res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   for(const [k,v]of sessions)if(v.expires<=now())sessions.delete(k);
   const token=(req.headers.cookie||'').match(/(?:^|;\s*)zc_ib_demo=([0-9a-f]{64})(?:;|$)/)?.[1],session=sessions.get(token);
   try{
    if(req.method==='GET'&&['/demo/ib','/demo/ib/','/demo/ib/app.js','/demo/ib/style.css'].includes(pathname)){
     const type=pathname.endsWith('.js')?'application/javascript':pathname.endsWith('.css')?'text/css':'text/html',file=pathname.endsWith('.js')?'ib-demo.js':pathname.endsWith('.css')?'ib-demo.css':'ib-demo.html';res.writeHead(200,{'Content-Type':type+'; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,file)));return true;
    }
-   if(req.method==='POST'){
+   if(req.method==='GET'&&['/demo/ib/bridge.js','/demo/ib/presentation.css','/demo/ib/telegram.js'].includes(pathname)){const file=pathname.endsWith('bridge.js')?'ib-demo-bridge.js':pathname.endsWith('telegram.js')?'ib-demo-telegram.js':'ib-demo-presentation.css';res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,file)));return true;}
+   if(!['GET','HEAD'].includes(req.method)){
     let origin;try{origin=new URL(req.headers.origin).host}catch{}
     if(!origin||origin!==req.headers.host){reply(res,403,{ok:false,error:'Origin tidak dibenarkan.'});return true;}
    }
@@ -30,10 +31,14 @@ function createDemoHandler({now=Date.now,secure=true,credentials={email:EMAIL,sa
     if(sessions.size>=64)sessions.delete(sessions.keys().next().value);
     const id=crypto.randomBytes(32).toString('hex');sessions.set(id,{expires:now()+TTL,data:dataset(),messages:[]});res.setHeader('Set-Cookie',cookie(req,id,TTL/1000));reply(res,200,{ok:true,demo:true});return true;
    }
+   if(!session&&req.method==='GET'&&pathname.startsWith('/demo/ib/view/')){res.writeHead(302,{Location:'/demo/ib'});res.end();return true;}
    if(!session){reply(res,401,{ok:false,error:'Log masuk akaun IB demo.'});return true;}
+   if(req.method==='GET'&&pathname.startsWith('/demo/ib/view/')){const file=presentation.page(pathname);if(!file){reply(res,404,{ok:false,error:'Paparan tidak dijumpai.'});return true;}res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(presentation.html(file));return true;}
+   if(req.method==='GET'&&pathname.startsWith('/demo/ib/assets/')){const name=pathname.slice('/demo/ib/assets/'.length),body=presentation.asset(name);if(body===null){reply(res,404,{ok:false});return true;}res.writeHead(200,{'Content-Type':name.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8'});res.end(body);return true;}
+   if(pathname==='/demo/ib/presentation-api'){const p=new URL(req.url,'http://demo').searchParams.get('path')||'',b=['GET','HEAD'].includes(req.method)?{}:await json(req);reply(res,200,await presentation.api(session,p,req.method,b,now()));return true;}
    if(req.method==='GET'&&pathname==='/demo/ib/data'){reply(res,200,{ok:true,...session.data,messages:session.messages});return true;}
    if(req.method==='POST'&&pathname==='/demo/ib/logout'){sessions.delete(token);res.setHeader('Set-Cookie',cookie(req,'',0));reply(res,200,{ok:true});return true;}
-   if(req.method==='POST'&&pathname==='/demo/ib/reset'){session.data=dataset();session.messages=[];reply(res,200,{ok:true,demo:true});return true;}
+   if(req.method==='POST'&&pathname==='/demo/ib/reset'){session.data=dataset();session.messages=[];delete session.realSettings;delete session.realEnabled;delete session.demoClosed;delete session.alertPrefs;reply(res,200,{ok:true,demo:true});return true;}
    if(req.method==='POST'&&pathname==='/demo/ib/client'){
     const b=await json(req),u=session.data.clients.find(x=>x.id===b.id);if(!u){reply(res,404,{ok:false,error:'Client demo tidak dijumpai.'});return true;}
     if(['expired','pending'].includes(u.status)){reply(res,403,{ok:false,error:'Akaun expired / pending memerlukan admin, termasuk dalam simulasi.'});return true;}
