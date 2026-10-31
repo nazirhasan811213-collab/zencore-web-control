@@ -1,6 +1,70 @@
-<!doctype html><html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>ZenCore | IB Demo</title><link rel="stylesheet" href="/demo/ib/style.css"></head><body>
-<div class="demo-banner">🧪 DEMO • SEMUA DATA REKAAN • TIADA ORDER ATAU MESEJ TELEGRAM SEBENAR</div>
-<section id="loginView" class="login"><div class="brand">ZENCORE <span>IB DEMO</span></div><h1>Tunjukkan cara ZenCore berfungsi.</h1><p>Dashboard IB dengan contoh client, analisis, rekod trading dan signal Telegram.</p><form id="loginForm"><label>ID demo<input id="email" type="email" autocomplete="username" value="ib.demo@zencore.invalid" required></label><label>Kata laluan<input id="password" type="password" autocomplete="current-password" required></label><button id="loginButton">Log masuk demo</button></form><p id="loginError" role="alert"></p><small>Akaun ini khas untuk pembentangan. Prestasi contoh bukan hasil backtest atau jaminan keuntungan.</small></section>
-<div id="app" class="shell" hidden><aside><div class="brand">ZENCORE <span>IB DEMO</span></div><nav id="nav"><button data-tab="dashboard" class="active">◈ Dashboard IB</button><button data-tab="clients">◎ Client Saya</button><button data-tab="analysis">⌁ Analisis TF2 / TF15</button><button data-tab="autotrade">↯ Auto Trade</button><button data-tab="records">▤ Rekod Trading</button><button data-tab="telegram">✉ Signal Telegram</button><button data-tab="guide">? Panduan Demo</button></nav><small>IB-DEMO<br>Data contoh: 30 Oktober 2026<br>Sesi demo direset selepas logout atau server restart.</small><button id="logout" class="ghost">Log keluar</button></aside>
-<main><header><div><span class="eyebrow">PARTNER WORKSPACE • SIMULASI</span><h1 id="pageTitle">Dashboard IB</h1><p>ZenCore IB Demo • <span id="period"></span></p></div><button id="reset" class="ghost">Reset data demo</button></header><div id="notice" role="status" aria-live="polite"></div><div id="content"></div><footer>Semua nama, baki, harga, sambungan dan signal ialah data dummy. Tiada hubungan dengan akaun client sebenar. Analisis contoh bukan ramalan pasaran semasa.</footer></main></div>
-<dialog id="detail"><button id="closeDetail" class="ghost">Tutup ✕</button><div id="detailContent"></div></dialog><script src="/demo/ib/app.js" defer></script></body></html>
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Login — ZenCore</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+  <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
+  <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"></head>
+<body data-auth-page="login">
+  <main class="auth-shell">
+    <section class="auth-story" aria-label="Pengenalan ZenCore">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+        <div><b>ZenCore Precision Entry</b><span>Professional Trading Analysis Workspace</span></div>
+      </div>
+
+      <div class="story-copy">
+        <div class="eyebrow">Analysis dahulu. Entry bila cukup syarat.</div>
+        <h1>Semua yang trader perlu, dalam satu tempat.</h1>
+        <p>Check Gold TF2 dan TF15, tengok SOP entry dan manage posisi ikut EXIT 32.3 StepLock — semua dalam ZenCore.</p>
+        <div class="feature-row" aria-label="Ciri utama">
+          <span>XAUUSD</span><span>TF2 / TF15</span><span>EXIT 32.3</span><span>LIVE ANALYSIS</span>
+        </div>
+      </div>
+
+      <p class="risk-note">ZenCore bantu baca market dan manage proses trade. Tak ada jaminan profit. Jaga risiko dan guna akaun demo masa test.</p>
+    </section>
+
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div class="brand mobile-brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Trading Analysis Workspace</span></div>
+        </div>
+        <div class="eyebrow">Mod Demo</div>
+        <h2>Login IB</h2>
+        <p class="auth-lead">Dashboard dan analisis untuk sesi latihan trader.</p>
+
+        <form id="authForm" class="form-grid" novalidate>
+          <div class="field">
+            <label for="email">E-mel</label>
+            <div class="input-wrap">
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" value="ib.demo@zencore.invalid" placeholder="nama@email.com" required>
+            </div>
+            <span class="field-error" data-error-for="email"></span>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="Masukkan password" required>
+              <button class="password-toggle" type="button" data-password-toggle="password" aria-label="Tunjukkan password">LIHAT</button>
+            </div>
+            <span class="field-error" data-error-for="password"></span>
+          </div>
+
+          <div id="formStatus" class="form-status" role="alert" aria-live="polite"></div>
+          <button id="submitButton" class="primary-btn" type="submit">MASUK KE ZENCORE</button>
+        </form>
+
+        <p class="auth-switch">Mod Demo • Simulasi latihan.</p>
+      </div>
+    </section>
+  </main>
+  <script src="/demo/ib/app.js" defer></script>
+</body>
+</html>
