@@ -23,6 +23,7 @@ const { SignalOutcomeStore } = require('./signal-outcome-store');
 const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let globalUserTradeMonitor = null;
+let adminTelegram = null;
 let signalOutcomes = null;
 let currentSignalRecords = null;
 require('./analysis-alert-bus').on('market', market => require('./analysis-alert-input').ingestMarket(analysisAlerts,market));
@@ -171,6 +172,7 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({reentryAllowed:(user,event)=>autoTradeState.service?.reentrySignalAllowed(user,event)??false,pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    if(store.pool&&analysisAlerts.ready){try{adminTelegram=new (require('./admin-telegram-service').AdminTelegram)({pool:store.pool,alerts:analysisAlerts});await adminTelegram.init();}catch(_){adminTelegram=null;console.error('Admin Telegram storage unavailable');}}
     try{await require('./indicator-chart-history').history.init(store.pool);}catch(_){console.error('Guide history restore unavailable; collecting live candles');}
     if(analysisAlerts.ready&&analysisAlerts.token){
       const guideScheduler=require('./telegram-trade-guide').createScheduler({getMarkets:fetchLocalAnalysisMarkets,
@@ -607,6 +609,22 @@ async function handleManagementApi(req, res, pathname, session) {
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
+      }
+      if(pathname.startsWith('/api/admin/telegram/')){
+        res.setHeader('Cache-Control','no-store');
+        if(!adminTelegram)return sendJson(res,503,{ok:false,error:'Servis mesej admin belum tersedia.'});
+        try{
+          if(req.method==='GET'&&pathname==='/api/admin/telegram/recipients')return sendJson(res,200,await adminTelegram.catalog(session.user));
+          if(req.method==='GET'&&pathname==='/api/admin/telegram/history')return sendJson(res,200,await adminTelegram.history(session.user));
+          if(req.method==='GET'&&/^\/api\/admin\/telegram\/jobs\/[0-9a-f-]{36}$/i.test(pathname))return sendJson(res,200,await adminTelegram.details(session.user,pathname.split('/').pop()));
+          if(req.method!=='POST')return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
+          if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+          const body=await parseApiJson(req,res);if(body===null)return;
+          if(!body||typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+          if(pathname==='/api/admin/telegram/preview')return sendJson(res,200,await adminTelegram.preview(session.user,body));
+          if(pathname==='/api/admin/telegram/send')return sendJson(res,200,await adminTelegram.send(session.user,body.draftId));
+          return sendJson(res,404,{ok:false,error:'Endpoint tidak dijumpai.'});
+        }catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis mesej admin tidak tersedia. Cuba lagi.'});}
       }
       if(pathname==='/api/admin/monitoring/notifications'){
         res.setHeader('Cache-Control','no-store');
@@ -1647,6 +1665,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/detail.js') return sendAuthAsset(res, 'detail.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/client-connections.js') return sendAuthAsset(res, 'client-connections.js', 'application/javascript; charset=utf-8');
+  if(req.method==='GET'&&['/admin-telegram.js','/admin-telegram.css'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.js')?'application/javascript; charset=utf-8':'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/admin-ops.js') return sendAuthAsset(res, 'admin-ops.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
@@ -1773,6 +1792,7 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
   }
 
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/telegram'){const session=await requireRole(req,res,'admin','/login');if(!session)return;return sendAuthAsset(res,'admin-telegram.html','text/html; charset=utf-8');}
   if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/user-trade-monitor') {
     const session=await requireRole(req,res,'admin','/login');if(!session)return;
     return sendAuthAsset(res,'admin-user-trade.html','text/html; charset=utf-8');

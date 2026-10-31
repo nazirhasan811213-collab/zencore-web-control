@@ -12,6 +12,8 @@ name: Auto Trade control plane checks
       - "auth*"
       - "register.html"
       - "admin-registrations.*"
+      - "admin-telegram*"
+      - "scripts/check-admin-telegram-ui.cjs"
       - "management.js"
       - "scripts/check-registration-ui.cjs"
       - "scripts/check-pine-insights-ui.cjs"
@@ -82,6 +84,9 @@ jobs:
       - name: Check user trade monitoring UI
         run: node scripts/check-user-trade-ui.cjs
 
+      - name: Check admin Telegram messaging UI
+        run: node scripts/check-admin-telegram-ui.cjs
+
       - name: Check registration approval UI
         run: node scripts/check-registration-ui.cjs
 
@@ -97,6 +102,7 @@ jobs:
         with:
           name: analysis-alert-previews
           path: |
+            admin-telegram-*.png
             records-*.png
             native-chart-*.png
             alert-ui-*.png
