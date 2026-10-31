@@ -148,6 +148,7 @@ function currentPineMessage(e,p,s={},time){
   ...(candle?[`Candle entry: ${candle}`]:[]),'',
   'Rumusan AI ZenCore:',summary,
   'Coach Tips:',tips,'',
+  ...require('./telegram-dashboard-context').lines(require('./telegram-dashboard-context').snapshot({timeframe:tf,signalObservedAt:s.signalObservedAt,strategyNormal:{sop:s}},tf),tf),'',
   'Signal sahaja • semak order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
@@ -182,6 +183,7 @@ function telegramMessageBody(e){
      'Kenapa Pullback:',cause+' '+momentum,'',
      'Rumusan AI ZenCore:',(profitable?'Profit mula susut.':'Posisi sedang tertekan.')+' Candle tutup menunjukkan tekanan melawan posisi; belum sah trend bertukar.',
      'Coach Tips:',profitable?'Lindungi profit ikut SOP. Jangan tambah layer atau longgarkan SL.':'Ikut SL dan signal exit. Jangan tambah layer untuk cover rugi.',
+     ...require('./telegram-dashboard-context').lines(e.dashboardContext,e.timeframe),
      `🕒 ${time} MYT • ZC-${e.id}`].join('\n');
   }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
