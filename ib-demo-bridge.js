@@ -8,7 +8,7 @@ window.fetch=(input,options={})=>{const raw=input instanceof Request?input.url:i
  if(u.pathname.startsWith(root+'/'))return nativeFetch(input,options);
  if(u.pathname==='/auth/logout')return nativeFetch(root+'/logout',{...options,method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
  if(!u.pathname.startsWith('/api/')&&!u.pathname.startsWith('/auth/'))return Promise.resolve(new Response('{}',{status:403}));
- const target=root+'/presentation-api?path='+encodeURIComponent(u.pathname+u.search);return nativeFetch(target,input instanceof Request?new Request(input,{...options,method}):{...options,method});
+ const target=root+'/presentation-api?path='+encodeURIComponent(u.pathname+u.search);return input instanceof Request?nativeFetch(new Request(target,new Request(input,options))):nativeFetch(target,{...options,method});
 };
 function init(){const strip=document.createElement('div');strip.className='zc-demo-strip';strip.innerHTML='<b>MOD DEMO</b><span>Simulasi latihan</span><a href="/demo/ib/view/ib">Panel IB</a><a href="/demo/ib/view/telegram">Telegram</a><button type="button" id="zcDemoReset">Reset</button><button type="button" id="zcDemoLogout">Keluar</button>';document.body.prepend(strip);document.body.classList.add('zc-demo-presentation');
  strip.querySelector('#zcDemoReset').onclick=async()=>{const r=await nativeFetch(root+'/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(r.ok)realLocation.reload();};strip.querySelector('#zcDemoLogout').onclick=async()=>{await nativeFetch(root+'/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});realLocation.assign(root);};
