@@ -46,7 +46,7 @@ function createDemoHandler({now=Date.now,secure=true,credentials={email:EMAIL,sa
     const b=await json(req),ids=Array.isArray(b.userIds)?[...new Set(b.userIds)]:[],text=typeof b.message==='string'?b.message.trim():'';
     if(!text||text.length>1000||!ids.length||ids.some(id=>!session.data.clients.some(x=>x.id===id))){reply(res,400,{ok:false,error:'Pilih client demo dan isi mesej maksimum 1000 aksara.'});return true;}
     if(session.messages.length>=50){reply(res,409,{ok:false,error:'Had demo dicapai. Reset demo untuk bermula semula.'});return true;}
-    const m={id:'DEMO-M'+(session.messages.length+1),time:new Date(now()).toISOString(),type:'ADMIN',tf:'SEMUA',title:'📩 MESEJ IB DEMO',text:'🧪 DEMO • TIDAK DIHANTAR KE TELEGRAM\n\n'+text,recipients:ids,status:'SIMULATED_ONLY'};session.messages.unshift(m);reply(res,200,{ok:true,demo:true,message:m});return true;
+    const m={id:'DEMO-M'+(session.messages.length+1),time:new Date(now()).toISOString(),type:'ADMIN',tf:'SEMUA',title:'📩 MESEJ ADMIN DEMO',text:'🧪 DEMO • TIDAK DIHANTAR KE TELEGRAM\n\n'+text,recipients:ids,status:'SIMULATED_ONLY'};session.messages.unshift(m);reply(res,200,{ok:true,demo:true,message:m});return true;
    }
    reply(res,404,{ok:false,error:'Fungsi ini tiada dalam demo.'});return true;
   }catch(e){reply(res,e.status||500,{ok:false,error:e.status?e.message:'Demo tidak tersedia. Cuba lagi.'});return true;}
