@@ -86,6 +86,8 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
    a.highRisk?'Market kuat libas. Jaga modal dahulu. Jangan tambah posisi atau longgarkan SL.':'Elakkan entry di tengah kawasan sempit atau dekat halangan. Jangan tambah posisi untuk cover rugi.',
    '', '% profit belum disahkan. Skor indikator bukan kebarangkalian untung.', 'Panduan terbatal lebih awal jika struktur berubah.');
  }
+ const dashboardContext=a.fresh?require('./telegram-dashboard-context').snapshot(m,tf):null;
+ lines.push(...require('./telegram-dashboard-context').lines(dashboardContext,tf));
  const compact=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`${date} • XAUUSD`,`🕒 ${clock(slot)}–${clock(end)} MYT`];
  if(!a.fresh)compact.push('Data belum cukup. Tunggu data sah.','Jika pegang posisi: semak SL dan sambungan MT5.','Panduan ZenCore — Jangan entry berdasarkan laporan ini.');
  else{
@@ -109,6 +111,7 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
    'Panduan sahaja • bukan signal entry atau jaminan arah.');
  }
 
+ compact.push(...require('./telegram-dashboard-context').lines(dashboardContext,tf));
  return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideCompactText:compact.join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
 }
 function createScheduler({getMarkets,history,record,now=Date.now}){

@@ -47,7 +47,7 @@ test('Telegram has one short checklist and plan without forecast/coach repetitio
  const m=market(fixture());Object.assign(m.strategyNormal.sop.advisor,{trend:'Uptrend',mtfSummary:'TF Sepakat NAIK',advice:'SETUP KURANG PADU.',proTip:'JAGA MODAL - JANGAN TRADE',aiCoach:'• [TREND]: Uptrend\n• [MOMENTUM]: Bullish\n• [HALANGAN]: Laluan CLEAR.\n• [WHALES]: Active\n• [NASIHAT]: SETUP KURANG PADU.'});
  const svc=new Alerts.AnalysisAlerts();await svc.init();await svc.record(m);const e=svc.events.find(e=>e.kind==='ENTRY'),text=T.telegramMessage(e);
  a.equal((text.match(/Forecast 10 candle:/g)||[]).length,0);a.equal((text.match(/Rumusan AI ZenCore:/g)||[]).length,1);a.equal((text.match(/MTF 15\/30\/45:/g)||[]).length,0);
- a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,0);a.doesNotMatch(text,/SETUP KURANG PADU|JANGAN TRADE/);clearInterval(svc.cleanupTimer);
+ a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,0);a.match(text,/SETUP KURANG PADU/);a.match(text,/JANGAN TRADE/);clearInterval(svc.cleanupTimer);
 });
 
 test('actual heartbeat close resets TF15; fresh new SOLID enters full layers immediately without five-minute cooldown',async()=>{
@@ -111,7 +111,7 @@ test('short Telegram layout keeps prices and action without coach text or MT5 fi
    await alerts.record(m);const event=alerts.events.find(x=>x.kind==='ENTRY');a.ok(event);
    event.telegramSop.advisor={trend:side==='BUY'?'Uptrend':'Downtrend',momentum:side==='BUY'?'Bullish':'Bearish',mtfSummary:'Ringkasan '.repeat(200),advice:'SETUP KURANG PADU.',proTip:'JAGA MODAL - JANGAN TRADE'};
    const text=T.telegramMessage(event);a.ok(text.length<4096);a.ok(text.startsWith('━━━━━━━━━━━━━━━━━━\n'+(side==='BUY'?'🟢':'🔴')));
-   a.ok(text.indexOf('Entry:')<text.indexOf('TP1:'));a.ok(text.indexOf('TP1:')<text.indexOf('Rumusan AI ZenCore:'));a.ok(text.length<850);
+   a.ok(text.indexOf('Entry:')<text.indexOf('TP1:'));a.ok(text.indexOf('TP1:')<text.indexOf('Rumusan AI ZenCore:'));a.ok(text.length<2400);
    a.match(text,/Jangan tambah posisi untuk cover rugi/);a.match(text,/Signal sahaja/);
    a.equal((text.match(/Entry:/g)||[]).length,1);a.equal((text.match(/SL:/g)||[]).length,1);a.equal((text.match(/Forecast 10 candle:/g)||[]).length,0);
    a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,0);

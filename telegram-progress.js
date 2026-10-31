@@ -50,7 +50,7 @@ function progress(previous,next,market,events,at=Date.now()){
   state.turnBestPrice=sign*price>sign*best?price:best;
   const evidence=Turn.confirm(state.side,state.turnBestPrice,state.turnBars);
   if(!closed&&!state.warned.includes(stage)&&evidence){
-   state.warned.push(stage);result.push({...base,kind:'PULLBACK',telegramProgressVersion:2,pullbackStage:stage,atrReference:bar.atr,bestPrice:state.turnBestPrice,reversalEvidence:evidence,message:`${next.symbol} • TF${tf} • HARGA MULA BERBALIK • SECURE POSISI ${state.side}`});
+   state.warned.push(stage);result.push({...base,kind:'PULLBACK',dashboardContext:require('./telegram-dashboard-context').snapshot(market,tf),telegramProgressVersion:2,pullbackStage:stage,atrReference:bar.atr,bestPrice:state.turnBestPrice,reversalEvidence:evidence,message:`${next.symbol} • TF${tf} • HARGA MULA BERBALIK • SECURE POSISI ${state.side}`});
   }
  }
 
