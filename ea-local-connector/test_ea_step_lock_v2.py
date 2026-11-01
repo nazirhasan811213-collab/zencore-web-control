@@ -47,6 +47,7 @@ bool LoadOwnRisk(ulong){return ReadFields("fill-risk-77.tsv")||ReadFields("risk-
 bool FileIsExist(const string& name,int){auto slash=name.find_last_of("\\");return files.count(name.substr(slash+1));}
 bool VolumeValid(const string&,double x){return x>=.01;}
 double MathFloor(double x){return std::floor(x);}
+bool MathIsValidNumber(double x){return std::isfinite(x);}
 bool SymbolInfoTick(const string&,MqlTick& tick){tick.bid=quote;tick.ask=quote;return true;}
 long SymbolInfoInteger(const string&,int){return 0;}
 double SymbolInfoDouble(const string&,int kind){return kind==SYMBOL_VOLUME_STEP?.01:1;}
