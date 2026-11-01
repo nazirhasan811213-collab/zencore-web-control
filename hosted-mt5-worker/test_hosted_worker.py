@@ -340,6 +340,38 @@ class HostedWorkerTests(unittest.TestCase):
                 worker.heartbeat_once()
         self.assertEqual(len(control.heartbeats), 1)
 
+    def test_initialize_failure_reports_numeric_code_only(self):
+        config = SimpleNamespace(approved_demo_server="InterStellarFinancial-Demo",
+                                 mt5_terminal_path="test-only")
+        for code, expected in [(-10005, "MT5_INITIALIZE_FAILED_-10005"),
+                               (-6, "MT5_INITIALIZE_FAILED_-6"),
+                               (True, "MT5_INITIALIZE_FAILED"),
+                               ("secret", "MT5_INITIALIZE_FAILED"),
+                               (-100001, "MT5_INITIALIZE_FAILED"),
+                               (1, "MT5_INITIALIZE_FAILED")]:
+            with self.subTest(code=code):
+                module = SimpleNamespace(initialize=lambda *a, **kw: False,
+                                         last_error=lambda: (code, "sensitive-password"))
+                credential = Mt5Credential(bytearray(b"123456"), bytearray(b"secret"),
+                    bytearray(b"InterStellarFinancial-Demo"), "DEMO", 1)
+                try:
+                    with self.assertRaises(WorkerFailure) as caught:
+                        MetaTraderConnection(module).connect(config, credential)
+                    self.assertEqual(caught.exception.code, expected)
+                    self.assertNotIn("sensitive-password", str(caught.exception))
+                finally:
+                    credential.wipe()
+
+    def test_initialize_failure_survives_unavailable_last_error(self):
+        module = SimpleNamespace()
+        self.assertEqual(MetaTraderConnection(module)._initialize_failure().code,
+                         "MT5_INITIALIZE_FAILED")
+        def broken():
+            raise RuntimeError("sensitive-password")
+        module.last_error = broken
+        self.assertEqual(MetaTraderConnection(module)._initialize_failure().code,
+                         "MT5_INITIALIZE_FAILED")
+
     def test_metatrader_adapter_reports_demo_specs_without_order_capability(self):
         with tempfile.TemporaryDirectory() as folder:
             config = WorkerConfig.load(write_config(folder))
@@ -359,6 +391,7 @@ class HostedWorkerTests(unittest.TestCase):
         self.assertTrue(telemetry["demoExecutionUnlocked"])
         self.assertFalse(hasattr(adapter, "order_send"))
         self.assertEqual(module.initialize_args[1]["server"], "InterStellarFinancial-Demo")
+        self.assertTrue(module.initialize_args[1]["portable"])
 
     def test_metatrader_adapter_reports_zencore_positions_and_rejects_real_account(self):
         with tempfile.TemporaryDirectory() as folder:

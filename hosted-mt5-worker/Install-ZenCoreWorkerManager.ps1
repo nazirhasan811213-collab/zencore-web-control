@@ -69,7 +69,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
+    $manifest.connectorVersion -ne "2.2.5-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
     $manifest.connectionOnlyPreflight -ne $true -or
     $manifest.workerManagerIncluded -ne $true -or
@@ -208,6 +208,33 @@ if ($null -ne $existingTask) {
 }
 if ($MigrateLegacyWorker) {
     Stop-ZenCoreManagedProcesses -ManagedReleaseRoot $ReleaseRoot
+
+    # Retire the temporary s03 launch task only when it targets our slot tree.
+    $slotPrefix = [System.IO.Path]::GetFullPath($SlotsRoot).TrimEnd([char]'\') + '\'
+    $configTask = Get-ScheduledTask -TaskName "ZenCore MT5 s03 Config" -ErrorAction SilentlyContinue
+    if ($null -ne $configTask) {
+        foreach ($configAction in $configTask.Actions) {
+            $target = [string]$configAction.Execute
+            if ($target.StartsWith($slotPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                Disable-ScheduledTask -TaskName $configTask.TaskName | Out-Null
+                Stop-ScheduledTask -TaskName $configTask.TaskName -ErrorAction SilentlyContinue
+                break
+            }
+        }
+    }
+    # Do not touch desktop MT5 or terminals outside the managed slot directories.
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        $terminals = @(Get-CimInstance Win32_Process | Where-Object {
+            $target = [string]$_.ExecutablePath
+            $_.Name -eq "terminal64.exe" -and
+            $target.StartsWith($slotPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and
+            $target.Substring($slotPrefix.Length) -match '^[a-z][-a-z0-9]*\\mt5\\terminal64\.exe$'
+        })
+        if ($terminals.Count -eq 0) { break }
+        if ($attempt -eq 5) { throw "A managed slot terminal survived upgrade cleanup." }
+        $terminals | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 500
+    }
 }
 $arguments = '--config "{0}"' -f $ManagerConfigPath
 $action = New-ScheduledTaskAction -Execute $managerExe -Argument $arguments -WorkingDirectory $releasePath

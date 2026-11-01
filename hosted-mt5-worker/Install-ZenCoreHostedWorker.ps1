@@ -21,7 +21,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1 -or
-    $manifest.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
+    $manifest.connectorVersion -ne "2.2.5-gcp-multiuser-multipair" -or
     $manifest.executionUnlocked -ne $true -or
     $manifest.connectionOnlyPreflight -ne $true -or
     $manifest.processLifetimeGuardIncluded -ne $true) {
@@ -59,7 +59,7 @@ $configuredSymbols = @($config.allowedDemoSymbols | ForEach-Object { [string]$_ 
 $invalidSymbols = @($configuredSymbols | Where-Object { $_ -notin $canonicalSymbols })
 if ($config.demoOnly -ne $true -or $config.executionEnabled -ne $true -or
     $config.privateKeyAvailable -ne $false -or $config.credentialStorage -ne "MEMORY_ONLY" -or
-    $config.connectorVersion -ne "2.2.2-gcp-multiuser-multipair" -or
+    $config.connectorVersion -ne "2.2.5-gcp-multiuser-multipair" -or
     $configuredSymbols.Count -lt 1 -or $invalidSymbols.Count -gt 0 -or
     @($configuredSymbols | Select-Object -Unique).Count -ne $configuredSymbols.Count -or
     [string]$config.approvedDemoServer -ne "InterStellarFinancial-Demo") {
