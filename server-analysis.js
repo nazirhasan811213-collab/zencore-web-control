@@ -24,6 +24,7 @@ const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
 let globalUserTradeMonitor = null;
 let adminTelegram = null;
+let accountHandover = null;
 let signalOutcomes = null;
 let currentSignalRecords = null;
 require('./analysis-alert-bus').on('market', market => require('./analysis-alert-input').ingestMarket(analysisAlerts,market));
@@ -164,6 +165,7 @@ if (AUTH_ENABLED) {
       console.log(`ZenCore public viewer ready (${viewer.email}) • VIEW ONLY`);
     }
     if(process.env.ZENCORE_MANAGED_VPS_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS account provisioning unavailable; existing accounts unchanged');}}
+    if(store.pool){accountHandover=new (require('./account-handover').AccountHandover)({pool:store.pool,tradingState:userId=>autoTradeState.service.state(userId)});await accountHandover.init();console.log(`Account handover ready: initialized=${accountHandover.initialized}`);}
     authState.store = store;
     authState.service = createAuthService({
       store,
@@ -265,7 +267,7 @@ if (AUTH_ENABLED) {
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         scalpingTimeframe: '2',
-        entryAccessAllowed:async userId=>require('./account-access').allowed(await authState.store.findUserByIdForLogin(userId)),
+        entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u);},
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -470,6 +472,7 @@ async function requireSession(req, res, redirectTo = null) {
       else sendJson(res, 401, { ok: false, error: 'Sesi tamat. Sila log masuk semula.' });
       return null;
     }
+    if(session.user.role==='client'&&session.user.handoverState!=='LIVE'&&!require('./account-handover').allowedPath(new URL(req.url,'http://localhost').pathname,session.user.handoverState)){if(redirectTo)redirect(res,'/onboarding');else sendJson(res,403,{ok:false,code:'ACCOUNT_HANDOVER_REQUIRED',error:'Lengkapkan serahan admin dan profil dahulu.',handoverState:session.user.handoverState});return null;}
     // End authenticated streams when the client's access period ends as well.
     const deadline=session.user.role==='client'?new Date(session.user.accessExpiresAt).getTime():NaN;
     if(Number.isFinite(deadline)&&deadline>Date.now()){
@@ -611,6 +614,17 @@ async function handleManagementApi(req, res, pathname, session) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
       }
+      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|setup\/state|setup\/settings|setup\/execution-diagnostics)$/i);
+      if(lifecycle){res.setHeader('Cache-Control','no-store');if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});const id=lifecycle[1],action=lifecycle[2];
+        if(req.method==='GET'&&action==='handover')return sendJson(res,200,await accountHandover.status(id));
+        if(req.method==='GET'&&action==='setup/state'){await accountHandover.row(id);const state=await autoTradeState.service.state(id);state.control.canTurnOn=false;state.control.canEnter=false;state.control.strategyReason='SETUP ADMIN — lengkapkan serahan dan profil user dahulu.';state.setupTarget=await accountHandover.status(id);return sendJson(res,200,state);}
+        if(req.method==='GET'&&action==='setup/execution-diagnostics')return sendJson(res,200,{ok:true,commands:[]});
+        if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+        if(req.method==='PUT'&&action==='setup/settings'){const target=await accountHandover.row(id);if(require('./account-handover').state(target)!=='ADMIN_SETUP')return sendJson(res,409,{ok:false,error:'Setup ini hanya dibuka pada fasa Admin Setup.'});return sendJson(res,200,await autoTradeState.service.saveSettings(id,body));}
+        if(req.method==='POST'&&action==='handover/release')return sendJson(res,200,await accountHandover.release(session.user,id));
+        if(req.method==='POST'&&action==='reset-account')return sendJson(res,200,await accountHandover.reset(session.user,id,body));
+        return sendJson(res,405,{ok:false,error:'Kaedah tidak dibenarkan.'});
+      }
       if(pathname.startsWith('/api/admin/telegram/')){
         res.setHeader('Cache-Control','no-store');
         if(!adminTelegram)return sendJson(res,503,{ok:false,error:'Servis mesej admin belum tersedia.'});
@@ -620,7 +634,7 @@ async function handleManagementApi(req, res, pathname, session) {
           if(req.method==='GET'&&/^\/api\/admin\/telegram\/jobs\/[0-9a-f-]{36}$/i.test(pathname))return sendJson(res,200,await adminTelegram.details(session.user,pathname.split('/').pop()));
           if(req.method!=='POST')return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
           if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
-          const body=await parseApiJson(req,res);if(body===null)return;
+          const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
           if(!body||typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
           if(pathname==='/api/admin/telegram/preview')return sendJson(res,200,await adminTelegram.preview(session.user,body));
           if(pathname==='/api/admin/telegram/send')return sendJson(res,200,await adminTelegram.send(session.user,body.draftId));
@@ -1394,7 +1408,7 @@ async function handleExecutionApi(req, res, pathname) {
   try {
     if (req.method === 'GET' && pathname === '/api/execution/link-status') return sendJson(res,200,await autoTradeState.service.executionLinkStatus(token));
     if(req.method==='POST'&&pathname==='/api/execution/broker-metadata') {
-      const body=await parseApiJson(req,res);if(body===null)return;
+      const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
       return sendJson(res,200,await autoTradeState.service.reportBrokerMetadata(token,body));
     }
     if (req.method === 'POST' && pathname === '/api/execution/heartbeat') {
@@ -1603,6 +1617,11 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if(req.method==='GET'&&['/onboarding.js','/onboarding.css','/admin-handover.js','/admin-setup-context.js'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8');
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/onboarding'){const session=await requireRole(req,res,'client','/login');if(!session)return;return sendAuthAsset(res,'onboarding.html','text/html; charset=utf-8');}
+  if(pathname==='/api/account/handover'){const session=await requireSession(req,res);if(!session)return;if(session.user.role!=='client')return sendJson(res,403,{ok:false,error:'Akaun client sahaja.'});if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});try{if(req.method==='GET')return sendJson(res,200,await accountHandover.status(session.user.id));if(req.method==='POST'&&requestOriginAllowed(req)){const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});const done=await accountHandover.complete(session.user.id,body);return sendJson(res,200,done,{'Set-Cookie':authState.service.clearCookie()});}return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});}catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis serahan tidak tersedia.'});}}
+  const setupPage=pathname.match(/^\/admin\/client\/([0-9a-f-]{36})\/setup$/i);
+  if(AUTH_ENABLED&&req.method==='GET'&&setupPage){const session=await requireRole(req,res,'admin','/login');if(!session)return;res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'auto-trade.html'),'utf8').replace('<head>','<head><script src="/admin-setup-context.js"></script>'));}
   if (req.method === 'GET' && ['/admin-user-trade.js','/admin-user-trade.css','/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }

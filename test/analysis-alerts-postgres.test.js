@@ -8,7 +8,7 @@ test('PostgreSQL preserves preferences and de-duplicates concurrent feed across 
  const schema='alert_test_'+Date.now();const admin=new Pool({connectionString:url});let pool,a,b;
  try{
   await admin.query(`CREATE SCHEMA ${schema}`);pool=new Pool({connectionString:url,options:`-c search_path=${schema}`});
-  await pool.query(`CREATE TABLE zencore_users(id UUID PRIMARY KEY,status TEXT,role TEXT,access_expires_at TIMESTAMPTZ DEFAULT (NOW()+INTERVAL '336 hours'))`);
+  await pool.query(`CREATE TABLE zencore_users(id UUID PRIMARY KEY,status TEXT,role TEXT,handover_state TEXT,access_expires_at TIMESTAMPTZ DEFAULT (NOW()+INTERVAL '336 hours'))`);
   const user='11111111-1111-4111-8111-111111111111';await pool.query("INSERT INTO zencore_users(id,status,role) VALUES($1,'active','client')",[user]);
   a=new AnalysisAlerts({pool});await a.init();b=new AnalysisAlerts({pool});await b.init();
   await a.put(user,{popup:true,sound:true,telegramEnabled:true,telegramId:'123456789',verified:true});
