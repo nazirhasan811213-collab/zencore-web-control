@@ -163,6 +163,7 @@ if (AUTH_ENABLED) {
       });
       console.log(`ZenCore public viewer ready (${viewer.email}) • VIEW ONLY`);
     }
+    if(process.env.ZENCORE_MANAGED_VPS_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS account provisioning unavailable; existing accounts unchanged');}}
     authState.store = store;
     authState.service = createAuthService({
       store,

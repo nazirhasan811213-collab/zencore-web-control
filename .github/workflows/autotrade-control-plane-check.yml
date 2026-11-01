@@ -10,6 +10,9 @@ name: Auto Trade control plane checks
       - "gold-copilot.js"
       - "home.html"
       - "auth*"
+      - "managed-vps-accounts.js"
+      - "login.html"
+      - "scripts/check-managed-login-ui.cjs"
       - "register.html"
       - "admin-registrations.*"
       - "admin-telegram*"
@@ -85,6 +88,9 @@ jobs:
 
       - name: Check user trade monitoring UI
         run: node scripts/check-user-trade-ui.cjs
+
+      - name: Check managed username login
+        run: node scripts/check-managed-login-ui.cjs
 
       - name: Check isolated IB demo UI
         run: node scripts/check-ib-demo-ui.cjs

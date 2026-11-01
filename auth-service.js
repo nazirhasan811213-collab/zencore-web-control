@@ -28,6 +28,7 @@ function safeUser(user) {
     id: user.id,
     displayName: user.displayName || user.display_name,
     email: user.email,
+    loginId: user.login_id?'ZCuser '+require('./managed-vps-accounts').number(user.login_id):require('./managed-vps-accounts').loginId(user.email),
     role: user.role || ROLE_CLIENT,
     status: user.status==='active'&&Access.expired(user)?'expired':user.status,
     ...Access.fields(user),
@@ -518,13 +519,13 @@ function createAuthService(options = {}) {
   }
 
   async function login(input = {}) {
-    const email = normalizeEmail(input.email);
+    const email = require('./managed-vps-accounts').loginEmail(input.email);
     const password = String(input.password || '');
     if (!validateEmail(email) || !password) {
       throw authError('INVALID_CREDENTIALS', 'E-mel atau password tidak betul.', 401);
     }
 
-    const userRow = await store.findUserForLogin(email);
+    const userRow = await require('./managed-vps-accounts').findUser(store,input.email);
     // Spend comparable work for unknown accounts so the response does not reveal
     // whether an e-mail exists through an obvious timing difference.
     const valid = userRow
