@@ -1,0 +1,21 @@
+name: Hosted EA scaffold syntax
+on:
+  pull_request:
+    paths: ['hosted-ea-scaffold/**', '.github/workflows/hosted-ea-scaffold-check.yml']
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows provisioning scripts without changing users or accounts
+        shell: powershell
+        run: |
+          $failed=$false
+          Get-ChildItem hosted-ea-scaffold/*.ps1 | ForEach-Object {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$errors) | Out-Null
+            foreach($error in $errors) { Write-Host $error.Message; $failed=$true }
+          }
+          if($failed){throw 'Windows PowerShell syntax failed'}
