@@ -402,6 +402,7 @@ function createAutoTradeService(options = {}) {
         ? Math.round(profile.lotPerLayer * profile.layers * 100000) / 100000 : null,
       riskAcknowledgedAt: profile.riskAcknowledgedAt
     } : null;
+    const entryAccessReady=!options.entryAccessAllowed||await options.entryAccessAllowed(userId);
     const effectiveState = !pod && !hostedAccount ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
     const desiredState = profile?.desiredState || 'STOPPED';
     const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
@@ -427,8 +428,8 @@ function createAutoTradeService(options = {}) {
         strategyReason: strategyReady?null:'TF15/Both memerlukan EA/Connector 1.2.',
         exitPolicyReady,
         exitPolicyReason: exitPolicyReady ? null : 'Rule TF2 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
-        canEnter: exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
+        canEnter: entryAccessReady && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
       pod: pod ? {
@@ -922,6 +923,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function turnOn(userId, input = {}) {
+    if(options.entryAccessAllowed&&!await options.entryAccessAllowed(userId))throw serviceError('ACCOUNT_NOT_LIVE','Akaun belum live. Lengkapkan serahan admin dan profil dahulu.',403);
     const allowDemoExecution = executionAllowed(userId, await store.getPodForUser(userId));
     if (!allowDemoExecution) {
       throw serviceError(

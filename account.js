@@ -61,7 +61,6 @@
     byId('profileDisplayName').value = profile.displayName || '';
     byId('profilePhone').value = profile.phone || '';
     byId('profileEmail').value = profile.email || '';
-    byId('profileIc').value = profile.identityNumber || profile.icMasked || '';
     byId('profileIbName').value = profile.ibName || 'Nazir (Admin)';
     renderTrading(body.trading);
   }
@@ -89,7 +88,6 @@
           displayName: byId('profileDisplayName').value,
           phone: byId('profilePhone').value,
           email: byId('profileEmail').value,
-          icNumber: byId('profileIc').value,
           currentPassword: byId('profileCurrentPassword').value
         })
       });

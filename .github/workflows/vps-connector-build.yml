@@ -32,19 +32,19 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" ea-local-connector/vps-installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
           $dir = Join-Path $env:RUNNER_TEMP 'ZenCore-VPS-Setup-Test'
-          $p = Start-Process dist/ZenCoreVPSSetup-1.0.0.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=$dir" -Wait -PassThru
+          $p = Start-Process dist/ZenCoreVPSSetup-1.0.1.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=$dir" -Wait -PassThru
           if ($p.ExitCode -ne 0 -or -not (Test-Path "$dir/ZenCoreVPSManager.exe")) { throw 'Installer smoke failed' }
           $p = Start-Process "$dir/ZenCoreVPSManager.exe" -ArgumentList '--self-test' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Installed Manager validation failed' }
           $p = Start-Process "$dir/unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Uninstall smoke failed' }
           Copy-Item ea-local-connector/ZenCoreExecutor.mq5,ea-local-connector/PANDUAN_VPS_10_USER.txt,ea-local-connector/VPS_10_USER.csv dist/
-          Get-FileHash dist/ZenCoreVPSSetup-1.0.0.exe,dist/ZenCoreVPSManager.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content dist/VPS-SHA256.txt
+          Get-FileHash dist/ZenCoreVPSSetup-1.0.1.exe,dist/ZenCoreVPSManager.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content dist/VPS-SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: ZenCore-VPS-10-User-Manager
           path: |
-            dist/ZenCoreVPSSetup-1.0.0.exe
+            dist/ZenCoreVPSSetup-1.0.1.exe
             dist/ZenCoreExecutor.mq5
             dist/PANDUAN_VPS_10_USER.txt
             dist/VPS_10_USER.csv

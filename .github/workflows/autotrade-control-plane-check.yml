@@ -10,6 +10,13 @@ name: Auto Trade control plane checks
       - "gold-copilot.js"
       - "home.html"
       - "auth*"
+      - "account*"
+      - "onboarding*"
+      - "admin-handover.js"
+      - "admin-setup-context.js"
+      - "client-detail.html"
+      - "detail.js"
+      - "scripts/check-account-handover-ui.cjs"
       - "managed-vps-accounts.js"
       - "login.html"
       - "scripts/check-managed-login-ui.cjs"
@@ -89,6 +96,9 @@ jobs:
       - name: Check user trade monitoring UI
         run: node scripts/check-user-trade-ui.cjs
 
+      - name: Check account handover and admin reset
+        run: node scripts/check-account-handover-ui.cjs
+
       - name: Check managed username login
         run: node scripts/check-managed-login-ui.cjs
 
@@ -113,6 +123,7 @@ jobs:
         with:
           name: analysis-alert-previews
           path: |
+            handover-*.png
             ib-demo-*.png
             admin-telegram-*.png
             records-*.png
