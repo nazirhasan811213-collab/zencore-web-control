@@ -879,7 +879,7 @@ function createAutoTradeService(options = {}) {
       throw serviceError('DEMO_SYMBOL_NOT_VALIDATED', 'Pilih pair daripada skop broker yang disahkan.', 400);
     }
     const manualPod=localEa ? await store.getPodForUser(userId) : null;
-    if(input.manualExit?.enabled===true && (!localEa || manualPod?.manualExitVersion!=='MANUAL_TF2_EXIT_V2'))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA 1.30.',409);
+    if(input.manualExit?.enabled===true && (!localEa || !['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(manualPod?.manualExitVersion)))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA yang menyokong exit manual.',409);
     const validation = Core.validateSettings({
       ...input,
       manualExit:input.manualExit ?? previous?.manualExit,
@@ -888,6 +888,7 @@ function createAutoTradeService(options = {}) {
       symbols: localEa ? input.symbols : allowedDemoSymbols
     });
     if (!validation.ok) throw serviceError('VALIDATION_ERROR', 'Semak konfigurasi Auto Trade.', 400, validation.errors);
+    if(validation.value.manualExit.enabled && validation.value.manualExit.version==='MANUAL_TF2_EXIT_V3' && manualPod?.manualExitVersion!=='MANUAL_TF2_EXIT_V3')throw serviceError('MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED','TP/SL tersuai perlu Connector 2.1.10 / EA 2.17 atau VPS Manager 1.0.2.',409);
     if (input.riskAcknowledged !== true) {
       throw serviceError('RISK_ACK_REQUIRED', 'Pengesahan risiko diperlukan.', 400, {
         riskAcknowledged: 'Tandakan pengesahan risiko untuk menyimpan.'
@@ -918,7 +919,11 @@ function createAutoTradeService(options = {}) {
         payload: { mode: pod.tradeMode, strategy: 'NORMAL_3M_SOP_V32', exitSchema: '32.3-EXIT-STEPLOCK', settings: validation.value } });
       await store.setControl(userId, { desiredState: 'ON', effectiveState: 'ARMING', pendingCommandId: issued.command.id, lastError: null });
     }
-    if(localEa && manualPod?.manualExitVersion==='MANUAL_TF2_EXIT_V2')await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:validation.value.manualExit},ttlMs:30000});
+    if(localEa && ['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(manualPod?.manualExitVersion)) {
+      // OFF must remain deliverable to legacy installations even with saved custom presets.
+      const config=validation.value.manualExit.enabled ? validation.value.manualExit : Core.validateSettings({manualExit:{enabled:false}}).value.manualExit;
+      await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:config},ttlMs:30000});
+    }
     return state(userId);
   }
 
@@ -1184,6 +1189,7 @@ function createAutoTradeService(options = {}) {
     }
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
+      if(queued.enabled && queued.version==='MANUAL_TF2_EXIT_V3' && (await store.getPodForUser(command.userId))?.manualExitVersion!=='MANUAL_TF2_EXIT_V3')return false;
       return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
@@ -1591,7 +1597,7 @@ function createAutoTradeService(options = {}) {
         const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
         if (!management&&!manualManagement) continue;
         const sourceAt=Number(market.signalObservedAt||market.receivedAt);
-        if(!hostedAccount&&pod?.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
+        if(!hostedAccount&&['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion)&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
           const side=market.strategyNormal?.side;
           const actions=(manualManagement?.payload.actions||[]).filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){

@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.16'
-CONNECTOR_BUILD = '2.1.9'
+EA_VERSION = '2.17'
+CONNECTOR_BUILD = '2.1.10'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -106,13 +106,14 @@ def command_fields(command, identity):
         fields.update(podId=identity['podId'], eaSession=identity['eaSession'])
     if kind == 'MANUAL_EXIT_CONFIG':
         cfg=payload['manualExit']
-        if cfg.get('version')!='MANUAL_TF2_EXIT_V2' or cfg.get('timeframeMinutes')!=2 or not isinstance(cfg.get('enabled'),bool):raise ValueError('EXIT_POLICY_REJECTED')
+        if cfg.get('version') not in ('MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3') or cfg.get('timeframeMinutes')!=2 or not isinstance(cfg.get('enabled'),bool):raise ValueError('EXIT_POLICY_REJECTED')
         if cfg.get('maxActiveLayers')!=10 or cfg.get('limitAction')!='WARN_ONLY':raise ValueError('EXIT_POLICY_REJECTED')
-        fields['manualMaxLayers']=10;fields['manualLimitAction']='WARN_ONLY'
+        fields['manualVersion']=cfg['version'];fields['manualMaxLayers']=10;fields['manualLimitAction']='WARN_ONLY'
         fields['manualEnabled']='1' if cfg['enabled'] else '0'
         if cfg['enabled']:
             distances=[float(number(cfg[k])) for k in ('tp1','tp2','tp3','sl')]
-            if distances != [2,4,6,3]:raise ValueError('EXIT_POLICY_REJECTED')
+            if not (0<distances[0]<distances[1]<distances[2] and distances[3]>0):raise ValueError('EXIT_POLICY_REJECTED')
+            if cfg['version']=='MANUAL_TF2_EXIT_V2' and distances != [2,4,6,3]:raise ValueError('EXIT_POLICY_REJECTED')
             for k in ('tp1','tp2','tp3','sl'):fields['manual'+k]=number(cfg[k])
     elif kind == 'MANUAL_EXIT_ACTION':
         if payload.get('symbol')!='XAUUSD' or payload.get('side') not in ('BUY','SELL'):raise ValueError('SYMBOL_REJECTED')
@@ -215,7 +216,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':(VERSION if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1' else '1.3.0-ea-local') if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
-      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
+      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion')=='MANUAL_TF2_EXIT_V3', 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
       'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
