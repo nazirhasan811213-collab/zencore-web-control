@@ -38,6 +38,7 @@ button,input{font:inherit}
 .detail-value.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;font-weight:700;word-break:break-all;letter-spacing:0}
 .detail-list{display:grid;gap:0;margin:8px 0 0}
 .detail-list div{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.055)}
+.detail-list div[hidden]{display:none}
 .detail-list div:last-child{border-bottom:0}
 .detail-list dt{color:#688696;font-size:8px;font-weight:850}
 .detail-list dd{margin:0;color:#d2e8f0;font-size:9px;font-weight:800;text-align:right}
