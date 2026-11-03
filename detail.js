@@ -295,6 +295,7 @@
 
   byId('adminClientPasswordForm')?.addEventListener('submit', async event => {
     event.preventDefault();
+    const form = event.currentTarget;
     if (currentUser?.role !== 'admin' || !detail?.client?.id) return;
     const button = byId('resetClientPassword');
     const status = byId('adminClientPasswordStatus');
@@ -318,7 +319,7 @@
           confirmPassword
         })
       });
-      event.currentTarget.reset();
+      form.reset();
       status.className = 'mg-form-status success';
       status.textContent = body.message || 'Password client berjaya direset.';
     } catch (error) {
