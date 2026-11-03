@@ -465,6 +465,8 @@ test('Admin can edit client information and reset client password after step-up 
   });
   assert.equal(edited.email, 'managed-new@example.com');
   assert.equal(edited.identityNumber, 'PASSMANAGED02');
+  const preserved=await auth.updateAdminClientProfile(adminLogin.user,client.user.id,{displayName:edited.displayName,email:edited.email,phone:edited.phone,adminPassword:'AdminSecure2026!'});
+  assert.equal(preserved.identityNumber,'PASSMANAGED02','admin profile form without IC preserves existing identity');
 
   await auth.resetAdminClientPassword(adminLogin.user, client.user.id, {
     adminPassword: 'AdminSecure2026!',

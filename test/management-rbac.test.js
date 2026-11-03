@@ -33,11 +33,17 @@ test('management detail respects IB ownership and client self profile scope', as
 
   const alphaClient = await makeClient(auth, 2, 'alpha');
   const betaClient = await makeClient(auth, 3, 'beta');
+  // Legacy identity already stored before IC was removed from registration.
+  (await store.findUserByIdForLogin(betaClient.user.id)).ic_number='900101010003';
   const alphaUser = (await auth.login({ email: 'alpha@example.test', password: 'TestPass2026!' })).user;
   const ownUser = (await auth.login({ email: 'client-2@example.test', password: 'TestPass2026!' })).user;
 
   assert.equal((await auth.adminIbDetail(adminUser, 'alpha')).clients.length, 1);
-  assert.equal((await auth.adminClientDetail(adminUser, betaClient.user.id)).ibCode, 'beta');
+  const adminDetail=await auth.adminClientDetail(adminUser,betaClient.user.id);
+  assert.equal(adminDetail.ibCode,'beta');
+  assert.equal(adminDetail.identityNumber,'900101010003');
+  assert.equal((await auth.ibClientDetail(alphaUser,alphaClient.user.id)).identityNumber,undefined);
+  await assert.rejects(()=>auth.adminClientDetail(alphaUser,alphaClient.user.id),e=>e.code==='FORBIDDEN');
   assert.equal((await auth.ibClientDetail(alphaUser, alphaClient.user.id)).ibCode, 'alpha');
 
   await assert.rejects(

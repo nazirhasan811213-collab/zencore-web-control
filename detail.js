@@ -191,6 +191,8 @@
     byId('clientStatusTag').textContent = `STATUS ${String(client.status || '').toUpperCase()}`;
     byId('clientIbTag').textContent = `IB ${String(client.ibCode || 'nazir').toUpperCase()}`;
     byId('clientPhone').textContent = client.phone || '—';
+    if(byId('adminClientIcRow'))byId('adminClientIcRow').hidden=!adminView;
+    if(byId('clientIdentityNumber'))byId('clientIdentityNumber').textContent=adminView?(client.identityNumber || 'Belum direkodkan'):'';
 
     byId('clientCreated').textContent = fmtDate(client.createdAt, true);
     byId('clientLastLogin').textContent = fmtDate(client.lastLoginAt, true);

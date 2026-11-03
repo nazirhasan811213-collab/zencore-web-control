@@ -454,7 +454,9 @@ function createAuthService(options = {}) {
     if (!/^[0-9a-f-]{36}$/i.test(String(clientId || ''))) {
       throw authError('INVALID_CLIENT', 'Client tidak sah.', 400);
     }
-    const validation = normalizeClientProfileInput(input);
+    const current=await store.getClientForAdmin(String(clientId));
+    if(!current)throw authError('CLIENT_NOT_FOUND','Client tidak dijumpai.',404);
+    const validation = normalizeClientProfileInput({...input,icNumber:input.icNumber==null?current.identityNumber:input.icNumber});
     if (!validation.ok) {
       throw authError('VALIDATION_ERROR', 'Semak semula maklumat client.', 400, validation.errors);
     }
