@@ -9,13 +9,13 @@ test('real PG recovers saved events, atomically checkpoints, survives restart an
   const entry={kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',setupKey:'A',side:'BUY',time:t,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106}};
   const insert=e=>pool.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1)',[e]);
   await insert(entry);await insert({...entry,time:t+100,telegramDuplicate:true});await insert({...entry,kind:'TP_HIT',targetNumber:1,currentPrice:102,time:t+200});
-  const one=new CurrentSignalRecords({pool}),two=new CurrentSignalRecords({pool});await one.init();await two.init();await Promise.all([one.sync(),two.sync()]);
+  const one=new CurrentSignalRecords({pool,now:()=>t+10000}),two=new CurrentSignalRecords({pool,now:()=>t+10000});await one.init();await two.init();await Promise.all([one.sync(),two.sync()]);
   let saved=await one.read();a.equal(saved.records.length,1);a.equal(saved.records[0].hitTp1,true);a.equal(saved.totals[0].open,1);
   const cursor=(await pool.query('SELECT last_event_id FROM zencore_signal_record_cursor')).rows[0].last_event_id;
   await insert({...entry,kind:'CLOSE',percent:100,time:t+300});
-  let fail=true;const broken=new CurrentSignalRecords({pool:{connect:async()=>{const c=await pool.connect();return {release:()=>c.release(),query:async(sql,args)=>{if(fail&&sql.startsWith('INSERT INTO zencore_current_signal_records')){fail=false;throw Error('simulated write failure');}return c.query(sql,args);}}}}});
+  let fail=true;const broken=new CurrentSignalRecords({now:()=>t+10000,pool:{connect:async()=>{const c=await pool.connect();return {release:()=>c.release(),query:async(sql,args)=>{if(fail&&sql.startsWith('INSERT INTO zencore_current_signal_records')){fail=false;throw Error('simulated write failure');}return c.query(sql,args);}}}}});
   await a.rejects(broken.sync());a.equal((await pool.query('SELECT last_event_id FROM zencore_signal_record_cursor')).rows[0].last_event_id,cursor);a.equal((await one.read()).records[0].state,'OPEN');
   await two.sync();a.equal((await two.read()).records[0].outcome,'CLOSE_SIGNAL');await pool.query('DELETE FROM zencore_analysis_alerts');
-  const restarted=new CurrentSignalRecords({pool});await restarted.init();await restarted.sync();saved=await restarted.read();a.equal(saved.records.length,1);a.equal(saved.records[0].hitTp1,true);a.equal(saved.totals[0].resolved,1);
+  const restarted=new CurrentSignalRecords({pool,now:()=>t+10000});await restarted.init();await restarted.sync();saved=await restarted.read();a.equal(saved.records.length,1);a.equal(saved.records[0].hitTp1,true);a.equal(saved.totals[0].resolved,1);
  }finally{await pool?.end();await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await db.end();}
 });
