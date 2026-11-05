@@ -13,7 +13,6 @@ function publicUser(row) {
   return {
     id: row.id,
     displayName: row.display_name,
-    ...(row.login_id ? {loginId: 'ZCuser '+require('./managed-vps-accounts').number(row.login_id)} : {}),
     email: row.email,
     role: row.role || 'client',
     status: row.status==='active'&&Access.expired(row)?'expired':row.status,
@@ -51,6 +50,7 @@ function publicClient(row) {
   return {
     id: row.id,
     displayName: row.display_name,
+    ...(row.login_id ? {loginId: 'ZCuser '+require('./managed-vps-accounts').number(row.login_id)} : {}),
     email: row.email,
     phone: row.phone || '',
     icMasked: maskedIc(row.ic_number),
