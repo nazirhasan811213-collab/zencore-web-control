@@ -287,7 +287,7 @@ if (AUTH_ENABLED) {
         credentialKeyId: MT5_CREDENTIAL_KEY_ID,
         credentialPublicKey: MT5_CREDENTIAL_PUBLIC_KEY
       });
-      if(store.pool&&analysisAlerts?.ready){try{positionTelegram?.stop();positionTelegram=new (require('./position-telegram').PositionTelegram)({pool:store.pool,store:autoStore,alerts:analysisAlerts});await positionTelegram.init();positionTelegram.start();console.log('Personal MT5 position Telegram notifications ready');}catch(_){positionTelegram=null;console.error('Position Telegram notifications unavailable');}}
+      if(store.pool&&analysisAlerts?.ready){try{positionTelegram?.stop();positionTelegram=new (require('./position-telegram').PositionTelegram)({pool:store.pool,store:autoStore,alerts:analysisAlerts});await positionTelegram.init();positionTelegram.diagnostics=true;positionTelegram.start();console.log('Personal MT5 position Telegram notifications ready');}catch(_){positionTelegram=null;console.error('Position Telegram notifications unavailable');}}
       autoTradeState.error = null;
       autoTradeState.ready = true;
       console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'} • GCP worker ${GCP_HOSTED_WORKER_ENABLED ? 'IDENTITY ENABLED' : 'LOCKED'}`);
