@@ -22,3 +22,8 @@ test('heartbeat observation is authenticated, full, connected, owner scoped and 
  await service.heartbeat(c.podToken,{...hb,terminalConnected:false});await service.heartbeat(c.podToken,{...hb,positions:[p(),{ticket:'bad'}]});a.equal(observed.length,2);
  await a.rejects(service.heartbeat(c.podToken,{...hb,accountFingerprint:'b'.repeat(64)}));a.equal(observed.length,2);
 });
+test('close message reports only confirmed closure without inventing financial outcomes',()=>{
+ const {closeMessage}=require('../position-telegram'),g=groups([p(),p({positionId:'457'})],at)[0];
+ const text=closeMessage(g,at,'b'.repeat(64));a.match(text,/SETUP SUDAH DITUTUP/);a.match(text,/2 • 0\.02 lot/);a.match(text,/History MT5/);a.doesNotMatch(text,/profit|untung:|SL HIT|callback|Sudah lihat/i);
+ a.equal(groups([p({openedAt:at-86400000})],at,true).length,1,'historical open positions can be tracked for future closure');
+});
