@@ -25,5 +25,11 @@ test('PG personal position outbox batches layers, isolates users, survives resta
   prefs.get(u1).telegramId='-100123';await observe(one,u1,[manual(16)]);a.equal((await pool.query('SELECT COUNT(*)::int AS n FROM zencore_position_notifications WHERE data->>\'manualId\'=\'16\'')).rows[0].n,0);prefs.get(u1).telegramId='123456';
   await observe(one,u1,[manual(17)]);await pool.query("UPDATE zencore_users SET status='disabled' WHERE id=$1",[u1]);await one.drain();a.equal(sent.length,3);
   await pool.query("UPDATE zencore_users SET status='active',access_expires_at=$2 WHERE id=$1",[u1,new Date(at-1)]);await observe(one,u1,[manual(18)]);await one.drain();a.equal(sent.length,3);
+  await observe(one,u2,[manual(19)]);pods.get(u2).lastSeenAt=at-16000;await one.drain();a.equal(sent.length,3);
+  a.equal((await pool.query("SELECT status FROM zencore_position_notifications WHERE data->>'manualId'='19'")).rows[0].status,'pending','wait for a fresh MT5 snapshot without sending or dropping the alert');
+  at+=2000;pods.get(u2).lastSeenAt=at;await two.drain();a.equal(sent.length,4);
+  await observe(one,u2,[p(30,{strategyMode:'TF15_INTRA'})]);await one.drain();a.equal(sent.length,4);at+=7000;pods.get(u2).lastSeenAt=at;await two.drain();a.equal(sent.length,5);a.match(sent.at(-1).text,/TF15/);a.match(sent.at(-1).text,/Posisi disahkan: 1/);a.match(sent.at(-1).text,/Pelan: 2 layer/);
+  await observe(one,u2,[manual(20,{openedAt:at-130000})]);a.equal((await pool.query("SELECT COUNT(*)::int AS n FROM zencore_position_notifications WHERE data->>'manualId'='20'")).rows[0].n,0);
+  await observe(one,u2,[manual(21)]);at+=120001;pods.get(u2).lastSeenAt=at;await one.drain();a.equal(sent.length,5,'expired open alerts are not delivered late');
  }finally{await pool?.end();await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await db.end();}
 });

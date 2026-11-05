@@ -78,8 +78,8 @@ class PositionTelegram{
       if(positions.length){attempted=true;await this.alerts.telegram(row.chat_id,message(row.data,positions,checkedAt,row.key));status='sent';result='POSITION_CONFIRMED';}
       else result='POSITION_ALREADY_CLOSED';}
      }
-    }catch{status=attempted?'unknown':'pending';result=attempted?'SEND_UNCONFIRMED':'CHECK_RETRY';await c.query('ROLLBACK');rolledBack=true;}
-    try{await c.query("UPDATE zencore_position_notifications SET status=$2,result=$3,updated_at=$4,send_after=CASE WHEN $2='pending' THEN $4+2000 ELSE send_after END WHERE key=$1",[row.key,status,result,this.now()]);if(!rolledBack)await c.query('COMMIT');
+    }catch(error){status=attempted?'unknown':'pending';result=attempted?'SEND_UNCONFIRMED':'CHECK_RETRY';try{await c.query('ROLLBACK');rolledBack=true;}catch{c.release();throw error;}}
+    try{await c.query("UPDATE zencore_position_notifications SET status=$2,result=$3,updated_at=$4::bigint,send_after=CASE WHEN $2='pending' THEN $4::bigint+2000 ELSE send_after END WHERE key=$1",[row.key,status,result,this.now()]);if(!rolledBack)await c.query('COMMIT');
      if(status==='unknown')this.log.warn?.('Position Telegram send unconfirmed:',JSON.stringify({reference:row.key.slice(0,8)}));}
     catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
    }
