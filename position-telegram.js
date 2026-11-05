@@ -34,7 +34,7 @@ function closeMessage(g,at,key){
  return ['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | SETUP SUDAH DITUTUP','──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`Posisi dipantau: ${ps.length} • ${Number(volume.toFixed(3))} lot`,'✅ Semua posisi setup ini sudah tiada di MT5.','Disemak melalui dua laporan MT5 berturut-turut.','','Harga exit & untung/rugi: semak History MT5.','Sebab penutupan belum dilaporkan.','Tunggu signal baharu yang lulus SOP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
 }
 class PositionTelegram{
- constructor({pool,store,alerts,now=Date.now,log=console}){Object.assign(this,{pool,store,alerts,now,log});this.busy=false;}
+ constructor({pool,store,alerts,now=Date.now,log=console}){Object.assign(this,{pool,store,alerts,now,log});this.busy=false;this.flow={};}
  async init(){await this.pool.query(`CREATE TABLE IF NOT EXISTS zencore_position_notifications(
   key CHAR(64) PRIMARY KEY,user_id UUID NOT NULL REFERENCES zencore_users(id) ON DELETE CASCADE,
   pod_id UUID NOT NULL,fingerprint CHAR(64) NOT NULL,generation INTEGER NOT NULL,chat_id TEXT NOT NULL,
@@ -47,19 +47,20 @@ class PositionTelegram{
   CREATE INDEX IF NOT EXISTS zencore_position_watches_active ON zencore_position_watches(user_id,pod_id) WHERE finished=false;
   CREATE INDEX IF NOT EXISTS zencore_position_notifications_pending ON zencore_position_notifications(send_after) WHERE status='pending';`);}
  async user(id,db=this.pool,lock=false){return (await db.query('SELECT status,role,access_expires_at,handover_state,handover_generation FROM zencore_users WHERE id=$1'+(lock?' FOR SHARE':''),[id])).rows[0];}
+ count(reason){this.flow[reason]=(this.flow[reason]||0)+1;}
  async observe({userId,podId,accountFingerprint,positions,observedAt}){
-  if(!this.alerts.token||!/^[a-f0-9]{64}$/.test(accountFingerprint||''))return;
-  const at=this.now(),list=groups(positions,at,true);if(Math.abs(at-observedAt)>15000)return;
+  this.count('snapshots');if(!this.alerts.token){this.count('no_bot');return;}if(!/^[a-f0-9]{64}$/.test(accountFingerprint||'')){this.count('bad_binding');return;}
+  const at=this.now(),list=groups(positions,at,true);if(Math.abs(at-observedAt)>15000){this.count('stale_snapshot');return;}this.count(positions.length?'positions_present':'positions_empty');if(positions.length&&!list.length)this.count('unrecognised_positions');
   const [u,prefs]=await Promise.all([this.user(userId),this.alerts.get(userId)]);
-  if(!allowed(u,at)||!prefs.telegramEnabled||!prefs.verified||!privateChat(prefs.telegramId))return;
+  if(!allowed(u,at)){this.count('account_unavailable');return;}if(!prefs.telegramEnabled){this.count('telegram_off');return;}if(!prefs.verified){this.count('telegram_unverified');return;}if(!privateChat(prefs.telegramId)){this.count('non_private_chat');return;}this.count('eligible_snapshot');
   for(const g of list){
    if(!g.manual){
     const command=await this.store.setupForPosition(userId,podId,'XAUUSD',g.mode,g.setupId);
-    if(!command||command.podId!==podId||command.userId!==userId||command.payload?.accountFingerprint!==accountFingerprint)continue;
+    if(!command||command.podId!==podId||command.userId!==userId||command.payload?.accountFingerprint!==accountFingerprint){this.count('setup_not_matched');continue;}
     g.directionMismatch=command.payload?.side!==g.side;
     g.expected=Math.max(1,Math.min(10,Number(command.payload.layers)||g.positions.length));
    }else g.expected=1;
-   const key=crypto.createHash('sha256').update(JSON.stringify([userId,accountFingerprint,u.handover_generation||0,g.key])).digest('hex');
+   this.count('setup_matched');const key=crypto.createHash('sha256').update(JSON.stringify([userId,accountFingerprint,u.handover_generation||0,g.key])).digest('hex');
    // Track older open positions for their future close, without announcing historical opens.
    await this.pool.query(`INSERT INTO zencore_position_watches(key,user_id,pod_id,fingerprint,generation,chat_id,data,last_seen,last_snapshot)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$8) ON CONFLICT(key) DO UPDATE SET
@@ -69,7 +70,7 @@ class PositionTelegram{
     last_seen=EXCLUDED.last_seen,last_snapshot=EXCLUDED.last_snapshot,absent_since=NULL
     WHERE zencore_position_watches.finished=false AND zencore_position_watches.pod_id=EXCLUDED.pod_id`,
     [key,userId,podId,accountFingerprint,u.handover_generation||0,String(prefs.telegramId),g,at]);
-   if(at-Math.min(...g.positions.map(p=>p.openedAt))>AGE)continue;
+   if(at-Math.min(...g.positions.map(p=>p.openedAt))>AGE){this.count('historical_open');continue;}
    const sendAfter=at+(g.positions.length>=g.expected?0:WAIT);
    await this.pool.query(`INSERT INTO zencore_position_notifications(key,user_id,pod_id,fingerprint,generation,chat_id,data,first_seen,send_after,updated_at)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$8) ON CONFLICT(key) DO UPDATE SET data=EXCLUDED.data,
@@ -94,10 +95,22 @@ class PositionTelegram{
     WHERE zencore_position_notifications.status='pending'`,[key,userId,podId,accountFingerprint,w.generation,w.chat_id,g,at]);
   }
  }
+ async reportFlow(){
+  const at=this.now();if(this.lastReport&&at-this.lastReport<60000)return;
+  const r=await this.pool.query(`SELECT jsonb_build_object(
+   'preferences',(SELECT count(*) FROM zencore_alert_preferences WHERE data->>'verified'='true' AND data->>'telegramEnabled'='true'),
+   'positions',(SELECT count(*) FROM zencore_mt5_positions),
+   'positionsWithSetup',(SELECT count(*) FROM zencore_mt5_positions WHERE data->>'setupId' IS NOT NULL),
+   'activeWatches',(SELECT count(*) FROM zencore_position_watches WHERE finished=false),
+   'outbox',COALESCE((SELECT jsonb_object_agg(status,n) FROM (SELECT status,count(*) n FROM zencore_position_notifications GROUP BY status) s),'{}'::jsonb),
+   'results',COALESCE((SELECT jsonb_object_agg(result,n) FROM (SELECT COALESCE(result,'QUEUED') result,count(*) n FROM zencore_position_notifications GROUP BY result) s),'{}'::jsonb)) AS metrics`);
+  this.log.info?.('Position Telegram flow:',JSON.stringify({botConfigured:!!this.alerts.token,observed:this.flow,...r.rows[0]?.metrics}));this.lastReport=at;this.flow={};
+ }
  async drain(){
   if(this.busy||!this.alerts.token)return;this.busy=true;
   try{
    const at=this.now();
+   if(this.diagnostics){try{await this.reportFlow();}catch{this.log.warn?.('Position Telegram diagnostic unavailable');this.lastReport=at;}}
    // Uncertain sends are never automatically repeated.
    await this.pool.query("UPDATE zencore_position_notifications SET status='unknown',result='INTERRUPTED_SEND',updated_at=$1 WHERE status='sending' AND updated_at<$2",[at,at-AGE]);
    const jobs=(await this.pool.query(`UPDATE zencore_position_notifications SET status='sending',updated_at=$1 WHERE key IN
