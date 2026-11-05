@@ -83,6 +83,13 @@
     if (byId('accountEmail')) byId('accountEmail').textContent = currentUser.email || '';
   }
 
+  function adminClientName(client) {
+    const alias=/^ZCuser (?:10|[1-9])$/.test(client.loginId||'')?client.loginId:null;
+    const name=String(client.displayName||'').trim();
+    const personal=alias&&name&&name!=='Client'&&name.toLowerCase().replace(/\s/g,'')!==alias.toLowerCase().replace(/\s/g,'');
+    return `<strong>${esc(alias||name)}</strong>${personal?`<small>${esc(name)}</small>`:''}<small>${esc(client.email)}</small>`;
+  }
+
   function renderAdminClients(list) {
     const tbody = byId('clientTable');
     if (!tbody) return;
@@ -91,7 +98,7 @@
       return;
     }
     tbody.innerHTML = list.map(client => `<tr>
-      <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
+      <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}">${adminClientName(client)}</a></td>
       <td><strong>${esc(client.phone || '—')}</strong><small>${esc(client.handoverState||'LIVE')}</small></td>
       <td><strong>${esc(client.ibName || 'Nazir (Admin)')}</strong><small>${esc((client.ibCode || 'nazir').toUpperCase())}</small></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
@@ -309,7 +316,7 @@
       if (status && String(client.status || '').toLowerCase() !== status) return false;
       if (!q) return true;
       return [
-        client.displayName, client.email, client.phone, client.ibName, client.ibCode, client.icMasked
+        client.loginId, client.displayName, client.email, client.phone, client.ibName, client.ibCode, client.icMasked
       ].some(value => String(value || '').toLowerCase().includes(q));
     });
     if (role === 'admin') renderAdminClients(list);

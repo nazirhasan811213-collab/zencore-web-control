@@ -50,6 +50,7 @@ function publicClient(row) {
   return {
     id: row.id,
     displayName: row.display_name,
+    ...(row.login_id ? {loginId: 'ZCuser '+require('./managed-vps-accounts').number(row.login_id)} : {}),
     email: row.email,
     phone: row.phone || '',
     icMasked: maskedIc(row.ic_number),
@@ -547,6 +548,12 @@ class PostgresAuthStore {
        LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
       values
     );
+    // Resolve the permanent managed ID independently of the user's updated name/email.
+    if(result.rows.length&&(await this.pool.query("SELECT to_regclass('zencore_managed_login_aliases') AS name")).rows[0]?.name){
+      const aliases=await this.pool.query('SELECT user_id,login_id FROM zencore_managed_login_aliases WHERE user_id=ANY($1::uuid[])',[result.rows.map(row=>row.id)]);
+      const byId=new Map(aliases.rows.map(row=>[row.user_id,row.login_id]));
+      for(const row of result.rows)row.login_id=byId.get(row.id)||null;
+    }
     return result.rows.map(publicClient);
   }
 
