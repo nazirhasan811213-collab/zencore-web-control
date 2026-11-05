@@ -1151,6 +1151,10 @@ function createAutoTradeService(options = {}) {
     const profile=await store.getProfile(pod.userId);
     const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
+    if(accountAccessAllowed&&isLocalEa(updated)&&input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&typeof options.onConfirmedPositions==='function'){
+      try{await options.onConfirmedPositions({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});}
+      catch(_){console.error('Position Telegram observation unavailable');}
+    }
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
     if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
       fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&

@@ -22,6 +22,7 @@ const { AnalysisAlerts } = require('./analysis-alert-service');
 const { SignalOutcomeStore } = require('./signal-outcome-store');
 const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
+let positionTelegram = null;
 let globalUserTradeMonitor = null;
 let adminTelegram = null;
 let accountHandover = null;
@@ -267,6 +268,7 @@ if (AUTH_ENABLED) {
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         scalpingTimeframe: '2',
+        onConfirmedPositions: snapshot=>positionTelegram?.observe(snapshot),
         entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u);},
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
@@ -285,6 +287,7 @@ if (AUTH_ENABLED) {
         credentialKeyId: MT5_CREDENTIAL_KEY_ID,
         credentialPublicKey: MT5_CREDENTIAL_PUBLIC_KEY
       });
+      if(store.pool&&analysisAlerts?.ready){try{positionTelegram?.stop();positionTelegram=new (require('./position-telegram').PositionTelegram)({pool:store.pool,store:autoStore,alerts:analysisAlerts});await positionTelegram.init();positionTelegram.start();console.log('Personal MT5 position Telegram notifications ready');}catch(_){positionTelegram=null;console.error('Position Telegram notifications unavailable');}}
       autoTradeState.error = null;
       autoTradeState.ready = true;
       console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'} • GCP worker ${GCP_HOSTED_WORKER_ENABLED ? 'IDENTITY ENABLED' : 'LOCKED'}`);
