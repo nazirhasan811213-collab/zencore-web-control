@@ -10,7 +10,7 @@
     <p id="zaTelegramHelp">Masukkan ID nombor akaun Telegram anda, bukan @username. Tekan Start pada bot sebelum meminta kod.</p>
     <a id="zaBot" target="_blank" rel="noopener" hidden>Buka bot ZenCore</a><button id="zaCode" type="button">Hantar kod pengesahan</button>
     <label>Kod <input id="zaVerifyCode" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 digit"></label><button id="zaVerify" type="button">Sahkan ID</button>
-    <label><input id="zaTelegram" type="checkbox"> Hantar alert ke Telegram</label></section></div><div class="alert-footer">
+    <label><input id="zaTelegram" type="checkbox"> Hantar alert ke Telegram</label><p>Termasuk satu notifikasi peribadi selepas posisi disahkan terbuka di MT5. Layer setup Auto Trade digabungkan; tiada mesej peringatan.</p></section></div><div class="alert-footer">
     <button id="zaSave" type="button">Simpan tetapan</button><p id="zaStatus" class="alert-status" role="status">Memuatkan tetapan…</p>
     <p id="zaConnection" role="status"></p><details><summary>Alert terkini</summary><div id="zaHistory" class="alert-history">Belum ada signal baharu.</div></details></div>`;
   const app=document.querySelector('.app');if(!app)return;(app.querySelector('[aria-labelledby="aiHeading"]')||app.querySelector('.status-grid')||app.querySelector('header'))?.insertAdjacentElement('afterend',root);
