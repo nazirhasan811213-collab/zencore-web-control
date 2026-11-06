@@ -192,6 +192,7 @@
       if(response.status===401){goToLogin();return;}
       if(!response.ok)throw Error('Simpanan rekod tidak tersedia');
       const payload=await response.json();if(!payload.ok)throw Error('Data rekod tidak sah');
+      if(payload.retention?.cutoffAt)setText('recordRetention','Rekod dari '+new Date(payload.retention.cutoffAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' MYT. Paparan 3 bulan bergulir berdasarkan tarikh entry; rekod lama dikekalkan.');
       aggregate=Results.fromStoredRecords(payload);
       renderAll();refreshDurable();
       connectionState(payload.lastError||payload.syncPending?'partial':'live',payload.lastError?'SYNC GAGAL • REKOD TERAKHIR':payload.syncPending?'MEMULIHKAN SEJARAH':'REKOD DATABASE');

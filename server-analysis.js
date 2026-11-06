@@ -22,7 +22,10 @@ const { AnalysisAlerts } = require('./analysis-alert-service');
 const { SignalOutcomeStore } = require('./signal-outcome-store');
 const { targetReachMap } = require('./target-reach-map');
 let analysisAlerts = null;
+let positionTelegram = null;
 let globalUserTradeMonitor = null;
+let adminTelegram = null;
+let accountHandover = null;
 let signalOutcomes = null;
 let currentSignalRecords = null;
 require('./analysis-alert-bus').on('market', market => require('./analysis-alert-input').ingestMarket(analysisAlerts,market));
@@ -170,6 +173,8 @@ if (AUTH_ENABLED) {
       });
       console.log(`ZenCore public viewer ready (${viewer.email}) • VIEW ONLY`);
     }
+    if(process.env.ZENCORE_MANAGED_VPS_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS account provisioning unavailable; existing accounts unchanged');}}
+    if(store.pool){accountHandover=new (require('./account-handover').AccountHandover)({pool:store.pool,tradingState:userId=>autoTradeState.service.state(userId)});await accountHandover.init();console.log(`Account handover ready: initialized=${accountHandover.initialized}`);}
     authState.store = store;
     authState.service = createAuthService({
       store,
@@ -179,6 +184,16 @@ if (AUTH_ENABLED) {
     });
     analysisAlerts = new AnalysisAlerts({reentryAllowed:(user,event)=>autoTradeState.service?.reentrySignalAllowed(user,event)??false,pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
+    if(store.pool&&analysisAlerts.ready){try{adminTelegram=new (require('./admin-telegram-service').AdminTelegram)({pool:store.pool,alerts:analysisAlerts});await adminTelegram.init();}catch(_){adminTelegram=null;console.error('Admin Telegram storage unavailable');}}
+    try{await require('./indicator-chart-history').history.init(store.pool);}catch(_){console.error('Guide history restore unavailable; collecting live candles');}
+    if(analysisAlerts.ready&&analysisAlerts.token){
+      const guideScheduler=require('./telegram-trade-guide').createScheduler({getMarkets:fetchLocalAnalysisMarkets,
+        history:(tf,at)=>require('./indicator-chart-history').history.snapshot(tf,at).candles,
+        record:event=>analysisAlerts.recordGuide(event)});
+      const guideTimer=setInterval(()=>guideScheduler.tick().catch(()=>console.error('Scheduled trade guide unavailable')),15000);
+      guideTimer.unref?.();
+    }
+
     if(store.pool){
       const records=new (require('./current-signal-records').CurrentSignalRecords)({pool:store.pool});
       try{await records.init();currentSignalRecords=records;records.start();console.log('Durable TF2/TF15 signal records ready');}
@@ -261,7 +276,8 @@ if (AUTH_ENABLED) {
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
         scalpingTimeframe: '2',
-        entryAccessAllowed:async userId=>require('./account-access').allowed(await authState.store.findUserByIdForLogin(userId)),
+        onConfirmedPositions: snapshot=>positionTelegram?.observe(snapshot),
+        entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u);},
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -279,6 +295,7 @@ if (AUTH_ENABLED) {
         credentialKeyId: MT5_CREDENTIAL_KEY_ID,
         credentialPublicKey: MT5_CREDENTIAL_PUBLIC_KEY
       });
+      if(store.pool&&analysisAlerts?.ready){try{positionTelegram?.stop();positionTelegram=new (require('./position-telegram').PositionTelegram)({pool:store.pool,store:autoStore,alerts:analysisAlerts});await positionTelegram.init();positionTelegram.diagnostics=true;positionTelegram.start();console.log('Personal MT5 position Telegram notifications ready');}catch(_){positionTelegram=null;console.error('Position Telegram notifications unavailable');}}
       autoTradeState.error = null;
       autoTradeState.ready = true;
       console.log(`ZenCore Auto Trade control plane ready (${usingMemory ? 'development memory store' : 'PostgreSQL'}) • execution ${AUTOTRADE_EXECUTION_ENABLED ? 'UNLOCKED' : 'LOCKED'} • hosted MT5 ${HOSTED_MT5_ENABLED ? 'ENVELOPE ENABLED' : 'LOCKED'} • GCP worker ${GCP_HOSTED_WORKER_ENABLED ? 'IDENTITY ENABLED' : 'LOCKED'}`);
@@ -466,6 +483,7 @@ async function requireSession(req, res, redirectTo = null) {
       else sendJson(res, 401, { ok: false, error: 'Sesi tamat. Sila log masuk semula.' });
       return null;
     }
+    if(session.user.role==='client'&&session.user.handoverState!=='LIVE'&&!require('./account-handover').allowedPath(new URL(req.url,'http://localhost').pathname,session.user.handoverState)){if(redirectTo)redirect(res,'/onboarding');else sendJson(res,403,{ok:false,code:'ACCOUNT_HANDOVER_REQUIRED',error:'Lengkapkan serahan admin dan profil dahulu.',handoverState:session.user.handoverState});return null;}
     // End authenticated streams when the client's access period ends as well.
     const deadline=session.user.role==='client'?new Date(session.user.accessExpiresAt).getTime():NaN;
     if(Number.isFinite(deadline)&&deadline>Date.now()){
@@ -606,6 +624,33 @@ async function handleManagementApi(req, res, pathname, session) {
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
+      }
+      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|setup\/state|setup\/settings|setup\/execution-diagnostics)$/i);
+      if(lifecycle){res.setHeader('Cache-Control','no-store');if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});const id=lifecycle[1],action=lifecycle[2];
+        if(req.method==='GET'&&action==='handover')return sendJson(res,200,await accountHandover.status(id));
+        if(req.method==='GET'&&action==='setup/state'){await accountHandover.row(id);const state=await autoTradeState.service.state(id);state.control.canTurnOn=false;state.control.canEnter=false;state.control.strategyReason='SETUP ADMIN — lengkapkan serahan dan profil user dahulu.';state.setupTarget=await accountHandover.status(id);return sendJson(res,200,state);}
+        if(req.method==='GET'&&action==='setup/execution-diagnostics')return sendJson(res,200,{ok:true,commands:[]});
+        if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+        if(req.method==='PUT'&&action==='setup/settings'){const target=await accountHandover.row(id);if(require('./account-handover').state(target)!=='ADMIN_SETUP')return sendJson(res,409,{ok:false,error:'Setup ini hanya dibuka pada fasa Admin Setup.'});return sendJson(res,200,await autoTradeState.service.saveSettings(id,body));}
+        if(req.method==='POST'&&action==='handover/release')return sendJson(res,200,await accountHandover.release(session.user,id));
+        if(req.method==='POST'&&action==='reset-account')return sendJson(res,200,await accountHandover.reset(session.user,id,body));
+        return sendJson(res,405,{ok:false,error:'Kaedah tidak dibenarkan.'});
+      }
+      if(pathname.startsWith('/api/admin/telegram/')){
+        res.setHeader('Cache-Control','no-store');
+        if(!adminTelegram)return sendJson(res,503,{ok:false,error:'Servis mesej admin belum tersedia.'});
+        try{
+          if(req.method==='GET'&&pathname==='/api/admin/telegram/recipients')return sendJson(res,200,await adminTelegram.catalog(session.user));
+          if(req.method==='GET'&&pathname==='/api/admin/telegram/history')return sendJson(res,200,await adminTelegram.history(session.user));
+          if(req.method==='GET'&&/^\/api\/admin\/telegram\/jobs\/[0-9a-f-]{36}$/i.test(pathname))return sendJson(res,200,await adminTelegram.details(session.user,pathname.split('/').pop()));
+          if(req.method!=='POST')return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
+          if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+          const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+          if(!body||typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+          if(pathname==='/api/admin/telegram/preview')return sendJson(res,200,await adminTelegram.preview(session.user,body));
+          if(pathname==='/api/admin/telegram/send')return sendJson(res,200,await adminTelegram.send(session.user,body.draftId));
+          return sendJson(res,404,{ok:false,error:'Endpoint tidak dijumpai.'});
+        }catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis mesej admin tidak tersedia. Cuba lagi.'});}
       }
       if(pathname==='/api/admin/monitoring/notifications'){
         res.setHeader('Cache-Control','no-store');
@@ -1374,7 +1419,7 @@ async function handleExecutionApi(req, res, pathname) {
   try {
     if (req.method === 'GET' && pathname === '/api/execution/link-status') return sendJson(res,200,await autoTradeState.service.executionLinkStatus(token));
     if(req.method==='POST'&&pathname==='/api/execution/broker-metadata') {
-      const body=await parseApiJson(req,res);if(body===null)return;
+      const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
       return sendJson(res,200,await autoTradeState.service.reportBrokerMetadata(token,body));
     }
     if (req.method === 'POST' && pathname === '/api/execution/heartbeat') {
@@ -1552,9 +1597,11 @@ function startAutoTradeDispatcher() {
 const signalDeskRoutes = require('./signal-desk-routes');
 const signalDeskEnabled = signalDeskRoutes.enabled();
 const handleSignalDesk = signalDeskRoutes.createHandler({active:signalDeskEnabled,requireSession,sendAsset,sendJson});
+const ibDemoHandler=require('./ib-demo-server').createDemoHandler({secure:process.env.ZENCORE_INSECURE_COOKIE!=='true'});
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
+  if(await ibDemoHandler(req,res,pathname))return;
   if (await handleSignalDesk(req,res,pathname)) return;
 
   if(req.method==='POST'&&pathname==='/webhook'){
@@ -1591,6 +1638,11 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if(req.method==='GET'&&['/onboarding.js','/onboarding.css','/admin-handover.js','/admin-setup-context.js'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8');
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/onboarding'){const session=await requireRole(req,res,'client','/login');if(!session)return;return sendAuthAsset(res,'onboarding.html','text/html; charset=utf-8');}
+  if(pathname==='/api/account/handover'){const session=await requireSession(req,res);if(!session)return;if(session.user.role!=='client')return sendJson(res,403,{ok:false,error:'Akaun client sahaja.'});if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});try{if(req.method==='GET')return sendJson(res,200,await accountHandover.status(session.user.id));if(req.method==='POST'&&requestOriginAllowed(req)){const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});const done=await accountHandover.complete(session.user.id,body);return sendJson(res,200,done,{'Set-Cookie':authState.service.clearCookie()});}return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});}catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis serahan tidak tersedia.'});}}
+  const setupPage=pathname.match(/^\/admin\/client\/([0-9a-f-]{36})\/setup$/i);
+  if(AUTH_ENABLED&&req.method==='GET'&&setupPage){const session=await requireRole(req,res,'admin','/login');if(!session)return;res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'auto-trade.html'),'utf8').replace('<head>','<head><script src="/admin-setup-context.js"></script>'));}
   if (req.method === 'GET' && ['/admin-user-trade.js','/admin-user-trade.css','/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
@@ -1656,6 +1708,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/detail.js') return sendAuthAsset(res, 'detail.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/client-connections.js') return sendAuthAsset(res, 'client-connections.js', 'application/javascript; charset=utf-8');
+  if(req.method==='GET'&&['/admin-telegram.js','/admin-telegram.css'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.js')?'application/javascript; charset=utf-8':'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/admin-ops.js') return sendAuthAsset(res, 'admin-ops.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
@@ -1672,6 +1725,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && ['/downloads/ZenCore_TF2_SOP_V6.pine','/downloads/ZenCore_TF15_SOP_V6.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_ATR8_TP1Max3.pine') return sendAuthAsset(res, 'ZenCore_TF2_ATR8_TP1Max3.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && ['/downloads/ZenCore_TF2_SolidOnly.pine','/downloads/ZenCore_TF15_SolidOnly.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
   if (req.method === 'GET' && ['/downloads/ZenCore_TF2_Forecast45.pine','/downloads/ZenCore_TF15_Forecast45.pine'].includes(pathname)) return sendAuthAsset(res, pathname.split('/').pop(), 'text/plain; charset=utf-8');
@@ -1680,6 +1734,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF3_Scalp.pine') return sendAuthAsset(res, 'ZenCore_TF2_Scalp.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/tf15-intraday.js') return sendAuthAsset(res, 'tf15-intraday.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Intraday.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/tf2-bar-close.js') return sendAuthAsset(res, 'tf2-bar-close.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/setup-lifecycle.js') return sendAuthAsset(res, 'setup-lifecycle.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/tf3-scalping.js') return sendAuthAsset(res, 'tf3-scalping.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Scalp_Caps.pine') return sendAuthAsset(res, 'ZenCore_Original_Full_TF2_Scalp_Caps.pine', 'text/plain; charset=utf-8');
@@ -1780,6 +1835,7 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
   }
 
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/telegram'){const session=await requireRole(req,res,'admin','/login');if(!session)return;return sendAuthAsset(res,'admin-telegram.html','text/html; charset=utf-8');}
   if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/user-trade-monitor') {
     const session=await requireRole(req,res,'admin','/login');if(!session)return;
     return sendAuthAsset(res,'admin-user-trade.html','text/html; charset=utf-8');

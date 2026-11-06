@@ -37,7 +37,7 @@ function createEntryCycleReset(store){
   }
  }
  async function check(user,pod,market){
-  if(![POLICY,'PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(market?.strategyNormal?.sop?.entryPolicyVersion))return {allowed:true,reason:null};
+  if(![POLICY,'PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(market?.strategyNormal?.sop?.entryPolicyVersion))return {allowed:true,reason:null};
   const mode=String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING',k=key(user,pod,mode);
   if(!cache.has(k))cache.set(k,typeof store.lastStrategyCycleReset==='function'?await store.lastStrategyCycleReset(user,pod,mode):null);
   const reset=cache.get(k);
@@ -49,7 +49,7 @@ function createEntryCycleReset(store){
     }
   }
   if(!reset)return {allowed:true,reason:null};
-  if(s.lifecycleVersion===Lifecycle.VERSION){
+  if(Lifecycle.supported(s.lifecycleVersion)){
    // Pine INITIAL is a genuinely new native SOLID, not a continuation of the
    // last closed setup. Require both its source candle and live trigger after
    // the confirmed close; a held INITIAL cannot reuse this after its own exit.

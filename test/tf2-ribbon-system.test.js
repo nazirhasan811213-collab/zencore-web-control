@@ -21,7 +21,7 @@ test('stale, wrong timeframe, old rule and replay batches fail closed',()=>{for(
 test('opposite ribbon, excess SL and changed MTF block entry',()=>{for(const change of [f=>f.row[65].tf2.fast=4099,f=>f.row[23]=4094,f=>f.row[66].dashboardAi.dashboard.mtfTimeframes=['15','30','60'],f=>f.row[66].solidHoldActive=false]){const f=fixture();change(f);const m=market(f);a.equal(m.strategyNormal.state,'WAIT');a.equal(C.createEntryDecision(m),null);}});
 test('Forecast ignored; execution event mandatory and Dashboard never orders',()=>{const f=fixture();f.row[43]=40;let m=market(f);a.equal(m.strategyNormal.sop.passed,4);a.ok(C.createEntryDecision(m));m={...m,feedChannel:'DASHBOARD'};a.equal(C.createEntryDecision(m),null);m={...m,feedChannel:'EXECUTION',entryEvent:false};a.equal(C.createEntryDecision(m),null);});
 test('TP1 plus .50 uses existing absolute-price SL action, not EA entry override',()=>{const f=fixture();f.row[24]=4100.5;f.row[58]='MOVE_SL_ENTRY_PLUS_050';f.row[59]=true;const m=market(f),d=C.createManagementDecision(m);a.deepEqual(d.snapshot.actions[0],{type:'MOVE_SL_TP1',activeSl:4100.5,lockLabel:'INITIAL'});});
-test('Telegram TF2 entry and close preserve timeframe without sending messages',async()=>{const f=fixture(),m=market(f);const service=new Alerts.AnalysisAlerts();await service.init();await service.record(m);const e=service.events.find(x=>x.kind==='ENTRY');a.ok(e);a.equal(T.entrySopAllowed(e),true);a.match(T.telegramMessage(e),/SOLID ENTRY TF2/);a.match(T.telegramMessage(e),/4,100\.00/);const close={...m,receivedAt:f.now+1,entryEvent:false,positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};await service.record(close);a.ok(service.events.some(x=>x.kind==='CLOSE'&&x.timeframe==='2'));clearInterval(service.cleanupTimer);});
+test('Telegram TF2 entry and close preserve timeframe without sending messages',async()=>{const f=fixture(),m=market(f);const service=new Alerts.AnalysisAlerts();await service.init();await service.record(m);const e=service.events.find(x=>x.kind==='ENTRY');a.ok(e);a.equal(T.entrySopAllowed(e),true);a.match(T.telegramMessage(e),/ENTRY TF2/);a.match(T.telegramMessage(e),/4,100\.00/);const close={...m,receivedAt:f.now+1,entryEvent:false,positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};await service.record(close);a.ok(service.events.some(x=>x.kind==='CLOSE'&&x.timeframe==='2'));clearInterval(service.cleanupTimer);});
 
 test('ATR8 metadata rejected; chart partial becomes full close; management deduplicates',()=>{let f=fixture();f.row[66].atrPeriod=8;a.equal(market(f).strategyNormal.state,'WAIT');f=fixture();const m=market(f);m.positionManagement={action:'CLOSE_50_NOW',reason:'chart partial'};const d=C.createManagementDecision(m);a.equal(d.snapshot.actions[0].percent,100);a.equal(d.snapshot.actions[0].reason,'EXIT_ALL');a.equal(d.managementKey,C.createManagementDecision({...m,receivedAt:m.receivedAt+1}).managementKey);a.equal(d.snapshot.setupKey,m.setupKey);});
 test('queued TF2 confirmation is recomputed from live values',()=>{const m=market(fixture());a.equal(Core.entryConfirmationsPass(m),true);m.strategyNormal.sop.hema2.fast=4099;a.equal(Core.entryConfirmationsPass(m),false);});
@@ -97,7 +97,7 @@ test('Unified Pine uses one execution stream with heartbeat budget and explicit 
  a.match(text,/input.string\("Unified", "Feed channel"/);
  a.match(text,/zc24_channel == "Dashboard" \? "DASHBOARD" : "EXECUTION"/);
  a.match(text,/zc24_count < 6/);a.match(text,/zc24_count < 12/);
- a.match(require('node:fs').readFileSync(require.resolve('../analysis-telegram'),'utf8'),/belum pengesahan order MT5/);
+ a.match(require('node:fs').readFileSync(require.resolve('../analysis-telegram'),'utf8'),/Signal sahaja/);
 });
 
 test('newer dashboard does not suppress a matching execution close event',async()=>{
@@ -241,7 +241,7 @@ test('signed TF2 order survives an 11s poll without extending the original event
 });
 
 
-test('current Telegram layout puts action and own plan before bounded analysis, without claiming an MT5 fill',async()=>{
+test('short Telegram layout keeps prices and action without coach text or MT5 fill claims',async()=>{
  for(const side of ['BUY','SELL']){
   const f=fixture(side);delete require.cache[require.resolve('../tf2-ribbon-market-hub')];
   const m=require('../tf2-ribbon-market-hub').ingest(f.batch,f.now)[0],alerts=new Alerts.AnalysisAlerts();a.ok(m);await alerts.init();
@@ -249,12 +249,12 @@ test('current Telegram layout puts action and own plan before bounded analysis, 
    await alerts.record(m);const event=alerts.events.find(x=>x.kind==='ENTRY');a.ok(event);
    event.telegramSop.advisor={trend:side==='BUY'?'Uptrend':'Downtrend',momentum:side==='BUY'?'Bullish':'Bearish',mtfSummary:'Ringkasan '.repeat(200),advice:'SETUP KURANG PADU.',proTip:'JAGA MODAL - JANGAN TRADE'};
    const text=T.telegramMessage(event);a.ok(text.length<4096);a.ok(text.startsWith('━━━━━━━━━━━━━━━━━━\n'+(side==='BUY'?'🟢':'🔴')));
-   a.ok(text.indexOf('📌 APA NAK BUAT')<text.indexOf('🎯 PELAN ENTRY'));a.ok(text.indexOf('🎯 PELAN ENTRY')<text.indexOf('📊 ANALYSIS SEMASA'));
-   a.match(text,/Jangan tambah entry atau re-entry/);a.match(text,/belum pengesahan order MT5/);
-   a.equal((text.match(/Entry:/g)||[]).length,1);a.equal((text.match(/SL:/g)||[]).length,1);a.equal((text.match(/Forecast 10 candle:/g)||[]).length,1);
-   a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,1);
+   a.ok(text.indexOf('Entry:')<text.indexOf('TP1:'));a.ok(text.indexOf('TP1:')<text.indexOf('Rumusan AI ZenCore:'));a.ok(text.length<2400);
+   a.match(text,/Jangan tambah posisi untuk cover rugi/);a.match(text,/Signal sahaja/);
+   a.equal((text.match(/Entry:/g)||[]).length,1);a.equal((text.match(/SL:/g)||[]).length,1);a.equal((text.match(/Forecast 10 candle:/g)||[]).length,0);
+   a.equal((text.match(/SETUP HIGH RISK JAGA SAIZ LAYER DAN LOT/g)||[]).length,0);
    a.doesNotMatch(text,/ORDER DIBUKA|ORDER EXECUTED|STATUS: SETUP ANALYSIS|undefined|NaN/);
-   a.match(text,/Rujukan: ZC-/);a.match(text,/MYT/);
+   a.match(text,/ZC-/);a.match(text,/MYT/);
   }finally{clearInterval(alerts.cleanupTimer);}
  }
 });

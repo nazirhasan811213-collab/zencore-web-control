@@ -49,7 +49,7 @@
 
   function clientValidation(payload) {
     const errors = {};
-    if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(payload.email)) {
+    if (!payload.email || (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(payload.email) && !(page==='login'&&/^zcuser\s*(10|[1-9])$/i.test(payload.email.trim())))) {
       errors.email = 'Masukkan alamat e-mel yang sah.';
     }
     if (!payload.password) errors.password = 'Masukkan password.';

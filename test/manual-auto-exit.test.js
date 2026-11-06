@@ -8,15 +8,38 @@ const settings={capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],riskA
 async function setup(capability=true){
  const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-that-is-longer-than-thirty-two-bytes',allowDemoExecution:true,allowedDemoOwnershipModes:['TRADER_OWNED_EA_LOCAL'],now:()=>at});
  const {podToken}=await service.connectLocalEa(userId);
- await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',manualExitVersion:capability?'MANUAL_TF2_EXIT_V2':null,positions:[]});
+ await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',manualExitVersion:capability==='custom'?'MANUAL_TF2_EXIT_V3':capability?'MANUAL_TF2_EXIT_V2':null,manualExitCustomSupported:capability==='custom',positions:[]});
  return {store,service,podToken};
 }
-test('manual policy pins requested distances and warning-only ten layers, independent of lot',()=>{
+test('manual distances accept custom values and use defaults per blank field',()=>{
  assert.equal(Core.validateSettings({...settings,manualExit:undefined}).value.manualExit.enabled,false);
- for(const lot of [.01,.1,1]){
-  const value=Core.validateSettings({...settings,lotPerLayer:lot,manualExit:{enabled:true,tp1:99,sl:100}}).value.manualExit;
-  assert.deepEqual(value,{version:'MANUAL_TF2_EXIT_V2',enabled:true,timeframeMinutes:2,tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'});
+ for(const lot of [.01,.1,1]) {
+  const result=Core.validateSettings({...settings,lotPerLayer:lot,manualExit:{enabled:true,tp1:'1.5',tp2:'',tp3:'  ',sl:'4'}});
+  assert.equal(result.ok,true);assert.deepEqual(result.value.manualExit,{...cfg,version:'MANUAL_TF2_EXIT_V3',tp1:1.5,sl:4});
  }
+ assert.deepEqual(Core.validateSettings({...settings,manualExit:{enabled:true,tp1:'',tp2:null,tp3:undefined,sl:' '}}).value.manualExit,cfg);
+ for(const bad of [{tp1:0},{sl:-1},{sl:Infinity},{sl:'abc'},{sl:true},{tp1:4},{tp2:7},{tp3:4}])assert.equal(Core.validateSettings({...settings,manualExit:{...cfg,...bad}}).ok,false);
+});
+test('custom configuration requires both upgraded Connector and EA; legacy defaults still work',async()=>{
+ const custom={...settings,manualExit:{...cfg,tp1:1.5,sl:4}};
+ const old=await setup();await assert.rejects(old.service.saveSettings(userId,custom),e=>e.code==='MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED');
+ const fresh=await setup('custom');const state=await fresh.service.saveSettings(userId,custom);
+ assert.equal(state.settings.manualExit.sl,4);assert.equal(state.control.desiredState,'STOPPED');
+ const {command}=await fresh.service.nextCommand(fresh.podToken);assert.deepEqual(command.payload.manualExit,{...cfg,version:'MANUAL_TF2_EXIT_V3',tp1:1.5,sl:4});
+ const raw={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Broker',tradeMode:'DEMO',manualExitVersion:'MANUAL_TF2_EXIT_V3'};
+ assert.equal(Core.normaliseHeartbeat(raw).value.manualExitVersion,null);
+ assert.equal(Core.normaliseHeartbeat({...raw,manualExitCustomSupported:true}).value.manualExitVersion,'MANUAL_TF2_EXIT_V3');
+});
+test('custom queued settings are rejected after edit; OFF remains compatible after downgrade',async()=>{
+ const {service,podToken,store}=await setup('custom');await service.saveSettings(userId,{...settings,manualExit:{...cfg,sl:4}});
+ await service.saveSettings(userId,{...settings,manualExit:{...cfg,sl:5}});
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ const {command}=await service.nextCommand(podToken);assert.equal(command.payload.manualExit.sl,5);
+ await service.acknowledgeCommand(podToken,command.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
+ const pod=await store.getPodForUser(userId);pod.manualExitVersion='MANUAL_TF2_EXIT_V2';
+ await service.saveSettings(userId,{...settings,manualExit:{enabled:false,sl:5}});
+ const off=(await service.nextCommand(podToken)).command;assert.equal(off.payload.manualExit.enabled,false);assert.equal(off.payload.manualExit.version,'MANUAL_TF2_EXIT_V2');
+ assert.equal((await service.state(userId)).settings.manualExit.sl,5);
 });
 test('saving manual exit while entry STOPPED issues only a signed exit config, never ON or entry',async()=>{
  const {store,service,podToken}=await setup();

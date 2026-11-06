@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Login — ZenCore</title>
+  <link rel="stylesheet" href="/auth.css?v=1.0">
+  <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
+  <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"></head>
+<body data-auth-page="login">
+  <main class="auth-shell">
+    <section class="auth-story" aria-label="Pengenalan ZenCore">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+        <div><b>ZenCore Precision Entry</b><span>Professional Trading Analysis Workspace</span></div>
+      </div>
+
+      <div class="story-copy">
+        <div class="eyebrow">Analysis dahulu. Entry bila cukup syarat.</div>
+        <h1>Semua yang trader perlu, dalam satu tempat.</h1>
+        <p>Check Gold TF2 dan TF15, tengok SOP entry dan manage posisi ikut EXIT 32.3 StepLock — semua dalam ZenCore.</p>
+        <div class="feature-row" aria-label="Ciri utama">
+          <span>XAUUSD</span><span>TF2 / TF15</span><span>EXIT 32.3</span><span>LIVE ANALYSIS</span>
+        </div>
+      </div>
+
+      <p class="risk-note">ZenCore bantu baca market dan manage proses trade. Tak ada jaminan profit. Jaga risiko dan guna akaun demo masa test.</p>
+    </section>
+
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div class="brand mobile-brand">
+          <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
+          <div><b>ZenCore Precision Entry</b><span>Trading Analysis Workspace</span></div>
+        </div>
+        <div class="eyebrow">Mod Demo</div>
+        <h2>Login IB</h2>
+        <p class="auth-lead">Dashboard dan analisis untuk sesi latihan trader.</p>
+
+        <form id="authForm" class="form-grid" novalidate>
+          <div class="field">
+            <label for="email">E-mel</label>
+            <div class="input-wrap">
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" value="ib.demo@zencore.invalid" placeholder="nama@email.com" required>
+            </div>
+            <span class="field-error" data-error-for="email"></span>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="Masukkan password" required>
+              <button class="password-toggle" type="button" data-password-toggle="password" aria-label="Tunjukkan password">LIHAT</button>
+            </div>
+            <span class="field-error" data-error-for="password"></span>
+          </div>
+
+          <div id="formStatus" class="form-status" role="alert" aria-live="polite"></div>
+          <button id="submitButton" class="primary-btn" type="submit">MASUK KE ZENCORE</button>
+        </form>
+
+        <p class="auth-switch">Mod Demo • Simulasi latihan.</p>
+      </div>
+    </section>
+  </main>
+  <script src="/demo/ib/app.js" defer></script>
+</body>
+</html>

@@ -9,8 +9,8 @@ test('Telegram new SOP requires all confirmation gates and ignores old quality s
  for(const edit of [{tf:'3m'},{solid:false},{green:2},{gates:[{pass:true}]},{gates:e.telegramSop.gates.map((g,i)=>({pass:i!==5}))}])
   assert.equal(entrySopAllowed({...e,telegramSop:{...e.telegramSop,...edit}}),false);
  assert.equal(entrySopAllowed({...e,telegramSop:undefined}),false);
- const text=telegramMessage(e);assert.match(text,/SOLID ENTRY TF2/);assert.match(text,/Checklist: 3\/5/);
- assert.match(text,/NEUTRAL 56%/);assert.match(text,/HEMA TF3 confirmed: STRONG/);
+ const text=telegramMessage(e);assert.match(text,/ENTRY TF2/);assert.match(text,/Sebab entry:/);
+ assert.match(text,/Rumusan AI ZenCore:/);assert.doesNotMatch(text,/Forecast|HEMA TF3/);
  assert.doesNotMatch(text,/NORMAL 3M|A\+ PROFIT QUALITY|LOW QUALITY/);
 });
 test('Analysis records the same approved SOP and plan for Telegram without sending',async()=>{

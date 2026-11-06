@@ -2,6 +2,7 @@
 // The authenticated webhook handles identity; this guard validates freshness and
 // the compact execution state before preserving intrabar management actions.
 function allow(row,batch,now=Date.now()){
+ if(row?.[66]?.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').allowRow(row,batch))return false;
  const meta=row?.[66],t=batch?.emittedAt,action=row?.[49],stage=row?.[48];
  if(!Array.isArray(row)||String(batch?.timeframe)!=='2'||batch.feedChannel!=='EXECUTION'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||batch.feedVersion!=='TF2_REALTIME_V1'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||
  !['TF2_SOLID_RIBBON_V1'].includes(meta?.entryRuleVersion)||

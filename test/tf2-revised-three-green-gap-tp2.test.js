@@ -34,7 +34,7 @@ test('valid 3-green entry authorizes below TP1, but TP2 analysis cannot bypass u
   const d=frame(side),tracked=createEntrySetupTracker().update(d),x=evaluateEntrySop(tracked,'2'),m=market(d,x);
   assert.equal(x.standardReady,true);assert.ok(C.createEntryDecision(m));assert.equal(C.entryQuality(m).grade,'C+');
   const event={kind:'ENTRY',id:'GAP',time:Date.now(),symbol:'XAUUSD',side,timeframe:'2',telegramSop:{version:x.version,tf:'2m',solid:true,green:3,gates:x.gates,forecast:x.forecast,power:x.power,hema2:x.hema2,hema3:x.hema3,atrReference:x.atrReference,pullback:x.pullback,eaEntryCompatible:true},telegramQuality:C.entryQuality(m),telegramPlan:m.strategyNormal.plan};
-  assert.equal(T.entrySopAllowed(event),true);assert.match(T.telegramMessage(event),/SOLID ENTRY TF2/);
+  assert.equal(T.entrySopAllowed(event),true);assert.match(T.telegramMessage(event),/ENTRY TF2/);
   const later={...d,tp1Hit:true,normal3Close:100+(side==='BUY'?1.2:-1.2)},n=createEntrySetupTracker().update(later),y=evaluateEntrySop(n,'2');assert.equal(y.standardReady,false);
   const lateMarket=market(later,y);assert.equal(C.createEntryDecision(lateMarket),null);
   assert.equal(T.entrySopAllowed({...event,telegramSop:{...event.telegramSop,eaEntryCompatible:false}}),false);

@@ -22,3 +22,19 @@ test('retention, response size and timeframe isolation are bounded',()=>{
  const merged=Core.merge(input,[{...p,time:now+6000},{...p,time:now-Core.MAX_AGE-1},{...p,timeframe:'15'}],'2',now);
  assert.equal(merged.length,Core.MAX_BARS);assert(merged.every(p=>p.timeframe==='2'&&p.time<=now&&p.time>=now-Core.MAX_AGE));
 });
+
+test('confirmed close survives newer intrabar snapshot and persists across history restart',async()=>{
+ const records=new Map();let writes=0;const pool={query:async(sql,args=[])=>{
+  if(sql.startsWith('SELECT data'))return{rows:[...records.values()].map(data=>({data}))};
+  if(sql.startsWith('INSERT INTO')){writes++;for(const x of JSON.parse(args[0]))records.set(x.tf+'|'+x.bar_time,x.data);}return{rows:[]};
+ }};
+ const h=new ChartHistory();await h.init(pool,now);try{
+  const closed={...frame('2',bar-120000),confirmed:true,signalObservedAt:bar,atr:2,waveTrend1:3,waveTrend2:1};h.observe(closed,now);h.observe({...closed,confirmed:false,signalObservedAt:bar+1000,close:4101},now);
+  assert.equal(h.snapshot('2',now).candles.at(-1).confirmed,true);assert.equal(h.snapshot('2',now).candles.at(-1).close,4102);await h.flush(now);assert.equal(writes,1);
+  const restored=new ChartHistory();await restored.init(pool,now);try{assert.equal(restored.snapshot('2',now).candles.length,1);assert.equal(restored.snapshot('2',now).candles[0].atr,2);}finally{clearInterval(restored.timer);}
+ }finally{clearInterval(h.timer);}
+});
+
+test('legacy history without confirmed flag still accepts newer live chart OHLC',()=>{
+ const old=Core.point(frame());delete old.confirmed;const next={...Core.point(frame()),confirmed:false,observedAt:old.observedAt+1,open:4101,close:4103};const merged=Core.merge([old],next,'2',now);assert.equal(merged[0].close,4103);assert.equal(merged[0].open,4101);
+});

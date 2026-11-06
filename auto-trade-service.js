@@ -136,6 +136,7 @@ function createAutoTradeService(options = {}) {
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const dispatchDiagnosticAt = new Map();
   const entryCycleReset=require('./entry-cycle-reset').createEntryCycleReset(store);
+
   const reentryTracker=new Reentry.Tracker(),reentryCapability=new Map(),heartbeatChains=new Map();
   const commandTtlMs = Math.max(15_000, Number(options.commandTtlMs) || 2 * 60 * 1000);
   const hostedLeaseTtlMs = Math.max(30_000, Math.min(5 * 60 * 1000,
@@ -401,6 +402,7 @@ function createAutoTradeService(options = {}) {
         ? Math.round(profile.lotPerLayer * profile.layers * 100000) / 100000 : null,
       riskAcknowledgedAt: profile.riskAcknowledgedAt
     } : null;
+    const entryAccessReady=!options.entryAccessAllowed||await options.entryAccessAllowed(userId);
     const effectiveState = !pod && !hostedAccount ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
     const desiredState = profile?.desiredState || 'STOPPED';
     const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
@@ -426,8 +428,8 @@ function createAutoTradeService(options = {}) {
         strategyReason: strategyReady?null:'TF15/Both memerlukan EA/Connector 1.2.',
         exitPolicyReady,
         exitPolicyReason: exitPolicyReady ? null : 'Rule TF2 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
-        canEnter: exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
+        canEnter: entryAccessReady && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
       pod: pod ? {
@@ -877,7 +879,7 @@ function createAutoTradeService(options = {}) {
       throw serviceError('DEMO_SYMBOL_NOT_VALIDATED', 'Pilih pair daripada skop broker yang disahkan.', 400);
     }
     const manualPod=localEa ? await store.getPodForUser(userId) : null;
-    if(input.manualExit?.enabled===true && (!localEa || manualPod?.manualExitVersion!=='MANUAL_TF2_EXIT_V2'))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA 1.30.',409);
+    if(input.manualExit?.enabled===true && (!localEa || !['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(manualPod?.manualExitVersion)))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA yang menyokong exit manual.',409);
     const validation = Core.validateSettings({
       ...input,
       manualExit:input.manualExit ?? previous?.manualExit,
@@ -886,6 +888,7 @@ function createAutoTradeService(options = {}) {
       symbols: localEa ? input.symbols : allowedDemoSymbols
     });
     if (!validation.ok) throw serviceError('VALIDATION_ERROR', 'Semak konfigurasi Auto Trade.', 400, validation.errors);
+    if(validation.value.manualExit.enabled && validation.value.manualExit.version==='MANUAL_TF2_EXIT_V3' && manualPod?.manualExitVersion!=='MANUAL_TF2_EXIT_V3')throw serviceError('MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED','TP/SL tersuai perlu Connector 2.1.10 / EA 2.17 atau VPS Manager 1.0.2.',409);
     if (input.riskAcknowledged !== true) {
       throw serviceError('RISK_ACK_REQUIRED', 'Pengesahan risiko diperlukan.', 400, {
         riskAcknowledged: 'Tandakan pengesahan risiko untuk menyimpan.'
@@ -916,11 +919,16 @@ function createAutoTradeService(options = {}) {
         payload: { mode: pod.tradeMode, strategy: 'NORMAL_3M_SOP_V32', exitSchema: '32.3-EXIT-STEPLOCK', settings: validation.value } });
       await store.setControl(userId, { desiredState: 'ON', effectiveState: 'ARMING', pendingCommandId: issued.command.id, lastError: null });
     }
-    if(localEa && manualPod?.manualExitVersion==='MANUAL_TF2_EXIT_V2')await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:validation.value.manualExit},ttlMs:30000});
+    if(localEa && ['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(manualPod?.manualExitVersion)) {
+      // OFF must remain deliverable to legacy installations even with saved custom presets.
+      const config=validation.value.manualExit.enabled ? validation.value.manualExit : Core.validateSettings({manualExit:{enabled:false}}).value.manualExit;
+      await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:config},ttlMs:30000});
+    }
     return state(userId);
   }
 
   async function turnOn(userId, input = {}) {
+    if(options.entryAccessAllowed&&!await options.entryAccessAllowed(userId))throw serviceError('ACCOUNT_NOT_LIVE','Akaun belum live. Lengkapkan serahan admin dan profil dahulu.',403);
     const allowDemoExecution = executionAllowed(userId, await store.getPodForUser(userId));
     if (!allowDemoExecution) {
       throw serviceError(
@@ -1143,6 +1151,10 @@ function createAutoTradeService(options = {}) {
     const profile=await store.getProfile(pod.userId);
     const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
+    if(accountAccessAllowed&&isLocalEa(updated)&&input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&typeof options.onConfirmedPositions==='function'){
+      try{await options.onConfirmedPositions({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});}
+      catch(_){console.error('Position Telegram observation unavailable');}
+    }
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
     if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
       fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&
@@ -1181,6 +1193,7 @@ function createAutoTradeService(options = {}) {
     }
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
+      if(queued.enabled && queued.version==='MANUAL_TF2_EXIT_V3' && (await store.getPodForUser(command.userId))?.manualExitVersion!=='MANUAL_TF2_EXIT_V3')return false;
       return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
@@ -1504,7 +1517,7 @@ function createAutoTradeService(options = {}) {
         if (!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market)) continue;
         if (!allowedDemoSymbols.includes(symbol))continue;
         if(!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
-        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
+        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
         const cycle=await entryCycleReset.check(profile.userId,pod?.id,market);
         if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
         if (hostedAccount) {
@@ -1588,7 +1601,7 @@ function createAutoTradeService(options = {}) {
         const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
         if (!management&&!manualManagement) continue;
         const sourceAt=Number(market.signalObservedAt||market.receivedAt);
-        if(!hostedAccount&&pod?.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
+        if(!hostedAccount&&['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion)&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
           const side=market.strategyNormal?.side;
           const actions=(manualManagement?.payload.actions||[]).filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){
@@ -1628,11 +1641,11 @@ function createAutoTradeService(options = {}) {
     const [pod,positions]=await Promise.all([store.getPodForUser(userId),store.listPositions(userId)]);
     if(!isLocalEa(pod)||!connectionState(pod).ready)return false;
     const sop=event.telegramSop||{};
-    const market={symbol:event.symbol,timeframe:'2',signalObservedAt:sop.signalObservedAt,
+    const market={symbol:event.symbol,timeframe:event.timeframe||'2',signalObservedAt:sop.signalObservedAt,
       strategyNormal:{side:event.side,sop}};
     if(!Core.permitsPositionEntry(market,positions))return false;
     // A re-entry signal requires an actual preceding fill and broker close.
-    const last=await store.latestExecutedSetupForMode(userId,pod.id,'TF2_SCALPING');
+    const last=await store.latestExecutedSetupForMode(userId,pod.id,String(event.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING');
     if(!last)return false;
     const cycle=await entryCycleReset.check(userId,pod.id,market);
     return cycle.allowed&&Number.isFinite(cycle.closedAt)?{allowed:true,cycleKey:[pod.id,last.id,cycle.closedAt].join('|')}:false;

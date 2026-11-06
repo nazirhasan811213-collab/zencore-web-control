@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('crypto');
+const Retention=require('./record-retention');
 const validTime=t=>Number.isFinite(t)&&t>0;
 function idFor(e){return crypto.createHash('sha256').update(JSON.stringify([e.symbol,String(e.timeframe),e.setupKey||e.notificationKey||null])).digest('hex');}
 function applyEvent(rows,e){
@@ -30,45 +31,48 @@ function applyEvent(rows,e){
  row.lastEventAt=e.time;changed.push(row);return changed;
 }
 class CurrentSignalRecords{
- constructor({pool,log=console}={}){this.pool=pool;this.log=log;this.error=null;this.lastSync=null;this.queue=Promise.resolve();}
+ constructor({pool,log=console,now=Date.now}={}){this.now=now;this.pool=pool;this.log=log;this.error=null;this.lastSync=null;this.queue=Promise.resolve();}
  async init(){await this.pool.query(`CREATE TABLE IF NOT EXISTS zencore_current_signal_records(
   id CHAR(64) PRIMARY KEY,symbol TEXT NOT NULL,timeframe TEXT NOT NULL,state TEXT NOT NULL,
   opened_at BIGINT NOT NULL,resolved_at BIGINT,data JSONB NOT NULL);
   CREATE INDEX IF NOT EXISTS zencore_current_signal_records_time ON zencore_current_signal_records(opened_at DESC);
   CREATE TABLE IF NOT EXISTS zencore_signal_record_cursor(id INTEGER PRIMARY KEY,last_event_id BIGINT NOT NULL);
-  INSERT INTO zencore_signal_record_cursor(id,last_event_id) VALUES(1,0) ON CONFLICT DO NOTHING;`);}
+  INSERT INTO zencore_signal_record_cursor(id,last_event_id) VALUES(1,0) ON CONFLICT DO NOTHING;`);await this.prune(true);}
+ async prune(report=false){if(process.env.ZENCORE_PRESERVE_SIGNAL_HISTORY==="true")return;const cutoff=Retention.cutoffAt(this.now());const result=await this.pool.query('DELETE FROM zencore_current_signal_records WHERE opened_at<$1',[cutoff]);if(report||result.rowCount)this.log.log?.('Signal record retention applied:',JSON.stringify({table:'current',cutoff,deleted:result.rowCount||0,months:Retention.MONTHS,startAt:Retention.START_AT}));}
  sync(){const run=this.queue.catch(()=>{}).then(()=>this.drain());this.queue=run;return run;}
- async drain(){let imported=0;
+ async drain(){let imported=0;const cutoff=Retention.cutoffAt(this.now());
   try{for(let batch=0;batch<10;batch++){
    const c=await this.pool.connect();let count=0;
    try{await c.query('BEGIN');await c.query("SELECT pg_advisory_xact_lock(hashtext('zencore-current-signal-records'))");
+    const removed=process.env.ZENCORE_PRESERVE_SIGNAL_HISTORY==='true'?{rowCount:0}:await c.query('DELETE FROM zencore_current_signal_records WHERE opened_at<$1',[cutoff]);
     const cursor=(await c.query('SELECT last_event_id FROM zencore_signal_record_cursor WHERE id=1')).rows[0].last_event_id;
     const events=(await c.query('SELECT id,data FROM zencore_analysis_alerts WHERE id>$1 ORDER BY id LIMIT 200',[cursor])).rows;count=events.length;
     if(count){const ids=events.map(r=>idFor(r.data));
      const saved=(await c.query("SELECT data FROM zencore_current_signal_records WHERE state='OPEN' OR id=ANY($1::text[])",[ids])).rows;
      const rows=new Map(saved.map(r=>[r.data.id,r.data])),updates=new Map();
-     for(const {data:e} of events)for(const row of applyEvent(rows,e))updates.set(row.id,row);
+     for(const {data:e} of events)if(e.time>=cutoff)for(const row of applyEvent(rows,e))updates.set(row.id,row);
      for(const row of updates.values())await c.query(`INSERT INTO zencore_current_signal_records(id,symbol,timeframe,state,opened_at,resolved_at,data)
       VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET state=EXCLUDED.state,resolved_at=EXCLUDED.resolved_at,data=EXCLUDED.data`,[row.id,row.symbol,row.timeframe,row.state,row.openedAt,row.resolvedAt,row]);
      await c.query('UPDATE zencore_signal_record_cursor SET last_event_id=$1 WHERE id=1',[events.at(-1).id]);imported+=updates.size;
     }
-    await c.query('COMMIT');
+    await c.query('COMMIT');if(removed.rowCount)this.log.log?.('Signal record retention applied:',JSON.stringify({table:'current',cutoff,deleted:removed.rowCount}));
    }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
    if(count<200)break;
-  }this.error=null;this.lastSync=Date.now();return imported;
+  }this.error=null;this.lastSync=this.now();return imported;
   }catch(e){this.error='Rekod signal gagal diselaraskan';throw e;}
  }
  start(){if(this.timer)return;const run=()=>this.sync().then(async n=>{if(n){const stats=(await this.pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER(WHERE state='OPEN')::int AS open FROM zencore_current_signal_records")).rows[0];this.log.log?.('Durable TF2/TF15 records synchronized:',JSON.stringify({updated:n,...stats}));}}).catch(()=>this.log.error?.('Durable TF2/TF15 records sync unavailable'));run();this.timer=setInterval(run,15000);this.timer.unref?.();}
  stop(){clearInterval(this.timer);this.timer=null;}
  async read(){
-  const records=(await this.pool.query('SELECT data FROM zencore_current_signal_records ORDER BY opened_at DESC LIMIT 500')).rows.map(r=>r.data);
+  const retention=Retention.metadata(this.now());
+  const records=(await this.pool.query('SELECT data FROM zencore_current_signal_records WHERE opened_at >= $1 ORDER BY opened_at DESC LIMIT 500',[retention.cutoffAt])).rows.map(r=>r.data);
   const totals=(await this.pool.query(`SELECT timeframe,COUNT(*)::int AS sample,
    COUNT(*) FILTER(WHERE state='OPEN')::int AS open,COUNT(*) FILTER(WHERE state='CLOSED')::int AS resolved,
    COUNT(*) FILTER(WHERE data->>'hitTp1'='true')::int AS tp1,
    COUNT(*) FILTER(WHERE data->>'hitTp2'='true')::int AS tp2,
    COUNT(*) FILTER(WHERE data->>'hitTp3'='true')::int AS tp3
-   FROM zencore_current_signal_records GROUP BY timeframe ORDER BY timeframe`)).rows;
-  return {ok:true,source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',records,totals,lastSync:this.lastSync,lastError:this.error,syncPending:this.lastSync===null,
+   FROM zencore_current_signal_records WHERE opened_at >= $1 GROUP BY timeframe ORDER BY timeframe`,[retention.cutoffAt])).rows;
+  return {ok:true,retention,source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',records,totals,lastSync:this.lastSync,lastError:this.error,syncPending:this.lastSync===null,
    note:'TP ialah harga sasaran yang diperhatikan. CLOSE_SIGNAL dan SUPERSEDED tidak mengesahkan hasil untung/rugi. Sejarah dipulihkan hanya daripada event yang masih disimpan.'};
  }
 }

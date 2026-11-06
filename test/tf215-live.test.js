@@ -43,6 +43,6 @@ test('Telegram state dedupe is independent for two timeframes on the same pair',
  const alerts=new AnalysisAlerts({fetchFn:()=>{throw Error('No external sends');}});await alerts.init();
  await alerts.record(market('2'));await alerts.record(market('15'));
  const entry=alerts.events.filter(e=>e.kind==='ENTRY');assert.equal(entry.length,2);
- for(const e of entry){assert.ok(entrySopAllowed(e));assert.ok(entryFresh(e,now));assert.match(telegramMessage(e),new RegExp('SOLID ENTRY TF'+e.timeframe));}
+ for(const e of entry){assert.ok(entrySopAllowed(e));assert.ok(entryFresh(e,now));assert.match(telegramMessage(e),new RegExp('ENTRY TF'+e.timeframe));}
  assert.match(telegramMessage(entry[1]),/INTRA/);clearInterval(alerts.cleanupTimer);
 });

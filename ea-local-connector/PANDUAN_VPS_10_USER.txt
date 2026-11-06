@@ -1,0 +1,80 @@
+ZENCORE VPS CONNECTOR MANAGER 1.0.2
+10 terminal MT5 / 10 akaun ZenCore dalam satu sesi Windows.
+
+KANDUNGAN
+ZenCoreVPSSetup-1.0.2.exe — installer Manager.
+ZenCoreExecutor.mq5 — EA 2.17 yang sama untuk setiap terminal.
+VPS_10_USER.csv — senarai ID dan lembaran pemetaan admin.
+
+ID SISTEM
+ZCuser 1 hingga ZCuser 10. Password awal semua: zc123.
+Login web: https://zencore-precision-entry.onrender.com/login
+Password MT5 berbeza daripada password ZenCore. Manager tidak meminta password MT5.
+Password awal boleh ditukar oleh user melalui akaun web selepas serahan.
+Tempoh aktif client 14 hari bermula selepas profil user lengkap; pembaharuan hanya admin. Akaun IB ikut polisi IB.
+
+SETUP OLEH ADMIN
+1. Log masuk ke Windows VPS. Jalankan semua 10 terminal dalam pengguna Windows yang sama.
+2. Pastikan setiap terminal mempunyai folder pemasangan/data sendiri. Login akaun MT5 yang betul pada terminal masing-masing.
+3. Pasang ZenCoreVPSSetup-1.0.2.exe sekali. Tutup Connector lama terlebih dahulu; jangan jalankan Connector lama bersama Manager.
+   Installer menggantikan autostart Connector lama dengan Manager. Ia tidak menutup MT5 atau mengubah posisi.
+4. Buka terminal pertama. File > Open Data Folder. Salin/lengkapkan lokasi folder untuk rujukan.
+5. Dalam baris ZCuser 1, klik Pasang EA dan pilih folder data terminal itu. Manager salin EA dan cuba compile melalui MetaEditor.
+6. Di MT5, Refresh Navigator > Expert Advisors > ZenCore > ZenCoreExecutor. Attach pada SATU chart XAUUSD.
+7. Hidupkan Algo Trading dan benarkan Algo Trading pada EA. EA tidak memerlukan DLL/WebRequest.
+8. Ulang pada kesemua 10 terminal. EA menggunakan akaun + server + mode untuk folder komunikasi berasingan.
+9. Klik Cari semua MT5. Semak mode REAL/DEMO, 4 digit akhir akaun dan nama server.
+10. Masukkan password ZenCore awal zc123 dalam Manager. Ia digunakan untuk pautan sahaja dan tidak disimpan.
+11. Baris ZCuser 1: pilih akaun MT5 milik user pertama, kemudian Pautkan. Ulang bagi setiap baris sehingga ZCuser 10.
+    SATU akaun MT5 tidak boleh dipilih untuk dua ID. Dua terminal untuk akaun MT5 yang sama juga tidak disokong.
+12. Klik Kosongkan selepas semua pautan selesai. Token pautan disimpan secara DPAPI Windows dalam folder setiap profil.
+13. Login akaun ADMIN di web. Buka All Clients > pilih ZCuser berkenaan > panel Setup / Serahan / Reset > Setup Auto Trade.
+14. Dalam panel admin ini, semak nombor akhir akaun dan server. Isi modal, lot, layer, TF2/TF15 dan waktu mengikut pilihan user. Simpan tetapan. Jangan gunakan akaun user untuk setup web sebelum serahan.
+15. Auto Trade kekal STOP. Sambungan MT5 mesti READY dan tiada posisi terbuka. Kembali ke butiran client dan klik Buka Serahan User.
+16. Serahkan ID dan password awal zc123 kepada user. Semasa login pertama, user WAJIB isi nama penuh, e-mel, telefon dan password baharu. Tiada medan IC.
+17. Selepas profil lengkap, user log masuk semula dengan password baharu. Barulah dashboard dan Auto Trade boleh digunakan. Tempoh aktif 14 hari bermula pada langkah ini.
+18. Password baharu tidak perlu dimasukkan semula dalam Manager. Token pautan DPAPI sedia ada terus digunakan; tetapan admin dikekalkan.
+19. ON Auto Trade hanya selepas profil lengkap dan mengikut kebenaran user. Manager tidak membuka order ujian atau menekan ON secara automatik.
+
+RESET AKAUN UNTUK DIGUNAKAN SEMULA
+- Admin > All Clients > pilih client > Reset Akaun. Taip RESET untuk mengesahkan.
+- Auto Trade mesti STOP, tiada posisi atau arahan belum selesai, dan sambungan MT5 yang masih terikat mesti segar untuk pengesahan.
+- Reset memadam maklumat peribadi, tetapan Auto Trade, pautan/token MT5, sesi login, rekod trading ZenCore dan tetapan Telegram untuk user itu.
+- ID akaun kekal; password kembali zc123; fasa kembali ADMIN SETUP. Sejarah broker MT5 tidak dipadam.
+- Manager akan membuang pautan yang dibatalkan. Tunggu pelepasan link (sekitar 30 saat), semak akaun MT5, kemudian admin pautkan, setup dan serah semula.
+- Reset TIDAK menutup order broker. Jika masih ada posisi, reset ditolak; selesaikan pengurusan posisi dahulu mengikut pelan trader.
+- Catatan audit reset admin dikekalkan tanpa maklumat peribadi lama.
+- TP/SL manual tersuai memerlukan Manager 1.0.2 dan EA 2.17 pada setiap terminal. Versi lama terus menyokong nilai default.
+
+SEMAKAN SEBELUM SERAHAN (SETIAP USER)
+[ ] ID web betul.
+[ ] Akaun MT5 + server betul.
+[ ] Status EA / Connector aktif.
+[ ] Pair XAUUSD / simbol broker betul.
+[ ] Lot, layer, TF2/TF15 dan waktu mengikut pilihan user.
+[ ] Auto Trade ON/OFF mengikut kebenaran user.
+[ ] Fasa ADMIN SETUP / MENUNGGU PROFIL / LIVE disemak. Tempoh lesen bermula selepas profil lengkap.
+[ ] Tidak berkongsi token/akaun dengan profil lain.
+
+OPERASI
+- Henti dalam Manager menjeda profil itu sahaja. Sambung meneruskan token yang sama.
+- ON/OFF di web kekal kawalan setiap user. Henti profil tidak mengubah setting web user lain.
+- Manager autostart selepas LOGIN pengguna Windows, bukan sebelum sesi Windows wujud. Terminal MT5 juga mesti berjalan.
+- Tutup Manager menghentikan semua sambungan. SL broker yang telah dipasang kekal; arahan web dan pemindahan SL memerlukan sambungan aktif.
+- Jika akaun dalam terminal ditukar, entry pada pautan lama disekat. Jangan guna pautan lama untuk akaun baharu.
+- Untuk tukar pemilik/account: OFF di web, selesaikan posisi, Reset Link Akaun MT5 di web, tunggu pelepasan, kemudian pautkan semula.
+- Pautan yang dibatalkan server dipadam daripada profil Manager itu sahaja.
+- Pautan encrypted terikat kepada pengguna Windows. Jangan salin paired.dpapi kepada orang/Windows lain.
+
+DATA TEMPATAN
+%LOCALAPPDATA%\ZenCore\VPSConnector\ZCuser-1\paired.dpapi
+... sehingga ZCuser-10. Setiap profil mengandungi token sendiri; tiada password MT5/ZenCore.
+EA menggunakan %APPDATA%\MetaQuotes\Terminal\Common\Files\ZenCore\<account>-<hash>.
+Jika folder data MT5 portable, gunakan File > Open Data Folder; jangan pilih folder program yang salah.
+
+BATAS UJIAN
+Pakej dibina dan diuji pada Windows CI dengan 10 profil simulasi dan ujian DPAPI/GUI/installer.
+Belum diuji pada VPS/10 terminal sebenar milik admin. Jangan anggap bilangan terminal sahaja membuktikan kapasiti RAM/CPU mencukupi.
+Tiada order broker atau Telegram sebenar dihantar dalam ujian pakej.
+
+AUTO EXIT ENTRY MANUAL: User boleh ubah TP1/TP2/TP3/SL dalam Auto Trade dan Simpan. Medan kosong guna default 2/4/6/3. TP1 < TP2 < TP3; semua jarak positif. Tetapan berkuat kuasa untuk posisi manual baharu selepas EA menerima Simpan; pelan posisi sedia ada dikekalkan.

@@ -1,12 +1,13 @@
 'use strict';
 const {PAIRS}=require('./analysis-v33');
+const Retention=require('./record-retention');
 const numeric=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Number(v):null;
-function cleanClosed(row,symbol){
+function cleanClosed(row,symbol,now=Date.now()){
   if(!row||row.symbol!==symbol||row.mode!=='NORMAL'||row.state!=='CLOSED'||
     typeof row.id!=='string'||row.id.length>180||!/^[A-Za-z0-9:._|+-]+$/.test(row.id)||
     !['BUY','SELL'].includes(row.side)||!Number.isFinite(numeric(row.openedAt))||
     !Number.isFinite(numeric(row.resolvedAt))||row.resolvedAt<row.openedAt||
-    row.resolvedAt>Date.now()+60000)return null;
+    row.resolvedAt>now+60000)return null;
   const keys=['entry','sl','tp1','tp2','tp3','score','openedAt','resolvedAt'];
   const values=Object.fromEntries(keys.map(k=>[k,numeric(row[k])]));
   return {id:row.id,symbol,side:row.side,mode:'NORMAL',state:'CLOSED',outcome:String(row.outcome||'').slice(0,40),
@@ -14,7 +15,7 @@ function cleanClosed(row,symbol){
     slLockStage:numeric(row.slLockStage)||0,source:'V17_VALIDATION'};
 }
 class SignalOutcomeStore{
-  constructor({pool,fetchSummary,intervalMs=15000,log=console}={}){this.pool=pool;this.fetchSummary=fetchSummary;this.intervalMs=intervalMs;this.log=log;this.timer=null;this.busy=false;this.lastSync=null;this.lastError=null;}
+  constructor({pool,fetchSummary,intervalMs=15000,log=console,now=Date.now}={}){this.now=now;this.pool=pool;this.fetchSummary=fetchSummary;this.intervalMs=intervalMs;this.log=log;this.timer=null;this.busy=false;this.lastSync=null;this.lastError=null;}
   async init(){if(!this.pool)throw Error('Durable storage unavailable');
     await this.pool.query(`CREATE TABLE IF NOT EXISTS zencore_signal_outcomes (
       id VARCHAR(180) PRIMARY KEY,symbol VARCHAR(16) NOT NULL,side VARCHAR(4) NOT NULL,
@@ -22,17 +23,20 @@ class SignalOutcomeStore{
       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     await this.pool.query('CREATE INDEX IF NOT EXISTS zencore_signal_outcomes_symbol_resolved ON zencore_signal_outcomes(symbol,resolved_at DESC)');
+    await this.pool.query('CREATE INDEX IF NOT EXISTS zencore_signal_outcomes_opened ON zencore_signal_outcomes(opened_at)');
+    await this.prune(true);
   }
+  async prune(report=false){if(process.env.ZENCORE_PRESERVE_SIGNAL_HISTORY==="true")return;const cutoff=Retention.cutoffAt(this.now());const result=await this.pool.query('DELETE FROM zencore_signal_outcomes WHERE opened_at<$1',[cutoff]);if(report||result.rowCount)this.log.log?.('Signal record retention applied:',JSON.stringify({table:'archive',cutoff,deleted:result.rowCount||0,months:Retention.MONTHS,startAt:Retention.START_AT}));}
   async sync(){if(this.busy)return;this.busy=true;let failures=0;
-    try{for(const symbol of PAIRS){try{
+    try{await this.prune();const cutoff=Retention.cutoffAt(this.now());for(const symbol of PAIRS){try{
       const response=await this.fetchSummary(symbol);
       if(response?.ok!==true||response.symbol!==symbol||response.mode!=='NORMAL'||!Array.isArray(response.summary?.recent))throw Error('Invalid validation response');
-      for(const raw of response.summary.recent){const row=cleanClosed(raw,symbol);if(!row)continue;
+      for(const raw of response.summary.recent){const row=cleanClosed(raw,symbol,this.now());if(!row||row.openedAt<cutoff)continue;
         await this.pool.query(`INSERT INTO zencore_signal_outcomes(id,symbol,side,opened_at,resolved_at,data)
           VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING`,[row.id,row.symbol,row.side,row.openedAt,row.resolvedAt,row]);
       }
     }catch{failures++;}}
-      this.lastSync=Date.now();this.lastError=failures?`${failures} pair tidak dapat diselaraskan`:null;
+      this.lastSync=this.now();this.lastError=failures?`${failures} pair tidak dapat diselaraskan`:null;
       if(failures)this.log.warn?.('Signal outcome sync incomplete');
     }finally{this.busy=false;}
   }
@@ -40,14 +44,14 @@ class SignalOutcomeStore{
     this.timer=setInterval(()=>this.sync().catch(()=>{this.lastError='Simpanan hasil tidak tersedia';}),this.intervalMs);this.timer.unref?.();}
   stop(){if(this.timer)clearInterval(this.timer);this.timer=null;}
   async read(symbol,limit=100){
-    const selected=PAIRS.includes(symbol)?symbol:null;
+    const selected=PAIRS.includes(symbol)?symbol:null,retention=Retention.metadata(this.now());
     const rows=(await this.pool.query(`SELECT data FROM zencore_signal_outcomes
-      WHERE ($1::text IS NULL OR symbol=$1) ORDER BY resolved_at DESC LIMIT $2`,[selected,Math.min(200,Math.max(1,limit))])).rows;
+      WHERE ($1::text IS NULL OR symbol=$1) AND opened_at >= $3 ORDER BY resolved_at DESC LIMIT $2`,[selected,Math.min(200,Math.max(1,limit)),retention.cutoffAt])).rows;
     const totals=(await this.pool.query(`SELECT symbol,COUNT(*)::int AS sample,
       COUNT(*) FILTER (WHERE data->>'outcome'='SL')::int AS sl,
       COUNT(*) FILTER (WHERE data->>'outcome' IN ('TP1','TP2','TP3','PROTECTED_WIN','TP2_PROTECTED','TP3_PROTECTED','TP1_MANAGED','TP2_MANAGED','TP3_MANAGED'))::int AS wins
-      FROM zencore_signal_outcomes WHERE ($1::text IS NULL OR symbol=$1) GROUP BY symbol ORDER BY symbol`,[selected])).rows;
-    return {source:'SIGNAL_VALIDATION_NOT_BROKER_PL',lastSync:this.lastSync,lastError:this.lastError,totals,
+      FROM zencore_signal_outcomes WHERE ($1::text IS NULL OR symbol=$1) AND opened_at >= $2 GROUP BY symbol ORDER BY symbol`,[selected,retention.cutoffAt])).rows;
+    return {retention,source:'SIGNAL_VALIDATION_NOT_BROKER_PL',lastSync:this.lastSync,lastError:this.lastError,totals,
       note:'Hanya keputusan V17 yang sempat diselaraskan disimpan. Posisi open boleh terputus selepas restart; sejarah lama sebelum pengaktifan tidak boleh dipulihkan.',
       records:rows.map(r=>r.data)};
   }
@@ -57,7 +61,7 @@ class SignalOutcomeStore{
       COUNT(*) FILTER (WHERE data->>'hitTp1'='true')::int AS hit_tp1,
       COUNT(*) FILTER (WHERE data->>'hitTp2'='true')::int AS hit_tp2,
       COUNT(*) FILTER (WHERE data->>'hitTp3'='true')::int AS hit_tp3
-      FROM zencore_signal_outcomes WHERE symbol=$1 AND side=$2 AND data->>'outcome'<>'AMBIGUOUS'`,[symbol,side]);
+      FROM zencore_signal_outcomes WHERE symbol=$1 AND side=$2 AND data->>'outcome'<>'AMBIGUOUS' AND opened_at >= $3`,[symbol,side,Retention.cutoffAt(this.now())]);
     const row=result.rows[0];return row?{sample:Number(row.sample),hitTp1:Number(row.hit_tp1),
       hitTp2:Number(row.hit_tp2),hitTp3:Number(row.hit_tp3)}:null;
   }

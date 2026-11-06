@@ -61,7 +61,6 @@
     byId('profileDisplayName').value = profile.displayName || '';
     byId('profilePhone').value = profile.phone || '';
     byId('profileEmail').value = profile.email || '';
-    byId('profileIc').value = profile.identityNumber || profile.icMasked || '';
     byId('profileIbName').value = profile.ibName || 'Nazir (Admin)';
     renderTrading(body.trading);
   }
@@ -89,7 +88,6 @@
           displayName: byId('profileDisplayName').value,
           phone: byId('profilePhone').value,
           email: byId('profileEmail').value,
-          icNumber: byId('profileIc').value,
           currentPassword: byId('profileCurrentPassword').value
         })
       });
@@ -110,6 +108,7 @@
 
   byId('passwordForm')?.addEventListener('submit', async event => {
     event.preventDefault();
+    const form = event.currentTarget;
     const button = byId('changePassword');
     const status = byId('passwordStatusMessage');
     button.disabled = true;
@@ -126,7 +125,7 @@
       });
       status.className = 'mg-form-status success';
       status.textContent = body.message || 'Password dah tukar.';
-      event.currentTarget.reset();
+      form.reset();
       window.setTimeout(() => window.location.replace('/login'), 900);
     } catch (error) {
       status.className = 'mg-form-status error';

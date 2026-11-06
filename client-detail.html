@@ -51,12 +51,13 @@
         </div>
       </section>
 
+      <section id="adminHandover" class="mg-panel" hidden><div class="mg-panel-head"><div><span class="mg-kicker">SERAHAN AKAUN</span><h2>Setup → User → Live</h2></div><b id="adminHandoverState">Memuatkan...</b></div><p id="adminHandoverInfo"></p><p><a id="adminSetupLink" class="table-action">Setup Auto Trade</a> <button id="releaseClient" type="button" class="table-action good">Buka Serahan User</button> <button id="resetClientAccount" type="button" class="table-action danger">Reset Akaun</button></p><p id="adminHandoverMessage" role="status"></p></section>
       <section class="detail-grid three">
         <article class="mg-panel detail-card">
           <span class="mg-kicker">ACCOUNT PROFILE</span><h3>Client Information</h3>
           <dl class="detail-list">
             <div><dt>Phone</dt><dd id="clientPhone">—</dd></div>
-            <div><dt>ID / Passport</dt><dd id="clientIc">—</dd></div>
+            <div id="adminClientIcRow" hidden><dt>No. IC / Passport</dt><dd id="clientIdentityNumber">Belum direkodkan</dd></div>
             <div><dt>Registered</dt><dd id="clientCreated">—</dd></div>
             <div><dt>Last Login</dt><dd id="clientLastLogin">—</dd></div>
           </dl>
@@ -90,7 +91,6 @@
             <label>Nama penuh<input id="adminClientName" maxlength="60" required></label>
             <label>E-mel<input id="adminClientEmail" type="email" maxlength="254" required></label>
             <label>No. telefon<input id="adminClientPhone" type="tel" maxlength="24" required></label>
-            <label>No. IC / Passport / National ID<input id="adminClientIdentity" maxlength="64" required></label>
             <label class="wide">Password Admin<input id="adminProfilePassword" type="password" autocomplete="current-password" maxlength="128" required></label>
             <div class="admin-client-form-actions">
               <span id="adminClientProfileStatus" class="mg-form-status"></span>
@@ -169,7 +169,7 @@
       <footer class="mg-foot">ZenCore Errante Client Detail • Only masked broker/account data is shown in management views</footer>
     </main>
   </div>
-  <script src="/detail.js?v=1.2" defer></script>
+  <script src="/detail.js?v=20261103.password1" defer></script>
 <script src="/workspace-shell.js?v=20261007.2" defer></script>
-</body>
+<script src="/admin-handover.js" defer></script></body>
 </html>

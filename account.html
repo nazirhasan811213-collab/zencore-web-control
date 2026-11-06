@@ -59,10 +59,9 @@
           <label>Nama penuh<input id="profileDisplayName" name="displayName" maxlength="60" required></label>
           <label>No. telefon<input id="profilePhone" name="phone" type="tel" maxlength="24" required></label>
           <label>E-mel<input id="profileEmail" name="email" type="email" maxlength="254" required></label>
-          <label>No. IC / Passport / National ID<input id="profileIc" name="icNumber" maxlength="64" required></label>
           <label>Your IB<input id="profileIbName" disabled></label>
-          <label>Password sekarang <small>Wajib jika ubah e-mel atau ID</small><input id="profileCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
-          <p class="account-lock-note">🔒 Client tak boleh tukar IB sendiri. Nak tukar e-mel atau ID/Passport? Confirm dengan password sekarang.</p>
+          <label>Password sekarang <small>Wajib jika ubah e-mel</small><input id="profileCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
+          <p class="account-lock-note">🔒 Client tak boleh tukar IB sendiri. Nak tukar e-mel? Confirm dengan password sekarang.</p>
           <div class="mg-create-actions">
             <span id="profileStatusMessage" class="mg-form-status"></span>
             <button id="saveProfile" class="mg-primary" type="submit">SAVE PROFILE</button>
@@ -99,7 +98,7 @@
       <footer class="mg-foot">ZenCore Errante Client Portal • Own account only</footer>
     </main>
   </div>
-  <script src="/account.js?v=20261007.2" defer></script>
+  <script src="/account.js?v=20261103.password1" defer></script>
 <script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>
 </html>

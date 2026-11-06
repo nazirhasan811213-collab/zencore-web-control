@@ -63,7 +63,7 @@
     tbody.innerHTML = list.map(client => `<tr>
       <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
       <td><strong>${esc(client.phone || '—')}</strong><small>${esc(fmtDate(client.lastLoginAt, true))}</small></td>
-      <td><span class="link-code">${esc(client.icMasked || '—')}</span></td>
+      <td><span class="link-code">${esc(client.id.slice(0,8))}</span></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
       <td>${statusPill(client.status === 'active')}</td>
       <td><a class="table-action mg-link-btn" href="/admin/client/${encodeURIComponent(client.id)}">OPEN</a></td>
@@ -191,7 +191,9 @@
     byId('clientStatusTag').textContent = `STATUS ${String(client.status || '').toUpperCase()}`;
     byId('clientIbTag').textContent = `IB ${String(client.ibCode || 'nazir').toUpperCase()}`;
     byId('clientPhone').textContent = client.phone || '—';
-    byId('clientIc').textContent = client.icMasked || '—';
+    if(byId('adminClientIcRow'))byId('adminClientIcRow').hidden=!adminView;
+    if(byId('clientIdentityNumber'))byId('clientIdentityNumber').textContent=adminView?(client.identityNumber || 'Belum direkodkan'):'';
+
     byId('clientCreated').textContent = fmtDate(client.createdAt, true);
     byId('clientLastLogin').textContent = fmtDate(client.lastLoginAt, true);
     byId('clientIbName').textContent = client.ibName || 'Nazir (Admin)';
@@ -275,7 +277,6 @@
           displayName: byId('adminClientName').value,
           email: byId('adminClientEmail').value,
           phone: byId('adminClientPhone').value,
-          icNumber: byId('adminClientIdentity').value,
           adminPassword: byId('adminProfilePassword').value
         })
       });
@@ -294,6 +295,7 @@
 
   byId('adminClientPasswordForm')?.addEventListener('submit', async event => {
     event.preventDefault();
+    const form = event.currentTarget;
     if (currentUser?.role !== 'admin' || !detail?.client?.id) return;
     const button = byId('resetClientPassword');
     const status = byId('adminClientPasswordStatus');
@@ -317,7 +319,7 @@
           confirmPassword
         })
       });
-      event.currentTarget.reset();
+      form.reset();
       status.className = 'mg-form-status success';
       status.textContent = body.message || 'Password client berjaya direset.';
     } catch (error) {

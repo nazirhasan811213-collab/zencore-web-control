@@ -50,6 +50,7 @@ function publicClient(row) {
   return {
     id: row.id,
     displayName: row.display_name,
+    ...(row.login_id ? {loginId: 'ZCuser '+require('./managed-vps-accounts').number(row.login_id)} : {}),
     email: row.email,
     phone: row.phone || '',
     icMasked: maskedIc(row.ic_number),
@@ -124,6 +125,7 @@ class PostgresAuthStore {
         last_login_at TIMESTAMPTZ
       );
 
+      ALTER TABLE zencore_users ADD COLUMN IF NOT EXISTS handover_state TEXT, ADD COLUMN IF NOT EXISTS handover_released_at TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS handover_completed_at TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS handover_generation INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE zencore_users
         ADD COLUMN IF NOT EXISTS ic_number VARCHAR(64),
         ADD COLUMN IF NOT EXISTS phone VARCHAR(24),
@@ -537,7 +539,7 @@ class PostgresAuthStore {
     values.push(Math.max(0, Math.floor(Number(offset) || 0)));
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
+              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -546,6 +548,12 @@ class PostgresAuthStore {
        LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
       values
     );
+    // Resolve the permanent managed ID independently of the user's updated name/email.
+    if(result.rows.length&&(await this.pool.query("SELECT to_regclass('zencore_managed_login_aliases') AS name")).rows[0]?.name){
+      const aliases=await this.pool.query('SELECT user_id,login_id FROM zencore_managed_login_aliases WHERE user_id=ANY($1::uuid[])',[result.rows.map(row=>row.id)]);
+      const byId=new Map(aliases.rows.map(row=>[row.user_id,row.login_id]));
+      for(const row of result.rows)row.login_id=byId.get(row.id)||null;
+    }
     return result.rows.map(publicClient);
   }
 
@@ -582,7 +590,7 @@ class PostgresAuthStore {
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
+              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_ib_referrers ref
        JOIN zencore_users u
@@ -686,7 +694,7 @@ class PostgresAuthStore {
       }
       const enriched = await client.query(
         `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-                u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
+                u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
                 ref.code AS ib_code, ref.display_name AS ib_name
          FROM zencore_users u
          LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -810,7 +818,7 @@ class PostgresAuthStore {
   async getClientForAdmin(clientId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
+              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -824,7 +832,7 @@ class PostgresAuthStore {
   async getClientForIb(ibUserId, clientId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.phone, u.ic_number, u.status,
-              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
+              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_ib_referrers ref
        JOIN zencore_users u
@@ -919,7 +927,7 @@ class PostgresAuthStore {
   async findUserForLogin(email) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
-              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
+              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE u.email = $1
@@ -932,7 +940,7 @@ class PostgresAuthStore {
   async findUserByIdForLogin(userId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
-              u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
+              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE u.id = $1
@@ -960,14 +968,14 @@ class PostgresAuthStore {
   async findSession(tokenHash) {
     const result = await this.pool.query(
       `SELECT s.id AS session_id, s.expires_at,
-              u.id, u.display_name, u.email, u.role, u.status, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
+              u.id, u.display_name, u.email, u.role, u.status, u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
               ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_sessions s
        JOIN zencore_users u ON u.id = s.user_id
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE s.token_hash = $1
          AND s.expires_at > NOW()
-         AND u.status = 'active' AND (u.role<>'client' OR u.access_expires_at>NOW())
+         AND u.status = 'active' AND (u.role<>'client' OR u.handover_state IN ('ADMIN_SETUP','USER_PROFILE') OR u.access_expires_at>NOW())
        LIMIT 1`,
       [tokenHash]
     );

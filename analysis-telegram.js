@@ -34,12 +34,16 @@ const {entryQuality}=require('./analysis-execution-contract');
 function messageQuality(m){return entryQuality(m);}
 const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
 function entrySopAllowed(e){
- if(e.telegramSop?.lifecycleVersion==='PULLBACK_REQUALIFY_V1'&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
+ if(e.timeframe==='2'&&e.telegramSop?.entryCandle&&!require('./tf2-ribbon-scalping').candlePass(e.telegramSop.entryCandle,e.side,e.telegramMarket?.sourceBarTime))return false;
+ if(e.timeframe==='2'&&e.telegramSop?.entrySafety&&!require('./tf2-entry-safety').allowed(e.telegramSop.entrySafety,e.side,e.telegramMarket?.sourceBarTime))return false;
+ if(e.timeframe==='2'&&e.telegramSop?.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed({...e.telegramMarket,strategyNormal:{sop:e.telegramSop}}))return false;
+ if(require('./setup-lifecycle').supported(e.telegramSop?.lifecycleVersion)&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
   if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
   const s=e.telegramSop;
+ if(s?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'&&(!require('./setup-lifecycle').supported(s.lifecycleVersion)||s.lifecycleVersion!=='CLOSED_PAUSE_RESUME_V2'||!['INITIAL','FOLLOWUP'].includes(s.cycleKind)||s.currentBar?.confirmed!==true||(e.timeframe==='2'&&(!s.entryCandle||!s.entrySafety))))return false;
   if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf2ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
-  if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(s.entryPolicyVersion)&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
-  if(s?.version==='NORMAL_20261001_TF2_RIBBON_V1')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(s.entryPolicyVersion)&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(s.entryPolicyVersion)&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF2_RIBBON_V1')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(s.entryPolicyVersion)&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
   if(s?.version==='NORMAL_20261001_TF3_RIBBON_V1')return e.timeframe==='3'&&s.tf==='3m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf3-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_3OF4_CHOP50_V3'&&require('./tf3-scalping').planPass(e.side,e.telegramPlan,s);
   if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&require('./analysis-execution-contract').solid80Tf2Confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power},['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version),s.version==='NORMAL_20261001_TF2_SOLID_HOLD_V16'?5:6);
   if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
@@ -81,9 +85,9 @@ function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':
 // Entry transport expires 30 seconds after both reception and candle close.
 function entryFresh(e,now=Date.now()){
   const q=e.telegramMarket;
-  if(['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(e.telegramSop?.entryPolicyVersion)){
+  if(['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(e.telegramSop?.entryPolicyVersion)){
     const origin=q?.entryAuthorizedAt??q?.signalObservedAt;
-    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='2'?60000:30000);
+    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='2'||e.telegramSop?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'?60000:30000);
   }
   if(q?.feedMode==='INTRABAR')return Number.isFinite(q.signalObservedAt)&&now-q.signalObservedAt>=-5000&&now-q.signalObservedAt<=30000&&now-e.time>=-5000&&now-e.time<=30000;
   const duration=Number(q?.timeframe)*60000;
@@ -113,69 +117,74 @@ function pineContext(s={},tf){
  add('Nasihat',d.advice,180);add('Coach tips',d.proTip,180);
  return lines.join('\n');
 }
-function currentPineMessage(e,p,s,time){
- const tf=e.timeframe,reentry=s.cycleKind==='FOLLOWUP',label=tf==='15'?'INTRADAY':'SCALPING',buy=e.side==='BUY';
- const title=reentry?'CALON RE-ENTRY':'SOLID ENTRY',passed=s.gates.filter(g=>g.pass).length;
- const action=reentry
-   ? `Semua layer TF${tf} mesti ditutup dan disahkan MT5 sebelum re-entry.`
-   : `Tiada posisi TF${tf} → setup boleh diproses ikut setting user.`;
- return [
-  `${buy?'🟢':'🔴'} ZENCORE | ${title} TF${tf} • ${label}`,
-  `${e.symbol} • ${e.side} / ${buy?'BELI':'JUAL'}`,
-  '',
-  `✅ SOP ${passed}/4 • Chop ${price(s.chopIndex)}% (<50%)`,
-  '',
-  '📌 APA NAK BUAT',action,
-  ...(reentry?[]:[`Masih pegang posisi TF${tf}? Jangan tambah entry atau re-entry.`]),
-  'Auto Trade semak izin MT5, lot/layer dan setting user sebelum buka order.',
-  '',
-  `🎯 PELAN ${reentry?'RE-ENTRY BAHARU':'ENTRY'}`,
-  `Entry: ${price(p.entry)}`,
-  `🛑 SL: ${price(p.sl)}`,
-  `TP1: ${price(p.tp1)}`,
-  `TP2: ${price(p.tp2)}`,
-  `TP3: ${price(p.tp3)}`,
-  `Pelan Pine: ${s.planMode}`,
-  ...(reentry?['Guna paras re-entry ini; pelan entry lama tidak digunakan.']:[]),
-  '',
-  pineContext(s,tf),
-  '',
-  'ℹ️ Signal Analysis — belum pengesahan order MT5.',
-  `🕒 ${time} MYT`,
-  `Rujukan: ZC-${e.id}`
- ].join('\n');
+function entryAnalysis(e,s){
+ const buy=e.side==='BUY',parts=[];
+ if(s.solid===true)parts.push(`SOLID ${e.side} aktif`);
+ const gates=Array.isArray(s.gates)?s.gates:[];
+ const pass=key=>gates.some(g=>g.key===key&&g.pass===true);
+ if(pass('entry'))parts.push(`harga ${buy?'di atas':'di bawah'} entry SOLID`);
+ if(pass('hema'))parts.push(`HEMA ${buy?'hijau':'merah'}`);
+ if(pass('wt'))parts.push(`momentum menyokong ${e.side}`);
+ if(pass('forecast'))parts.push(`unjuran menyokong ${e.side}`);
+ if(pass('mtf'))parts.push(`TF lain menyokong ${e.side}`);
+ const lines=[`Sebab entry: ${parts.length?parts.join('; '):'Syarat SOP entry telah lulus'}.`];
+ const waiting=gates.filter(g=>g.pass===false).map(g=>({entry:'harga belum lepas entry SOLID',wt:'momentum belum searah',forecast:'unjuran belum menyokong',sop:'checklist belum cukup',mtf:'TF lain belum searah'})[g.key]).filter(Boolean);
+ if(waiting.length)lines.push(`Perhatian: ${waiting.join('; ')}.`);
+ return lines;
 }
-function closeMessage(e,time){
- const tf=e.timeframe||'2',half=e.percent===50;
- const raw=String(e.message||'').split('\n');
- // The first legacy line repeats pair, timeframe and action already in the header.
- const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,240);
+function currentPineMessage(e,p,s={},time){
+ const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
+ const reason=entryAnalysis(e,s).map(x=>x.replace(/^Sebab entry: /,'').replace(/; (HEMA|momentum)/,';\n$1')).join('\n');
+ const bar=s.entryCandle||s.currentBar;
+ const candle=bar&&Number.isFinite(bar.open)&&Number.isFinite(bar.close)?(bar.close>bar.open?'BULLISH':bar.close<bar.open?'BEARISH':'DOJI'):s.entryCandle?(buy?'BULLISH':'BEARISH'):null;
+ const risk=Math.abs(p.entry-p.sl),reward=Math.abs(p.tp1-p.entry);
+ const summary=`Setup ${e.side} lulus pengesahan semasa. TP1 berjarak ${price(reward)} USD; risiko ke SL ${price(risk)} USD.`;
+ const tips=reentry?`Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup. Jangan tambah layer di luar tetapan.`:'Ikut lot/layer dan SL yang ditetapkan. Jangan tambah posisi untuk cover rugi.';
  return [
-  `🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,
-  `${e.symbol} • ${tf==='15'?'INTRADAY':'SCALPING'}`,
-  '',
-  '📌 TINDAKAN',
-  half?`Tutup 50% posisi ZenCore TF${tf}.`:`Tutup semua baki posisi ZenCore TF${tf}.`,
-  'Auto Trade: semak pengesahan close di MT5.',
-  `Jangan buka setup baharu selagi masih ada layer TF${tf} terbuka.`,
-  ...(reason?['',`Sebab: ${reason}`]:[]),
-  '',
-  'ℹ️ Arahan exit Analysis — belum pengesahan posisi MT5 ditutup.',
-  `🕒 ${time} MYT`,
-  `Rujukan: ZC-${e.id}`
+  `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'RE-ENTRY':'ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
+  `${e.symbol} • ${e.side}`,'',
+  `Entry: ${price(p.entry)}`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)}`,`TP2: ${price(p.tp2)}`,`TP3: ${price(p.tp3)}`,'',
+  'Sebab entry:',reason,
+  ...(candle?[`Candle entry: ${candle}`]:[]),'',
+  'Rumusan AI ZenCore:',summary,
+  'Coach Tips:',tips,'',
+  ...require('./telegram-dashboard-context').lines(require('./telegram-dashboard-context').snapshot({timeframe:tf,signalObservedAt:s.signalObservedAt,strategyNormal:{sop:s}},tf),tf),'',
+  'Signal sahaja • semak order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
 
+function closeMessage(e,time){
+ const tf=e.timeframe||'2',half=e.percent===50,raw=String(e.message||'').split('\n');
+ const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,90);
+ return [`🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,e.symbol,
+  half?`Tutup 50% posisi TF${tf}.`:`Tutup semua baki posisi TF${tf}.`,
+  ...(reason?[`Sebab: ${reason==='Native chart close signal'?'Signal exit carta.':reason}`]:[]),
+  'Panduan ZenCore — Semak close di MT5 sebelum entry baharu.',
+  'Arahan sahaja • belum pengesahan close MT5.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
+}
+
 function telegramMessageBody(e){
-  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
+  if(e.kind==='GUIDE')return e.guideCompactText||e.guideText;
+  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
   const footer=`Masa: ${time} MYT\nRujukan: ZC-${e.id}\nAlert Analysis • bukan pengesahan transaksi MT5`;
   if(['TP_HIT','PULLBACK'].includes(e.kind)){
     if(!require('./telegram-progress').allowed(e))return `ZENCORE | PERGERAKAN TIDAK DISAHKAN\n${footer}`;
     const p=e.telegramPlan;
-    return [e.kind==='TP_HIT'?`✅ ZENCORE | TP${e.targetNumber} DILEPASI`:'⚠️ ZENCORE | HATI-HATI PULLBACK',
-      `${e.symbol} • TF${e.timeframe} • ${e.side}`,`Entry pelan: ${price(p.entry)}`,
-      e.kind==='TP_HIT'?`Paras TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])}`:`Unduran: ${price(Math.abs(e.bestPrice-e.currentPrice))} • Ambang 0.25 ATR: ${price(e.atrReference*.25)}`,
-      `Harga semasa: ${price(e.currentPrice)}`,e.kind==='PULLBACK'?'Harga mula berundur daripada harga terbaik sejak entry.':'Harga Pine telah mencapai atau melepasi sasaran pelan.',footer].join('\n');
+    if(e.kind==='TP_HIT')return [`✅ ZENCORE | TP${e.targetNumber} DILEPASI`,`${e.symbol} • TF${e.timeframe} • ${e.side}`,
+     `TP${e.targetNumber}: ${price(p['tp'+e.targetNumber])} | Harga: ${price(e.currentPrice)}`,
+     'Panduan ZenCore — Jaga profit ikut SOP.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
+    const buy=e.side==='BUY',proof=e.reversalEvidence;
+    const cause=proof.priceBreak?`Candle tutup ${buy?'di bawah low':'di atas high'} candle sebelumnya.`:`Dua candle berturut-turut tutup ${buy?'menurun':'menaik'}.`;
+    const momentum=proof.momentumAgainst?`WT tidak lagi menyokong posisi ${e.side}.`:`Kekuatan WT ${e.side} berkurang.`;
+    const profitable=buy?e.currentPrice>p.entry:e.currentPrice<p.entry;
+    return ['⚠️ ZENCORE | HARGA MULA PULLBACK',`${e.symbol} • TF${e.timeframe}`,`Posisi ${e.side}`,'',
+     `Harga Sekarang: ${price(e.currentPrice)}`,`Harga Entry: ${price(p.entry)}`,'',
+     buy?'Harga mula turun. → Momentum BUY melemah.':'Harga mula naik. → Momentum SELL melemah.',
+     'Kenapa Pullback:',cause+' '+momentum,'',
+     'Rumusan AI ZenCore:',(profitable?'Profit mula susut.':'Posisi sedang tertekan.')+' Candle tutup menunjukkan tekanan melawan posisi; belum sah trend bertukar.',
+     'Coach Tips:',profitable?'Lindungi profit ikut SOP. Jangan tambah layer atau longgarkan SL.':'Ikut SL dan signal exit. Jangan tambah layer untuk cover rugi.',
+     ...require('./telegram-dashboard-context').lines(e.dashboardContext,e.timeframe),
+     `🕒 ${time} MYT • ZC-${e.id}`].join('\n');
   }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
@@ -220,9 +229,14 @@ function telegramMessageBody(e){
 }
 // Plain-text separators render consistently in Telegram without parse-mode markup.
 function telegramMessage(e){
-  const [title,...body]=telegramMessageBody(e).split('\n');
+  let message=telegramMessageBody(e);
+  if(e.kind==='ENTRY'&&e.telegramPlan&&!message.includes('ENTRY TIDAK DISAHKAN')){
+   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(e.time));
+   message=currentPineMessage(e,e.telegramPlan,e.telegramSop||{},time);
+  }
+  const [title,...body]=message.split('\n');
   const border='━━━━━━━━━━━━━━━━━━';
-  return [border,title,'──────────────────',...body,'',`AKHIR MESEJ • TF${e.timeframe||'2'}`,border].join('\n');
+  return [border,title,'──────────────────',...body,border].join('\n');
 }
 module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade,entryFresh,entrySopAllowed};
 

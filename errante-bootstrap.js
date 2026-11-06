@@ -17,6 +17,7 @@ function configureErrante(env) {
   env.ZENCORE_ENTRY_SIGNALS_PAUSED = 'true';
   env.ZENCORE_AUTH_ENABLED = 'true';
   env.ZENCORE_AUTOTRADE_ENABLED = 'false';
+  env.ZENCORE_PRESERVE_SIGNAL_HISTORY = 'true';
   env.ZENCORE_PRODUCT_NAME = 'ZenCore Errante';
   env.ZENCORE_RELAY_TARGET_URL = ''; // Receiver only; never relay back or form a loop.
   return env;

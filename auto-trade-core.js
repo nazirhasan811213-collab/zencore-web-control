@@ -71,9 +71,15 @@
   const STRATEGY_MODES = Object.freeze(['TF2_SCALPING', 'TF15_INTRA', 'BOTH']);
 
   const TRADE_SYMBOLS=Object.freeze(['XAUUSD']);
+  const MALAYSIA_SESSIONS = Object.freeze([
+    {name:'ASIA',start:'08:00',end:'11:30',from:480,to:690},
+    {name:'EURO',start:'13:30',end:'16:30',from:810,to:990},
+    {name:'US',start:'20:00',end:'23:30',from:1200,to:1410},
+    {name:'US_LATE',start:'02:00',end:'03:30',from:120,to:210}
+  ]);
   function malaysiaTradingSchedule(enabled = true, skipNews = enabled) {
     return {enabled: enabled === true, skipNews: skipNews === true, timeZone: 'Asia/Kuala_Lumpur',
-      start: '07:00', end: '03:00', newsPauseMinutes: 30,
+      version:'MYT_ACTIVE_SESSIONS_V1', sessions:MALAYSIA_SESSIONS.map(({name,start,end})=>({name,start,end})), newsPauseMinutes: 30,
       newsTimes: ['20:30', '21:30', '22:00', '02:00']};
   }
 
@@ -85,13 +91,15 @@
     const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(at));
     const part=type=>Number(parts.find(p=>p.type===type).value);
     const minute=part('hour')*60+part('minute');
-    if (sessionEnabled && minute>=180 && minute<420) return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
+    // Use the current canonical sessions even for profiles saved under the old schedule.
+    const activeSession=MALAYSIA_SESSIONS.find(s=>minute>=s.from&&minute<s.to);
+    if(sessionEnabled&&!activeSession)return {allowed:false,reason:'OUTSIDE_SESSION',validUntil:null};
     const newsStarts=skipNews ? [1230,1290,1320,120] : [];
     if (newsStarts.some(start=>minute>=start && minute<start+30))
       return {allowed:false,reason:'NEWS_PAUSE',validUntil:null};
-    const untilMinutes=Math.min(...[...(sessionEnabled ? [180] : []),...newsStarts].map(stop=>(stop-minute+1440)%1440));
+    const untilMinutes=Math.min(...[...(sessionEnabled ? [activeSession.to] : []),...newsStarts].map(stop=>(stop-minute+1440)%1440));
     const validUntil=at+(untilMinutes*60-part('second'))*1000-new Date(at).getUTCMilliseconds();
-    return {allowed:true,reason:'SESSION_OPEN',validUntil};
+    return {allowed:true,reason:'SESSION_OPEN',validUntil,...(sessionEnabled?{session:activeSession.name}:{})};
   }
 
   function effectiveSettings(input = {}, symbol = 'XAUUSD') {
@@ -121,6 +129,15 @@
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
     const manualExit={version:'MANUAL_TF2_EXIT_V2',enabled:input.manualExit?.enabled===true,timeframeMinutes:2,
       tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'};
+    for(const key of ['tp1','tp2','tp3','sl']) {
+      const raw=input.manualExit?.[key];
+      if(raw==null || (typeof raw==='string' && !raw.trim()))continue;
+      const value=typeof raw==='boolean'?null:number(raw);
+      if(value===null || value<=0)errors['manualExit.'+key]='TP/SL manual mesti nombor lebih daripada 0.';
+      else manualExit[key]=value;
+    }
+    if(!(manualExit.tp1<manualExit.tp2 && manualExit.tp2<manualExit.tp3))errors['manualExit.targets']='TP manual mesti mengikut turutan TP1 < TP2 < TP3.';
+    if(['tp1','tp2','tp3','sl'].some(k=>manualExit[k]!==({tp1:2,tp2:4,tp3:6,sl:3})[k]))manualExit.version='MANUAL_TF2_EXIT_V3';
     const strategyExitPolicies = {
       ...(input.strategyExitPolicies || {}),
       TF2_SCALPING: { version: 'TF2_TIGHT_SL_3C_V1', timeframeMinutes: 2,
@@ -364,8 +381,8 @@
       value: {
         ...identity.value,
         accountFingerprint,
-        manualExitVersion:input.manualExitVersion==='MANUAL_TF2_EXIT_V2'?'MANUAL_TF2_EXIT_V2':null,
-        manualExitEnabled:input.manualExitVersion==='MANUAL_TF2_EXIT_V2'&&input.manualExitEnabled===true,
+        manualExitVersion:input.manualExitVersion==='MANUAL_TF2_EXIT_V3' && input.manualExitCustomSupported===true ? 'MANUAL_TF2_EXIT_V3' : input.manualExitVersion==='MANUAL_TF2_EXIT_V2' ? 'MANUAL_TF2_EXIT_V2' : null,
+        manualExitEnabled:['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(input.manualExitVersion)&&input.manualExitEnabled===true,
         tradeMode,
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,
@@ -430,7 +447,7 @@
     const symbol=normaliseSymbol(market.symbol);
     const tf=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '');
     const mode=tf==='15'?'TF15_INTRA':'TF2_SCALPING';
-    const open=positions.filter(position=>!(['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion)&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
+    const open=positions.filter(position=>!(['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion)&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
       (position.strategyMode||'TF2_SCALPING')===mode);
     // Re-entry is a new cycle, never an add-on to a still-open setup.
     // Keep TF2/TF15 independent and preserve the existing manual-position scope.

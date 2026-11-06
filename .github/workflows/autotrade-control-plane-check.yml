@@ -4,6 +4,7 @@ name: Auto Trade control plane checks
   pull_request:
     paths:
       - "analysis-alert*"
+      - "position-telegram.js"
       - "analysis-telegram.js"
       - "pine-insights.*"
       - "analysis-dual.*"
@@ -12,8 +13,22 @@ name: Auto Trade control plane checks
       - "gold-copilot.js"
       - "home.html"
       - "auth*"
+      - "account*"
+      - "onboarding*"
+      - "admin-handover.js"
+      - "admin-setup-context.js"
+      - "client-detail.html"
+      - "detail.js"
+      - "scripts/check-account-handover-ui.cjs"
+      - "managed-vps-accounts.js"
+      - "login.html"
+      - "scripts/check-managed-login-ui.cjs"
       - "register.html"
       - "admin-registrations.*"
+      - "admin-telegram*"
+      - "ib-demo*"
+      - "scripts/check-ib-demo-ui.cjs"
+      - "scripts/check-admin-telegram-ui.cjs"
       - "management.js"
       - "scripts/check-registration-ui.cjs"
       - "scripts/check-pine-insights-ui.cjs"
@@ -22,7 +37,14 @@ name: Auto Trade control plane checks
       - "viewer-mode.css"
       - "scripts/check-analysis-alert-ui.cjs"
       - "auto-trade-*.js"
+      - "record-retention.js"
+      - "current-signal-records.js"
+      - "signal-outcome-store.js"
+      - "results*"
+      - "scripts/check-records-ui.cjs"
       - "auto-trade.js"
+      - "auto-trade.html"
+      - "scripts/check-manual-exit-ui.cjs"
       - "gcp-instance-identity.js"
       - "server-analysis.js"
       - "signal-desk-routes.js"
@@ -88,6 +110,21 @@ jobs:
       - name: Check user trade monitoring UI
         run: node scripts/check-user-trade-ui.cjs
 
+      - name: Check account handover and admin reset
+        run: node scripts/check-account-handover-ui.cjs
+
+      - name: Check editable manual exit defaults and persistence
+        run: node scripts/check-manual-exit-ui.cjs
+
+      - name: Check managed username login
+        run: node scripts/check-managed-login-ui.cjs
+
+      - name: Check isolated IB demo UI
+        run: node scripts/check-ib-demo-ui.cjs
+
+      - name: Check admin Telegram messaging UI
+        run: node scripts/check-admin-telegram-ui.cjs
+
       - name: Check registration approval UI
         run: node scripts/check-registration-ui.cjs
 
@@ -103,6 +140,9 @@ jobs:
         with:
           name: analysis-alert-previews
           path: |
+            handover-*.png
+            ib-demo-*.png
+            admin-telegram-*.png
             records-*.png
             native-chart-*.png
             alert-ui-*.png

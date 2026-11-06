@@ -31,10 +31,15 @@ test('monitoring HTTP routes enforce admin role and serve the working admin snap
   assert.equal(ready.status,200);const readiness=await ready.json();assert.equal(readiness.database,'READY');assert.equal(readiness.dispatcher,'READY');assert.equal(readiness.webhook,'AUTHENTICATED');
   assert.equal((await fetch(base+'/api/admin/user-trade-monitor')).status,401);
   assert.equal((await fetch(base+'/admin/user-trade-monitor',{redirect:'manual'})).status,302);
+  assert.equal((await fetch(base+'/api/admin/telegram/recipients')).status,401);
+  assert.equal((await fetch(base+'/admin/telegram',{redirect:'manual'})).status,302);
   const anon=await fetch(base+'/api/admin/monitoring');assert.equal(anon.status,401);
   const page=await fetch(base+'/admin/monitoring',{redirect:'manual'});assert.equal(page.status,302);
   for(const role of ['client','admin']){
    const login=await fetch(base+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({email:role+'@monitor.test',password:'MonitorTest2026!'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie').split(';')[0];
+   assert.equal((await fetch(base+'/api/admin/telegram/recipients',{headers:{Cookie:cookie}})).status,role==='admin'?503:403);
+   const telegramPage=await fetch(base+'/admin/telegram',{headers:{Cookie:cookie},redirect:'manual'});assert.equal(telegramPage.status,role==='admin'?200:302);
+   if(role==='admin')assert.match(await telegramPage.text(),/admin-telegram.js/);
    const api=await fetch(base+'/api/admin/monitoring',{headers:{Cookie:cookie}});assert.equal(api.status,role==='admin'?200:403);
    const tradeMonitor=await fetch(base+'/api/admin/user-trade-monitor',{headers:{Cookie:cookie}});assert.equal(tradeMonitor.status,role==='admin'?200:403);
    if(role==='admin'){

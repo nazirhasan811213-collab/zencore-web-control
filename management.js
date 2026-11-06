@@ -46,7 +46,7 @@
     return `<button class="table-action ${active ? 'danger' : 'good'}" type="button"
       data-client-status="${esc(client.id)}" data-active="${active ? 'false' : 'true'}" data-scope="${scope}">
       ${active ? 'DISABLE' : scope==='admin'?'AKTIFKAN 14 HARI':'ACTIVATE'}
-    </button>`;
+    </button>${scope==='admin'?` <a class="table-action" href="/admin/client/${encodeURIComponent(client.id)}#adminHandover">SETUP / RESET</a>`:''}`;
   }
 
   async function api(url, options = {}) {
@@ -83,6 +83,13 @@
     if (byId('accountEmail')) byId('accountEmail').textContent = currentUser.email || '';
   }
 
+  function adminClientName(client) {
+    const alias=/^ZCuser (?:10|[1-9])$/.test(client.loginId||'')?client.loginId:null;
+    const name=String(client.displayName||'').trim();
+    const personal=alias&&name&&name!=='Client'&&name.toLowerCase().replace(/\s/g,'')!==alias.toLowerCase().replace(/\s/g,'');
+    return `<strong>${esc(alias||name)}</strong>${personal?`<small>${esc(name)}</small>`:''}<small>${esc(client.email)}</small>`;
+  }
+
   function renderAdminClients(list) {
     const tbody = byId('clientTable');
     if (!tbody) return;
@@ -91,8 +98,8 @@
       return;
     }
     tbody.innerHTML = list.map(client => `<tr>
-      <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
-      <td><strong>${esc(client.phone || '—')}</strong><small>ID ${esc(client.icMasked || '—')}</small></td>
+      <td><a class="table-link" href="/admin/client/${encodeURIComponent(client.id)}">${adminClientName(client)}</a></td>
+      <td><strong>${esc(client.phone || '—')}</strong><small>${esc(client.handoverState||'LIVE')}</small></td>
       <td><strong>${esc(client.ibName || 'Nazir (Admin)')}</strong><small>${esc((client.ibCode || 'nazir').toUpperCase())}</small></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
       <td>${statusPill(client.status)}<small>Tamat: ${esc(client.accessExpiresAt?new Date(client.accessExpiresAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Belum diaktifkan')}</small></td>
@@ -110,7 +117,7 @@
     tbody.innerHTML = list.map(client => `<tr>
       <td><a class="table-link" href="/ib/client/${encodeURIComponent(client.id)}"><strong>${esc(client.displayName)}</strong><small>${esc(client.email)}</small></a></td>
       <td><strong>${esc(client.phone || '—')}</strong><small>${esc(fmtLastLogin(client.lastLoginAt))}</small></td>
-      <td><span class="link-code">${esc(client.icMasked || '—')}</span></td>
+      <td><span class="link-code">${esc(client.id.slice(0,8))}</span></td>
       <td>${esc(fmtDate(client.createdAt))}</td>
       <td>${statusPill(client.status)}<small>Tamat: ${esc(client.accessExpiresAt?new Date(client.accessExpiresAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'Belum diaktifkan')}</small></td>
       <td>${clientAction(client, 'ib')}</td>
@@ -309,7 +316,7 @@
       if (status && String(client.status || '').toLowerCase() !== status) return false;
       if (!q) return true;
       return [
-        client.displayName, client.email, client.phone, client.ibName, client.ibCode, client.icMasked
+        client.loginId, client.displayName, client.email, client.phone, client.ibName, client.ibCode, client.icMasked
       ].some(value => String(value || '').toLowerCase().includes(q));
     });
     if (role === 'admin') renderAdminClients(list);

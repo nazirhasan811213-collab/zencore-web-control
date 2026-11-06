@@ -8,7 +8,7 @@ function decode(row,batch){
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
     ...(['HEMA15_LIVE_V1'].includes(row[65]?.version)?{hemaConfirmation:row[65]}:{}),
-    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,entryDeliveryVersion:row[66]?.entryDeliveryVersion,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupMeta:row[66],nativeChartExitAll:batch.feedChannel==='EXECUTION'&&[S.POLICY.entryPolicyVersion,'PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5'].includes(row[66]?.entryPolicyVersion)&&row[66]?.nativeExitAll===true,setupKey:row[66]?.setupAt?`TF15|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
+    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,entryDeliveryVersion:row[66]?.entryDeliveryVersion,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,setupMeta:row[66],nativeChartExitAll:batch.feedChannel==='EXECUTION'&&[S.POLICY.entryPolicyVersion,'PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6'].includes(row[66]?.entryPolicyVersion)&&row[66]?.nativeExitAll===true,setupKey:row[66]?.setupAt?`TF15|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
     symbol,timeframe:String(batch.timeframe||'15'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
@@ -32,6 +32,9 @@ function ingest(batch,now=Date.now()){
   const channelKey=d.symbol+'|'+batch.feedChannel;
   const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt))continue;
   d.receivedAt=now;
+  // V6 may recalculate the same closing tick after its entry pulse. Preserve
+  // only an identical confirmed plan for <=1s; never renew the original deadline.
+  if(prev&&d.setupMeta?.entryPolicyVersion===S.NEW_POLICY&&prev.entryEvent===true&&d.entryEvent===false&&prev.confirmed&&d.confirmed&&d.feedChannel==='EXECUTION'&&d.time===prev.sourceBarTime&&d.signalObservedAt-prev.signalObservedAt<=1000&&d.setupKey===prev.setupKey&&d.setupMeta.completedAt===prev.setupMeta?.completedAt&&d.close===prev.close&&d.entry===prev.entry&&d.sl===prev.sl&&d.tp1===prev.tp1&&d.tp2===prev.tp2&&d.tp3===prev.tp3&&d.positionExitAction===prev.positionExitAction&&d.nativeChartExitAll===prev.nativeChartExitAll&&S.entryDecision(prev,now)&&S.strategy(d,now).state==='READY')continue;
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
   require('./indicator-chart-history').history.observe(m,now);

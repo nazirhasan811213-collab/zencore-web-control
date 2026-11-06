@@ -10,6 +10,13 @@ class ManualExitTests(unittest.TestCase):
   self.assertEqual(result['manualEnabled'],'1');self.assertNotIn('lot',result);self.assertNotIn('layers',result)
   for bad in ({'tp1':0},{'sl':1001},{'tp3':1},{'sl':True},{'maxActiveLayers':11},{'limitAction':'CLOSE_EXCESS'}):
    with self.assertRaises(ValueError):self.fields('MANUAL_EXIT_CONFIG',{'manualExit':{**cfg,**bad}})
+ def test_custom_distances_require_v3_and_are_encoded_without_replacing_values(self):
+  cfg={'version':'MANUAL_TF2_EXIT_V3','enabled':True,'timeframeMinutes':2,'tp1':1.5,'tp2':2.5,'tp3':3.5,'sl':4,'maxActiveLayers':10,'limitAction':'WARN_ONLY'}
+  result=self.fields('MANUAL_EXIT_CONFIG',{'manualExit':cfg})
+  self.assertEqual([result['manual'+k] for k in ('tp1','tp2','tp3','sl')],['1.5','2.5','3.5','4'])
+  self.assertEqual(result['manualVersion'],'MANUAL_TF2_EXIT_V3')
+  for bad in ({'tp1':0},{'tp2':1},{'tp3':2.5},{'sl':-1},{'sl':float('inf')},{'sl':True},{'version':'MANUAL_TF2_EXIT_V2'}):
+   with self.assertRaises(ValueError):self.fields('MANUAL_EXIT_CONFIG',{'manualExit':{**cfg,**bad}})
  def test_only_exact_manual_ticket_and_allowed_sop_close_actions_are_encoded(self):
   data={'symbol':'XAUUSD','side':'SELL','ticket':'555','positionId':'666','sourceAt':1791000000000,'actions':[{'type':'CLOSE_PERCENT','reason':'CLOSE_SEPARUH','percent':50}]}
   self.assertEqual(self.fields('MANUAL_EXIT_ACTION',data)['ticket'],'555')

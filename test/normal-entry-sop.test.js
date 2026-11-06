@@ -50,7 +50,7 @@ test('TF15 decoder, analysis, execution and Telegram share original SOP and corr
   assert.ok(cmd);assert.equal(cmd.payload.exitPolicy,null);assert.equal(cmd.payload.sl,99);
   const q=messageQuality(m),event={kind:'ENTRY',timeframe:tf,symbol:'XAUUSD',side:'BUY',id:'TEST',time:at,telegramPlan:m.strategyNormal.plan,telegramQuality:q,
    telegramSop:{version:x.version,tf:tf+'m',solid:true,green:4,gates:x.gates,forecast:x.forecast,power:x.power,m5Position:'ABOVE',...Object.fromEntries(Object.entries(x).filter(([k])=>k.startsWith('hema')))}};
-  assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('SOLID ENTRY TF'+tf));assert.doesNotMatch(telegramMessage(event),/HEMA5:/);
+  assert.equal(entrySopAllowed(event),true);assert.match(telegramMessage(event),new RegExp('ENTRY TF'+tf));assert.doesNotMatch(telegramMessage(event),/HEMA5:/);
   assert.equal(entrySopAllowed({...event,telegramQuality:{score:49}}),false);
  }
  const late={...market,price:101};assert.equal(Contract.createEntryDecision(late),null);

@@ -4,8 +4,8 @@
 function forActiveSetup(market, latest, positions, mode, now) {
   const s=latest?.payload?.analysisSnapshot, t=market?.signalObservedAt;
   if(market?.nativeChartExitAll!==true||market.feedChannel!=='EXECUTION'||
-     !['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.setupMeta?.entryPolicyVersion)||
-     latest?.status!=='EXECUTED'||!['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(s?.entryPolicyVersion)||
+     !['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.setupMeta?.entryPolicyVersion)||
+     latest?.status!=='EXECUTED'||!['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(s?.entryPolicyVersion)||
      !Number.isFinite(t)||now-t>30000||t>now+5000||
      String(market.timeframe)!==String(s.executionTimeframe)||
      !positions.some(p=>p.origin!=='MANUAL'&&p.symbol===market.symbol&&

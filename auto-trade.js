@@ -183,7 +183,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', executionError(control.lastError) || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar sesi 7 pagi–3 pagi Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', executionError(control.lastError) || control.exitPolicyReason || control.strategyReason || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar waktu aktif trader Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));
@@ -238,7 +238,7 @@
     hydrateModeDraft(settings);
     byId('capitalUsd').value = settings.capitalUsd ?? '';
     byId('manualExitEnabled').checked=settings.manualExit?.enabled===true;
-    for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=({tp1:2,tp2:4,tp3:6,sl:3})[k];
+    for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=settings.manualExit?.[k] ?? ({tp1:2,tp2:4,tp3:6,sl:3})[k];
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
     byId('tradingScheduleEnabled').checked = settings.tradingSchedule?.enabled === true;
     byId('newsTradingMode').value = (settings.tradingSchedule?.skipNews ?? (settings.tradingSchedule?.enabled === true)) ? 'skip' : 'trade';
@@ -632,7 +632,7 @@
       if (!validation.ok) throw new Error(Object.values(validation.errors)[0]);
       const state = await api('/api/auto-trade/settings', { method: 'PUT', body: JSON.stringify(body) });
       settingsDirty = false;
-      settingsHydrated = true;
+      settingsHydrated = false;
       render(state);
       toast('Konfigurasi Auto Trade disimpan.');
     } catch (error) {
