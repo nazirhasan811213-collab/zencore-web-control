@@ -940,7 +940,7 @@ class PostgresAuthStore {
   async findUserByIdForLogin(userId) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.password_hash, u.role, u.status,
-              u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
+              u.handover_state, u.handover_released_at, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at, ref.code AS ib_code, ref.display_name AS ib_name
        FROM zencore_users u
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
        WHERE u.id = $1

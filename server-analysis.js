@@ -278,7 +278,7 @@ if (AUTH_ENABLED) {
         store: autoStore,
         scalpingTimeframe: '2',
         onConfirmedPositions: snapshot=>positionTelegram?.observe(snapshot),
-        entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u);},
+        entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u)&&(!VPS_HANDOVER_REQUIRED||u.role!=='client'||!!u.handover_released_at);},
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
         allowLocalEaExecution: LOCAL_EA_EXECUTION_ENABLED,
@@ -1623,7 +1623,7 @@ const server = http.createServer(async (req, res) => {
   }
   if(req.method==='GET'&&pathname==='/ready'){
     const status=await readiness.snapshot();
-    status.product="ZenCore Errante"; status.preparationMode=true;
+    status.product="ZenCore Errante"; status.preparationMode=!LOCAL_EA_EXECUTION_ENABLED;
     status.relay=feedRelay.status();
     return sendJson(res,status.ok?200:503,{...status,autoEntry:{enabled:AUTOTRADE_EXECUTION_ENABLED||LOCAL_EA_EXECUTION_ENABLED||!!String(process.env.ZENCORE_LOCAL_EA_EXECUTION_EMAILS||'').trim(),signalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')},demoEntry:{allUsers:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_ENABLED||''),scoped:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS||'').trim(),mode:'DEMO',accountRestricted:!!String(process.env.ZENCORE_LOCAL_EA_DEMO_ACCOUNT_MASK||'')}});
   }
