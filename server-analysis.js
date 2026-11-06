@@ -484,7 +484,7 @@ async function requireSession(req, res, redirectTo = null) {
       else sendJson(res, 401, { ok: false, error: 'Sesi tamat. Sila log masuk semula.' });
       return null;
     }
-    if(session.user.role==='client'&&session.user.handoverState!=='LIVE'&&!require('./account-handover').allowedPath(new URL(req.url,'http://localhost').pathname,session.user.handoverState)){if(redirectTo)redirect(res,'/onboarding');else sendJson(res,403,{ok:false,code:'ACCOUNT_HANDOVER_REQUIRED',error:'Lengkapkan serahan admin dan profil dahulu.',handoverState:session.user.handoverState});return null;}
+    if(!VPS_HANDOVER_REQUIRED&&session.user.role==='client'&&session.user.handoverState!=='LIVE'&&!require('./account-handover').allowedPath(new URL(req.url,'http://localhost').pathname,session.user.handoverState)){if(redirectTo)redirect(res,'/onboarding');else sendJson(res,403,{ok:false,code:'ACCOUNT_HANDOVER_REQUIRED',error:'Lengkapkan serahan admin dan profil dahulu.',handoverState:session.user.handoverState});return null;}
     // End authenticated streams when the client's access period ends as well.
     const deadline=session.user.role==='client'?new Date(session.user.accessExpiresAt).getTime():NaN;
     if(Number.isFinite(deadline)&&deadline>Date.now()){
@@ -1293,6 +1293,8 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
   }
   if (!autoTradeState.ready || !autoTradeState.service) return autoTradeUnavailable(res);
   const userId = session.user.id;
+  if(VPS_HANDOVER_REQUIRED&&session.user.role==='client'&&!require('./account-handover').allowedVpsAutoTrade(pathname,session.user.handoverState,req.method))
+    return sendJson(res,403,{ok:false,code:'ACCOUNT_HANDOVER_REQUIRED',error:'Auto Trade dikunci sehingga admin selesai setup VPS dan serah akses.'});
   if(VPS_HANDOVER_REQUIRED&&session.user.role==='client'&&['/api/auto-trade/ea-connect','/api/auto-trade/reset-link','/api/auto-trade/pairing','/api/auto-trade/hosted-account'].includes(pathname)&&!(pathname==='/api/auto-trade/ea-connect'&&session.user.handoverState==='ADMIN_SETUP'))
     return sendJson(res,403,{ok:false,code:'ADMIN_VPS_SETUP_REQUIRED',error:'Hubungi admin untuk sambung atau tukar Connector dan EA di VPS.'});
   try {
@@ -1642,7 +1644,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if(req.method==='GET'&&['/onboarding.js','/onboarding.css','/admin-handover.js','/admin-setup-context.js'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.css')?'text/css; charset=utf-8':'application/javascript; charset=utf-8');
-  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/onboarding'){const session=await requireRole(req,res,'client','/login');if(!session)return;return sendAuthAsset(res,'onboarding.html','text/html; charset=utf-8');}
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/onboarding'){const session=await requireRole(req,res,'client','/login');if(!session)return;if(VPS_HANDOVER_REQUIRED)return redirect(res,'/auto-trade');return sendAuthAsset(res,'onboarding.html','text/html; charset=utf-8');}
   if(pathname==='/api/account/handover'){const session=await requireSession(req,res);if(!session)return;if(session.user.role!=='client')return sendJson(res,403,{ok:false,error:'Akaun client sahaja.'});if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});try{if(req.method==='GET')return sendJson(res,200,await accountHandover.status(session.user.id));if(req.method==='POST'&&requestOriginAllowed(req)){const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});const done=await accountHandover.complete(session.user.id,body);return sendJson(res,200,done,{'Set-Cookie':authState.service.clearCookie()});}return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});}catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis serahan tidak tersedia.'});}}
   const setupPage=pathname.match(/^\/admin\/client\/([0-9a-f-]{36})\/setup$/i);
   if(AUTH_ENABLED&&req.method==='GET'&&setupPage){const session=await requireRole(req,res,'admin','/login');if(!session)return;res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'auto-trade.html'),'utf8').replace('<head>','<head><script src="/admin-setup-context.js"></script>'));}
@@ -1944,6 +1946,8 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
+    if(VPS_HANDOVER_REQUIRED&&session.user.role==='client'&&session.user.handoverState!=='LIVE')
+      return sendAuthAsset(res,'errante-auto-trade-locked.html','text/html; charset=utf-8');
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 
