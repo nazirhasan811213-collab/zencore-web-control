@@ -208,8 +208,8 @@ function createAutoTradeService(options = {}) {
       podId: pod.id, connectorVersion: LOCAL_EA_VERSION, executionEnabled: executionAllowed(userId, pod) };
   }
 
-  function connectionState(pod) {
-    if (pod && !executionAllowed(pod.userId, pod)) pod = { ...pod, demoExecutionUnlocked: false };
+  function connectionState(pod, setup = false) {
+    if (pod && !setup && !executionAllowed(pod.userId, pod)) pod = { ...pod, demoExecutionUnlocked: false };
     return Core.podConnectionState(pod, now(), {
       connectorVersion: isLocalEa(pod) ? (['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion)?pod.connectorVersion:LOCAL_EA_VERSION) : requiredDemoConnectorVersion,
       realAccountAllowed: isLocalEa(pod) && ['1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion),
@@ -432,6 +432,8 @@ function createAutoTradeService(options = {}) {
         canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
+      setupConnection: isLocalEa(pod) && pod.accountFingerprint && pod.lastSeenAt <= now()+5000
+        ? connectionState(pod,true) : {ready:false},
       pod: pod ? {
         label: pod.label,
         ownershipMode: pod.ownershipMode,
@@ -1140,6 +1142,7 @@ function createAutoTradeService(options = {}) {
       throw serviceError('ACCOUNT_MODE_CHANGED', 'Jenis akaun berubah. OFF dan pautkan semula akaun yang dipilih.', 409);
     }
     const seenAt = now();
+    if(process.env.ZENCORE_REQUIRE_VPS_HANDOVER==='true' && isLocalEa(pod) && input.terminalConnected!==true)heartbeatValidation.value.expertTradeAllowed=false;
     const updated = await store.updatePodHeartbeat(pod.id, heartbeatValidation.value, seenAt, pod.tokenHash);
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
     const cycleBefore=['2','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];

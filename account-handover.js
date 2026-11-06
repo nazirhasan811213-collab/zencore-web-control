@@ -6,21 +6,25 @@ const canTrade=u=>!!u&&((u.role&&u.role!=='client')||state(u)==='LIVE');
 function allowedPath(path,stage){return ['/auth/me','/auth/logout','/onboarding','/api/account/handover'].includes(path)||(stage==='ADMIN_SETUP'&&path==='/api/auto-trade/ea-connect');}
 function admin(actor){if(actor?.role!=='admin'||actor.status!=='active')throw fail('Admin aktif sahaja.',403);}
 class AccountHandover{
- constructor({pool,tradingState,now=Date.now}){this.pool=pool;this.tradingState=tradingState;this.now=now;this.aliases=false;}
+ constructor({pool,tradingState,now=Date.now,requireVps=false}){this.pool=pool;this.tradingState=tradingState;this.now=now;this.aliases=false;this.requireVps=requireVps;}
  async init(){
   await this.pool.query(`CREATE TABLE IF NOT EXISTS zencore_account_resets(id UUID PRIMARY KEY,user_id UUID NOT NULL REFERENCES zencore_users(id),admin_id UUID NOT NULL REFERENCES zencore_users(id),generation INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
+  if(this.requireVps){
+   await this.pool.query("ALTER TABLE zencore_users ALTER COLUMN handover_state SET DEFAULT 'ADMIN_SETUP'");
+   this.initialized=(await this.pool.query("UPDATE zencore_users SET handover_state='ADMIN_SETUP' WHERE role='client' AND handover_state IS NULL")).rowCount;
+  }
   this.aliases=!!(await this.pool.query("SELECT to_regclass('zencore_managed_login_aliases') AS name")).rows[0].name;
-  if(this.aliases){const c=await this.pool.connect();try{await c.query('BEGIN');const changed=await c.query("UPDATE zencore_users SET handover_state='ADMIN_SETUP' WHERE role='client' AND handover_state IS NULL AND id IN (SELECT user_id FROM zencore_managed_login_aliases) RETURNING id");this.initialized=changed.rowCount;const ids=changed.rows.map(u=>u.id);if(ids.length){
+  if(this.aliases){const c=await this.pool.connect();try{await c.query('BEGIN');const changed=await c.query("UPDATE zencore_users SET handover_state='ADMIN_SETUP' WHERE role='client' AND handover_state IS NULL AND id IN (SELECT user_id FROM zencore_managed_login_aliases) RETURNING id");this.initialized=(this.initialized||0)+changed.rowCount;const ids=changed.rows.map(u=>u.id);if(ids.length){
     if((await c.query("SELECT to_regclass('zencore_autotrade_profiles') AS name")).rows[0].name)await c.query("UPDATE zencore_autotrade_profiles SET desired_state='STOPPED',effective_state='STOPPED',pending_command_id=NULL,state_version=state_version+1,updated_at=NOW() WHERE user_id=ANY($1::uuid[])",[ids]);
     for(const table of ['zencore_autotrade_commands','zencore_hosted_autotrade_commands'])if((await c.query('SELECT to_regclass($1) AS name',[table])).rows[0].name)await c.query(`UPDATE ${table} SET status='CANCELLED',acknowledged_at=NOW(),result=jsonb_build_object('code','ADMIN_SETUP_REQUIRED') WHERE user_id=ANY($1::uuid[]) AND command_type IN ('PLACE_SETUP','SYSTEM_ON') AND status IN ('PENDING','DELIVERED')`,[ids]);
-   }await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}else this.initialized=0;
+   }await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}else this.initialized=this.initialized||0;
  }
  async row(userId,c=this.pool,lock=false){const r=(await c.query('SELECT * FROM zencore_users WHERE id=$1'+(lock?' FOR UPDATE':''),[userId])).rows[0];if(!r||r.role!=='client')throw fail('Akaun client tidak dijumpai.',404);return r;}
  async status(userId){const u=await this.row(userId);let alias=null;if(this.aliases)alias=(await this.pool.query('SELECT login_id FROM zencore_managed_login_aliases WHERE user_id=$1',[userId])).rows[0]?.login_id;return {ok:true,state:state(u),generation:u.handover_generation||0,loginId:alias?'ZCuser '+require('./managed-vps-accounts').number(alias):u.email,profile:{displayName:/^(ZCuser \d+|Client)$/.test(u.display_name)?'':u.display_name,email:u.email.endsWith('@managed.zencore.invalid')?'':u.email,phone:u.phone||''},releasedAt:u.handover_released_at,completedAt:u.handover_completed_at};}
  async release(actor,userId){admin(actor);const c=await this.pool.connect();try{await c.query('BEGIN');const u=await this.row(userId,c,true);if(u.status!=='active')throw fail('Aktifkan akaun client dahulu.');if(state(u)==='USER_PROFILE'){await c.query('COMMIT');return this.status(userId);}if(state(u)!=='ADMIN_SETUP')throw fail('Akaun bukan dalam fasa Admin Setup.');
   await c.query('SELECT user_id FROM zencore_autotrade_profiles WHERE user_id=$1 FOR UPDATE',[userId]);await c.query('SELECT id FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE',[userId]);
   const t=await this.tradingState(userId),v=require('./auto-trade-core').validateSettings(t.settings||{});
-  if(!t.connection?.ready||!t.pod||!v.ok||!t.settings?.riskAcknowledgedAt)throw fail('Lengkapkan sambungan MT5 dan simpan konfigurasi Auto Trade dahulu.');
+  if(!(this.requireVps?t.setupConnection?.ready:t.connection?.ready)||!t.pod||!v.ok||!t.settings?.riskAcknowledgedAt)throw fail('Sambungkan Connector dan EA pada MT5 di VPS, hidupkan Algo Trading dan simpan konfigurasi Auto Trade dahulu.');
   if((t.positions||[]).length||!['STOPPED','UNPROVISIONED'].includes(t.control?.effectiveState)||t.control?.desiredState!=='STOPPED')throw fail('STOP Auto Trade dan pastikan tiada posisi sebelum serahan.');
   await c.query("UPDATE zencore_users SET handover_state='USER_PROFILE',handover_released_at=NOW(),handover_completed_at=NULL WHERE id=$1",[userId]);await c.query('COMMIT');return this.status(userId);
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}

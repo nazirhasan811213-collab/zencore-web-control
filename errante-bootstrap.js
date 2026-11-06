@@ -16,8 +16,9 @@ function configureErrante(env) {
   for (const key of ['ZENCORE_LOCAL_EA_EXECUTION_EMAILS', 'ZENCORE_LOCAL_EA_DEMO_EXECUTION_EMAILS']) env[key] = '';
   env.ZENCORE_ENTRY_SIGNALS_PAUSED = 'true';
   env.ZENCORE_AUTH_ENABLED = 'true';
-  env.ZENCORE_AUTOTRADE_ENABLED = 'false';
+  env.ZENCORE_AUTOTRADE_ENABLED = 'true';
   env.ZENCORE_PRESERVE_SIGNAL_HISTORY = 'true';
+  env.ZENCORE_REQUIRE_VPS_HANDOVER = 'true';
   env.ZENCORE_PRODUCT_NAME = 'ZenCore Errante';
   env.ZENCORE_RELAY_TARGET_URL = ''; // Receiver only; never relay back or form a loop.
   return env;
@@ -26,6 +27,9 @@ function configureErrante(env) {
 module.exports = { configureErrante };
 if (require.main === module) {
   configureErrante(process.env);
+  for (const key of ['ZENCORE_POD_PROVISIONING_SECRET', 'ZENCORE_COMMAND_SIGNING_KEY']) {
+    if (Buffer.byteLength(process.env[key] || '') < 32) throw new Error(key + ' must be at least 32 bytes.');
+  }
   require('./compat-v17.js');
   require('./server-analysis.js');
 }
