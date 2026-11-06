@@ -2,7 +2,7 @@
 const test=require('node:test'),a=require('node:assert/strict'),{telegramMessage}=require('../analysis-telegram');
 for(const tf of ['3','15'])test(`TF${tf} close is a scoped action, not an execution acknowledgement`,()=>{
  const message=telegramMessage({kind:'CLOSE',symbol:'XAUUSD',timeframe:tf,time:Date.UTC(2026,9,19,1,0),id:'close-1',percent:100,message:`XAUUSD • TF${tf} • CLOSE SEMUA\nChart Close Separuh → CLOSE ALL`});
- a.ok(message.startsWith(`━━━━━━━━━━━━━━━━━━\n🛑 ZENCORE | CLOSE ALL TF${tf}\n──────────────────`));a.match(message,new RegExp(`Tutup semua baki posisi TF${tf}`));
+ a.ok(message.startsWith(`━━━━━━━━━━━━━━━━━━\n🛑 ZENCORE ERRATE | CLOSE ALL TF${tf}\n──────────────────`));a.match(message,new RegExp(`Tutup semua baki posisi TF${tf}`));
  a.match(message,/Semak close di MT5/);a.match(message,/belum pengesahan close MT5/);
  a.equal((message.match(/XAUUSD/g)||[]).length,1);a.equal((message.match(/Chart Close Separuh/g)||[]).length,1);
  a.match(message,/09:00:00 MYT/);a.doesNotMatch(message,/SEMUA POSISI SUDAH DITUTUP|undefined/);

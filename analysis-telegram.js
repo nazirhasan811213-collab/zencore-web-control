@@ -236,7 +236,7 @@ function telegramMessage(e){
   }
   const [title,...body]=message.split('\n');
   const border='━━━━━━━━━━━━━━━━━━';
-  return [border,title,'──────────────────',...body,border].join('\n');
+  return [border,title,'──────────────────',...body,border].join('\n').replace(/\b(ZENCORE|ZenCore)\b/g, name=>name==='ZENCORE'?'ZENCORE ERRATE':'ZenCore Errate');
 }
 module.exports={prepareTelegram,messageQuality,telegramMessage,qualityGrade,entryFresh,entrySopAllowed};
 

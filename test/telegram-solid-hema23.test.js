@@ -10,7 +10,7 @@ test('Telegram new SOP requires all confirmation gates and ignores old quality s
   assert.equal(entrySopAllowed({...e,telegramSop:{...e.telegramSop,...edit}}),false);
  assert.equal(entrySopAllowed({...e,telegramSop:undefined}),false);
  const text=telegramMessage(e);assert.match(text,/ENTRY TF2/);assert.match(text,/Sebab entry:/);
- assert.match(text,/Rumusan AI ZenCore:/);assert.doesNotMatch(text,/Forecast|HEMA TF3/);
+ assert.match(text,/Rumusan AI ZenCore Errate:/);assert.doesNotMatch(text,/Forecast|HEMA TF3/);
  assert.doesNotMatch(text,/NORMAL 3M|A\+ PROFIT QUALITY|LOW QUALITY/);
 });
 test('Analysis records the same approved SOP and plan for Telegram without sending',async()=>{
