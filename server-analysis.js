@@ -899,6 +899,22 @@ async function handleManagementApi(req, res, pathname, session) {
       if (session.user.role !== 'ib') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'IB access required.' });
       }
+      if(pathname.startsWith('/api/ib/telegram/')){
+        res.setHeader('Cache-Control','no-store');
+        if(!adminTelegram)return sendJson(res,503,{ok:false,error:'Servis mesej admin belum tersedia.'});
+        try{
+          if(req.method==='GET'&&pathname==='/api/ib/telegram/recipients')return sendJson(res,200,await adminTelegram.catalog(session.user,true));
+          if(req.method==='GET'&&pathname==='/api/ib/telegram/history')return sendJson(res,200,await adminTelegram.history(session.user,true));
+          if(req.method==='GET'&&/^\/api\/ib\/telegram\/jobs\/[0-9a-f-]{36}$/i.test(pathname))return sendJson(res,200,await adminTelegram.details(session.user,pathname.split('/').pop(),true));
+          if(req.method!=='POST')return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
+          if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+          const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+          if(!body||typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
+          if(pathname==='/api/ib/telegram/preview')return sendJson(res,200,await adminTelegram.preview(session.user,body,true));
+          if(pathname==='/api/ib/telegram/send')return sendJson(res,200,await adminTelegram.send(session.user,body.draftId,true));
+          return sendJson(res,404,{ok:false,error:'Endpoint tidak dijumpai.'});
+        }catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis mesej admin tidak tersedia. Cuba lagi.'});}
+      }
       if (req.method === 'GET' && pathname === '/api/ib/overview') {
         return sendJson(res, 200, { ok: true, ...(await authState.service.ibOverview(session.user)) });
       }
@@ -1817,6 +1833,7 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'admin.html', 'text/html; charset=utf-8');
   }
 
+  if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/ib/telegram'){const session=await requireRole(req,res,'ib','/login');if(!session)return;return sendAuthAsset(res,'ib-telegram.html','text/html; charset=utf-8');}
   if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/telegram'){const session=await requireRole(req,res,'admin','/login');if(!session)return;return sendAuthAsset(res,'admin-telegram.html','text/html; charset=utf-8');}
   if(AUTH_ENABLED&&req.method==='GET'&&pathname==='/admin/user-trade-monitor') {
     const session=await requireRole(req,res,'admin','/login');if(!session)return;
