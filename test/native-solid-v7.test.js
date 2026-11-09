@@ -30,7 +30,9 @@ test('V7 scripts preserve risk/re-entry, use one structured alert and unconditio
  for(const tf of ['2','15']){const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.equal((s.match(/\balert\(/g)||[]).length,1);a.match(s,/CLOSED_PAUSE_RESUME_V2/);a.match(s,/bool xc_yellow_exit = xc_buy \? \(v2_dr and not v2_dc\) : \(v2_ur and not v2_uc\)/);a.match(s,/if xc_yellow_exit or xc_stop/);a.match(s,/nativeSolid/);a.match(s,/NATIVE_SOLID_LABEL_V1/);a.match(s,/zc24_closed_entry_packet := zc24_payload/);if(tf==='2')a.match(s,/bool zs_pass = true/);}
 });
 for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`V7 TF${tf} ${side}: signal queues once, connector receives full lot/layers and exit policy`,async()=>{
- const {f,ingest}=native(tf,side),m=ingest(),Core=require('../auto-trade-core');
+ const {f,ingest,sign}=native(tf,side);
+ if(tf==='2'){f.row[3]=4100+sign*.5;f.row[40]=false;f.row[65].tf2.fast=4100-sign;Object.assign(f.row[66].entrySafety,{flips:3,atr:5,chopBlocked:true});}
+ const m=ingest(),Core=require('../auto-trade-core');
  const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
  const store=new MemoryAutoTradeStore(),token='zcpod_'+'v'.repeat(48),hash=tokenHash(token),user='v7-'+tf+side;
  const pod={id:'v7pod'+tf+side,userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:f.now,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
@@ -52,4 +54,10 @@ test('V7.1 native SOLID cannot be cancelled by the removed HEMA entry filter; fo
  for(const tf of ['2','15']){
   const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7.1`));a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
  }
+});
+for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{
+ const {f,ingest,sign}=native('2',side);f.row[3]=4100+sign*.5;f.row[40]=false;const m=ingest(),d=C.createEntryDecision(m),check=require('../entry-delivery-check').checkEntryDelivery;
+ a.ok(d);const payload={...d.snapshot,side,analysisSnapshot:d.snapshot};a.equal(check({payload},m,f.now).ok,true);
+ const follow={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,cycleKind:'FOLLOWUP'}}};a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,cycleKind:'FOLLOWUP'}}},follow,f.now).reason,'TF2_HOLD_CANDLE_DIRECTION');
+ a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,entryAuthorizedAt:f.now-61000}}},m,f.now).reason,'ENTRY_EVENT_EXPIRED');
 });

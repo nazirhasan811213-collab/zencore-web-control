@@ -5,6 +5,9 @@ const Core=require('./auto-trade-core');
 const samePrice=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=1e-6;
 function checkEntryDelivery(command,market,at=Date.now()){
  const p=command.payload||{},snap=p.analysisSnapshot||{},n=market?.strategyNormal;
+ const nativePolicy=require('./tf2-ribbon-scalping').NATIVE_POLICY;
+ const nativeV7=snap.qualificationPolicyVersion===nativePolicy&&n?.sop?.entryPolicyVersion===nativePolicy;
+ const nativeInitial=nativeV7&&snap.cycleKind==='INITIAL'&&n.sop.cycleKind==='INITIAL';
  const observed=Number(market?.signalObservedAt)||market?.receivedAt;
  const detail={timeframe:snap.executionTimeframe||null,side:p.side||null,setupKey:snap.setupKey||null,
   currentSide:n?.side||null,currentSetupKey:market?.setupKey||null,observedAt:observed||null};
@@ -14,8 +17,8 @@ function checkEntryDelivery(command,market,at=Date.now()){
  if(snap.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed(market))return fail('TF2_CANDLE_NOT_CLOSED');
  if(snap.analysisSopVersion==='NORMAL_20261001_TF2_RIBBON_V1'&&market.feedChannel!=='EXECUTION')return fail('EXECUTION_FEED_REQUIRED');
  if(!Number.isFinite(observed)||at-observed>(['2','3','15'].includes(String(market?.timeframe))&&market?.feedChannel==='EXECUTION'&&market?.entryEvent===true?60000:require('./entry-data-age').maximumAge(market))||observed>at+5000)return fail('MARKET_STALE');
- if(String(market.timeframe)==='2'&&n?.sop?.entrySafety&&!require('./tf2-entry-safety').allowed(n.sop.entrySafety,p.side,market.sourceBarTime??market.time))return fail('TF2_ENTRY_SAFETY_BLOCKED');
- if(String(market.timeframe)==='2'&&(snap.confirmationEvidence?.entryCandle||market.setupMeta?.entryCandleVersion||n?.sop?.entryCandle)){
+ if(!nativeV7&&String(market.timeframe)==='2'&&n?.sop?.entrySafety&&!require('./tf2-entry-safety').allowed(n.sop.entrySafety,p.side,market.sourceBarTime??market.time))return fail('TF2_ENTRY_SAFETY_BLOCKED');
+ if(!nativeInitial&&String(market.timeframe)==='2'&&(snap.confirmationEvidence?.entryCandle||market.setupMeta?.entryCandleVersion||n?.sop?.entryCandle)){
   const ribbon=require('./tf2-ribbon-scalping'),proof=ribbon.entryCandleProof(market)||n?.sop?.entryCandle;
   if(!ribbon.candlePass(proof,p.side,market.sourceBarTime??market.time))return fail('TF2_HOLD_CANDLE_DIRECTION');
  }
