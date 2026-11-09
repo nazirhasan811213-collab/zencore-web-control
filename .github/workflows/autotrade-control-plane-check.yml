@@ -56,7 +56,7 @@ permissions:
 jobs:
   test:
     name: Test control plane without cloud credentials
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:

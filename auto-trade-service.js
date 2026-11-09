@@ -1517,7 +1517,7 @@ function createAutoTradeService(options = {}) {
         if (!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market)) continue;
         if (!allowedDemoSymbols.includes(symbol))continue;
         if(!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
-        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
+        const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
         const cycle=await entryCycleReset.check(profile.userId,pod?.id,market);
         if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
         if (hostedAccount) {
@@ -1589,6 +1589,7 @@ function createAutoTradeService(options = {}) {
         if(mode==='TF15_INTRA'&&(hostedAccount||!['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion)))continue;
         const latest=!hostedAccount&&typeof store.latestSetupForMode==='function'?await store.latestSetupForMode(profile.userId,symbol,mode):null;
         const active=pod?await require('./pine-position-plan').resolve(store,profile.userId,pod.id,positions,symbol,mode,latest):null;
+        market=require('./native-chart-exit').forActiveSetup(market,active||latest,positions,mode,now());
         const activeMarket=active&&now()-pod.lastSeenAt<=15000?require('./pine-position-plan').management(market,positions,active,now()):null;
         const latestSnap=(active||latest)?.payload?.analysisSnapshot;
         if(activeMarket)market=activeMarket;
