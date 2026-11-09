@@ -2,7 +2,12 @@
 const crypto=require('node:crypto');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const error=(message,status=400)=>Object.assign(new Error(message),{status});
-function admin(actor){if(actor?.role!=='admin'||actor.status!=='active')throw error('Admin aktif sahaja.',403);}
+function admin(actor,ib=false){if((actor?.role!=='admin'&&!(ib&&actor?.role==='ib'))||actor.status!=='active')throw error('Admin aktif sahaja.',403);}
+
+function ownIb(actor,ibs){const ib=ibs.find(i=>i.user_id===actor.id);if(!ib)throw error('Profil IB tidak dijumpai.',403);return ib;}
+function ibSelection(actor,ibs){return {mode:'IB',ibId:ownIb(actor,ibs).id,ibScope:'CLIENTS'};}
+function senderScope(sender,job,ibs){return sender?.status==='active'&&(sender.role==='admin'||sender.role==='ib'&&job.selection?.mode==='IB'&&job.selection.ibScope==='CLIENTS'&&ibs.some(i=>i.user_id===sender.id&&i.id===job.selection.ibId));}
+
 function selection(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))throw error('Pilihan penerima tidak sah.');
  const mode=input.mode;if(!['IB','SINGLE','MULTI','ALL'].includes(mode))throw error('Pilihan penerima tidak sah.');
@@ -26,11 +31,11 @@ function resolve(users,ibs,s){
  if(targets.length>10000)throw error('Terlalu ramai penerima. Pecahkan mengikut IB.');
  return {selected:chosen.length,targets,skipped};
 }
-function content(input,at,id){
+function content(input,at,id,ib=false){
  const title=typeof input.title==='string'?input.title.trim():'',body=typeof input.message==='string'?input.message.trim():'';
  if(title.length>100||!body||body.length>3000||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(title+body))throw error('Mesej wajib diisi, maksimum 3000 aksara; tajuk maksimum 100.');
  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'short',timeStyle:'short'}).format(new Date(at));
- return ['━━━━━━━━━━━━━━━━━━','📩 ZENCORE | MESEJ ADMIN','──────────────────',...(title?[title,'']:[]),body,'',`🕒 ${time} MYT • ADM-${id.slice(0,8)}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
+ return ['━━━━━━━━━━━━━━━━━━',ib?'📩 ZENCORE | MESEJ IB':'📩 ZENCORE | MESEJ ADMIN','──────────────────',...(title?[title,'']:[]),body,'',`🕒 ${time} MYT • ${ib?'IB':'ADM'}-${id.slice(0,8)}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
 }
 class AdminTelegram {
  constructor({pool,alerts,now=Date.now}){this.pool=pool;this.alerts=alerts;this.now=now;this.busy=false;}
@@ -43,27 +48,28 @@ CREATE INDEX IF NOT EXISTS zencore_admin_telegram_pending_idx ON zencore_admin_t
  async data(){
   const [u,i]=await Promise.all([this.pool.query("SELECT u.id,u.display_name,u.email,u.role,u.status,u.access_expires_at,u.ib_referrer_id,COALESCE(p.data,'{}'::jsonb) AS prefs FROM zencore_users u LEFT JOIN zencore_alert_preferences p ON p.user_id=u.id WHERE u.role<>'viewer' ORDER BY u.display_name,u.id"),this.pool.query('SELECT id,code,display_name,user_id FROM zencore_ib_referrers ORDER BY display_name')]);return {users:u.rows,ibs:i.rows};
  }
- async catalog(actor){admin(actor);const d=await this.data();return {ok:true,available:!!this.alerts.token,users:d.users.map(u=>({id:u.id,name:u.display_name,email:u.email,role:u.role,status:u.status,expired:u.role==='client'&&u.access_expires_at!=null&&new Date(u.access_expires_at).getTime()<=this.now(),ibId:u.ib_referrer_id,telegramReady:eligible(u)})),ibs:d.ibs.map(i=>({id:i.id,name:i.display_name,code:i.code}))};}
- async preview(actor,input){
-  admin(actor);const s=selection(input),d=await this.data(),r=resolve(d.users,d.ibs,s),id=crypto.randomUUID(),at=this.now(),text=content(input,at,id);
+ async catalog(actor,ib=false){admin(actor,ib);const d=await this.data();if(ib){const own=ownIb(actor,d.ibs);d.users=d.users.filter(u=>u.role==='client'&&u.ib_referrer_id===own.id);d.ibs=[own];}return {ok:true,available:!!this.alerts.token,users:d.users.map(u=>({id:u.id,name:u.display_name,email:u.email,role:u.role,status:u.status,expired:u.role==='client'&&u.access_expires_at!=null&&new Date(u.access_expires_at).getTime()<=this.now(),ibId:u.ib_referrer_id,telegramReady:eligible(u)})),ibs:d.ibs.map(i=>({id:i.id,name:i.display_name,code:i.code}))};}
+ async preview(actor,input,ib=false){
+  admin(actor,ib);const d=await this.data(),s=ib?ibSelection(actor,d.ibs):selection(input),r=resolve(d.users,d.ibs,s),id=crypto.randomUUID(),at=this.now(),text=content(input,at,id,ib);
   if(!r.targets.length)throw error('Tiada penerima dengan Telegram disahkan dan notifikasi ON.');
   await this.pool.query('INSERT INTO zencore_admin_telegram_jobs(id,admin_id,selection,message,targets,skipped,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,actor.id,s,text,JSON.stringify(r.targets),JSON.stringify(r.skipped),new Date(at+10*60000)]);
   return {ok:true,draftId:id,message:text,selected:r.selected,ready:r.targets.length,skipped:r.skipped.length,recipients:r.targets.map(t=>({id:t.id,name:t.name})),expiresAt:at+10*60000};
  }
- async send(actor,id){
-  admin(actor);if(!UUID.test(id||''))throw error('Preview tidak sah.');if(!this.alerts.token)throw error('Bot Telegram belum dikonfigurasi.',503);
+ async send(actor,id,ib=false){
+  admin(actor,ib);if(!UUID.test(id||''))throw error('Preview tidak sah.');if(!this.alerts.token)throw error('Bot Telegram belum dikonfigurasi.',503);
   const c=await this.pool.connect();try{await c.query('BEGIN');
    const row=(await c.query('SELECT * FROM zencore_admin_telegram_jobs WHERE id=$1 AND admin_id=$2 FOR UPDATE',[id,actor.id])).rows[0];if(!row)throw error('Preview tidak dijumpai.',404);
+   if(ib){const d=await this.data();if(!senderScope(actor,row,d.ibs))throw error('Skop IB tidak sah.',403);}
    if(row.status!=='DRAFT'){await c.query('COMMIT');return {ok:true,jobId:id,alreadyQueued:true};}
    if(new Date(row.expires_at).getTime()<=this.now())throw error('Preview tamat tempoh. Jana preview baharu.',409);
    await c.query("INSERT INTO zencore_admin_telegram_targets(job_id,user_id,chat_id) SELECT $1,t.id,t.\"chatId\" FROM jsonb_to_recordset($2::jsonb) AS t(id uuid,\"chatId\" text) ON CONFLICT DO NOTHING",[id,JSON.stringify(row.targets)]);
    await c.query("UPDATE zencore_admin_telegram_jobs SET status='QUEUED' WHERE id=$1",[id]);await c.query('COMMIT');return {ok:true,jobId:id,alreadyQueued:false};
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
- async history(actor){admin(actor);const r=await this.pool.query(`SELECT j.id,j.admin_id,j.message,j.status,j.created_at,jsonb_array_length(j.targets) AS total,jsonb_array_length(j.skipped) AS excluded,
+ async history(actor,ib=false){admin(actor,ib);const r=await this.pool.query(`SELECT j.id,j.admin_id,j.message,j.status,j.created_at,jsonb_array_length(j.targets) AS total,jsonb_array_length(j.skipped) AS excluded,
  COUNT(t.id) FILTER(WHERE t.status='sent')::int AS sent,COUNT(t.id) FILTER(WHERE t.status='failed')::int AS failed,COUNT(t.id) FILTER(WHERE t.status='unknown')::int AS unknown,COUNT(t.id) FILTER(WHERE t.status='skipped')::int AS skipped,COUNT(t.id) FILTER(WHERE t.status IN ('pending','sending'))::int AS pending
- FROM zencore_admin_telegram_jobs j LEFT JOIN zencore_admin_telegram_targets t ON t.job_id=j.id WHERE j.status<>'DRAFT' GROUP BY j.id ORDER BY j.created_at DESC LIMIT 30`);return {ok:true,jobs:r.rows};}
- async details(actor,id){admin(actor);if(!UUID.test(id||''))throw error('Rekod tidak sah.');const r=await this.pool.query("SELECT t.user_id,u.display_name,u.email,t.status,t.result FROM zencore_admin_telegram_targets t LEFT JOIN zencore_users u ON u.id=t.user_id WHERE t.job_id=$1 ORDER BY t.id",[id]);return {ok:true,recipients:r.rows};}
+ FROM zencore_admin_telegram_jobs j LEFT JOIN zencore_admin_telegram_targets t ON t.job_id=j.id WHERE j.status<>'DRAFT' ${ib?'AND j.admin_id=$1':''} GROUP BY j.id ORDER BY j.created_at DESC LIMIT 30`,ib?[actor.id]:[]);return {ok:true,jobs:r.rows};}
+ async details(actor,id,ib=false){admin(actor,ib);if(!UUID.test(id||''))throw error('Rekod tidak sah.');const r=await this.pool.query("SELECT t.user_id,u.display_name,u.email,t.status,t.result FROM zencore_admin_telegram_targets t LEFT JOIN zencore_users u ON u.id=t.user_id WHERE t.job_id=$1 AND ($2::uuid IS NULL OR EXISTS(SELECT 1 FROM zencore_admin_telegram_jobs j WHERE j.id=t.job_id AND j.admin_id=$2)) ORDER BY t.id",[id,ib?actor.id:null]);return {ok:true,recipients:r.rows};}
  async drain(){
   if(this.busy||!this.alerts.token)return;this.busy=true;try{
    // An interrupted send is ambiguous. Do not resend it automatically.
@@ -71,9 +77,10 @@ CREATE INDEX IF NOT EXISTS zencore_admin_telegram_pending_idx ON zencore_admin_t
    for(let i=0;i<3;i++){
     const t=(await this.pool.query("UPDATE zencore_admin_telegram_targets SET status='sending',updated_at=NOW() WHERE id=(SELECT t.id FROM zencore_admin_telegram_targets t JOIN zencore_admin_telegram_jobs j ON j.id=t.job_id WHERE t.status='pending' AND j.status='QUEUED' ORDER BY t.id FOR UPDATE OF t SKIP LOCKED LIMIT 1) RETURNING *")).rows[0];if(!t)break;
     let status='skipped',reason='RECIPIENT_CHANGED';
-    try{const job=(await this.pool.query('SELECT * FROM zencore_admin_telegram_jobs WHERE id=$1',[t.job_id])).rows[0],sender=(await this.pool.query('SELECT role,status FROM zencore_users WHERE id=$1',[job.admin_id])).rows[0];
-     if(sender?.role!=='admin'||sender.status!=='active')reason='ADMIN_DISABLED';
-     else{const data=await this.data(),u=data.users.find(u=>u.id===t.user_id);
+    try{const job=(await this.pool.query('SELECT * FROM zencore_admin_telegram_jobs WHERE id=$1',[t.job_id])).rows[0],sender=(await this.pool.query('SELECT id,role,status FROM zencore_users WHERE id=$1',[job.admin_id])).rows[0];
+     const data=await this.data();
+     if(!senderScope(sender,job,data.ibs))reason=sender?.role==='ib'?'IB_DISABLED_OR_SCOPE_CHANGED':'ADMIN_DISABLED';
+     else{const u=data.users.find(u=>u.id===t.user_id);
       if(u&&eligible(u)&&String(u.prefs.telegramId)===t.chat_id&&selected(u,job.selection,data.ibs)){await this.alerts.telegram(t.chat_id,job.message);status='sent';reason='TELEGRAM_ACCEPTED';}
      }
     }catch(_){status='failed';reason='FAILED_OR_UNCONFIRMED';}
@@ -83,4 +90,4 @@ CREATE INDEX IF NOT EXISTS zencore_admin_telegram_pending_idx ON zencore_admin_t
   }finally{this.busy=false;}
  }
 }
-module.exports={AdminTelegram,selection,selected,eligible,resolve,content};
+module.exports={AdminTelegram,selection,selected,eligible,resolve,content,ownIb,ibSelection,senderScope};
