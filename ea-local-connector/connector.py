@@ -53,6 +53,41 @@ def load_config():
     target = INSTALL / 'paired.dpapi'
     return json.loads(dpapi(target.read_bytes(),True)) if target.exists() else None
 
+def reset_connector_data(config, runner=None, runner_thread=None, config_path=None, common=None):
+    """Forget only this Connector binding; keep broker protection and other profiles."""
+    config_path=Path(config_path or INSTALL/'paired.dpapi')
+    if runner:
+        runner.stop.set();runner.invalidate_lease()
+    if runner_thread:
+        runner_thread.join(timeout=25)
+        if runner_thread.is_alive():raise RuntimeError('CONNECTOR_STOP_PENDING')
+    if runner and any(runner.channel.glob('*.result')):runner.flush_results()
+    if config:
+        common=Path(common or COMMON).resolve()
+        digest=hashlib.sha256((config['server']+'|'+config.get('tradeMode','DEMO')).encode()).hexdigest()[:16]
+        channel=Path(config['channel']).resolve()
+        if channel!=common/(str(config['account'])+'-'+digest):raise RuntimeError('CHANNEL_BINDING_INVALID')
+        # Keep the reset retryable if MT5 cannot yet confirm a flat, idle channel.
+        atomic_write(channel/'lease.tsv',encode_fields({'account':config['account'],'server':config['server'],'expiresAt':0,'desiredState':'STOPPED'}))
+        local=read_fields(channel/'heartbeat.tsv');report=heartbeat(local,config)
+        if local.get('terminalConnected')!='1':raise RuntimeError('TERMINAL_OFFLINE')
+        if int(local.get('positionCount',-1))!=0 or report['positions']:raise RuntimeError('RESET_POSITIONS_OPEN')
+        if (channel/'command.tsv').exists() or any(channel.glob('*.result')):raise RuntimeError('RESET_COMMAND_PENDING')
+        # Do not delete EA-owned heartbeat/risk/manual/step-lock files, even when flat.
+        for name in ('connector-health.json','execution-timing.jsonl','execution-timing.previous.jsonl'):
+            (channel/name).unlink(missing_ok=True)
+    config_path.unlink(missing_ok=True)
+    config_path.with_suffix('.tmp').unlink(missing_ok=True)
+
+RESET_MESSAGES={
+    'RESET_POSITIONS_OPEN':'Reset ditolak: selesaikan posisi ZenCore di MT5 dahulu.',
+    'RESET_COMMAND_PENDING':'Reset ditolak: tunggu arahan/pengesahan MT5 selesai, kemudian cuba semula.',
+    'CONNECTOR_STOP_PENDING':'Connector lama belum berhenti. Tunggu dan cuba Reset semula.',
+    'EA_OFFLINE':'Reset ditolak: buka MT5 dan tunggu EA mengesahkan tiada posisi.',
+    'TERMINAL_OFFLINE':'Reset ditolak: sambungkan MT5 ke broker dahulu.',
+    'ACCOUNT_CHANGED':'Reset ditolak: login semula akaun MT5 lama untuk semak posisi dahulu.',
+}
+
 class Api:
     def __init__(self):
         handler = urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
@@ -386,7 +421,7 @@ class App:
         ttk.Label(link,text='2   Pautkan akaun anda',style='Card.TLabel').pack(anchor='w')
         ttk.Label(link,text='Gunakan login ZenCore. Connector membaca akaun MT5 secara automatik.',style='Muted.TLabel').pack(anchor='w',pady=(4,12))
         fields=ttk.Frame(link);fields.pack(fill='x');fields.columnconfigure(0,weight=1);fields.columnconfigure(1,weight=1)
-        ttk.Label(fields,text='Email ZenCore').grid(row=0,column=0,sticky='w');ttk.Label(fields,text='Password ZenCore').grid(row=0,column=1,sticky='w',padx=(12,0))
+        ttk.Label(fields,text='ID / E-mel ZenCore').grid(row=0,column=0,sticky='w');ttk.Label(fields,text='Password ZenCore').grid(row=0,column=1,sticky='w',padx=(12,0))
         ttk.Entry(fields,textvariable=self.email).grid(row=1,column=0,sticky='ew',pady=(4,12))
         ttk.Entry(fields,textvariable=self.password,show='•').grid(row=1,column=1,sticky='ew',pady=(4,12),padx=(12,0))
         ttk.Label(link,text='Akaun MT5 yang EA sedang baca').pack(anchor='w')
@@ -394,7 +429,7 @@ class App:
         actions=ttk.Frame(link);actions.pack(fill='x')
         ttk.Button(actions,text='Cari akaun',command=self.refresh).pack(side='left')
         ttk.Button(actions,text='Pautkan akaun',style='Accent.TButton',command=self.pair).pack(side='left',padx=8)
-        ttk.Button(actions,text='Reset link / tukar akaun',command=self.reset_link).pack(side='left')
+        ttk.Button(actions,text='Reset Connector',command=self.reset_link).pack(side='left')
         footer=ttk.Frame(box,padding=20);footer.pack(fill='x')
         ttk.Label(footer,text='3   Kawal trade melalui ZenCore',style='Card.TLabel').pack(anchor='w')
         ttk.Button(footer,text='Buka dashboard & setting trade',style='Accent.TButton',command=lambda:webbrowser.open(BASE+'/auto-trade')).pack(anchor='w',pady=10)
@@ -423,30 +458,24 @@ class App:
         self.root.after(1000,self.health_tick)
     def reset_link(self):
         if self.pairing or self.switching:return
-        if not messagebox.askyesno('Reset link akaun', 'Reset akan STOP dan kosongkan setting ZenCore untuk akaun baharu.\nPosisi sedia ada masih kekal di MT5; tutup sendiri jika diperlukan.\nTeruskan reset?'):return
-        email=self.email.get();password=self.password.get();self.password.set('')
-        if not self.session_api and (not email or not password):
-            self.status.set('Isi email dan password ZenCore sekali untuk mengesahkan reset.');return
-        self.switching=True;runner=self.runner
-        if runner:runner.stop.set();runner.invalidate_lease()
-        self.status.set('STOP sambungan lama dan reset link...')
+        if not messagebox.askyesno('Reset Connector', 'Padam pautan, login dan data Connector pada PC ini?\nSelesaikan posisi ZenCore dan OFF di web dahulu.\nAkaun web/rekod broker tidak dipadam. Selepas reset, isi ID client baharu.'):return
+        self.switching=True;runner=self.runner;thread=self.runner_thread
+        self.status.set('Menghentikan sambungan dan mengosongkan data Connector...')
         def task():
             try:
-                if self.runner_thread:self.runner_thread.join(timeout=25)
-                if self.runner_thread and self.runner_thread.is_alive():raise RuntimeError('RUNNER_STOP_PENDING')
-                api=self.session_api or Api()
-                if not self.session_api:api.request('/auth/login',{'email':email,'password':password})
-                api.request('/api/auto-trade/reset-link',{})
-                (INSTALL/'paired.dpapi').unlink(missing_ok=True)
-                self.session_api=api
+                config=runner.config if runner else load_config()
+                reset_connector_data(config,runner,thread)
                 def finish():
-                    self.runner=None;self.runner_thread=None;self.switching=False;self.refresh()
-                    self.status.set('Reset selesai. Login akaun baharu dalam MT5 dan pautkan semula selepas 30 saat. Posisi lama tidak ditutup automatik.')
+                    self.runner=None;self.runner_thread=None;self.session_api=None;self.switching=False
+                    self.email.set('');self.password.set('');self.account.set('');self.folder.set('')
+                    self.available={};self.accounts['values']=[]
+                    self.status.set('Reset selesai. Isi ID/password client baharu, Cari akaun MT5 dan Pautkan. Jika guna ID ZenCore lama: OFF di web dan tunggu 2 minit.')
                 self.post(finish)
-            except Exception:
-                def failed():
-                    self.switching=False;self.session_api=None
-                    self.status.set('Sambungan tempatan dihentikan. Reset server belum disahkan; login ZenCore dan cuba reset semula.')
+            except Exception as error:
+                code=str(error)
+                def failed(code=code):
+                    self.switching=False;self.session_api=None;self.password.set('')
+                    self.status.set(RESET_MESSAGES.get(code,'Reset belum selesai. Sambungan dihentikan; semak MT5 dan cuba semula.'))
                 self.post(failed)
         threading.Thread(target=task,daemon=True).start()
     def post(self,callback):self.ui_queue.put(callback)

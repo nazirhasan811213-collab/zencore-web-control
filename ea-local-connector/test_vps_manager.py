@@ -1,12 +1,12 @@
 import unittest,tempfile,threading,time,json,uuid
 from pathlib import Path
 from vps_manager import Manager,Vault,expected_channel,config_valid,slot_number
-from protocol import atomic_write,encode_fields
+from protocol import atomic_write,encode_fields,read_fields
 from test_protocol import local_heartbeat
 
 class FakeRunner:
     seen=[]
-    def __init__(self,config,status,on_unpaired):self.config=config;self.stop=threading.Event();self.status=status
+    def __init__(self,config,status,on_unpaired):self.config=config;self.channel=Path(config['channel']);self.stop=threading.Event();self.status=status
     def run(self):self.seen.append(dict(self.config));self.status('CONNECTED');self.stop.wait(10)
     def invalidate_lease(self):atomic_write(Path(self.config['channel'])/'lease.tsv',str(self.config['vpsSlot']))
 
@@ -59,3 +59,43 @@ class VpsManagerTests(unittest.TestCase):
         for value in [0,11,True,'1']:
             with self.assertRaises(ValueError):slot_number(value)
         self.assertNotEqual(self.vault.path(1),self.vault.path(2))
+
+    def test_reset_one_slot_then_pair_new_client_and_new_mt5_keeps_others_running(self):
+        old=self.channel(1);self.manager.pair(1,old,'secret');self.manager.pair(2,self.channel(2),'secret')
+        (old/'connector-health.json').write_text('old-client')
+        (old/'risk-old.tsv').write_text('broker-protection')
+        self.manager.reset(1)
+        self.assertNotIn(1,self.manager.configs);self.assertFalse(self.vault.path(1).exists())
+        self.assertFalse((old/'connector-health.json').exists());self.assertTrue((old/'risk-old.tsv').exists())
+        self.assertEqual(read_fields(old/'lease.tsv')['expiresAt'],'0')
+        self.assertFalse(self.manager.runners[2].stop.is_set());self.assertTrue(self.vault.path(2).exists())
+        self.manager.pair(1,self.channel(11),'new-secret',login='ZCuser 11')
+        self.assertEqual(self.manager.configs[1]['zenCoreLogin'],'ZCuser 11')
+        self.assertEqual(self.manager.configs[1]['account'],'810011')
+        self.assertEqual(self.calls[-2][1]['email'],'ZCuser 11')
+        self.assertFalse(any(p.endswith('/on') or p.endswith('/reset-link') for p,_ in self.calls))
+    def test_reset_with_open_positions_preserves_link_paused_and_retryable(self):
+        old=self.channel(1);self.manager.pair(1,old,'secret')
+        atomic_write(old/'heartbeat.tsv',encode_fields({**local_heartbeat(),'account':'810001','writtenAt':int(time.time()*1000),'positionCount':-1}))
+        with self.assertRaisesRegex(RuntimeError,'RESET_POSITIONS_OPEN'):self.manager.reset(1)
+        self.assertTrue(self.vault.path(1).exists());self.assertTrue(self.manager.configs[1]['paused'])
+        self.assertFalse(self.manager.pending)
+        self.channel(1);self.manager.reset(1);self.assertFalse(self.vault.path(1).exists())
+    def test_same_client_in_two_slots_is_rejected_before_rotating_cloud_token(self):
+        self.manager.pair(1,self.channel(1),'secret')
+        previous=self.manager.configs[1]['zenCoreUserId']
+        class DuplicateApi:
+            calls=[]
+            def request(self,path,data=None):
+                self.calls.append(path)
+                return {'user':{'id':previous,'loginId':'ZCuser 1','role':'client'}}
+        self.manager.api_factory=DuplicateApi
+        with self.assertRaisesRegex(RuntimeError,'ZENCORE_USER_ALREADY_ASSIGNED'):
+            self.manager.pair(2,self.channel(2),'secret',login='ZCuser 1')
+        self.assertEqual(DuplicateApi.calls,['/auth/login'])
+        self.assertFalse(self.manager.runners[1].stop.is_set())
+    def test_empty_slot_reset_does_not_reserve_every_other_mt5_channel(self):
+        self.manager.pending[1]={'resetting':True}
+        self.manager.pair(2,self.channel(2),'secret')
+        self.assertIn(2,self.manager.configs)
+        self.manager.pending.clear();self.manager.reset(1)
