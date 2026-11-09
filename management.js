@@ -84,7 +84,7 @@
   }
 
   function adminClientName(client) {
-    const alias=/^ZCuser (?:10|[1-9])$/.test(client.loginId||'')?client.loginId:null;
+    const alias=/^ZCuser (?:[1-9]|[1-3][0-9]|40)$/.test(client.loginId||'')?client.loginId:null;
     const name=String(client.displayName||'').trim();
     const personal=alias&&name&&name!=='Client'&&name.toLowerCase().replace(/\s/g,'')!==alias.toLowerCase().replace(/\s/g,'');
     return `<strong>${esc(alias||name)}</strong>${personal?`<small>${esc(name)}</small>`:''}<small>${esc(client.email)}</small>`;
