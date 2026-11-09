@@ -165,7 +165,11 @@ test('non-RS256 and modified signatures are rejected', async () => {
   const verifier = createGcpInstanceIdentityVerifier({ ...expected, fetcher: fakeFetcher(), now: () => NOW });
   await assert.rejects(() => verifier.verify(token({}, { alg: 'HS256' })), error => error.code === 'INVALID_GCP_IDENTITY');
   const original = token();
-  const modified = `${original.slice(0, -2)}AA`;
+  const parts = original.split('.');
+  const signature = Buffer.from(parts[2], 'base64url');
+  signature[0] ^= 1; // Always change signed bytes; replacing trailing base64 characters can be a no-op.
+  parts[2] = signature.toString('base64url');
+  const modified = parts.join('.');
   await assert.rejects(() => verifier.verify(modified), error => error.code === 'INVALID_GCP_IDENTITY');
 });
 
