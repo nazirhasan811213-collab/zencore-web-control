@@ -42,3 +42,9 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`V7 TF${tf} ${s
  const cp=require('child_process').spawnSync('python',['-c',"import json,sys;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify(command),encoding:'utf8'});
  a.equal(cp.status,0,cp.stderr);a.equal(JSON.parse(cp.stdout).exitLockVersion,tf==='15'?'PINE_STEPLOCK_BE_TF15_V1':'PINE_STEPLOCK_150_TP3_PLUS3_V1');
 });
+for(const tf of ['2','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke authenticated EXECUTION candidate`,async()=>{
+ const {f,ingest}=native(tf,'BUY'),m=ingest(),{createRealtimeDispatcher}=require('../realtime-dispatcher');let release,valid;const wait=new Promise(r=>release=r),batches=[];
+ const d=createRealtimeDispatcher({dispatch:async(batch,current)=>{batches.push(batch);await wait;valid=current(batch[0]);},fetchMarkets:async()=>[]});
+ const first=d.onMarket(m);await d.onMarket({...m,feedChannel:'DASHBOARD',signalObservedAt:f.now+1,entryEvent:false,strategyNormal:{...m.strategyNormal,state:'WAIT',plan:null}});
+ a.equal(d.getLatestMarket('XAUUSD',tf),m);release();await first;a.equal(valid,true);a.equal(batches.length,1);
+});
