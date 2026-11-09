@@ -1,0 +1,39 @@
+ZENCORE CONNECTOR 2.1.11 / EA 2.17 — KEMAS KINI LEASE
+
+PEMBAIKAN
+Connector memperbaharui lease selepas semakan tandatangan arahan PLACE_SETUP,
+sebelum menyerahkannya kepada EA. STOP dan perubahan sesi MT5 tetap dihormati.
+Signal luput tidak dipanjangkan. Tiada order lama dihantar semula secara automatik.
+EA 2.17 dikekalkan. Tidak perlu ubah Pine, lot/layer atau pautan akaun untuk pembaikan ini.
+
+CARA KEMAS KINI NORMAL
+1. Tunggu tiada arahan sedang dihantar; sebaiknya posisi ZenCore sudah kosong.
+2. Keluar Connector lama melalui menu Keluar, bukan hanya butang X.
+3. Jalankan ZenCoreSetup-2.1.11.exe menggunakan Windows user yang sama.
+4. Buka Connector. Semak build 2.1.11, akaun, server dan mode REAL/DEMO.
+5. Pautan dan tetapan sedia ada dikekalkan. Jangan Reset Link hanya untuk update.
+6. Pastikan MT5 tersambung, EA 2.17 pada satu chart, Algo Trading dan Allow Algo Trading ON.
+7. Semak status Cloud/EA dan ON/OFF di web. Tunggu signal baharu yang sah.
+
+UNTUK VPS
+Gunakan ZenCoreVPSSetup-1.0.3.exe, bukan kedua-dua Connector serentak.
+Keluar Manager lama sebelum installer. Buka semula dan semak setiap profil.
+Kemas kini tidak menutup MT5 atau mengubah lot/layer. Semasa Connector berhenti,
+SL broker kekal tetapi arahan cloud tidak boleh diproses. Pilih waktu update sesuai.
+
+JIKA MASIH LEASE_NOT_READY
+Semak sambungan internet, waktu Windows automatik, akaun/server MT5, Cloud dan EA.
+Pastikan satu Connector sahaja mengurus akaun tersebut dan sesi Windows sama.
+Catat masa, build dan status untuk admin. Jangan salin token atau fail lease.
+Pembaikan ini tidak menjamin sambungan jika internet/MT5 terputus.
+
+SOP LIVE
+Initial entry TF2/TF15 mengikuti native Solid Entry V7.1 pada candle tutup.
+Re-entry, SL/TP dan exit kekal mengikut SOP server semasa.
+TF2 ATR8: jarak SL maksimum 4.00 USD; TP maksimum 1.50/2.50/3.50 USD.
+TF15 mengikut pelan ATR14. Jarak harga bukan had kerugian akaun.
+SL broker tetap aktif intrabar; slippage/gap masih boleh berlaku.
+Auto Exit manual: medan kosong guna jarak default TP1/TP2/TP3/SL = 2/4/6/3.
+Pelan posisi manual sedia ada dikekalkan selepas tetapan baharu disimpan.
+
+Tiada order broker atau mesej Telegram sebenar dihantar dalam ujian pakej.
