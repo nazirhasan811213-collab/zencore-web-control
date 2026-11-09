@@ -166,6 +166,7 @@ if (AUTH_ENABLED) {
       console.log(`ZenCore public viewer ready (${viewer.email}) • VIEW ONLY`);
     }
     if(process.env.ZENCORE_MANAGED_VPS_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS account provisioning unavailable; existing accounts unchanged');}}
+    if(process.env.ZENCORE_MANAGED_VPS_EXTENSION_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_EXTENSION_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS extension accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS extension provisioning unavailable; existing accounts unchanged');}}
     if(store.pool){accountHandover=new (require('./account-handover').AccountHandover)({pool:store.pool,tradingState:userId=>autoTradeState.service.state(userId)});await accountHandover.init();console.log(`Account handover ready: initialized=${accountHandover.initialized}`);}
     authState.store = store;
     authState.service = createAuthService({
