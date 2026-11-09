@@ -79,7 +79,7 @@ CREATE INDEX IF NOT EXISTS zencore_admin_telegram_pending_idx ON zencore_admin_t
     let status='skipped',reason='RECIPIENT_CHANGED';
     try{const job=(await this.pool.query('SELECT * FROM zencore_admin_telegram_jobs WHERE id=$1',[t.job_id])).rows[0],sender=(await this.pool.query('SELECT id,role,status FROM zencore_users WHERE id=$1',[job.admin_id])).rows[0];
      const data=await this.data();
-     if(!senderScope(sender,job,data.ibs))reason='SENDER_DISABLED_OR_SCOPE_CHANGED';
+     if(!senderScope(sender,job,data.ibs))reason=sender?.role==='ib'?'IB_DISABLED_OR_SCOPE_CHANGED':'ADMIN_DISABLED';
      else{const u=data.users.find(u=>u.id===t.user_id);
       if(u&&eligible(u)&&String(u.prefs.telegramId)===t.chat_id&&selected(u,job.selection,data.ibs)){await this.alerts.telegram(t.chat_id,job.message);status='sent';reason='TELEGRAM_ACCEPTED';}
      }

@@ -29,3 +29,16 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`V7 yellow clos
 test('V7 scripts preserve risk/re-entry, use one structured alert and unconditional confirmed yellow exit',()=>{
  for(const tf of ['2','15']){const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.equal((s.match(/\balert\(/g)||[]).length,1);a.match(s,/CLOSED_PAUSE_RESUME_V2/);a.match(s,/bool xc_yellow_exit = xc_buy \? \(v2_dr and not v2_dc\) : \(v2_ur and not v2_uc\)/);a.match(s,/if xc_yellow_exit or xc_stop/);a.match(s,/nativeSolid/);a.match(s,/NATIVE_SOLID_LABEL_V1/);a.match(s,/zc24_closed_entry_packet := zc24_payload/);if(tf==='2')a.match(s,/bool zs_pass = true/);}
 });
+for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`V7 TF${tf} ${side}: signal queues once, connector receives full lot/layers and exit policy`,async()=>{
+ const {f,ingest}=native(tf,side),m=ingest(),Core=require('../auto-trade-core');
+ const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService,tokenHash}=require('../auto-trade-service');
+ const store=new MemoryAutoTradeStore(),token='zcpod_'+'v'.repeat(48),hash=tokenHash(token),user='v7-'+tf+side;
+ const pod={id:'v7pod'+tf+side,userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:f.now,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
+ store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
+ const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'2',localEaExecutionUserIds:[user],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'a-test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,frame)=>frame===tf?m:null});
+ await svc.saveSettings(user,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',riskAcknowledged:true});await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+ a.equal((await svc.dispatchMarkets([m])).queued,1);a.equal((await svc.dispatchMarkets([m])).queued,0);
+ const {command}=await svc.nextCommand(token);a.ok(command);a.equal(command.payload.side,side);a.equal(command.payload.layers,2);a.equal(command.payload.lotPerLayer,.01);a.equal(command.expiresAt,f.now+60000);
+ const cp=require('child_process').spawnSync('python',['-c',"import json,sys;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify(command),encoding:'utf8'});
+ a.equal(cp.status,0,cp.stderr);a.equal(JSON.parse(cp.stdout).exitLockVersion,tf==='15'?'PINE_STEPLOCK_BE_TF15_V1':'PINE_STEPLOCK_150_TP3_PLUS3_V1');
+});
