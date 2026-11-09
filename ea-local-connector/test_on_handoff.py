@@ -2,25 +2,30 @@ import tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 from connector import Runner,readiness_message
-from protocol import atomic_write,encode_fields,read_fields,STRATEGY,SCHEMA
+from protocol import atomic_write,encode_fields,read_fields,STRATEGY,SCHEMA,CONTRACT
 from test_protocol import IDENTITY,NOW,KEY,POD,signed,local_heartbeat
 
 class OnHandoffTests(unittest.TestCase):
- def run_case(self, state='ON', alter_session=False, stop=False, delay=0, tamper=False):
+ def run_case(self, state='ON', alter_session=False, stop=False, delay=0, tamper=False, kind="SYSTEM_ON", fetch_delay=0):
   folder=tempfile.TemporaryDirectory();self.addCleanup(folder.cleanup);path=Path(folder.name)
   atomic_write(path/'heartbeat.tsv',encode_fields(local_heartbeat()))
-  atomic_write(path/'lease.tsv',encode_fields({'desiredState':'STOPPED','expiresAt':NOW+10000}))
+  atomic_write(path/'lease.tsv',encode_fields({'desiredState':'STOPPED','expiresAt':NOW+1000}))
   runner=Runner({**IDENTITY,'channel':folder.name,'podToken':'test-only','commandSigningKey':KEY},lambda _:None)
   # A prior periodic heartbeat observed STOPPED; the next heartbeat is not due yet.
   runner.next_heartbeat=102;runner.desired_state='STOPPED'
   cmd=signed('SYSTEM_ON',{'mode':'DEMO','strategy':STRATEGY,'exitSchema':SCHEMA,
     'settings':{'symbols':['XAUUSD'],'lotPerLayer':.01,'layers':3}})
+  if kind=='PLACE_SETUP':
+   snap={'contractVersion':CONTRACT,'decisionOwner':'ZENCORE_ANALYSIS','decision':'ENTRY_AUTHORIZED','executionTimeframe':'2','symbol':'XAUUSD','side':'BUY','entry':100,'sl':99,'tp1':101,'tp2':102,'tp3':103}
+   cmd=signed(kind,{**{k:snap[k] for k in ('symbol','side','entry','sl','tp1','tp2','tp3')},'analysisContractVersion':CONTRACT,'strategy':STRATEGY,'schemaVersion':SCHEMA,'analysisSnapshot':snap,'lotPerLayer':.01,'layers':2,'strategyMode':'TF2_SCALPING','exitPolicy':None})
   if tamper:cmd['signature']='tampered'
   calls=[];clock=[100.5];acks=[]
   class Api:
    def request(self,url,data=None,token=None):
     calls.append(url)
-    if url.endswith('/next'):return {'command':cmd,'serverTime':NOW}
+    if url.endswith('/next'):
+     clock[0]+=fetch_delay
+     return {'command':cmd,'serverTime':NOW+fetch_delay*1000}
     if url.endswith('/heartbeat'):
      clock[0]+=delay
      if alter_session:atomic_write(path/'heartbeat.tsv',encode_fields({**local_heartbeat(),'eaSession':'2'*32}))
@@ -59,3 +64,20 @@ class OnHandoffTests(unittest.TestCase):
   source=(Path(__file__).parent/'ZenCoreExecutor.mq5').read_text()
   self.assertIn('code=LeaseReason(commandPod)',source)
   self.assertIn('code=PermissionReason()',source)
+
+ def test_entry_after_slow_fetch_renews_lease_before_handoff(self):
+  path,calls,acks=self.run_case(kind='PLACE_SETUP',fetch_delay=3)
+  lease=read_fields(path/'lease.tsv');command=read_fields(path/'command.tsv')
+  self.assertEqual(calls,['/api/execution/commands/next','/api/execution/heartbeat'])
+  self.assertEqual(lease['desiredState'],'ON')
+  for k in ('account','server','tradeMode','podId','eaSession'):self.assertEqual(lease[k],command[k])
+  self.assertEqual(acks,[])
+ def test_entry_handoff_preserves_stop_session_signature_and_deadline_guards(self):
+  for options,code in (({'state':'STOPPED'},'CONTROL_STOPPED'),({'delay':11},'COMMAND_EXPIRED'),({'tamper':True},'SIGNATURE_REJECTED')):
+   with self.subTest(options=options):
+    path,_,acks=self.run_case(kind='PLACE_SETUP',**options)
+    self.assertFalse((path/'command.tsv').exists());self.assertEqual(acks[0]['code'],code)
+  for options in ({'alter_session':True},{'stop':True}):
+   with self.subTest(options=options):
+    path,_,_=self.run_case(kind='PLACE_SETUP',**options)
+    self.assertFalse((path/'command.tsv').exists())

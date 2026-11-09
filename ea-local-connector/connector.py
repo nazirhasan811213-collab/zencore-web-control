@@ -131,6 +131,7 @@ def readiness_message(code):
         'EA_ALGO_DISABLED':'EA > Properties > Allow Algo Trading mesti ON.',
         'ACCOUNT_TRADE_DISABLED':'Broker tidak memberi permission trading pada akaun ini.',
         'ACCOUNT_EXPERT_DISABLED':'Broker tidak memberi permission Expert Advisor pada akaun ini.',
+        'LEASE_NOT_READY':'Kebenaran EA belum sah. Semak Cloud, akaun dan sesi MT5; tunggu sambungan pulih. Jangan reset pautan atau ulang order lama.',
         'LEASE_EXPIRED':'Kebenaran sambungan tamat. Tunggu Connector tersambung, kemudian ON semula.',
         'LEASE_STOPPED':'Web sedang STOP. Semak akaun dan tekan ON semula.',
         'LEASE_NOT_FOUND':'Fail kebenaran belum tersedia. Semak folder Common MT5.',
@@ -207,11 +208,11 @@ class Runner:
                 if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
-                # ON can be queued between the periodic heartbeat and this poll.
+                # Command fetch can outlive the previous lease, or ON/STOP can change between polls.
                 # Refresh server permission after verifying the command, before handing it to EA.
-                if signed['type'] in ('SYSTEM_ON','MANUAL_EXIT_CONFIG'):
+                if signed['type'] in ('SYSTEM_ON','PLACE_SETUP','MANUAL_EXIT_CONFIG'):
                     if not self.renew_lease(local): return
-                    if signed['type']=='SYSTEM_ON' and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
+                    if signed['type'] in ('SYSTEM_ON','PLACE_SETUP') and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
                 if remaining_ms <= 0: raise ValueError('COMMAND_EXPIRED')
                 fields['expiresAt']=int(time.time()*1000+remaining_ms)
