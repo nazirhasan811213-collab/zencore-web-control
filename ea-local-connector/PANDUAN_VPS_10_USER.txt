@@ -1,13 +1,15 @@
-ZENCORE VPS CONNECTOR MANAGER 1.0.3
+ZENCORE VPS CONNECTOR MANAGER 1.0.4
 10 terminal MT5 / 10 akaun ZenCore dalam satu sesi Windows.
 
 KANDUNGAN
-ZenCoreVPSSetup-1.0.3.exe — installer Manager.
+ZenCoreVPSSetup-1.0.4.exe — installer Manager.
 ZenCoreExecutor.mq5 — EA 2.17 yang sama untuk setiap terminal.
 VPS_10_USER.csv — senarai ID dan lembaran pemetaan admin.
 
 ID SISTEM
-ZCuser 1 hingga ZCuser 10. Password awal semua: zc123.
+Slot asal 1 hingga 10 menggunakan ZCuser 1 hingga ZCuser 10. Password awal: zc123.
+Setiap slot kini boleh menggunakan ID lain (termasuk ZCuser11–40) atau e-mel client sah.
+Gunakan password client sebenar selepas ia ditukar; password awal tidak semestinya masih sah.
 Login web: https://zencore-precision-entry.onrender.com/login
 Password MT5 berbeza daripada password ZenCore. Manager tidak meminta password MT5.
 Password awal boleh ditukar oleh user melalui akaun web selepas serahan.
@@ -16,7 +18,7 @@ Tempoh aktif client 14 hari bermula selepas profil user lengkap; pembaharuan han
 SETUP OLEH ADMIN
 1. Log masuk ke Windows VPS. Jalankan semua 10 terminal dalam pengguna Windows yang sama.
 2. Pastikan setiap terminal mempunyai folder pemasangan/data sendiri. Login akaun MT5 yang betul pada terminal masing-masing.
-3. Pasang ZenCoreVPSSetup-1.0.3.exe sekali. Tutup Connector lama terlebih dahulu; jangan jalankan Connector lama bersama Manager.
+3. Pasang ZenCoreVPSSetup-1.0.4.exe sekali. Tutup Connector lama terlebih dahulu; jangan jalankan Connector lama bersama Manager.
    Installer menggantikan autostart Connector lama dengan Manager. Ia tidak menutup MT5 atau mengubah posisi.
 4. Buka terminal pertama. File > Open Data Folder. Salin/lengkapkan lokasi folder untuk rujukan.
 5. Dalam baris ZCuser 1, klik Pasang EA dan pilih folder data terminal itu. Manager salin EA dan cuba compile melalui MetaEditor.
@@ -44,7 +46,7 @@ RESET AKAUN UNTUK DIGUNAKAN SEMULA
 - Manager akan membuang pautan yang dibatalkan. Tunggu pelepasan link (sekitar 30 saat), semak akaun MT5, kemudian admin pautkan, setup dan serah semula.
 - Reset TIDAK menutup order broker. Jika masih ada posisi, reset ditolak; selesaikan pengurusan posisi dahulu mengikut pelan trader.
 - Catatan audit reset admin dikekalkan tanpa maklumat peribadi lama.
-- TP/SL manual tersuai memerlukan Manager 1.0.3 dan EA 2.17 pada setiap terminal. Versi lama terus menyokong nilai default.
+- TP/SL manual tersuai memerlukan Manager 1.0.4 dan EA 2.17 pada setiap terminal. Versi lama terus menyokong nilai default.
 
 SEMAKAN SEBELUM SERAHAN (SETIAP USER)
 [ ] ID web betul.
@@ -79,9 +81,24 @@ Tiada order broker atau Telegram sebenar dihantar dalam ujian pakej.
 
 AUTO EXIT ENTRY MANUAL: User boleh ubah TP1/TP2/TP3/SL dalam Auto Trade dan Simpan. Medan kosong guna default 2/4/6/3. TP1 < TP2 < TP3; semua jarak positif. Tetapan berkuat kuasa untuk posisi manual baharu selepas EA menerima Simpan; pelan posisi sedia ada dikekalkan.
 
-KEMAS KINI 1.0.3 / CONNECTOR 2.1.11 (LEASE)
+KEMAS KINI 1.0.4 / CONNECTOR 2.1.12 (LEASE)
 Keluar Manager lama sebelum installer. Guna Windows user sama; pautan DPAPI dikekalkan.
 Semak setiap profil selepas buka semula. Jangan Reset Link atau ulang order lama.
 Lease diperbaharui sebelum PLACE_SETUP, tanpa memanjangkan signal atau mengabaikan STOP.
 EA 2.17 dikekalkan. Pembaharuan ini tidak memerlukan ubah lot/layer atau Pine.
 Satu pemasangan masih 10 slot; akaun sistem tambahan tidak menambah slot secara automatik.
+
+RESET SATU SLOT DAN TUKAR CLIENT (MANAGER 1.0.4)
+1. OFF di web akaun lama. Selesaikan posisi ZenCore dan tunggu arahan MT5 selesai.
+2. Klik Reset pada baris slot berkenaan dan sahkan. Slot lain terus berjalan.
+3. Reset memadam token/diagnostik Connector slot itu dan mengosongkan ID serta pilihan MT5.
+4. Isi ID/e-mel ZenCore client baharu pada slot itu, pilih akaun MT5 baharu dan isi password client.
+5. Klik Pautkan. Semak akaun/server dan setup/serahan admin sebelum ON di web.
+6. ID sama memerlukan OFF dan kira-kira 2 minit sejak sambungan lama berhenti sebelum paut semula.
+
+Tidak perlu password lama untuk reset setempat. Akaun web, password web dan rekod broker kekal.
+Fail perlindungan EA tidak dipadam. Reset tidak menutup posisi atau menghidupkan Auto Trade.
+Jika reset ditolak, pautan lama disimpan PAUSED untuk disemak; boleh klik Sambung untuk operasi lama
+atau selesaikan punca dan klik Reset semula. Posisi/EA offline/arah belum selesai menghalang reset.
+Folder fizikal ZCuser-1 hingga ZCuser-10 kini mewakili SLOT, bukan semestinya ID client pada baris.
+Jangan salin token antara slot. Client sama atau MT5 sama tidak boleh dipautkan kepada dua slot.
