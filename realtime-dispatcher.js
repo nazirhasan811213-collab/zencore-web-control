@@ -5,8 +5,8 @@ const {createEntryDecision,entryConfirmationsPass,createManagementDecision}=requ
 // Only matching current dashboard confirmations may preserve a queued trigger.
 function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  const pending=new Map(),latest=new Map();
- // TF2 Dashboard is display-only. Only EXECUTION may replace execution state.
- const tf2Ribbon=m=>String(m?.timeframe)==='2'&&m?.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF2_RIBBON_V1';
+ // Ribbon Dashboard is display-only for BOTH TFs. Only EXECUTION can replace order authority.
+ const tf2Ribbon=m=>['2','15'].includes(String(m?.timeframe))&&m?.strategyNormal?.entrySopVersion===`NORMAL_20261001_TF${m.timeframe}_RIBBON_V1`;
  const executionInput=m=>!tf2Ribbon(m)||m.feedChannel==='EXECUTION';
  const key=m=>String(m?.symbol||'')+'|'+String(m?.timeframe||'');
  const tick=createCoalescingDispatcher(async()=>{
