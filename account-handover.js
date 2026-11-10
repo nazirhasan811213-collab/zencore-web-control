@@ -59,9 +59,10 @@ class AccountHandover{
    throw fail('Akaun sudah berubah. Muat semula; permintaan lama tidak boleh mereset client baharu.');
   }
   const pod=(await this.pool.query('SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 AND revoked_at IS NULL',[userId])).rows[0];
+  if(input.expectedPodTokenHash&&(!/^[a-f0-9]{64}$/.test(input.expectedPodTokenHash)||pod?.token_hash!==input.expectedPodTokenHash))throw fail('Pautan slot sudah berubah. Muat semula; akaun baharu tidak direset.');
   const abandon=async commandId=>{
    const ref=commandId||crypto.randomUUID();
-   return {...await this.reset(actor,userId,{confirmation:'RESET',masterCommandId:ref},{key:RELEASE_UNCONFIRMED,generation,podId:pod?.id||null}),completed:true};
+   return {...await this.reset(actor,userId,{confirmation:'RESET',masterCommandId:ref,expectedPodTokenHash:input.expectedPodTokenHash},{key:RELEASE_UNCONFIRMED,generation,podId:pod?.id||null}),completed:true};
   };
   const offline=!pod?.last_seen_at||this.now()-new Date(pod.last_seen_at).getTime()>12000||new Date(pod.last_seen_at).getTime()>this.now()+5000;
   if(!pod){
@@ -76,7 +77,7 @@ class AccountHandover{
    if(command.status==='EXECUTED'&&command.result?.code==='MASTER_RESET_FORCE_READY'){
     const empty=!(await this.tradingState(userId)).positions?.length;
     if(pod.last_seen_at&&new Date(pod.last_seen_at).getTime()>=new Date(command.acknowledged_at).getTime()&&empty&&!offline)
-     return {...await this.reset(actor,userId,{confirmation:'RESET',masterCommandId:command.id}),completed:true};
+     return {...await this.reset(actor,userId,{confirmation:'RESET',masterCommandId:command.id,expectedPodTokenHash:input.expectedPodTokenHash}),completed:true};
     if(fallback&&(offline||this.now()-new Date(command.acknowledged_at).getTime()>15000))return abandon(command.id);
     return {ok:true,pending:true,commandId:command.id,message:'EA sudah memproses penutupan. Menunggu laporan MT5 terkini mengesahkan kosong.'};
    }
@@ -90,11 +91,12 @@ class AccountHandover{
   const existing=(await this.pool.query("SELECT id FROM zencore_autotrade_commands WHERE user_id=$1 AND pod_id=$2 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion'='MASTER_RESET_FORCE_V2' AND payload->>'masterResetGeneration'=$3 "+(fallback?'':"AND ((status IN ('PENDING','DELIVERED') AND expires_at>NOW()) OR (status='EXECUTED' AND result->>'code'='MASTER_RESET_FORCE_READY')) ")+"ORDER BY created_at DESC LIMIT 1",[userId,pod.id,String(generation)])).rows[0];
   if(existing)return this.masterReset(actor,userId,{...input,commandId:existing.id});
   if(fallback&&offline)return abandon();
-  const t=await this.stopTrading(userId,{generation,closeAllAccount:true});
+  const t=await this.stopTrading(userId,{generation,closeAllAccount:true,expectedPodTokenHash:input.expectedPodTokenHash});
   return {ok:true,pending:true,commandId:t.control.pendingCommandId,message:'Master Reset dimulakan. Menutup posisi jika Connector boleh dicapai; pautan sistem akan dilepaskan jika tidak dapat disahkan.'};
  }
  async reset(actor,userId,input,release=null){admin(actor);const abandon=release?.key===RELEASE_UNCONFIRMED;if(input.confirmation!=='RESET')throw fail('Taip RESET untuk mengesahkan reset akaun.',400);const hash=await hashPassword('zc123'),c=await this.pool.connect();try{await c.query('BEGIN');const u=await this.row(userId,c,true);
    const profile=(await c.query('SELECT * FROM zencore_autotrade_profiles WHERE user_id=$1 FOR UPDATE',[userId])).rows[0],pod=(await c.query('SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE',[userId])).rows[0],hosted=(await c.query('SELECT * FROM zencore_mt5_hosted_accounts WHERE user_id=$1 FOR UPDATE',[userId])).rows[0];
+   if(input.expectedPodTokenHash&&pod?.token_hash!==input.expectedPodTokenHash)throw fail('Pautan slot sudah berubah. Reset lama dibatalkan.');
    if(abandon&&((u.handover_generation||0)!==release.generation||(pod?.revoked_at?null:pod?.id||null)!==release.podId))throw fail('Pautan atau pemilik akaun berubah. Reset lama dibatalkan.');
    if(input.masterCommandId&&!abandon){
     const proof=(await c.query("SELECT * FROM zencore_autotrade_commands WHERE id=$1 AND user_id=$2 AND pod_id=$3 FOR UPDATE",[input.masterCommandId,userId,pod?.id])).rows[0];

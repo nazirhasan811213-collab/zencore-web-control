@@ -68,3 +68,9 @@ test('replayed old-generation offline release returns its receipt without touchi
  const h=new AccountHandover({pool});const out=await h.masterReset({role:'admin',status:'active'},'one',{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_RELEASE_V3',allowUnconfirmedDisconnect:true,resetGeneration:0});
  a.equal(out.completed,true);a.equal(out.brokerCloseConfirmed,false);a.match(out.message,/BROKER BELUM DISAHKAN/);a.equal(queries,2);
 });
+test('slot reset binding refuses an old token epoch before touching current client settings',async()=>{
+ const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-more-than-32-characters',allowDemoExecution:true});
+ const p=await service.connectLocalEa('one');await service.heartbeat(p.podToken,hb);await service.saveSettings('one',settings);
+ const before=await store.getProfile('one');await a.rejects(service.stop('one',{generation:0,closeAllAccount:true,expectedPodTokenHash:'f'.repeat(64)}),{code:'ACCOUNT_BINDING_CHANGED'});
+ a.deepEqual(await store.getProfile('one'),before);a.equal(await store.masterResetCommand('one'),null);
+});

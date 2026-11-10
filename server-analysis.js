@@ -618,13 +618,19 @@ async function handleManagementApi(req, res, pathname, session) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
       }
-      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|master-reset|setup\/state|setup\/settings|setup\/execution-diagnostics)$/i);
+      if(pathname==='/api/admin/vps/resolve'&&req.method==='POST'){
+        if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+        const body=await parseApiJson(req,res);if(body===null)return;
+        return sendJson(res,200,await require('./admin-vps-setup').resolve(session.user,authState.store,body.loginId));
+      }
+      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|master-reset|setup\/state|setup\/settings|setup\/execution-diagnostics|setup\/ea-connect)$/i);
       if(lifecycle){res.setHeader('Cache-Control','no-store');if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});const id=lifecycle[1],action=lifecycle[2];
         if(req.method==='GET'&&action==='handover')return sendJson(res,200,await accountHandover.status(id));
         if(req.method==='GET'&&action==='setup/state'){await accountHandover.row(id);const state=await autoTradeState.service.state(id);state.control.canTurnOn=false;state.control.canEnter=false;state.control.strategyReason='SETUP ADMIN — lengkapkan serahan dan profil user dahulu.';state.setupTarget=await accountHandover.status(id);return sendJson(res,200,state);}
         if(req.method==='GET'&&action==='setup/execution-diagnostics')return sendJson(res,200,{ok:true,commands:[]});
         if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
         if(req.method==='PUT'&&action==='setup/settings'){const target=await accountHandover.row(id);if(require('./account-handover').state(target)!=='ADMIN_SETUP')return sendJson(res,409,{ok:false,error:'Setup ini hanya dibuka pada fasa Admin Setup.'});return sendJson(res,200,await autoTradeState.service.saveSettings(id,body));}
+        if(req.method==='POST'&&action==='setup/ea-connect'){if(!autoTradeState.ready||!autoTradeState.service)return autoTradeUnavailable(res);return sendJson(res,201,await require('./admin-vps-setup').connect(session.user,accountHandover,autoTradeState.service,id));}
         if(req.method==='POST'&&action==='handover/release')return sendJson(res,200,await accountHandover.release(session.user,id));
         if(req.method==='POST'&&action==='master-reset')return sendJson(res,200,await accountHandover.masterReset(session.user,id,body));
         if(req.method==='POST'&&action==='reset-account')return sendJson(res,200,await accountHandover.reset(session.user,id,body));
