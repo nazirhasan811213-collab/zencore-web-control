@@ -43,6 +43,7 @@ name: Auto Trade control plane checks
       - "auto-trade.js"
       - "auto-trade.html"
       - "scripts/check-manual-exit-ui.cjs"
+      - "scripts/check-auto-trade-buttons-ui.cjs"
       - "gcp-instance-identity.js"
       - "server-analysis.js"
       - "test/**"
@@ -106,6 +107,9 @@ jobs:
 
       - name: Check account handover and admin reset
         run: node scripts/check-account-handover-ui.cjs
+
+      - name: Check Auto Trade button actions and diagnostic failure isolation
+        run: node scripts/check-auto-trade-buttons-ui.cjs
 
       - name: Check editable manual exit defaults and persistence
         run: node scripts/check-manual-exit-ui.cjs
