@@ -35,3 +35,36 @@ test('only confirmed active admin can invoke master reset',async()=>{
  await a.rejects(h.masterReset({role:'admin',status:'active'},'id',{}),e=>e.status===400);
  await a.rejects(h.masterReset({role:'admin',status:'active'},'id',{confirmation:'RESET'}),e=>e.status===400,'old cached confirmation cannot authorize liquidation');
 });
+
+test('unconfirmed release needs explicit admin fallback consent and a current generation',async()=>{
+ const h=new AccountHandover({pool:{query:()=>{throw Error('must not query')}}});
+ const actor={role:'admin',status:'active'};
+ for(const extra of [{resetGeneration:0},{allowUnconfirmedDisconnect:true},{allowUnconfirmedDisconnect:true,resetGeneration:-1}])
+  await a.rejects(h.masterReset(actor,'one',{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_RELEASE_V3',...extra}),e=>e.status===400);
+});
+test('expired/unresponsive commands may release only logical state and V2 never silently falls back',async()=>{
+ const at=1791000000000,actor={role:'admin',status:'active'},id='11111111-1111-4111-8111-111111111111',commandId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ let status='PENDING',expires=at-1,created=at-1000,resetCalls=0;
+ const pool={query:async sql=>{
+  if(sql.includes('FROM zencore_account_resets'))return {rows:[]};
+  if(sql.startsWith('SELECT * FROM zencore_users'))return {rows:[{id,role:'client',handover_generation:0}]};
+  if(sql.startsWith('SELECT * FROM zencore_mt5_secure_pods'))return {rows:[{id:'pod',ownership_mode:'TRADER_OWNED_EA_LOCAL',last_seen_at:new Date(at)}]};
+  if(sql.startsWith('SELECT * FROM zencore_autotrade_commands'))return {rows:[{id:commandId,status,created_at:new Date(created),expires_at:new Date(expires),payload:{masterResetVersion:'MASTER_RESET_FORCE_V2',masterResetScope:'ALL_ACCOUNT',masterResetGeneration:0}}]};
+  throw Error('unexpected query');
+ }};
+ const h=new AccountHandover({pool,now:()=>at});h.reset=async(actor,user,input,release)=>{resetCalls++;a.equal(typeof release.key,'symbol');a.equal(release.generation,0);a.equal(release.podId,'pod');return {ok:true,brokerCloseConfirmed:false};};
+ const body={confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId};
+ await a.rejects(h.masterReset(actor,id,body),/Arahan luput/);a.equal(resetCalls,0);
+ const fallback={...body,resetPolicy:'MASTER_RESET_RELEASE_V3',allowUnconfirmedDisconnect:true,resetGeneration:0};
+ a.equal((await h.masterReset(actor,id,fallback)).brokerCloseConfirmed,false);a.equal(resetCalls,1);
+ expires=at+120000;created=at-20000;
+ a.equal((await h.masterReset(actor,id,fallback)).brokerCloseConfirmed,false);a.equal(resetCalls,2);
+ status='DELIVERED';a.equal((await h.masterReset(actor,id,fallback)).pending,true);a.equal(resetCalls,2);
+ created=at-31000;a.equal((await h.masterReset(actor,id,fallback)).brokerCloseConfirmed,false);a.equal(resetCalls,3);
+});
+test('replayed old-generation offline release returns its receipt without touching a newer client setup',async()=>{
+ let queries=0;
+ const pool={query:async(sql,args)=>{queries++;if(sql.startsWith('SELECT * FROM zencore_users'))return {rows:[{id:'one',role:'client',handover_generation:1}]};if(sql.includes('FROM zencore_account_resets'))return {rows:[{generation:1,broker_close_confirmed:false}]};throw Error('must not inspect/revoke new pod');}};
+ const h=new AccountHandover({pool});const out=await h.masterReset({role:'admin',status:'active'},'one',{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_RELEASE_V3',allowUnconfirmedDisconnect:true,resetGeneration:0});
+ a.equal(out.completed,true);a.equal(out.brokerCloseConfirmed,false);a.match(out.message,/BROKER BELUM DISAHKAN/);a.equal(queries,2);
+});
