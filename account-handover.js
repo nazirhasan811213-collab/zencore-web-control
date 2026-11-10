@@ -6,9 +6,10 @@ const canTrade=u=>!!u&&((u.role&&u.role!=='client')||state(u)==='LIVE');
 function allowedPath(path,stage){return ['/auth/me','/auth/logout','/onboarding','/api/account/handover'].includes(path)||(stage==='ADMIN_SETUP'&&path==='/api/auto-trade/ea-connect');}
 function admin(actor){if(actor?.role!=='admin'||actor.status!=='active')throw fail('Admin aktif sahaja.',403);}
 class AccountHandover{
- constructor({pool,tradingState,now=Date.now}){this.pool=pool;this.tradingState=tradingState;this.now=now;this.aliases=false;}
+ constructor({pool,tradingState,stopTrading,now=Date.now}){this.pool=pool;this.tradingState=tradingState;this.stopTrading=stopTrading;this.now=now;this.aliases=false;}
  async init(){
   await this.pool.query(`CREATE TABLE IF NOT EXISTS zencore_account_resets(id UUID PRIMARY KEY,user_id UUID NOT NULL REFERENCES zencore_users(id),admin_id UUID NOT NULL REFERENCES zencore_users(id),generation INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`);
+  await this.pool.query('ALTER TABLE zencore_account_resets ADD COLUMN IF NOT EXISTS command_id UUID');
   this.aliases=!!(await this.pool.query("SELECT to_regclass('zencore_managed_login_aliases') AS name")).rows[0].name;
   if(this.aliases){const c=await this.pool.connect();try{await c.query('BEGIN');const changed=await c.query("UPDATE zencore_users SET handover_state='ADMIN_SETUP' WHERE role='client' AND handover_state IS NULL AND id IN (SELECT user_id FROM zencore_managed_login_aliases) RETURNING id");this.initialized=changed.rowCount;const ids=changed.rows.map(u=>u.id);if(ids.length){
     if((await c.query("SELECT to_regclass('zencore_autotrade_profiles') AS name")).rows[0].name)await c.query("UPDATE zencore_autotrade_profiles SET desired_state='STOPPED',effective_state='STOPPED',pending_command_id=NULL,state_version=state_version+1,updated_at=NOW() WHERE user_id=ANY($1::uuid[])",[ids]);
@@ -33,8 +34,39 @@ class AccountHandover{
    await c.query("UPDATE zencore_users SET display_name=$2,email=$3,phone=$4,ic_number=NULL,password_hash=$5,handover_state='LIVE',handover_completed_at=NOW(),access_activated_at=NOW(),access_expires_at=NOW()+INTERVAL '14 days' WHERE id=$1",[userId,profile.displayName,profile.email,profile.phone,hash]);await c.query('DELETE FROM zencore_sessions WHERE user_id=$1',[userId]);await c.query('COMMIT');return {ok:true,state:'LIVE',message:'Profil lengkap. Log masuk semula menggunakan password baharu.'};
   }catch(e){await c.query('ROLLBACK');if(e.code==='23505')throw fail('E-mel ini sudah digunakan.',409);throw e;}finally{c.release();}
  }
+ async masterReset(actor,userId,input={}){
+  admin(actor);if(input.confirmation!=='RESET')throw fail('Sahkan Master Reset dahulu.',400);
+  if(input.commandId){
+   if(!/^[0-9a-f-]{36}$/i.test(input.commandId))throw fail('Rujukan reset tidak sah.',400);
+   const done=(await this.pool.query('SELECT generation FROM zencore_account_resets WHERE user_id=$1 AND command_id=$2',[userId,input.commandId])).rows[0];
+   if(done)return {ok:true,completed:true,state:'ADMIN_SETUP',message:'Master Reset selesai. ID asal kekal; password awal zc123.'};
+  }
+  const u=await this.row(userId),generation=u.handover_generation||0;
+  const pod=(await this.pool.query('SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 AND revoked_at IS NULL',[userId])).rows[0];
+  if(!pod){await this.stopTrading(userId);return {...await this.reset(actor,userId,{confirmation:'RESET'}),completed:true};}
+  if(pod.ownership_mode!=='TRADER_OWNED_EA_LOCAL')throw fail('Master Reset ini untuk EA + Connector tempatan.');
+  let command;
+  if(input.commandId){
+   command=(await this.pool.query("SELECT * FROM zencore_autotrade_commands WHERE id=$1 AND user_id=$2 AND pod_id=$3 AND command_type='SYSTEM_STOP'",[input.commandId,userId,pod.id])).rows[0];
+   if(!command||command.payload?.masterResetVersion!=='MASTER_RESET_V1'||command.payload?.masterResetGeneration!==generation)throw fail('Rujukan reset sudah tidak sah. Muat semula akaun.');
+   if(command.status==='EXECUTED'){
+    if(command.result?.code!=='MASTER_RESET_READY')throw fail('EA belum menyokong Master Reset. Pasang EA 2.18 dan Connector terkini, kemudian cuba semula.');
+    return {...await this.reset(actor,userId,{confirmation:'RESET',masterCommandId:command.id}),completed:true};
+   }
+   if(!['PENDING','DELIVERED'].includes(command.status)||new Date(command.expires_at).getTime()<=this.now())throw fail('Reset belum selesai: '+(command.result?.code||'Arahan luput. Semak Connector/EA dan cuba semula.'));
+   return {ok:true,pending:true,commandId:command.id,message:'Menunggu Connector dan EA mengesahkan STOP serta reset. Jangan tutup Manager/MT5.'};
+  }
+  const existing=(await this.pool.query("SELECT id FROM zencore_autotrade_commands WHERE user_id=$1 AND pod_id=$2 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion'='MASTER_RESET_V1' AND payload->>'masterResetGeneration'=$3 AND ((status IN ('PENDING','DELIVERED') AND expires_at>NOW()) OR (status='EXECUTED' AND result->>'code'='MASTER_RESET_READY')) ORDER BY created_at DESC LIMIT 1",[userId,pod.id,String(generation)])).rows[0];
+  if(existing)return this.masterReset(actor,userId,{confirmation:'RESET',commandId:existing.id});
+  const t=await this.stopTrading(userId,{generation});
+  return {ok:true,pending:true,commandId:t.control.pendingCommandId,message:'Master Reset dimulakan. Menunggu pengesahan EA.'};
+ }
  async reset(actor,userId,input){admin(actor);if(input.confirmation!=='RESET')throw fail('Taip RESET untuk mengesahkan reset akaun.',400);const hash=await hashPassword('zc123'),c=await this.pool.connect();try{await c.query('BEGIN');const u=await this.row(userId,c,true);
    const profile=(await c.query('SELECT * FROM zencore_autotrade_profiles WHERE user_id=$1 FOR UPDATE',[userId])).rows[0],pod=(await c.query('SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE',[userId])).rows[0],hosted=(await c.query('SELECT * FROM zencore_mt5_hosted_accounts WHERE user_id=$1 FOR UPDATE',[userId])).rows[0];
+   if(input.masterCommandId){
+    const proof=(await c.query("SELECT * FROM zencore_autotrade_commands WHERE id=$1 AND user_id=$2 AND pod_id=$3 FOR UPDATE",[input.masterCommandId,userId,pod?.id])).rows[0];
+    if(!proof||proof.command_type!=='SYSTEM_STOP'||proof.status!=='EXECUTED'||proof.result?.code!=='MASTER_RESET_READY'||proof.payload?.masterResetVersion!=='MASTER_RESET_V1'||proof.payload?.masterResetGeneration!==(u.handover_generation||0))throw fail('Pengesahan Master Reset tidak sepadan.');
+   }
    if(profile&&(profile.desired_state!=='STOPPED'||!['STOPPED','UNPROVISIONED'].includes(profile.effective_state)))throw fail('STOP Auto Trade sebelum reset akaun.');
    if((await c.query('SELECT 1 FROM zencore_mt5_positions WHERE user_id=$1 LIMIT 1',[userId])).rowCount)throw fail('Masih ada posisi MT5. Reset tidak dibenarkan.');
    for(const table of ['zencore_autotrade_commands','zencore_hosted_autotrade_commands'])if((await c.query(`SELECT 1 FROM ${table} WHERE user_id=$1 AND status IN ('PENDING','DELIVERED') LIMIT 1`,[userId])).rowCount)throw fail('Masih ada arahan belum selesai. Tunggu pengesahan MT5.');
@@ -43,11 +75,15 @@ class AccountHandover{
    let alias=null;if(this.aliases)alias=(await c.query('SELECT login_id FROM zencore_managed_login_aliases WHERE user_id=$1',[userId])).rows[0]?.login_id;const n=require('./managed-vps-accounts').number(alias),email=n?require('./managed-vps-accounts').loginEmail(alias):u.email,name=n?'ZCuser '+n:'Client';
    if((await c.query("SELECT to_regclass('zencore_position_notifications') AS name")).rows[0].name)await c.query('DELETE FROM zencore_position_notifications WHERE user_id=$1',[userId]);
    if((await c.query("SELECT to_regclass('zencore_position_watches') AS name")).rows[0].name)await c.query('DELETE FROM zencore_position_watches WHERE user_id=$1',[userId]);
+   if((await c.query("SELECT to_regclass('zencore_admin_telegram_jobs') AS name")).rows[0].name){
+    await c.query('DELETE FROM zencore_admin_telegram_targets WHERE user_id=$1',[userId]);
+    await c.query("UPDATE zencore_admin_telegram_jobs SET targets=(SELECT COALESCE(jsonb_agg(t),'[]'::jsonb) FROM jsonb_array_elements(targets)t WHERE t->>'id'<>$1) WHERE targets @> jsonb_build_array(jsonb_build_object('id',$1::text))",[userId]);
+   }
    // Revoke the connector before deleting history. In-flight heartbeats cannot restore it.
    if(pod)await c.query("UPDATE zencore_mt5_secure_pods SET token_hash=$2,label='Unpaired',connector_version=NULL,terminal_build=NULL,manual_exit_version=NULL,revoked_at=NOW(),account_mask=NULL,server_mask=NULL,broker_mask=NULL,account_fingerprint=NULL,trade_mode=NULL,last_seen_at=NULL,symbol_specs='{}'::jsonb,manual_exit_enabled=FALSE,terminal_trade_allowed=FALSE,account_trade_allowed=FALSE,expert_trade_allowed=FALSE,demo_execution_unlocked=FALSE WHERE user_id=$1",[userId,crypto.randomBytes(32).toString('hex')]);
    for(const table of ['zencore_sessions','zencore_telegram_deliveries','zencore_alert_preferences','zencore_autotrade_commands','zencore_hosted_autotrade_commands','zencore_autotrade_audit','zencore_mt5_positions','zencore_mt5_pairing_sessions','zencore_autotrade_profiles'])await c.query(`DELETE FROM ${table} WHERE user_id=$1`,[userId]);
    await c.query("UPDATE zencore_users SET display_name=$2,email=$3,phone=NULL,ic_number=NULL,password_hash=$4,status='active',last_login_at=NULL,registration_reason=NULL,registration_decision='approved',handover_state='ADMIN_SETUP',handover_released_at=NULL,handover_completed_at=NULL,handover_generation=handover_generation+1,access_activated_at=NOW(),access_expires_at=NOW()+INTERVAL '14 days' WHERE id=$1",[userId,name,email,hash]);
-   await c.query('INSERT INTO zencore_account_resets(id,user_id,admin_id,generation) VALUES($1,$2,$3,$4)',[crypto.randomUUID(),userId,actor.id,(u.handover_generation||0)+1]);await c.query('COMMIT');return {ok:true,state:'ADMIN_SETUP',defaultPassword:'zc123',message:'Akaun direset. Admin perlu setup dan serah semula.'};
+   await c.query('INSERT INTO zencore_account_resets(id,user_id,admin_id,generation,command_id) VALUES($1,$2,$3,$4,$5)',[crypto.randomUUID(),userId,actor.id,(u.handover_generation||0)+1,input.masterCommandId||null]);await c.query('COMMIT');return {ok:true,state:'ADMIN_SETUP',defaultPassword:'zc123',message:'Akaun direset. Admin perlu setup dan serah semula.'};
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
 }

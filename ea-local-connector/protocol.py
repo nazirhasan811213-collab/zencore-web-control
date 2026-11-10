@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.17'
-CONNECTOR_BUILD = '2.1.13'
+EA_VERSION = '2.18'
+CONNECTOR_BUILD = '2.1.14'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -194,7 +194,11 @@ def command_fields(command, identity):
                     fields[f'a{i}value'] = action['percent']
                     fields[f'a{i}reason'] = action.get('reason','')
                 else: fields[f'a{i}value'] = number(action['activeSl'])
-    elif kind not in ('SYSTEM_STOP','EMERGENCY_CLOSE_ALL'):
+    elif kind == 'SYSTEM_STOP':
+        if payload.get('masterResetVersion') is not None:
+            if payload['masterResetVersion']!='MASTER_RESET_V1':raise ValueError('TYPE_REJECTED')
+            fields['masterResetVersion']='MASTER_RESET_V1'
+    elif kind != 'EMERGENCY_CLOSE_ALL':
         raise ValueError('TYPE_REJECTED')
     return fields
 

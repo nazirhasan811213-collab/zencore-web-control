@@ -1280,6 +1280,11 @@ class PostgresAutoTradeStore {
     return timestamp(result.rows[0]?.revoked_at);
   }
 
+  async masterResetCommand(userId) {
+    const r=await this.pool.query("SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion'='MASTER_RESET_V1' ORDER BY created_at DESC LIMIT 1",[userId]);
+    return r.rows[0]?publicCommand(r.rows[0]):null;
+  }
+
   async resetLocalEaLink(userId, now) {
     const client = await this.pool.connect();
     try {
@@ -2131,6 +2136,11 @@ class MemoryAutoTradeStore {
   }
 
   async getLinkResetAt(userId) { return this.podsByUser.get(userId)?.revokedAt || null; }
+
+  async masterResetCommand(userId) {
+    const rows=[...this.commands.values()].flat().filter(c=>c.userId===userId&&c.type==='SYSTEM_STOP'&&c.payload?.masterResetVersion==='MASTER_RESET_V1');
+    return rows.sort((a,b)=>b.createdAt-a.createdAt)[0]||null;
+  }
 
   async resetLocalEaLink(userId, now) {
     const pod=this.podsByUser.get(userId);

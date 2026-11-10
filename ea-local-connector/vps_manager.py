@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from connector import Runner,Api,dpapi,install_ea,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.0.5'
+VERSION='1.0.6'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def slot_number(value):
@@ -102,8 +102,12 @@ class Manager:
             with self.lock:self.installing.pop(slot,None)
     def unpaired(self,slot):
         with self.lock:
-            self.vault.remove(slot);self.configs.pop(slot,None)
-        self.status(slot,'LINK_RESET — pautkan semula melalui admin')
+            cfg=self.configs.get(slot)
+            self.vault.remove(slot);self.vault.remove_folder(slot);self.folders.pop(slot,None);self.configs.pop(slot,None)
+            if cfg:
+                for name in ('connector-health.json','execution-timing.jsonl','execution-timing.previous.jsonl'):
+                    (Path(cfg['channel'])/name).unlink(missing_ok=True)
+        self.status(slot,'RESET_CLEAR')
     def start(self,slot):
         slot_number(slot)
         with self.lock:

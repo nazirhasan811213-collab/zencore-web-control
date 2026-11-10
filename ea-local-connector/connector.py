@@ -203,7 +203,7 @@ def readiness_message(code):
     messages={
         'TERMINAL_OFFLINE':'MT5 terputus dari broker. Tunggu connection pulih, kemudian ON semula.',
         'TERMINAL_ALGO_DISABLED':'Hidupkan butang Algo Trading MT5, kemudian ON semula.',
-        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.17 pada chart; versi lama tidak menyokong plan tepat.',
+        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.18 pada chart; versi lama tidak menyokong plan tepat.',
         'SL_POLICY_REJECTED':'Polisi SL tidak sepadan. Entry ditolak; kemas kini Connector dan EA.',
         'BROKER_STOP_DISTANCE':'Broker menolak jarak SL. Entry belum dibuka.',
         'ENTRY_OUTSIDE_PLAN':'Harga sudah di luar julat entry hingga TP1. Order tidak dikejar.',
@@ -614,11 +614,16 @@ class App:
             finally:self.pairing=False
         threading.Thread(target=task,daemon=True).start()
     def link_reset_received(self):
+        old=self.runner
         def finish():
             try: (INSTALL/'paired.dpapi').unlink(missing_ok=True)
             except OSError:
                 self.status.set('Link dibatalkan tetapi fail pautan belum boleh dipadam. Tutup Connector dan cuba semula.');return
-            self.runner=None;self.runner_thread=None
+            if old:
+                for name in ('connector-health.json','execution-timing.jsonl','execution-timing.previous.jsonl'):
+                    (old.channel/name).unlink(missing_ok=True)
+            self.runner=None;self.runner_thread=None;self.session_api=None
+            self.email.set('');self.password.set('');self.account.set('');self.folder.set('')
             self.refresh()
             self.status.set('Reset link berjaya. Login akaun baharu dalam MT5, Cari akaun dan pautkan semula selepas 30 saat.')
         self.post(finish)
