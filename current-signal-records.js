@@ -70,7 +70,9 @@ class CurrentSignalRecords{
    COUNT(*) FILTER(WHERE state='OPEN')::int AS open,COUNT(*) FILTER(WHERE state='CLOSED')::int AS resolved,
    COUNT(*) FILTER(WHERE data->>'hitTp1'='true')::int AS tp1,
    COUNT(*) FILTER(WHERE data->>'hitTp2'='true')::int AS tp2,
-   COUNT(*) FILTER(WHERE data->>'hitTp3'='true')::int AS tp3
+   COUNT(*) FILTER(WHERE data->>'hitTp3'='true')::int AS tp3,
+   COUNT(*) FILTER(WHERE data->>'hitSl'='true' OR data->>'outcome'='SL')::int AS sl,
+   COUNT(*) FILTER(WHERE data->>'hitSl' IN ('true','false') OR data->>'outcome'='SL')::int AS sl_observed
    FROM zencore_current_signal_records WHERE opened_at >= $1 GROUP BY timeframe ORDER BY timeframe`,[retention.cutoffAt])).rows;
   return {ok:true,retention,source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',records,totals,lastSync:this.lastSync,lastError:this.error,syncPending:this.lastSync===null,
    note:'TP ialah harga sasaran yang diperhatikan. CLOSE_SIGNAL dan SUPERSEDED tidak mengesahkan hasil untung/rugi. Sejarah dipulihkan hanya daripada event yang masih disimpan.'};

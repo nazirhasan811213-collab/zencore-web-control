@@ -210,8 +210,17 @@
   function fromStoredRecords(payload) {
     const stats=payload.totals||[],rows=(payload.records||[]).map(r=>normaliseRow(r));
     const pairSummaries=stats.map(r=>({symbol:'XAUUSD',timeframe:String(r.timeframe),available:true,sample:Number(r.sample),resolved:Number(r.resolved),wins:Number(r.tp1),losses:Number(r.resolved),open:Number(r.open),winRate:Number(r.sample)?Number(r.tp1)/Number(r.sample)*100:null,maturity:'PERSISTED'}));
+    for (let i=0;i<pairSummaries.length;i++) {
+      const row=stats[i],p=pairSummaries[i],n=p.sample;
+      p.tp2=Number(row.tp2)||0;p.tp3=Number(row.tp3)||0;p.sl=Number(row.sl)||0;p.slObserved=Number(row.sl_observed)||0;
+      p.tp2Rate=n?p.tp2/n*100:null;p.tp3Rate=n?p.tp3/n*100:null;
+      p.slRate=n&&p.slObserved===n?p.sl/n*100:null;
+    }
     const summary=pairSummaries.reduce((s,r)=>{for(const k of ['sample','resolved','wins','losses','open'])s[k]+=r[k];return s;},{sample:0,resolved:0,wins:0,losses:0,open:0});
     summary.winRate=summary.sample?summary.wins/summary.sample*100:null;summary.available=pairSummaries.length;summary.expected=2;
+    for(const k of ['tp2','tp3','sl','slObserved'])summary[k]=pairSummaries.reduce((n,p)=>n+p[k],0);
+    summary.tp2Rate=summary.sample?summary.tp2/summary.sample*100:null;summary.tp3Rate=summary.sample?summary.tp3/summary.sample*100:null;
+    summary.slRate=summary.sample&&summary.slObserved===summary.sample?summary.sl/summary.sample*100:null;
     return {summary,pairSummaries,allRows:rows,openRows:rows.filter(r=>r.state==='OPEN'),resolvedRows:rows.filter(r=>r.state==='CLOSED'),generatedAt:payload.lastSync};
   }
 

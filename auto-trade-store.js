@@ -2076,7 +2076,8 @@ class MemoryAutoTradeStore {
       const existing = rows.find(item => item.userId === command.userId && item.dedupeKey === command.dedupeKey);
       if (existing) return { created: false, command: publicCommand(existing) };
     }
-    const row = { ...command, status: 'PENDING', createdAt: Date.now(), deliveredAt: null, acknowledgedAt: null, result: null };
+    // Match Postgres: signed timestamps are immutable through storage/delivery.
+    const row = { ...command, status: 'PENDING', createdAt: command.createdAt ?? Date.now(), deliveredAt: null, acknowledgedAt: null, result: null };
     rows.push(row);
     this.commands.set(command.podId, rows);
     return { created: true, command: publicCommand(row) };

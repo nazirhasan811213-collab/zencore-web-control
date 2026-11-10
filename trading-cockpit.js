@@ -69,15 +69,21 @@
   const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'TUNGGU DATA';
   const ranked=visible.slice().sort((a,b)=>Number(ready(b))-Number(ready(a))||Number(fresh(b))-Number(fresh(a))||Number(b.market?.strategyNormal?.sop?.sopGreen||0)-Number(a.market?.strategyNormal?.sop?.sopGreen||0));
   const best=ranked[0],n=best.market?.strategyNormal||{},s=n.sop||{},p=n.plan||{};
-  $('featuredPair').textContent=best.symbol;$('featuredTf').textContent='TF'+best.timeframe+' · '+tfName(best.timeframe);
-  $('featuredBadge').textContent=ready(best)?'ENTRY READY':fresh(best)?'TENGAH MONITOR':'WAITING';$('featuredBadge').className='pill'+(ready(best)?' live':'');
-  $('featuredSide').textContent=ready(best)?'SOLID '+n.side:fresh(best)?'TUNGGU CONFIRMATION':'TUNGGU SIGNAL';$('featuredSide').className='featured-side '+tone(best);
-  $('featuredReason').textContent=fresh(best)?n.reason||'Semak confirmation pada Analysis.':'Feed TF'+best.timeframe+' belum tersedia. Signal akan muncul selepas data segar diterima.';
-  const chips=[];chips.push(el('span','SOP '+(s.sopGreen==null?'≥4/5':s.sopGreen+'/5'),s.sopGreen>=4?'pass':''));chips.push(el('span','FORECAST '+(s.forecast||'10 CANDLE')));if(s.hemaShape)chips.push(el('span','SHAPE '+s.hemaShape.state,s.hemaShape.pass?'pass':''));for(const h of best.timeframe===2?[2]:[15,30])chips.push(el('span','HEMA'+h+' '+(s['hema'+h]?.mode||'WAIT'),s['hema'+h]?.pass?'pass':''));$('featuredChecks').replaceChildren(...chips);
-  $('featuredEntry').textContent=format(p.entry,best.symbol);$('featuredTp').textContent=format(p.tp1,best.symbol);$('featuredSl').textContent=format(p.sl,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
+  const valid=fresh(best),side=valid&&['BUY','SELL'].includes(n.side)?n.side:'—';
+  document.querySelector('.featured .kicker').textContent='ZENCORE | ENTRY TF'+best.timeframe+' • '+(Number(best.timeframe)===2?'SCALP':'INTRA');
+  $('featuredPair').textContent=best.symbol+' • '+side;$('featuredTf').textContent='';
+  $('featuredBadge').textContent=ready(best)?'SIGNAL ENTRY':valid?'MENUNGGU ENTRY':'TUNGGU DATA';
+  $('featuredBadge').className='pill'+(ready(best)?' live':'');
+  $('featuredSide').textContent='';$('featuredReason').textContent='';
+  // Strength and projected range have no validated producer yet. Do not relabel forecast as strength.
+  $('featuredChecks').replaceChildren(el('p','Entry: '+format(valid?p.entry:null,best.symbol)+' • Overall Setup Strength —','pine-analysis-line'),el('p','SL: '+format(valid?p.sl:null,best.symbol),'pine-analysis-line'),el('p','🎯 Jangkauan setup: —','pine-analysis-line'));
+  $('featuredEntry').textContent=format(valid?p.entry:null,best.symbol);$('featuredTp').textContent=format(valid?p.tp1:null,best.symbol);$('featuredSl').textContent=format(valid?p.sl:null,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
   const cards=[];
   for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'FOREX'));card.append(head);
-   card.classList.toggle('single',visible.filter(v=>v.symbol===symbol).length===1);for(const v of visible.filter(v=>v.symbol===symbol)){const m=v.market?.strategyNormal||{},sop=m.sop||{},row=el('div',undefined,'market-view'),top=el('div');top.append(el('span','TF'+v.timeframe+' · '+tfName(v.timeframe),'tf-label'),el('strong',state(v),tone(v)));row.append(top,el('p',fresh(v)?'Arah '+(m.side||'WAIT')+' · Harga '+format(v.market.price,symbol):'Menunggu feed TF'+v.timeframe),el('div','SOP '+(sop.sopGreen==null?'—':sop.sopGreen+'/5')+'  ·  Forecast '+(sop.forecast||'—')+'  ·  Power '+(sop.marketPower==null?'—':sop.marketPower+'%'),'readings'));
+   card.classList.toggle('single',visible.filter(v=>v.symbol===symbol).length===1);for(const v of visible.filter(v=>v.symbol===symbol)){const m=v.market||{},n=m.strategyNormal||{},row=el('div',undefined,'market-view'),top=el('div');top.append(el('span','TF'+v.timeframe+' · '+tfName(v.timeframe),'tf-label'));row.append(top);
+    const current=fresh(v),known=value=>current&&typeof value==='string'&&value.trim()?value:'—';
+    const readings=[['Arah market',current&&['BUY','SELL'].includes(n.side)?n.side:'—'],['Keadaan market',known(m.marketStructure)],['Momentum',known(m.momentum)],['Support terdekat',format(current?m.nearestSupport:null,symbol)],['Resistance terdekat',format(current?m.nearestResistance:null,symbol)],['Panduan ZenCore',known(m.proTip)]];
+    const list=el('dl',undefined,'market-summary');for(const [label,value] of readings){const item=el('div');item.append(el('dt',label),el('dd',value));list.append(item);}row.append(list);
     const a=el('a','Lihat Analysis TF'+v.timeframe+' ↗');a.href=link(symbol,v.timeframe);row.append(a);card.append(row);
    }cards.push(card);
   }$('marketGrid').replaceChildren(...cards);
@@ -87,8 +93,16 @@
  }
  for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};$('planSelector').onchange=render;
  async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF2 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Data tak masuk. Tengah cuba connect balik…';}render();if(!stopped)setTimeout(poll,2000);}
- async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings')]);
-  if(results[0].status==='fulfilled'){const a=results[0].value;$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';$('tradeState').textContent=state.replaceAll('_',' ');dot('tradeDot',state==='ON');}else{$('mt5State').textContent='STATUS BELUM ADA';$('tradeState').textContent='STATUS BELUM ADA';dot('mt5Dot',false);dot('tradeDot',false);}
+ function renderAccount(a){
+  const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
+  set('overviewAccount',v.account);set('overviewServer',v.server);set('overviewPositions',v.count??'—');
+  set('overviewModes',v.count===null?'Menunggu laporan MT5':`TF2: ${v.tf2} • TF15: ${v.tf15}`);
+  set('overviewLot',v.lot===null?'—':v.lot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3}));
+  set('overviewFloating',v.floating===null?'—':v.floating.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  set('overviewSeen',v.lastSeen?'Laporan MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Data belum disahkan / tidak segar');
+ }
+ async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings'),api('/ready')]);
+  if(results[0].status==='fulfilled'){const a=results[0].value;renderAccount(a);$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';const paused=results[2]?.status==='fulfilled'?results[2].value?.autoEntry?.signalsPaused:null;$('tradeState').textContent=paused===true?'PAUSED':state==='ON'&&paused===null?'ON • SEMAK STATUS':state.replaceAll('_',' ');dot('tradeDot',state==='ON'&&paused===false);}else{renderAccount(null);$('mt5State').textContent='STATUS BELUM ADA';$('tradeState').textContent='STATUS BELUM ADA';dot('mt5Dot',false);dot('tradeDot',false);}
   if(results[1].status==='fulfilled'){const p=results[1].value.settings||{};const enabled=p.verified&&p.telegramEnabled&&p.telegramAvailable;$('telegramState').textContent=enabled?'AKTIF':p.telegramAvailable?'BELUM DIAKTIFKAN':'BELUM ADA';dot('telegramDot',!!enabled);}else{$('telegramState').textContent='STATUS BELUM ADA';dot('telegramDot',false);}if(!stopped)setTimeout(connections,5000);
  }
  api('/auth/me').then(j=>{$('welcomeName').textContent=j.user?.displayName||'Trader';}).catch(()=>{});
