@@ -1329,7 +1329,7 @@ function createAutoTradeService(options = {}) {
       }, {id:pod.id,tokenHash:pod.tokenHash});
     }
     await store.appendAudit(pod.userId, 'COMMAND_ACKNOWLEDGED', {
-      commandId: command.id, commandType: command.type, status, code: result.code,
+      commandId: command.id, commandType: command.type, status, code: result.code, message: result.message,
       ...(command.type==='PLACE_SETUP'?{timeframe:command.payload?.analysisSnapshot?.executionTimeframe,
         lifecycleState:status==='EXECUTED'?'MT5_ACKNOWLEDGED':'EA_REJECTED',
         sopCompletedAt:command.payload?.analysisSnapshot?.qualifiedAt||command.payload?.analysisSnapshot?.confirmationEvidence?.qualifiedAt,
