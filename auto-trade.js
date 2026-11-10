@@ -346,12 +346,22 @@
   async function refreshState(silent = true) {
     try {
       render(await api('/api/auto-trade/state'));
-      const diagnostics = await api('/api/auto-trade/execution-diagnostics');
-      const diagnosticList = byId('executionDiagnostics');
-      if (diagnosticList) diagnosticList.innerHTML = (diagnostics.commands || []).filter(c => c.type === 'PLACE_SETUP').slice(0,3).map(c => `<div class="audit-row"><b>DIAGNOSTIK ${escape(c.symbol)} TF${escape(c.timeframe)}</b><span>${escape(c.resultCode || c.status)} • ${escape(c.checks.length ? c.checks.join(', ') : 'Semakan struktur server lulus')}</span><time>${escape(timeText(c.createdAt))}</time></div>`).join('');
     } catch (error) {
       render(syntheticUnavailable(error.message));
       if (!silent) toast(error.message, true);
+      return;
+    }
+    // Optional diagnostics must not replace a valid MT5/control state.
+    const diagnosticList = byId('executionDiagnostics');
+    try {
+      const diagnostics = await api('/api/auto-trade/execution-diagnostics');
+      const commands = Array.isArray(diagnostics.commands) ? diagnostics.commands : [];
+      if (diagnosticList) diagnosticList.innerHTML = commands.filter(c => c.type === 'PLACE_SETUP').slice(0,3).map(c => {
+        const checks = Array.isArray(c.checks) ? c.checks : [];
+        return `<div class="audit-row"><b>DIAGNOSTIK ${escape(c.symbol)} TF${escape(c.timeframe)}</b><span>${escape(c.resultCode || c.status)} • ${escape(checks.length ? checks.join(', ') : 'Semakan struktur server lulus')}</span><time>${escape(timeText(c.createdAt))}</time></div>`;
+      }).join('');
+    } catch (_) {
+      if (diagnosticList) diagnosticList.textContent = 'Diagnostik belum tersedia. Status MT5 dan kawalan Auto Trade dikekalkan.';
     }
   }
 
@@ -735,7 +745,8 @@
     } catch (error) {
       toast(error.message, true);
     } finally {
-      button.disabled = false;
+      if (currentState) renderMaster(currentState);
+      else button.disabled = false;
     }
   });
 
