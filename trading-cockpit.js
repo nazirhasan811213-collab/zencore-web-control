@@ -75,8 +75,9 @@
   $('featuredBadge').textContent=ready(best)?'SIGNAL ENTRY':valid?'MENUNGGU ENTRY':'TUNGGU DATA';
   $('featuredBadge').className='pill'+(ready(best)?' live':'');
   $('featuredSide').textContent='';$('featuredReason').textContent='';
-  // Strength and projected range have no validated producer yet. Do not relabel forecast as strength.
-  $('featuredChecks').replaceChildren(el('p','Entry: '+format(valid?p.entry:null,best.symbol)+' • Overall Setup Strength —','pine-analysis-line'),el('p','SL: '+format(valid?p.sl:null,best.symbol),'pine-analysis-line'),el('p','🎯 Jangkauan setup: —','pine-analysis-line'));
+  const assessment=valid&&best.assessment?.status==='AVAILABLE'?best.assessment:null;
+  const strength=assessment?assessment.overall+'%':'—',range=assessment?.range?format(assessment.range.low,best.symbol)+'–'+format(assessment.range.high,best.symbol):'—';
+  $('featuredChecks').replaceChildren(el('p','Entry: '+format(valid?p.entry:null,best.symbol)+' • Overall Setup Strength '+strength,'pine-analysis-line'),el('p','SL: '+format(valid?p.sl:null,best.symbol),'pine-analysis-line'),el('p','🎯 Jangkauan setup: '+range+' • Anggaran indikator, bukan % win','pine-analysis-line'));
   $('featuredEntry').textContent=format(valid?p.entry:null,best.symbol);$('featuredTp').textContent=format(valid?p.tp1:null,best.symbol);$('featuredSl').textContent=format(valid?p.sl:null,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
   const cards=[];
   for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'FOREX'));card.append(head);

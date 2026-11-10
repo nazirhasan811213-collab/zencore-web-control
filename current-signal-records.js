@@ -14,7 +14,7 @@ function applyEvent(rows,e){
   }
   const row={id,symbol:e.symbol,timeframe:tf,setupKey:e.setupKey||null,mode:'NORMAL',side:e.side,entryType:e.telegramSop?.cycleKind==='FOLLOWUP'?'REENTRY':e.entryType||'SOLID_ENTRY',
    state:'OPEN',outcome:'OPEN',openedAt:e.time,resolvedAt:null,lastEventAt:e.time,...p,
-   hitTp1:false,hitTp2:false,hitTp3:false,score:e.telegramQuality?.score??null,slLockStage:0,
+   setupAssessment:e.setupAssessment?JSON.parse(JSON.stringify(e.setupAssessment)):null,hitTp1:false,hitTp2:false,hitTp3:false,score:e.telegramQuality?.score??null,slLockStage:0,
    source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',reason:'Signal entry diterima; bukan pengesahan order MT5'};
   rows.set(id,row);changed.push(row);return changed;
  }
@@ -74,7 +74,7 @@ class CurrentSignalRecords{
    COUNT(*) FILTER(WHERE data->>'hitSl'='true' OR data->>'outcome'='SL')::int AS sl,
    COUNT(*) FILTER(WHERE data->>'hitSl' IN ('true','false') OR data->>'outcome'='SL')::int AS sl_observed
    FROM zencore_current_signal_records WHERE opened_at >= $1 GROUP BY timeframe ORDER BY timeframe`,[retention.cutoffAt])).rows;
-  return {ok:true,retention,source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',records,totals,lastSync:this.lastSync,lastError:this.error,syncPending:this.lastSync===null,
+  return {ok:true,strengthEvaluation:require('./setup-strength').evaluate(records),retention,source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',records,totals,lastSync:this.lastSync,lastError:this.error,syncPending:this.lastSync===null,
    note:'TP ialah harga sasaran yang diperhatikan. CLOSE_SIGNAL dan SUPERSEDED tidak mengesahkan hasil untung/rugi. Sejarah dipulihkan hanya daripada event yang masih disimpan.'};
  }
 }

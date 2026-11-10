@@ -99,7 +99,7 @@
   }
 
   function lockText(row) {
-    if(row.source==='PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL')return 'TP1 '+(row.hitTp1?'✓':'—')+' • TP2 '+(row.hitTp2?'✓':'—')+' • TP3 '+(row.hitTp3?'✓':'—');
+    if(row.source==='PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL')return (row.setupAssessment?.status==='AVAILABLE'?'Strength '+row.setupAssessment.overall+'% • ':'')+'TP1 '+(row.hitTp1?'✓':'—')+' • TP2 '+(row.hitTp2?'✓':'—')+' • TP3 '+(row.hitTp3?'✓':'—');
     const stage = Number(row.slLockStage) || 0;
     if (stage >= 3) return 'SL → TP2';
     if (stage === 2) return 'SL → TP1';
