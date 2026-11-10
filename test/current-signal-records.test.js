@@ -22,3 +22,12 @@ test('persisted summary uses full database counts, TF remains in filters and CSV
  const result=Results.fromStoredRecords(data);a.equal(result.summary.sample,50);a.equal(result.summary.winRate,60);a.equal(result.allRows[0].timeframe,'2');
  a.equal(Results.filterRows(result.allRows,{category:'tp1'}).length,1);a.equal(Results.filterRows(result.allRows,{category:'closed'}).length,0);a.match(Results.buildCsv(result.allRows),/Timeframe/);
 });
+test('TP rates use all retained entries and SL remains unknown without complete evidence',()=>{
+ const payload={records:[],totals:[{timeframe:'2',sample:10,resolved:8,open:2,tp1:6,tp2:4,tp3:2,sl:2,sl_observed:8}]};
+ let result=Results.fromStoredRecords(payload);
+ a.equal(result.summary.winRate,60);a.equal(result.summary.tp2Rate,40);a.equal(result.summary.tp3Rate,20);
+ a.equal(result.summary.slRate,null);a.equal(result.pairSummaries[0].slRate,null);
+ payload.totals[0].sl_observed=10;result=Results.fromStoredRecords(payload);a.equal(result.summary.slRate,20);
+ payload.totals[0].sl=0;result=Results.fromStoredRecords(payload);a.equal(result.summary.slRate,0);
+ const empty=Results.fromStoredRecords({records:[],totals:[]});a.equal(empty.summary.slRate,null);a.equal(empty.summary.tp2Rate,null);
+});

@@ -1,5 +1,5 @@
-ZENCORE VPS MANAGER 1.1.0 — DRAF MODUL 1
-Connector 2.1.18 / EA 2.21
+ZENCORE VPS MANAGER 1.1.1 — DRAF MODUL 1
+Connector 2.1.19 / EA 2.21
 Server kekal PAUSED. Kit ujian ini tidak memberi kebenaran untuk live semula.
 
 ALIRAN ADMIN

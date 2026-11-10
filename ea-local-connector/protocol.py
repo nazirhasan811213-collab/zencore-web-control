@@ -11,7 +11,7 @@ from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
 EA_VERSION = '2.21'
-CONNECTOR_BUILD = '2.1.18'
+CONNECTOR_BUILD = '2.1.19'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -52,7 +52,15 @@ def atomic_write(path, text):
 
 def read_fields(path):
     fields = {}
-    text = Path(path).read_text(encoding='utf-8-sig')
+    # MT5 briefly opens files without sharing on Windows. A single sharing
+    # violation must not be treated as a lost EA session. Never reuse cached data.
+    for attempt in range(3):
+        try:
+            text = Path(path).read_text(encoding='utf-8-sig')
+            break
+        except PermissionError:
+            if attempt == 2: raise
+            time.sleep(.01*(attempt+1))
     if len(text) > 100000: raise ValueError('LOCAL_FILE_TOO_LARGE')
     for row in text.splitlines():
         if '\t' not in row: raise ValueError('INVALID_LOCAL_ROW')

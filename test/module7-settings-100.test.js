@@ -1,0 +1,31 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const {MemoryAutoTradeStore}=require('../auto-trade-store');
+const {createAutoTradeService}=require('../auto-trade-service');
+test('100 users retain separate TF settings through simulated ON ACK and STOP ACK',async()=>{
+ const store=new MemoryAutoTradeStore(),now=1792370000000;
+ const service=createAutoTradeService({store,now:()=>now,allowDemoExecution:true,commandSigningKey:'offline-settings-test-key-more-than-thirty-two-bytes'});
+ const users=Array.from({length:100},(_,i)=>({id:crypto.randomUUID(),lot:.01*(1+i%3),layers:1+i%4}));
+ await Promise.all(users.map(async u=>{
+  const linked=await service.connectLocalEa(u.id);u.token=linked.podToken;
+  await service.heartbeat(u.token,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Broker',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',accountFingerprint:crypto.createHash('sha256').update(u.id).digest('hex'),positions:[]});
+  const settings={capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'BOTH',riskAcknowledged:true,modeSettings:{TF2_SCALPING:{gold:{enabled:true,lotPerLayer:u.lot,layers:u.layers},fx:{enabled:false}},TF15_INTRA:{gold:{enabled:true,lotPerLayer:.04,layers:5},fx:{enabled:false}}}};
+  const saved=await service.saveSettings(u.id,settings);u.saved=saved.settings;
+  assert.equal(saved.settings.modeSettings.TF2_SCALPING.gold.lotPerLayer,u.lot);
+  assert.equal(saved.settings.modeSettings.TF2_SCALPING.gold.layers,u.layers);
+  assert.equal(saved.settings.modeSettings.TF15_INTRA.gold.lotPerLayer,.04);
+  assert.equal(saved.settings.modeSettings.TF15_INTRA.gold.layers,5);
+  await service.turnOn(u.id,{confirmation:'AKTIFKAN DEMO'});
+  let {command}=await service.nextCommand(u.token);assert.equal(command.type,'SYSTEM_ON');
+  assert.deepEqual(command.payload.settings.modeSettings,saved.settings.modeSettings);
+  await service.acknowledgeCommand(u.token,command.id,{status:'EXECUTED',code:'ARMED'});
+  assert.equal((await service.state(u.id)).control.effectiveState,'ON');
+  await service.stop(u.id);({command}=await service.nextCommand(u.token));assert.equal(command.type,'SYSTEM_STOP');
+  await service.acknowledgeCommand(u.token,command.id,{status:'EXECUTED',code:'STOPPED'});
+  const stopped=await service.state(u.id);assert.equal(stopped.control.effectiveState,'STOPPED');assert.deepEqual(stopped.settings,u.saved);
+ }));
+ const changed=structuredClone(users[0].saved);changed.riskAcknowledged=true;changed.modeSettings.TF15_INTRA.gold={enabled:false};
+ await service.saveSettings(users[0].id,changed);
+ for(const u of users.slice(1))assert.deepEqual((await service.state(u.id)).settings,u.saved);
+ const commands=[...store.commands.values()].flat();assert.equal(commands.filter(c=>c.type==='SYSTEM_ON').length,100);assert.equal(commands.filter(c=>c.type==='SYSTEM_STOP').length,100);assert.equal(commands.some(c=>c.type==='PLACE_SETUP'),false);
+});

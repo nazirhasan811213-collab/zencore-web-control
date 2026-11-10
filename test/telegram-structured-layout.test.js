@@ -5,7 +5,7 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])for(const again of [
  const sign=side==='BUY'?1:-1,e={kind:'ENTRY',symbol:'XAUUSD',timeframe:tf,side,time:Date.now(),id:'LAYOUT',telegramPlan:{entry:4100,sl:4100-sign*4,tp1:4100+sign*1.5,tp2:4100+sign*2.5,tp3:4100+sign*3.5},telegramSop:{version:tf==='2'?'SOLID_TF2_3GREEN_HEMA23_V2':'SOLID_TF15_3GREEN_HEMA1545_2L_V1',tf:tf+'m',solid:true,green:5,cycleKind:again?'FOLLOWUP':'INITIAL',gates:['entry','hema','wt','sop','x','y'].map(key=>({key,pass:true}))}};
  const text=telegramMessage(e);a.match(text,new RegExp(`ZENCORE \\| PELUANG ${again?'RE-ENTRY':'ENTRY'} TF${tf}`));
  const markers=['Entry:','SL:','TP1:','TP2:','TP3:','Sebab entry:','Rumusan AI ZenCore:','Coach Tips:','Signal sahaja'];for(let i=1;i<markers.length;i++)a.ok(text.indexOf(markers[i])>text.indexOf(markers[i-1]),markers[i]);
- for(const name of ['Entry','SL','TP1','TP2','TP3'])a.match(text,new RegExp('\\n'+name+': [0-9,.]+\\n'));
+ for(const name of ['Entry','SL','TP1','TP2','TP3'])a.match(text,new RegExp('\\n'+name+': [0-9,.]+(?: • [^\\n]+)?\\n'));
  a.match(text,new RegExp(`HEMA ${side==='BUY'?'hijau':'merah'}`));a.ok(text.length<1400);a.match(text,/BELUM pengesahan order MT5/);a.doesNotMatch(text,/ORDER EXECUTED|Win rate|undefined|NaN|screenshot/i);
 });
 test('pullback states the actual closed-price and momentum trigger before safe management advice',()=>{
@@ -19,4 +19,8 @@ test('pullback states the actual closed-price and momentum trigger before safe m
 test('TF15 candle label reports actual OHLC body rather than assuming the entry direction',()=>{
  const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:'15',side:'SELL',time:Date.now(),id:'BODY',telegramPlan:{entry:100,sl:104,tp1:96,tp2:92,tp3:88},telegramSop:{version:'SOLID_TF15_3GREEN_HEMA1545_2L_V1',tf:'15m',solid:true,green:5,currentBar:{open:99,close:100},gates:Array.from({length:6},()=>({pass:true}))}};
  a.match(telegramMessage(e),/Candle entry: BULLISH/);a.doesNotMatch(telegramMessage(e),/Candle entry: BEARISH/);
+});
+test('compact analysis reports the captured Pine reading and never substitutes forecast for Strength',()=>{
+ const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',side:'BUY',time:Date.now(),id:'SNAPSHOT',telegramPlan:{entry:4100,sl:4096,tp1:4101.5,tp2:4102.5,tp3:4103.5},telegramSop:{version:'SOLID_TF2_3GREEN_HEMA23_V2',tf:'2m',solid:true,green:5,power:65,forecast:'BULLISH',pineReading:{rsi:58,hemaFast:4101,hemaSlow:4100,momentum:'BUY perlahan'},gates:Array.from({length:6},()=>({pass:true}))}};
+ const text=telegramMessage(e);a.match(text,/RSI 58.0 • Momentum BUY perlahan/);a.match(text,/Forecast BULLISH • Skor 65\/100/);a.match(text,/HEMA hijau/);a.match(text,/Overall Setup Strength —/);a.doesNotMatch(text,/Strength 65%/);
 });

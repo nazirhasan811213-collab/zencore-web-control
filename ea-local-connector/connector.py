@@ -4,6 +4,7 @@ import hashlib
 import http.cookiejar
 import json
 import queue
+import random
 import os
 from pathlib import Path
 import shutil
@@ -244,8 +245,8 @@ def readiness_message(code):
         'RISK_FILE_WRITE_FAILED':'Fail pelan risiko tidak boleh ditulis. Semak permission folder Common MT5.',
         'BROKER_ENTRY_REJECTED':'Broker menolak order. Semak retcode dan Experts MT5.',
         'LEASE_NOT_READY':'Kebenaran EA belum sah. Semak Cloud, akaun dan sesi MT5; tunggu sambungan pulih. Jangan reset pautan atau ulang order lama.',
-        'LEASE_EXPIRED':'Kebenaran sambungan tamat. Tunggu Connector tersambung, kemudian ON semula.',
-        'LEASE_STOPPED':'Web sedang STOP. Semak akaun dan tekan ON semula.',
+        'LEASE_EXPIRED':'Kebenaran sambungan tamat. Connector cuba pulihkan sambungan; tidak perlu ulang OFF/ON untuk gangguan sementara.',
+        'LEASE_STOPPED':'Sistem belum membenarkan entry. Semak status STOP/PAUSED dan akses akaun di web.',
         'LEASE_NOT_FOUND':'Fail kebenaran belum tersedia. Semak folder Common MT5.',
         'LEASE_BINDING_CHANGED':'Sesi atau akaun berubah. Pautkan semula akaun yang dipilih.',
         'ON_SETTINGS_INVALID':'Isi lot dan layer yang sah di web, kemudian ON semula.',
@@ -253,6 +254,10 @@ def readiness_message(code):
         'ALGO_OR_ACCOUNT_NOT_READY':'EA menolak ON. Pasang EA 1.28 dan semak permission MT5; lihat Experts.',
     }
     return messages.get(code,'Arahan ditolak: '+str(code or 'UNKNOWN')[:40])
+
+def reconnect_delay(failures):
+    # Spread recovery across VPS slots; never extend the maximum wait beyond 10s.
+    return min(10,2**min(failures,4))*random.uniform(.8,1.0)
 
 class Runner:
     def __init__(self,config,status,on_unpaired=None,background_lease=True):
@@ -285,7 +290,7 @@ class Runner:
         except (OSError,ValueError,TypeError):pass
     def connection_health(self, code):
         # Fixed codes only: no credentials, account identifiers or response bodies.
-        safe={'EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','EA_SESSION_CHANGED','ACCOUNT_BINDING_CHANGED','NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504','CONNECTION_PENDING','CONNECTED'}
+        safe={'LOCAL_FILE_LOCKED','EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','EA_SESSION_CHANGED','ACCOUNT_BINDING_CHANGED','NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504','CONNECTION_PENDING','CONNECTED'}
         code=code if code in safe else 'CONNECTION_PENDING'
         try:
             atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':self.connection_stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count)}))
@@ -376,8 +381,8 @@ class Runner:
         if self.stop.is_set():return
         self.invalidate_lease();self.next_heartbeat=0;self.desired_state='STOPPED'
         self.lease_failure_count+=1
-        self.lease_retry_at=time.monotonic()+min(10,2**min(self.lease_failure_count,4))
-        raw='EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) else str(error)
+        self.lease_retry_at=time.monotonic()+reconnect_delay(self.lease_failure_count)
+        raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) else str(error)
         self.lease_error=self.connection_health(raw)
         self.status(self.lease_error+' — lease belum sah; sambungan akan dicuba semula.')
     def renew_lease(self, local=None, api=None):
@@ -463,7 +468,7 @@ class Runner:
                 # when the previous periodic heartbeat was not yet due.
                 self.next_heartbeat=0
                 self.failure_count+=1
-                raw='EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
+                raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
                 # Even with no local EA heartbeat, a web reset must release the
                 # saved account link. Network failure alone never deletes it.
                 if raw in ('EA_HEARTBEAT_MISSING','EA_OFFLINE','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED') and time.monotonic()>=self.next_link_check:
@@ -478,6 +483,7 @@ class Runner:
                     if self.on_unpaired: self.on_unpaired()
                     break
                 hints={
+                    'LOCAL_FILE_LOCKED':'Fail pautan MT5 tidak boleh diakses. Connector cuba semula; semak permission folder jika berterusan.',
                     'EA_HEARTBEAT_MISSING':'EA belum menghantar data. Buka MT5 dan pasang EA pada chart.',
                     'EA_OFFLINE':'Heartbeat EA berhenti. Semak MT5 masih terbuka dan EA pada chart.',
                     'NETWORK_UNAVAILABLE':'Internet atau server tidak dapat dicapai. Connector cuba sambung semula.',
@@ -485,7 +491,7 @@ class Runner:
                     'TRANSPORT_REPLACED':'Pautan diganti oleh Connector lain. Semak PC yang aktif.',
                 }
                 self.status(code+' — '+hints.get(code,'Entry baharu menunggu sambungan; Connector cuba semula.'))
-                delay=min(10,2**min(self.failure_count,4)) if code in ('NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504') else 2
+                delay=reconnect_delay(self.failure_count) if code in ('NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504') else 2
             self.stop.wait(delay)
         self.invalidate_lease()
 

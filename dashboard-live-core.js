@@ -20,5 +20,26 @@
   const start=points[0].at,end=points.at(-1).at;
   return points.map((p,i)=>`${i?'L':'M'}${(12+(p.at-start)/Math.max(1,end-start)*(width-24)).toFixed(2)},${(range?height-12-(p.price-min)/range*(height-24):height/2).toFixed(2)}`).join(' ');
  }
- return {fresh,quote,createTape,sparkline};
+ function pineAnalysis(view,now=Date.now()){
+  if(!fresh(view,now))return ['Menunggu data Pine segar.'];
+  const m=view.market,n=m.strategyNormal||{},s=n.sop||{},side=['BUY','SELL'].includes(n.side)?n.side:'—';
+  const open=number(m.open),close=number(m.close),fast=number(m.hemaFast??m.hema20),slow=number(m.hemaSlow??m.hema40);
+  const candle=open===null||close===null?'—':close>open?'bullish':close<open?'bearish':'doji';
+  const hema=fast===null||slow===null?'—':fast>slow?'hijau':fast<slow?'merah':'mendatar';
+  const rsi=number(m.rsi),score=number(s.marketPower),forecast=s.forecast||'—';
+  return ['SOLID '+side+' '+(n.solid===true?'aktif':n.solid===false?'tidak aktif':'—')+' • Candle '+candle+' • HEMA '+hema,
+   'RSI '+(rsi===null?'—':rsi.toFixed(1))+' • Momentum '+(typeof m.momentum==='string'&&m.momentum.trim()?m.momentum:'—'),
+   'Forecast '+forecast+' • Skor '+(score!==null&&score>=0&&score<=100?score+'/100':'—')];
+ }
+ function accountOverview(a,now=Date.now()){
+  const last=a?.pod?.lastSeenAt??a?.hostedAccount?.lastSeenAt;
+  const live=Number.isFinite(last)&&now-last>=-5000&&now-last<=15000&&a?.connection?.online===true&&Array.isArray(a.positions);
+  const positions=live?a.positions:null;
+  const sum=key=>positions&&positions.every(p=>typeof p[key]==='number'&&Number.isFinite(p[key]))?positions.reduce((n,p)=>n+p[key],0):null;
+  return {account:a?.pod?.accountMask||a?.hostedAccount?.accountMask||'—',server:a?.pod?.serverMask||a?.hostedAccount?.serverMask||'Belum dipautkan',
+   count:positions?positions.length:null,lot:sum('volume'),floating:sum('profitUsd'),lastSeen:live?last:null,
+   tf2:positions?positions.filter(p=>(p.strategyMode||'TF2_SCALPING')==='TF2_SCALPING').length:null,
+   tf15:positions?positions.filter(p=>p.strategyMode==='TF15_INTRA').length:null};
+ }
+ return {fresh,quote,createTape,sparkline,accountOverview,pineAnalysis};
 });

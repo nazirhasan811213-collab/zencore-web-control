@@ -1,11 +1,31 @@
 import tempfile,threading,time,unittest
 from pathlib import Path
 from unittest.mock import patch
-from connector import Runner
+from connector import Runner,reconnect_delay
 from protocol import atomic_write,encode_fields,read_fields
 from test_protocol import IDENTITY,local_heartbeat
 
 class ModuleOneLeaseTests(unittest.TestCase):
+ def test_100_slots_spread_reconnects_without_extending_ten_second_cap(self):
+  factors=[.8+i*.002 for i in range(100)]
+  with patch('connector.random.uniform',side_effect=factors):delays=[reconnect_delay(10) for _ in range(100)]
+  self.assertEqual(len(set(delays)),100)
+  self.assertTrue(all(8<=delay<=10 for delay in delays))
+ def test_repeated_outages_recover_without_changing_saved_user_settings(self):
+  with tempfile.TemporaryDirectory() as folder:
+   runner=self.make_runner(folder);saved=dict(runner.config)
+   class HealthyApi:
+    def request(self,*args,**kwargs):return {'desiredState':'ON'}
+   class PausedApi:
+    def request(self,*args,**kwargs):return {'desiredState':'ON','entryBlockedReason':'GLOBAL_ENTRY_PAUSED'}
+   for _ in range(20):
+    with runner.lease_lock:runner.lease_failed(RuntimeError('NETWORK_UNAVAILABLE'))
+    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
+    with patch('connector.time.monotonic',return_value=runner.lease_retry_at+1):self.assertTrue(runner.renew_lease(api=HealthyApi()))
+    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['desiredState'],'ON')
+   self.assertEqual(runner.config,saved)
+   self.assertTrue(runner.renew_lease(api=PausedApi()))
+   self.assertEqual(read_fields(Path(folder)/'lease.tsv')['desiredState'],'STOPPED')
  def make_runner(self,folder):
   path=Path(folder);atomic_write(path/'heartbeat.tsv',encode_fields({**local_heartbeat(),'writtenAt':int(time.time()*1000)}))
   return Runner({**IDENTITY,'channel':folder,'podToken':'test-only'},lambda _:None)
@@ -31,7 +51,7 @@ class ModuleOneLeaseTests(unittest.TestCase):
     delays.append(delay);clock[0]+=delay
     if len(delays)>=4:runner.stop.set()
     return runner.stop.is_set()
-   with patch.object(runner.stop,'wait',side_effect=wait),patch('connector.time.monotonic',side_effect=lambda:clock[0]):runner.maintain_lease(BrokenApi())
+   with patch.object(runner.stop,'wait',side_effect=wait),patch('connector.time.monotonic',side_effect=lambda:clock[0]),patch('connector.random.uniform',return_value=1):runner.maintain_lease(BrokenApi())
    self.assertEqual(delays,[2,4,8,10])
 
  def test_foreground_poll_cannot_bypass_background_backoff(self):

@@ -55,7 +55,7 @@
   }
 
   function percent(value) {
-    return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : '—';
+    return value!==null&&value!==undefined&&Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : '—';
   }
 
   function renderSummary() {
@@ -65,6 +65,8 @@
     setText('summaryWins', summary.wins ?? 0);
     setText('summaryLosses', summary.losses ?? 0);
     setText('summaryWinRate', percent(summary.winRate));
+    setText('summaryTp2Rate',percent(summary.tp2Rate));setText('summaryTp3Rate',percent(summary.tp3Rate));setText('summarySlRate',percent(summary.slRate));
+    setText('slCoverage',`SL disahkan: ${summary.slObserved??0}/${summary.sample??0} setup`);
     setText('summaryOpen', summary.open ?? 0);
     setText('pairCoverage', `${summary.available ?? 0}/${summary.expected ?? 11} tersedia`);
   }
@@ -90,10 +92,10 @@
         <td>${pair.resolved}</td>
         <td class="pair-record"><span class="wins">${pair.wins} TP1</span> • <span class="losses">${pair.losses} tamat</span></td>
         <td><span class="rate-value ${rateClass}">${percent(pair.winRate)}</span></td>
-        <td>${pair.open}</td>
+        <td>${percent(pair.tp2Rate)}</td><td>${percent(pair.tp3Rate)}</td><td>${percent(pair.slRate)}</td><td>${pair.open}</td>
         <td><span class="maturity-badge ${maturityClass(pair)}">${escape(maturityLabel(pair))}</span></td>
       </tr>`;
-    }).join('') : '<tr><td colspan="6" class="table-empty">Scoreboard belum tersedia.</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="table-empty">Scoreboard belum tersedia.</td></tr>';
   }
 
   function lockText(row) {
@@ -192,7 +194,7 @@
       if(response.status===401){goToLogin();return;}
       if(!response.ok)throw Error('Simpanan rekod tidak tersedia');
       const payload=await response.json();if(!payload.ok)throw Error('Data rekod tidak sah');
-      if(payload.retention?.cutoffAt)setText('recordRetention','Rekod dari '+new Date(payload.retention.cutoffAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' MYT. Simpanan 3 bulan bergulir berdasarkan tarikh entry; rekod lebih lama dipadam automatik.');
+      if(payload.retention?.cutoffAt)setText('recordRetention','Rekod dari '+new Date(payload.retention.cutoffAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' MYT. Simpanan 2 bulan bergulir berdasarkan tarikh entry; rekod lebih lama dipadam automatik.');
       aggregate=Results.fromStoredRecords(payload);
       renderAll();refreshDurable();
       connectionState(payload.lastError||payload.syncPending?'partial':'live',payload.lastError?'SYNC GAGAL • REKOD TERAKHIR':payload.syncPending?'MEMULIHKAN SEJARAH':'REKOD DATABASE');

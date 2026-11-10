@@ -32,3 +32,21 @@ test('dashboard and AI display use TF2 60s freshness without changing TF15',()=>
  assert.equal(fresh(view(2,now-60000,4000),now),true);
  assert.equal(fresh(view(15,now-45000,4000),now),false);
 });
+
+test('dashboard account summary requires a fresh MT5 snapshot and never invents missing profit',()=>{
+ const {accountOverview}=require('../dashboard-live-core');
+ const a={pod:{accountMask:'****1234',serverMask:'****Demo',lastSeenAt:now},connection:{online:true},positions:[{strategyMode:'TF2_SCALPING',volume:.01,profitUsd:2},{strategyMode:'TF15_INTRA',volume:.02,profitUsd:-1}]};
+ let v=accountOverview(a,now);assert.equal(v.account,'****1234');assert.equal(v.count,2);assert.equal(v.tf2,1);assert.equal(v.tf15,1);assert.equal(v.floating,1);assert.equal(v.lot,.03);
+ v=accountOverview({...a,positions:[]},now);assert.equal(v.count,0);assert.equal(v.floating,0);
+ for(const changed of [{...a,pod:{...a.pod,lastSeenAt:now-16000}},{...a,connection:{online:false}},{...a,positions:undefined},null]){v=accountOverview(changed,now);assert.equal(v.count,null);assert.equal(v.floating,null);}
+ v=accountOverview({...a,positions:[{volume:.01}]},now);assert.equal(v.count,1);assert.equal(v.floating,null);
+});
+
+ test('Telegram-style Pine analysis uses actual fields and clears stale or missing readings',()=>{
+ const now=Date.now(),view={status:'LIVE',timeframe:2,market:{receivedAt:now,signalObservedAt:now,open:100,close:102,hemaFast:101,hemaSlow:100,rsi:58,momentum:'BUY perlahan',strategyNormal:{side:'BUY',solid:true,sop:{forecast:'BULLISH',marketPower:65}}}};
+ const {pineAnalysis}=require('../dashboard-live-core');
+ assert.deepEqual(pineAnalysis(view,now),['SOLID BUY aktif • Candle bullish • HEMA hijau','RSI 58.0 • Momentum BUY perlahan','Forecast BULLISH • Skor 65/100']);
+ assert.deepEqual(pineAnalysis(view,now+61000),['Menunggu data Pine segar.']);
+ delete view.market.rsi;delete view.market.momentum;
+ assert.equal(pineAnalysis(view,now)[1],'RSI — • Momentum —');
+ });

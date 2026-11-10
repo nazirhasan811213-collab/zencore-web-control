@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/viewer-mode.css?v=1.0">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
-<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"><link rel="stylesheet" href="/terminal-v2.css?v=20261007.1"></head>
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"><link rel="stylesheet" href="/terminal-v2.css?v=20261007.1"><link rel="stylesheet" href="/zencore-desk-theme.css?v=20261111.1"></head>
 <body>
   <main class="portal-shell results-shell">
     <div class="portal-wrap results-wrap">
@@ -51,7 +51,7 @@
 
       <aside class="data-notice" aria-label="Penerangan data result">
         <i aria-hidden="true">i</i>
-        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span id="recordRetention">Rekod bermula 1 November 2026 (MYT). Simpanan 3 bulan bergulir berdasarkan tarikh entry; rekod lebih lama dipadam automatik.</span><span>Entry, TP dan close signal TF2/TF15 disimpan dalam database dan kekal selepas restart. TP dicapai bukan bukti untung; hasil untung/rugi close tidak diandaikan.</span></div>
+        <div><b>Ini prestasi signal ZenCore, bukan keuntungan akaun.</b><span id="recordRetention">Rekod bermula 1 November 2026 (MYT). Simpanan 2 bulan bergulir berdasarkan tarikh entry; rekod lebih lama dipadam automatik.</span><span>Entry, TP dan close signal TF2/TF15 disimpan dalam database dan kekal selepas restart. Kadar TP menggunakan jumlah signal tersimpan. Kadar SL hanya dipaparkan jika bukti setiap setup lengkap; — bermaksud belum cukup bukti. TP dicapai bukan bukti untung; hasil untung/rugi close tidak diandaikan.</span></div>
       </aside>
 
       <section class="result-summary" aria-label="Ringkasan keputusan signal">
@@ -60,6 +60,9 @@
         <article class="win"><span>TP1 DICAPAI</span><b id="summaryWins">0</b><small>Harga mencapai TP1</small></article>
         <article class="loss"><span>SIGNAL TAMAT</span><b id="summaryLosses">0</b><small>Close atau setup diganti</small></article>
         <article class="rate"><span>KADAR TP1</span><b id="summaryWinRate">—</b><small>TP1 ÷ jumlah signal</small></article>
+        <article><span>KADAR TP2</span><b id="summaryTp2Rate">—</b><small>TP2 ÷ jumlah signal</small></article>
+        <article><span>KADAR TP3</span><b id="summaryTp3Rate">—</b><small>TP3 ÷ jumlah signal</small></article>
+        <article class="loss"><span>KADAR SL</span><b id="summarySlRate">—</b><small id="slCoverage">Bukti SL belum tersedia</small></article>
         <article class="open"><span>BELUM ADA CLOSE</span><b id="summaryOpen">0</b><small>Belum ada signal close direkod</small></article>
       </section>
 
@@ -71,7 +74,7 @@
           </div>
           <div class="pair-table-wrap">
             <table class="pair-table">
-              <thead><tr><th>PAIR</th><th>RESOLVED</th><th>TP1 / TAMAT</th><th>KADAR TP1</th><th>OPEN</th><th>STATUS</th></tr></thead>
+              <thead><tr><th>PAIR</th><th>RESOLVED</th><th>TP1 / TAMAT</th><th>KADAR TP1</th><th>KADAR TP2</th><th>KADAR TP3</th><th>KADAR SL</th><th>OPEN</th><th>STATUS</th></tr></thead>
               <tbody id="pairTableBody">
                 <tr><td colspan="6" class="table-empty">Memuatkan scoreboard...</td></tr>
               </tbody>
@@ -134,8 +137,8 @@
       </footer>
     </div>
   </main>
-  <script src="/results-core.js?v=1.0" defer></script>
-  <script src="/results.js?v=20261104.retention1" defer></script>
+  <script src="/results-core.js?v=20261110.two-months" defer></script>
+  <script src="/results.js?v=20261110.two-months" defer></script>
   <script src="/viewer-mode.js?v=1.0" defer></script>
 <script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>

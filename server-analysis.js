@@ -101,6 +101,7 @@ const autoTradeState = {
 
 const adminMonitoring = require('./admin-monitoring-service').createAdminMonitoring({
   auth: authState, trading: autoTradeState, telegram: () => analysisAlerts,
+  isPaused:()=>/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''),
   fetchMarkets: fetchLocalAnalysisMarkets, hostedEnabled: HOSTED_MT5_ENABLED, webhook: webhookIngress
 });
 
@@ -623,7 +624,7 @@ async function handleManagementApi(req, res, pathname, session) {
         const body=await parseApiJson(req,res);if(body===null)return;
         return sendJson(res,200,await require('./admin-vps-setup').resolve(session.user,authState.store,body.loginId));
       }
-      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|master-reset|setup\/state|setup\/settings|setup\/execution-diagnostics|setup\/ea-connect)$/i);
+      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|master-reset|switch-mt5|setup\/state|setup\/settings|setup\/execution-diagnostics|setup\/ea-connect)$/i);
       if(lifecycle){res.setHeader('Cache-Control','no-store');if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});const id=lifecycle[1],action=lifecycle[2];
         if(req.method==='GET'&&action==='handover')return sendJson(res,200,await accountHandover.status(id));
         if(req.method==='GET'&&action==='setup/state'){await accountHandover.row(id);const state=await autoTradeState.service.state(id);state.control.canTurnOn=false;state.control.canEnter=false;state.control.strategyReason='SETUP ADMIN — lengkapkan serahan dan profil user dahulu.';state.setupTarget=await accountHandover.status(id);return sendJson(res,200,state);}
@@ -632,6 +633,7 @@ async function handleManagementApi(req, res, pathname, session) {
         if(req.method==='PUT'&&action==='setup/settings'){const target=await accountHandover.row(id);if(require('./account-handover').state(target)!=='ADMIN_SETUP')return sendJson(res,409,{ok:false,error:'Setup ini hanya dibuka pada fasa Admin Setup.'});return sendJson(res,200,await autoTradeState.service.saveSettings(id,body));}
         if(req.method==='POST'&&action==='setup/ea-connect'){if(!autoTradeState.ready||!autoTradeState.service)return autoTradeUnavailable(res);return sendJson(res,201,await require('./admin-vps-setup').connect(session.user,accountHandover,autoTradeState.service,id));}
         if(req.method==='POST'&&action==='handover/release')return sendJson(res,200,await accountHandover.release(session.user,id));
+        if(req.method==='POST'&&action==='switch-mt5')return sendJson(res,200,await accountHandover.switchMt5(session.user,id,body));
         if(req.method==='POST'&&action==='master-reset')return sendJson(res,200,await accountHandover.masterReset(session.user,id,body));
         if(req.method==='POST'&&action==='reset-account')return sendJson(res,200,await accountHandover.reset(session.user,id,body));
         return sendJson(res,405,{ok:false,error:'Kaedah tidak dibenarkan.'});
@@ -1649,7 +1651,7 @@ const server = http.createServer(async (req, res) => {
   if(pathname==='/api/account/handover'){const session=await requireSession(req,res);if(!session)return;if(session.user.role!=='client')return sendJson(res,403,{ok:false,error:'Akaun client sahaja.'});if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});try{if(req.method==='GET')return sendJson(res,200,await accountHandover.status(session.user.id));if(req.method==='POST'&&requestOriginAllowed(req)){const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});const done=await accountHandover.complete(session.user.id,body);return sendJson(res,200,done,{'Set-Cookie':authState.service.clearCookie()});}return sendJson(res,403,{ok:false,error:'Permintaan tidak dibenarkan.'});}catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis serahan tidak tersedia.'});}}
   const setupPage=pathname.match(/^\/admin\/client\/([0-9a-f-]{36})\/setup$/i);
   if(AUTH_ENABLED&&req.method==='GET'&&setupPage){const session=await requireRole(req,res,'admin','/login');if(!session)return;res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'auto-trade.html'),'utf8').replace('<head>','<head><script src="/admin-setup-context.js"></script>'));}
-  if (req.method === 'GET' && ['/admin-user-trade.js','/admin-user-trade.css','/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
+  if (req.method === 'GET' && ['/admin-user-trade.js','/admin-user-trade.css','/admin-registrations.js','/admin-registrations.css','/pine-insights.js','/pine-insights.css','/admin-monitoring-snapshot.js','/admin-monitoring.js','/admin-monitoring.css','/gold-copilot-core.js','/gold-copilot.js','/dashboard-live-core.js','/terminal-v2.css','/zencore-desk-theme.css','/ui-refresh.css','/zencore-logo.css','/trading-cockpit.js','/trading-cockpit.css','/analysis-dual.js','/analysis-dual.css','/analysis-workspace.js','/analysis-workspace.css','/workspace-shell.js','/workspace-shell.css','/zencore-motion.js','/zencore-motion.css'].includes(pathname)) {
     return sendAuthAsset(res, pathname.slice(1), pathname.endsWith('.js') ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8');
   }
   if (pathname === '/webhook/v33' && req.method === 'POST') {

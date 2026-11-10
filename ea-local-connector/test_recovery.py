@@ -41,7 +41,8 @@ class RecoveryTests(unittest.TestCase):
     waits.append(delay)
     if len(waits)==5:runner.stop.set()
    with patch.object(runner,'cycle',side_effect=RuntimeError('HTTP_503')),patch.object(runner.stop,'wait',side_effect=wait):runner.run()
-   self.assertEqual(waits,[2,4,8,10,10])
+   self.assertEqual(len(waits),5)
+   for delay,cap in zip(waits,[2,4,8,10,10]):self.assertTrue(.8*cap<=delay<=cap)
    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
    self.assertEqual(json.loads((Path(folder)/'connector-health.json').read_text())['consecutiveFailures'],5)
 

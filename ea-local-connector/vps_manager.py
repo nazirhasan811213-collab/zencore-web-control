@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from connector import Runner,Api,dpapi,install_ea,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.0'
+VERSION='1.1.1'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def slot_number(value):
@@ -66,13 +66,14 @@ class Manager:
         cfg=self.configs.get(slot)
         if not cfg:raise RuntimeError('PROFILE_NOT_PAIRED')
         return BASE+'/admin/client/'+cfg['zenCoreUserId']+'/setup'
-    def clear_slot(self,slot):
+    def clear_slot(self,slot,preserve_profile=False):
         slot_number(slot)
         with self.lock:
             if slot in self.pending or slot in self.installing:raise RuntimeError('PROFILE_RESET_PENDING')
             cfg=self.configs.get(slot) or self.vault.load(slot)
             if cfg:config_valid(cfg,slot,self.common)
-            self.pending[slot]={'resetting':True}
+            self.pending[slot]={'resetting':True,'preserve_folder':preserve_profile}
+        folder=self.folders.get(slot) or self.vault.load_folder(slot)
         receipt={'message':'Slot tempatan kosong.'}
         try:
             detached=False
@@ -88,7 +89,7 @@ class Manager:
                 for attempt in range(90):
                     body={'confirmation':'RESET','closeAllAccount':True,'resetPolicy':'MASTER_RESET_RELEASE_V3','allowUnconfirmedDisconnect':True,'resetGeneration':status['generation'],'expectedPodTokenHash':hashlib.sha256(cfg['podToken'].encode()).hexdigest()}
                     if command:body['commandId']=command
-                    receipt=self.admin_request('/api/admin/clients/'+cfg['zenCoreUserId']+'/master-reset',body)
+                    receipt=self.admin_request('/api/admin/clients/'+cfg['zenCoreUserId']+('/switch-mt5' if preserve_profile else '/master-reset'),body)
                     self.status(slot,receipt.get('message','Menunggu reset...'))
                     if receipt.get('completed'):break
                     command=receipt.get('commandId');time.sleep(2)
@@ -96,7 +97,9 @@ class Manager:
             if detached:receipt={'brokerCloseConfirmed':False,'message':'Pautan lama telah dibatalkan. Slot tempatan dikosongkan.'}
             self.pause(slot)
             with self.lock:
-                self.vault.remove(slot);self.vault.remove_folder(slot);self.configs.pop(slot,None);self.folders.pop(slot,None);self.runners.pop(slot,None);self.threads.pop(slot,None)
+                self.vault.remove(slot);self.configs.pop(slot,None);self.runners.pop(slot,None);self.threads.pop(slot,None)
+                if preserve_profile and folder:self.vault.save_folder(slot,folder);self.folders[slot]=folder
+                else:self.vault.remove_folder(slot);self.folders.pop(slot,None)
             return receipt
         finally:
             with self.lock:self.pending.pop(slot,None)
@@ -162,7 +165,8 @@ class Manager:
     def unpaired(self,slot):
         with self.lock:
             cfg=self.configs.get(slot)
-            self.vault.remove(slot);self.vault.remove_folder(slot);self.folders.pop(slot,None);self.configs.pop(slot,None)
+            self.vault.remove(slot);self.configs.pop(slot,None)
+            if not self.pending.get(slot,{}).get('preserve_folder'):self.vault.remove_folder(slot);self.folders.pop(slot,None)
             if cfg:
                 for name in ('connector-health.json','execution-timing.jsonl','execution-timing.previous.jsonl'):
                     (Path(cfg['channel'])/name).unlink(missing_ok=True)
@@ -225,7 +229,7 @@ class Manager:
 
 class App:
     def __init__(self,root,test_mode=False):
-        self.root=root;self.events=queue.Queue();self.busy=set();self.options={};self.choices={};self.states={};self.buttons={};self.logins={};self.reset_buttons={};self.login_entries={};self.test_mode=test_mode
+        self.root=root;self.events=queue.Queue();self.busy=set();self.options={};self.choices={};self.states={};self.buttons={};self.logins={};self.reset_buttons={};self.switch_buttons={};self.login_entries={};self.test_mode=test_mode
         self.manager=Manager(status=lambda n,s:self.events.put((n,s)))
         root.title('ZenCore VPS Manager '+VERSION+' • Connector '+CONNECTOR_BUILD+' • 10 MT5');root.geometry(str(min(1380,max(960,root.winfo_screenwidth()-60)))+'x'+str(min(780,max(600,root.winfo_screenheight()-80))));root.minsize(900,600);root.configure(bg='#091823')
         style=ttk.Style();style.theme_use('clam');style.configure('TFrame',background='#091823');style.configure('TLabel',background='#091823',foreground='#e5f3f8');style.configure('TButton',padding=7);style.configure('TCombobox',padding=5)
@@ -248,6 +252,7 @@ class App:
             tools=ttk.Frame(grid);tools.grid(row=n,column=3,padx=4)
             ttk.Button(tools,text='1 Folder / EA',command=lambda k=n:self.install(k)).pack(side='left')
             ttk.Button(tools,text='3 Auto Trade',command=lambda k=n:self.open_setup(k)).pack(side='left',padx=3)
+            switch=ttk.Button(tools,text='Tukar MT5',command=lambda k=n:self.switch_mt5(k));switch.pack(side='left',padx=3);self.switch_buttons[n]=switch
             reset=ttk.Button(tools,text='Kosongkan',command=lambda k=n:self.clear_slot(k));reset.pack(side='left',padx=3);self.reset_buttons[n]=reset
             state=tk.StringVar(value='BELUM DIPAUTKAN');self.states[n]=state;ttk.Label(grid,textvariable=state,wraplength=260).grid(row=n,column=4,sticky='w',padx=5)
         ttk.Label(main,text='ON/OFF, lot, layer, waktu dan SOP dikawal melalui akaun web setiap user. Manager tidak mengaktifkan trading.').pack(anchor='w')
@@ -278,6 +283,16 @@ class App:
             if result.get('brokerCloseConfirmed') is False:text='POSISI BROKER BELUM DISAHKAN TUTUP. '+text
             self.events.put((n,text))
         self.task(n,perform)
+    def switch_mt5(self,n):
+        if n in self.busy:return
+        if not self.manager.admin_api:self.states[n].set('Sahkan Admin dahulu.');return
+        if not messagebox.askyesno('Tukar akaun MT5','Cuba tutup SEMUA posisi dan pending order akaun lama, termasuk manual/EA lain. Pautan lama dibatalkan. Profil/password dan folder dikekalkan. Jika offline, posisi broker mungkin masih terbuka. Teruskan?'):return
+        def perform():
+            result=self.manager.clear_slot(n,preserve_profile=True);self.events.put((n,'RESET_CLEAR'))
+            text='Login MT5 baharu pada folder sama, kemudian Sambung EA dan semak Auto Trade.'
+            if result.get('brokerCloseConfirmed') is False:text='POSISI BROKER BELUM DISAHKAN TUTUP. '+text
+            self.events.put((n,text))
+        self.task(n,perform)
     def scan(self):
         found=self.manager.discover();identities={str(x['channel']):x['identity'] for x in found};self.available={}
         for item in found:
@@ -294,7 +309,7 @@ class App:
             label=cfg['tradeMode']+' • ****'+cfg['account'][-4:]+' • '+cfg['server'];self.choices[n].set(label);self.logins[n].set(cfg['zenCoreLogin']);self.login_entries[n].configure(state='readonly')
     def task(self,n,fn,stage="LINK"):
         if n in self.busy:return
-        self.busy.add(n);self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
+        self.busy.add(n);self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.switch_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
         def run():
             try:fn()
             except Exception as e:
@@ -337,7 +352,7 @@ class App:
             if s is None:self.busy.discard(n)
             elif s=='RESET_CLEAR':self.choices[n].set('');self.logins[n].set('');self.states[n].set('RESET SELESAI — isi ID client baharu')
             else:self.states[n].set(s[:180])
-            self.reset_buttons[n].configure(state='disabled' if n in self.busy else 'normal')
+            self.reset_buttons[n].configure(state='disabled' if n in self.busy else 'normal');self.switch_buttons[n].configure(state='disabled' if n in self.busy else 'normal')
             cfg=self.manager.configs.get(n);self.login_entries[n].configure(state='readonly' if cfg or n in self.busy else 'normal');self.buttons[n].configure(text='Sambung' if cfg and cfg.get('paused') else 'Henti' if cfg else '2 Sambung EA',state='disabled' if n in self.busy else 'normal')
         self.root.after(150,self.pump)
     def close(self):

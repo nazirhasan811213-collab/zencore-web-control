@@ -1434,7 +1434,9 @@ function createAutoTradeService(options = {}) {
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
     const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
-    for (const profile of profiles) {
+    const entryDispatchErrors = await require('./profile-dispatch-pool').dispatchProfiles(profiles, async candidate => {
+      // Keep each account sequential; independent accounts share four workers.
+      for (const profile of [candidate]) {
       if(options.entryAccessAllowed&&!await options.entryAccessAllowed(profile.userId)){for(const m of markets)await reportEntryBlock(profile,m,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');continue;}
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
       if (!entryWindow.allowed){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
@@ -1587,9 +1589,11 @@ function createAutoTradeService(options = {}) {
         }
       }
     }
+    });
     const managedProfiles = typeof store.listManagedProfiles === 'function'
       ? await store.listManagedProfiles() : [];
-    for (const profile of managedProfiles) {
+    const managementDispatchErrors = await require('./profile-dispatch-pool').dispatchProfiles(managedProfiles, async candidate => {
+      for (const profile of [candidate]) {
       const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
         store.listPositions(profile.userId),
@@ -1647,6 +1651,9 @@ function createAutoTradeService(options = {}) {
         }
       }
     }
+    });
+    const dispatchErrors = [...entryDispatchErrors, ...managementDispatchErrors];
+    if (dispatchErrors.length) throw new AggregateError(dispatchErrors, 'Dispatch failed for some profiles; other profiles were processed');
     return { queued };
   }
 

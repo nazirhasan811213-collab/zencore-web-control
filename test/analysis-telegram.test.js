@@ -55,7 +55,7 @@ test('Telegram quality labels match existing displayed Analysis quality, not a n
 test('short message keeps prices and time without long quality commentary',()=>{
  const m=market();const event={kind:'ENTRY',symbol:m.symbol,side:'BUY',time:Date.UTC(2026,8,25,11,12),id:'45',telegramPlan:m.strategyNormal.plan,telegramQuality:{score:85,high:true}};
  const text=telegramMessage(event);
- assert.match(text,/TP3: 51,580\.18(?:\n|$)/);assert.doesNotMatch(text,/000000000005|Win rate|validasi selesai/);
+ assert.match(text,/TP3: 51,580\.18(?: • Strength —)?(?:\n|$)/);assert.doesNotMatch(text,/000000000005|Win rate|validasi selesai/);
  assert.doesNotMatch(text,/A\+ PROFIT QUALITY|Quality:|Gred:/);assert.match(text,/Coach Tips:/);
  assert.doesNotMatch(text,/POTENSI TINGGI/);assert.match(text,/19:12:00 MYT/);
  const low=telegramMessage({...event,telegramQuality:{score:25,high:false}});
