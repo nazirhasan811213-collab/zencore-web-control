@@ -13,4 +13,10 @@ function lines(ctx,tf){
  const rows=[['TIP',ctx.tip,120],['Rumusan AI Dashboard',ctx.summary,180],['Trend',ctx.trend,110],['Momentum',ctx.momentum,110],['Halangan',ctx.barrier,100],['Whales',ctx.whales,90],['Nasihat',ctx.advice,150],['Coach',ctx.coach,220]].filter(([,v])=>typeof v==='string'&&v.trim());
  return rows.length?['','📊 AI COACH & INSIGHTS • TF'+tf,...rows.map(([k,v,n])=>k+': '+clean(v,n))]:[];
 }
-module.exports={snapshot,lines};
+function compactLines(ctx,tf){
+ const full=lines(ctx,tf);if(!full.length)return [];
+ const rows=full.slice(2),paired=[];
+ for(let i=0;i<rows.length;i+=2)paired.push(rows.slice(i,i+2).join(' • '));
+ return [full[1],...paired];
+}
+module.exports={snapshot,lines,compactLines};

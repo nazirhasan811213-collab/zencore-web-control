@@ -27,11 +27,11 @@ function message(g,positions,at,key){
  if(values.every(n=>Number.isFinite(n)&&n>0))lines.push(values.every(n=>n===values[0])?`SL: ${price(values[0])}`:`SL setiap posisi: ${price(Math.min(...values))} – ${price(Math.max(...values))}`);
  else lines.push('SL: Semak setiap posisi di MT5');
  for(const k of ['tp1','tp2','tp3']){const a=positions.map(p=>p[k]);if(a.every(n=>Number.isFinite(n)&&n>0))lines.push(`${k.toUpperCase()}: ${a.every(n=>n===a[0])?price(a[0]):price(Math.min(...a))+' – '+price(Math.max(...a))}`);}
- lines.push('','✅ Posisi sebenar disahkan di MT5.','Semak posisi dan pelan SL/TP sekarang.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━');return lines.join('\n');
+ lines.push('✅ Posisi sebenar disahkan di MT5. Semak pelan SL/TP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━');return lines.join('\n');
 }
 function closeMessage(g,at,key){
  const ps=g.positions||[],volume=ps.reduce((n,p)=>n+p.volume,0);
- return ['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | SETUP SUDAH DITUTUP','──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`Posisi dipantau: ${ps.length} • ${Number(volume.toFixed(3))} lot`,'✅ Semua posisi setup ini sudah tiada di MT5.','Disemak melalui dua laporan MT5 berturut-turut.','','Harga exit & untung/rugi: semak History MT5.','Sebab penutupan belum dilaporkan.','Tunggu signal baharu yang lulus SOP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
+ return ['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | SETUP SUDAH DITUTUP','──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`Posisi dipantau: ${ps.length} • ${Number(volume.toFixed(3))} lot`,'✅ Semua posisi setup ini sudah tiada di MT5. Disemak melalui dua laporan MT5 berturut-turut.','Harga exit & untung/rugi: semak History MT5. Sebab penutupan belum dilaporkan.','Tunggu signal baharu yang lulus SOP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
 }
 class PositionTelegram{
  constructor({pool,store,alerts,now=Date.now,log=console}){Object.assign(this,{pool,store,alerts,now,log});this.busy=false;this.flow={};}
