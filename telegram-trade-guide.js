@@ -112,7 +112,7 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
  }
 
  compact.push(...require('./telegram-dashboard-context').compactLines(dashboardContext,tf));
- return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideCompactText:compact.join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
+ return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideCompactText:compact.flatMap((line,i)=>i<2||!line?[line]:/^(📊|•|Data:|Panduan sahaja)/.test(line)?[line]:/^(Harga:|Support:|Pegang BUY:|Panduan ZenCore)/.test(line)?['','• '+line]:['• '+line]).join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
 }
 function createScheduler({getMarkets,history,record,now=Date.now}){
  let running=false;const done=new Set();

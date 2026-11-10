@@ -15,8 +15,6 @@ function lines(ctx,tf){
 }
 function compactLines(ctx,tf){
  const full=lines(ctx,tf);if(!full.length)return [];
- const rows=full.slice(2),paired=[];
- for(let i=0;i<rows.length;i+=2)paired.push(rows.slice(i,i+2).join(' • '));
- return [full[1],...paired];
+ return ['',full[1],...full.slice(2).map(row=>'• '+row)];
 }
 module.exports={snapshot,lines,compactLines};
