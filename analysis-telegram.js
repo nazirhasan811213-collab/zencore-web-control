@@ -148,15 +148,15 @@ function currentPineMessage(e,p,s={},time){
   `${e.symbol} • ${e.side}`,'',
   `Entry: ${price(p.entry)} • Overall Setup Strength —`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)} • Strength —`,`TP2: ${price(p.tp2)} • Strength —`,`TP3: ${price(p.tp3)} • Strength —`,
   '🎯 Jangkauan setup: —','',
-  'Sebab entry: '+reason,
-  `Candle entry: ${candle||'—'} • HEMA ${hema}`,
+  'Sebab entry:',...reason.split(/;\s*|\n/).filter(Boolean).map(t=>'• '+t),'',
   '📊 ANALISIS PINE',
-  `RSI ${rsi===null?'—':rsi.toFixed(1)} • Momentum ${momentum}`,
-  `Forecast ${s.forecast||'—'} • Skor ${power!==null&&power>=0&&power<=100?power+'/100':'—'}`,
-  `Rumusan AI ZenCore: Ikut pelan ${e.side}; jangkauan belum disahkan.`,
-  'Coach Tips: '+(reentry?`Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup. Jangan tambah layer di luar tetapan.`:'Ikut lot/layer dan SL. Jangan tambah posisi untuk cover rugi.'),
+  `• Candle entry: ${candle||'—'} • HEMA ${hema}`,
+  `• RSI ${rsi===null?'—':rsi.toFixed(1)} • Momentum ${momentum}`,
+  `• Forecast ${s.forecast||'—'} • Skor ${power!==null&&power>=0&&power<=100?power+'/100':'—'}`,'',
+  'Rumusan AI ZenCore:',`• Ikut pelan ${e.side}; jangkauan belum disahkan.`,
+  'Coach Tips:',...(reentry?[`• Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup.`,'• Jangan tambah layer di luar tetapan.']:['• Ikut lot/layer dan SL.','• Jangan tambah posisi untuk cover rugi.']),
   ...require('./telegram-dashboard-context').compactLines(require('./telegram-dashboard-context').snapshot({timeframe:tf,signalObservedAt:s.signalObservedAt,strategyNormal:{sop:s}},tf),tf),
-  'Strength bukan % win • — = belum tersedia.',
+  '', 'Strength bukan % win • — = belum tersedia.',
   '📊 Signal sahaja — BELUM pengesahan order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
@@ -164,9 +164,9 @@ function currentPineMessage(e,p,s={},time){
 function closeMessage(e,time){
  const tf=e.timeframe||'2',half=e.percent===50,raw=String(e.message||'').split('\n');
  const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,90);
- return [`🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,e.symbol,
-  half?`Tutup 50% posisi TF${tf}.`:`Tutup semua baki posisi TF${tf}.`,
-  ...(reason?[`Sebab: ${reason==='Native chart close signal'?'Signal exit carta.':reason}`]:[]),
+ return [`🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,e.symbol,'',
+  half?`• Tutup 50% posisi TF${tf}.`:`• Tutup semua baki posisi TF${tf}.`,
+  ...(reason?[`• Sebab: ${reason==='Native chart close signal'?'Signal exit carta.':reason}`]:[]),'',
   'Panduan ZenCore — Semak close di MT5 sebelum entry baharu.',
   'Arahan sahaja • belum pengesahan close MT5.',`🕒 ${time} MYT • ZC-${e.id}`].join('\n');
 }
@@ -185,11 +185,11 @@ function telegramMessageBody(e){
     const cause=proof.priceBreak?`Candle tutup ${buy?'di bawah low':'di atas high'} candle sebelumnya.`:`Dua candle berturut-turut tutup ${buy?'menurun':'menaik'}.`;
     const momentum=proof.momentumAgainst?`WT tidak lagi menyokong posisi ${e.side}.`:`Kekuatan WT ${e.side} berkurang.`;
     const profitable=buy?e.currentPrice>p.entry:e.currentPrice<p.entry;
-    return ['⚠️ ZENCORE | HARGA MULA PULLBACK',`${e.symbol} • TF${e.timeframe} • Posisi ${e.side}`,
-     `Harga Sekarang: ${price(e.currentPrice)} • Harga Entry: ${price(p.entry)}`,
-     'Kenapa Pullback: '+cause+' '+momentum,
-     'Rumusan AI ZenCore: '+(profitable?'Profit mula susut':'Posisi tertekan')+'; belum sah trend bertukar.',
-     'Coach Tips: '+(profitable?'Lindungi profit ikut SOP. Jangan tambah layer atau longgarkan SL.':'Ikut SL dan signal exit. Jangan tambah layer untuk cover rugi.'),
+    return ['⚠️ ZENCORE | HARGA MULA PULLBACK',`${e.symbol} • TF${e.timeframe} • Posisi ${e.side}`,'',
+     `Harga Sekarang: ${price(e.currentPrice)} • Harga Entry: ${price(p.entry)}`,'',
+     'Kenapa Pullback:','• '+cause,'• '+momentum,'',
+     'Rumusan AI ZenCore:','• '+(profitable?'Profit mula susut':'Posisi tertekan')+'; belum sah trend bertukar.','',
+     'Coach Tips:',...(profitable?['• Lindungi profit ikut SOP.','• Jangan tambah layer atau longgarkan SL.']:['• Ikut SL dan signal exit.','• Jangan tambah layer untuk cover rugi.']),
      ...require('./telegram-dashboard-context').compactLines(e.dashboardContext,e.timeframe),
      `🕒 ${time} MYT • ZC-${e.id}`].join('\n');
   }
