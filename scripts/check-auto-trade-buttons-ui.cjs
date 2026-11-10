@@ -23,7 +23,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
   return r.fulfill({json:{ok:true,markets:[],commands:[]}});
  });
  try{
-  await page.goto('http://localhost/auto-trade');await page.getByText('Diagnostik belum tersedia. Status MT5 dan kawalan Auto Trade dikekalkan.',{exact:true}).waitFor();
+  await page.goto('http://localhost/auto-trade');await page.getByText('Diagnostik belum tersedia. Status MT5 dan kawalan Auto Trade dikekalkan.',{exact:true}).waitFor({state:'attached'});
   a.equal(await page.locator('#masterStateText').innerText(),'STOPPED');a.equal(await page.locator('#turnOnButton').isEnabled(),true);
   const values=async()=>page.locator('#settingsForm input,#settingsForm select').evaluateAll(xs=>xs.map(x=>[x.id,x.value,x.type==='checkbox'?x.checked:null]));const before=await values();
   await page.locator('#turnOnButton').click();await page.locator('#onDialog .dialog-cancel').click();a.equal(calls.length,0);
@@ -32,7 +32,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
   await page.locator('#stopButton').click();a.equal(calls.filter(x=>x.p.endsWith('/stop')).length,0,'cancel never sends STOP');
   acceptDialog=true;await page.locator('#stopButton').click();await page.getByText('STOP ujian ditolak.',{exact:true}).waitFor();a.equal(await page.locator('#stopButton').isEnabled(),true);
   stopFails=false;await page.locator('#stopButton').click();await page.waitForFunction(()=>document.getElementById('masterStateText').textContent==='STOPPED');a.equal(await page.locator('#stopButton').isDisabled(),true);
-  diagnostics='legacy';await page.locator('#executionDiagnostics').getByText(/LEASE_EXPIRED/).waitFor({timeout:10000});a.equal(await page.locator('#masterStateText').innerText(),'STOPPED');
+  diagnostics='legacy';await page.locator('#executionDiagnostics').getByText(/LEASE_EXPIRED/).waitFor({state:'attached',timeout:10000});a.equal(await page.locator('#masterStateText').innerText(),'STOPPED');
   await page.locator('#emergencyButton').click();await page.locator('#emergencyDialog .dialog-cancel').click();a.equal(calls.filter(x=>x.p.endsWith('/emergency-close')).length,0);
   await page.locator('#emergencyButton').click();await page.locator('#emergencyPassword').fill('WrongTestOnly');await page.locator('#confirmEmergencyButton').click();await page.getByText('Pengesahan close ujian ditolak.',{exact:true}).waitFor();a.equal(await page.locator('#emergencyPassword').inputValue(),'');a.equal(await page.locator('#confirmEmergencyButton').isEnabled(),true);
   await page.locator('#emergencyPassword').fill('TestOnly2026!');await page.locator('#emergencyConfirmation').fill('TUTUP SEMUA');await page.locator('#confirmEmergencyButton').click();await page.waitForFunction(()=>document.getElementById('masterStateText').textContent==='EMERGENCY CLOSING');a.equal(await page.locator('#emergencyButton').isDisabled(),true);
