@@ -232,6 +232,7 @@ class Runner:
     def __init__(self,config,status,on_unpaired=None,background_lease=True):
         self.config=config; self.status=status; self.on_unpaired=on_unpaired; self.api=Api(); self.stop=threading.Event()
         self.lease_lock=threading.RLock();self.background_lease=background_lease
+        self.lease_retry_at=0;self.lease_failure_count=0;self.lease_error=None
         self.next_link_check=0
         self.channel=Path(config['channel'])
         self.last_verified=0
@@ -258,13 +259,14 @@ class Runner:
         except (OSError,ValueError,TypeError):pass
     def connection_health(self, code):
         # Fixed codes only: no credentials, account identifiers or response bodies.
-        safe={'EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','ACCOUNT_BINDING_CHANGED','NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504','CONNECTION_PENDING','CONNECTED'}
+        safe={'EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','EA_SESSION_CHANGED','ACCOUNT_BINDING_CHANGED','NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504','CONNECTION_PENDING','CONNECTED'}
         code=code if code in safe else 'CONNECTION_PENDING'
         try:
-            atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':self.connection_stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':self.failure_count}))
+            atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':self.connection_stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count)}))
         except OSError:pass
         return code
     def cycle(self):
+        if self.lease_error in ('INVALID_POD_TOKEN','TRANSPORT_REPLACED'):raise RuntimeError(self.lease_error)
         self.flush_results()
         self.connection_stage='EA_HEARTBEAT'
         local=read_fields(self.channel/'heartbeat.tsv')
@@ -342,11 +344,25 @@ class Runner:
             self.timing(result['id'],'ACKNOWLEDGED',**measurements)
             self.last_result=(result.get('status'),result.get('code'))
             result_path.unlink()
-    def renew_lease(self, local, api=None):
+    def lease_failed(self,error):
+        # Called under lease_lock: stopped workers must never touch a replacement lease.
+        if self.stop.is_set():return
+        self.invalidate_lease();self.next_heartbeat=0;self.desired_state='STOPPED'
+        self.lease_failure_count+=1
+        self.lease_retry_at=time.monotonic()+min(10,2**min(self.lease_failure_count,4))
+        raw='EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) else str(error)
+        self.lease_error=self.connection_health(raw)
+        self.status(self.lease_error+' — lease belum sah; sambungan akan dicuba semula.')
+    def renew_lease(self, local=None, api=None):
         with self.lease_lock:
-            local=read_fields(self.channel/'heartbeat.tsv')
-            heartbeat(local,self.config)
-            return self._renew_lease(local, api or self.api)
+            if self.stop.is_set() or time.monotonic()<self.lease_retry_at:return False
+            try:
+                local=read_fields(self.channel/'heartbeat.tsv')
+                heartbeat(local,self.config)
+                return self._renew_lease(local, api or self.api)
+            except Exception as error:
+                self.lease_failed(error)
+                raise
     def _renew_lease(self, local, api):
         self.connection_stage='CLOUD_HEARTBEAT'
         response=api.request('/api/execution/heartbeat',heartbeat(local,self.config),self.config['podToken'])
@@ -354,7 +370,7 @@ class Runner:
         current=read_fields(self.channel/'heartbeat.tsv')
         heartbeat(current,self.config)
         if current.get('eaSession')!=local['eaSession']:
-            self.invalidate_lease();self.next_heartbeat=0
+            self.lease_failed(ValueError('EA_SESSION_CHANGED'))
             return False
         state=response.get('desiredState')
         self.entry_blocked_reason=response.get('entryBlockedReason')
@@ -367,6 +383,7 @@ class Runner:
             'expiresAt':int(time.time()*1000)+12000,'desiredState':state,'tradeMode':self.config.get('tradeMode','DEMO'),
             'podId':self.config['podId'],'eaSession':current['eaSession']}))
         self.last_cloud_heartbeat_ms=int(time.time()*1000)
+        self.lease_failure_count=0;self.lease_retry_at=0;self.lease_error=None
         self.next_heartbeat=time.monotonic()+2
         return True
     def invalidate_lease(self):
@@ -376,18 +393,20 @@ class Runner:
                   'server':self.config.get('server',''),'expiresAt':0,'desiredState':'STOPPED'}))
             except OSError: pass  # Existing lease still has a bounded 12-second expiry.
     def maintain_lease(self, api=None):
-        # Independent HTTP client: a slow command fetch/ACK must not starve permission renewal.
         api=api or Api()
         while not self.stop.is_set():
+            delay=.25
             try:
                 with self.lease_lock:
                     if time.monotonic()>=self.next_heartbeat:
-                        local=read_fields(self.channel/'heartbeat.tsv')
-                        heartbeat(local,self.config)
-                        self._renew_lease(local,api)
+                        self.renew_lease(api=api)
+                    delay=max(delay,self.lease_retry_at-time.monotonic())
             except Exception:
-                self.invalidate_lease();self.next_heartbeat=0
-            self.stop.wait(.25)
+                # renew_lease already revoked permission and scheduled a shared backoff.
+                # In particular, a late response after STOP must not erase a new lease.
+                if self.stop.is_set():break
+                delay=max(delay,self.lease_retry_at-time.monotonic())
+            self.stop.wait(delay)
     def monitor_broker_metadata(self):
         # Optional, independent HTTP client/thread: never delay command polling or leases.
         if self.stop.wait(5): return
@@ -410,7 +429,7 @@ class Runner:
             try:
                 self.cycle()
                 self.failure_count=0
-                if not self.stop.is_set():self.connection_health('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING')
+                if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'))
             except Exception as error:
                 self.invalidate_lease()
                 # A failed poll invalidates permission. Recovery MUST renew it even
@@ -526,7 +545,7 @@ class App:
         except (ValueError,TypeError):local['writtenAt']=0
         local['executorPolicyVersion']=raw.get('executorPolicyVersion')
         if runner:
-            cloud={'lastCloudHeartbeatMs':runner.last_cloud_heartbeat_ms,'consecutiveFailures':runner.failure_count,'desiredState':'STOPPED' if runner.stop.is_set() else runner.desired_state,'entryBlockedReason':runner.entry_blocked_reason}
+            cloud={'lastCloudHeartbeatMs':runner.last_cloud_heartbeat_ms,'consecutiveFailures':max(runner.failure_count,runner.lease_failure_count),'desiredState':'STOPPED' if runner.stop.is_set() else runner.desired_state,'entryBlockedReason':runner.entry_blocked_reason}
         cards=status_cards(local,cloud,int(time.time()*1000),bool(runner))
         for key,(text,tone) in cards.items():self.health_labels[key].configure(text=text,foreground={'good':'#4ce3ad','warn':'#f3c76a','bad':'#ff8691'}[tone])
         self.root.after(1000,self.health_tick)
