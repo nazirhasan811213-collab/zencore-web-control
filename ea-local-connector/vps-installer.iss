@@ -1,13 +1,13 @@
 [Setup]
 AppId=ZenCoreVPSConnectorManager
 AppName=ZenCore VPS Connector Manager
-AppVersion=1.0.6
+AppVersion=1.0.7
 AppPublisher=ZenCore
 DefaultDirName={localappdata}\ZenCore\VPSConnector
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=ZenCoreVPSSetup-1.0.6
+OutputBaseFilename=ZenCoreVPSSetup-1.0.7
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

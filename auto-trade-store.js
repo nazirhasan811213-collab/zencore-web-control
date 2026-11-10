@@ -1281,7 +1281,7 @@ class PostgresAutoTradeStore {
   }
 
   async masterResetCommand(userId) {
-    const r=await this.pool.query("SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion'='MASTER_RESET_V1' ORDER BY created_at DESC LIMIT 1",[userId]);
+    const r=await this.pool.query("SELECT * FROM zencore_autotrade_commands WHERE user_id=$1 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion' IN ('MASTER_RESET_V1','MASTER_RESET_FORCE_V2') ORDER BY created_at DESC LIMIT 1",[userId]);
     return r.rows[0]?publicCommand(r.rows[0]):null;
   }
 
@@ -2138,7 +2138,7 @@ class MemoryAutoTradeStore {
   async getLinkResetAt(userId) { return this.podsByUser.get(userId)?.revokedAt || null; }
 
   async masterResetCommand(userId) {
-    const rows=[...this.commands.values()].flat().filter(c=>c.userId===userId&&c.type==='SYSTEM_STOP'&&c.payload?.masterResetVersion==='MASTER_RESET_V1');
+    const rows=[...this.commands.values()].flat().filter(c=>c.userId===userId&&c.type==='SYSTEM_STOP'&&['MASTER_RESET_V1','MASTER_RESET_FORCE_V2'].includes(c.payload?.masterResetVersion));
     return rows.sort((a,b)=>b.createdAt-a.createdAt)[0]||null;
   }
 

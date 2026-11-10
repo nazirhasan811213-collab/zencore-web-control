@@ -203,7 +203,7 @@ def readiness_message(code):
     messages={
         'TERMINAL_OFFLINE':'MT5 terputus dari broker. Tunggu connection pulih, kemudian ON semula.',
         'TERMINAL_ALGO_DISABLED':'Hidupkan butang Algo Trading MT5, kemudian ON semula.',
-        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.18 pada chart; versi lama tidak menyokong plan tepat.',
+        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.19 pada chart; versi lama tidak menyokong plan tepat.',
         'SL_POLICY_REJECTED':'Polisi SL tidak sepadan. Entry ditolak; kemas kini Connector dan EA.',
         'BROKER_STOP_DISTANCE':'Broker menolak jarak SL. Entry belum dibuka.',
         'ENTRY_OUTSIDE_PLAN':'Harga sudah di luar julat entry hingga TP1. Order tidak dikejar.',
@@ -288,9 +288,11 @@ class Runner:
                 if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
+                force_reset=signed['type']=='SYSTEM_STOP' and signed.get('payload',{}).get('masterResetVersion')=='MASTER_RESET_FORCE_V2'
+                if force_reset and local.get('masterResetVersion')!='MASTER_RESET_FORCE_V2':raise ValueError('EA_MASTER_RESET_UPGRADE_REQUIRED')
                 # Command fetch can outlive the previous lease, or ON/STOP can change between polls.
                 # Refresh server permission after verifying the command, before handing it to EA.
-                if signed['type'] in ('SYSTEM_ON','PLACE_SETUP','MANUAL_EXIT_CONFIG'):
+                if signed['type'] in ('SYSTEM_ON','PLACE_SETUP','MANUAL_EXIT_CONFIG') or force_reset:
                     if not self.renew_lease(local): return
                     if signed['type'] in ('SYSTEM_ON','PLACE_SETUP') and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms

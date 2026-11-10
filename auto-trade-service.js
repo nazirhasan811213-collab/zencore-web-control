@@ -870,7 +870,7 @@ function createAutoTradeService(options = {}) {
 
   async function requireNoMasterReset(userId) {
     const c=await store.masterResetCommand?.(userId);
-    if(c && ((['PENDING','DELIVERED'].includes(c.status)&&c.expiresAt>now())||(c.status==='EXECUTED'&&c.result?.code==='MASTER_RESET_READY')))
+    if(c?.payload?.masterResetVersion==='MASTER_RESET_FORCE_V2'||(c && ((['PENDING','DELIVERED'].includes(c.status)&&c.expiresAt>now())||(c.status==='EXECUTED'&&['MASTER_RESET_READY','MASTER_RESET_FORCE_READY'].includes(c.result?.code)))))
       throw serviceError('MASTER_RESET_PENDING','Master Reset sedang berjalan. Tunggu admin menyelesaikan reset.',409);
   }
   async function saveSettings(userId, input = {}) {
@@ -1056,15 +1056,14 @@ function createAutoTradeService(options = {}) {
     }
     if(reset){
       if(!isLocalEa(pod))throw serviceError('MASTER_RESET_LOCAL_REQUIRED','Master Reset memerlukan EA + Connector tempatan.',409);
-      const positions=await store.listPositions(userId);
-      if(positions.length)throw serviceError('MASTER_RESET_POSITIONS_OPEN','Masih ada posisi MT5. Selesaikan posisi sebelum Master Reset.',409);
+      if(reset.closeAllAccount!==true)throw serviceError('MASTER_RESET_CONFIRMATION_REQUIRED','Admin perlu sahkan penutupan semua posisi dan pending order akaun ini.',400);
       const profile=await store.getProfile(userId);
       if(profile)await store.saveSettings(userId,{...profile,manualExit:{enabled:false}});
     }
     const issued = await issueCommand({
       userId, podId: pod.id, type: 'SYSTEM_STOP',
       payload: { keepExitManagement: true, blockNewEntriesImmediately: true,
-        ...(reset?{masterResetVersion:'MASTER_RESET_V1',masterResetGeneration:reset.generation}:{} ) }
+        ...(reset?{masterResetVersion:'MASTER_RESET_FORCE_V2',masterResetScope:'ALL_ACCOUNT',masterResetGeneration:reset.generation}:{} ) }
     });
     await store.setControl(userId, {
       desiredState: 'STOPPED', effectiveState: 'STOPPING',

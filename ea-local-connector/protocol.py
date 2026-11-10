@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.18'
-CONNECTOR_BUILD = '2.1.14'
+EA_VERSION = '2.19'
+CONNECTOR_BUILD = '2.1.15'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -196,8 +196,11 @@ def command_fields(command, identity):
                 else: fields[f'a{i}value'] = number(action['activeSl'])
     elif kind == 'SYSTEM_STOP':
         if payload.get('masterResetVersion') is not None:
-            if payload['masterResetVersion']!='MASTER_RESET_V1':raise ValueError('TYPE_REJECTED')
-            fields['masterResetVersion']='MASTER_RESET_V1'
+            if payload['masterResetVersion'] not in ('MASTER_RESET_V1','MASTER_RESET_FORCE_V2'):raise ValueError('TYPE_REJECTED')
+            fields['masterResetVersion']=payload['masterResetVersion']
+            if payload['masterResetVersion']=='MASTER_RESET_FORCE_V2':
+                if payload.get('masterResetScope')!='ALL_ACCOUNT':raise ValueError('TYPE_REJECTED')
+                fields['masterResetScope']='ALL_ACCOUNT'
     elif kind != 'EMERGENCY_CLOSE_ALL':
         raise ValueError('TYPE_REJECTED')
     return fields
@@ -255,6 +258,7 @@ def broker_metadata(fields, selected_identity, now_ms=None):
 
 
 VALIDATION_CODES = frozenset((
+ 'EA_MASTER_RESET_UPGRADE_REQUIRED',
  'ACCOUNT_BINDING_CHANGED','INVALID_MT5_IDENTITY','EA_SESSION_INVALID','ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
  'INVALID_COMMAND_ID','COMMAND_EXPIRED','CLOCK_SKEW','INVALID_NUMBER',
  'STRATEGY_MODE_REJECTED','TIMEFRAME_MODE_MISMATCH','VOLUME_INVALID','LAYERS_INVALID','TF15_SNAPSHOT_REQUIRED','SYSTEM_CONTRACT_REJECTED',
