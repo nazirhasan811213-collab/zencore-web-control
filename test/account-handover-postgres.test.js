@@ -33,19 +33,20 @@ test('real handover lifecycle, onboarding atomicity and safe account reset prese
   await h2.init();const pair2=await service.connectLocalEa(id2);await service.heartbeat(pair2.podToken,beat);
   await service.saveSettings(id2,{capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});
   await pool.query("UPDATE zencore_autotrade_profiles SET desired_state='ON',effective_state='ON' WHERE user_id=$1",[id2]);
-  let job=await h2.masterReset(admin,id2,{confirmation:'RESET'});a.equal(job.pending,true);
+  await service.heartbeat(pair2.podToken,{...beat,positions:[{ticket:'987654',symbol:'XAUUSD',side:'BUY',volume:.01,entry:2500}]});
+  let job=await h2.masterReset(admin,id2,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2'});a.equal(job.pending,true);
   await a.rejects(service.turnOn(id2,{}),{code:'MASTER_RESET_PENDING'});
-  let resetCommand=(await service.nextCommand(pair2.podToken)).command;a.equal(resetCommand.type,'SYSTEM_STOP');a.equal(resetCommand.payload.masterResetVersion,'MASTER_RESET_V1');
+  let resetCommand=(await service.nextCommand(pair2.podToken)).command;a.equal(resetCommand.type,'SYSTEM_STOP');a.equal(resetCommand.payload.masterResetVersion,'MASTER_RESET_FORCE_V2');
   await service.acknowledgeCommand(pair2.podToken,resetCommand.id,{status:'EXECUTED',code:'STOPPED'});
-  await a.rejects(h2.masterReset(admin,id2,{confirmation:'RESET',commandId:job.commandId}),/EA 2.18/);
+  await a.rejects(h2.masterReset(admin,id2,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId:job.commandId}),/EA 2.19/);
   a.ok(await tradeStore.getPodForUser(id2),'old EA cannot trigger account wipe');
-  job=await h2.masterReset(admin,id2,{confirmation:'RESET'});resetCommand=(await service.nextCommand(pair2.podToken)).command;
-  await service.acknowledgeCommand(pair2.podToken,resetCommand.id,{status:'EXECUTED',code:'MASTER_RESET_READY'});
+  job=await h2.masterReset(admin,id2,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2'});resetCommand=(await service.nextCommand(pair2.podToken)).command;
+  await service.acknowledgeCommand(pair2.podToken,resetCommand.id,{status:'EXECUTED',code:'MASTER_RESET_FORCE_READY'});
   await service.heartbeat(pair2.podToken,beat);
-  const completed=await h2.masterReset(admin,id2,{confirmation:'RESET',commandId:job.commandId});a.equal(completed.completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'ZCuser 2');
+  const completed=await h2.masterReset(admin,id2,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId:job.commandId});a.equal(completed.completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'ZCuser 2');
   await a.rejects(service.heartbeat(pair2.podToken,beat),{code:'INVALID_POD_TOKEN'});
   await pool.query("UPDATE zencore_users SET display_name='Next Client' WHERE id=$1",[id2]);
-  a.equal((await h2.masterReset(admin,id2,{confirmation:'RESET',commandId:job.commandId})).completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'Next Client','replayed completion cannot reset next owner');
+  a.equal((await h2.masterReset(admin,id2,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId:job.commandId})).completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'Next Client','replayed completion cannot reset next owner');
 
  }finally{if(alerts){clearInterval(alerts.timer);clearInterval(alerts.cleanupTimer);}await store?.close();await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await db.end();}
 });

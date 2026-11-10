@@ -6,9 +6,9 @@ from protocol import atomic_write,encode_fields,read_fields,STRATEGY,SCHEMA,CONT
 from test_protocol import IDENTITY,NOW,KEY,POD,signed,local_heartbeat
 
 class OnHandoffTests(unittest.TestCase):
- def run_case(self, state='ON', alter_session=False, stop=False, delay=0, tamper=False, kind="SYSTEM_ON", fetch_delay=0):
+ def run_case(self, state='ON', alter_session=False, stop=False, delay=0, tamper=False, kind="SYSTEM_ON", fetch_delay=0, force_reset=False, reset_capable=True):
   folder=tempfile.TemporaryDirectory();self.addCleanup(folder.cleanup);path=Path(folder.name)
-  atomic_write(path/'heartbeat.tsv',encode_fields(local_heartbeat()))
+  atomic_write(path/'heartbeat.tsv',encode_fields({**local_heartbeat(),**({'masterResetVersion':'MASTER_RESET_FORCE_V2'} if reset_capable else {})}))
   atomic_write(path/'lease.tsv',encode_fields({'desiredState':'STOPPED','expiresAt':NOW+1000}))
   runner=Runner({**IDENTITY,'channel':folder.name,'podToken':'test-only','commandSigningKey':KEY},lambda _:None)
   # A prior periodic heartbeat observed STOPPED; the next heartbeat is not due yet.
@@ -18,6 +18,7 @@ class OnHandoffTests(unittest.TestCase):
   if kind=='PLACE_SETUP':
    snap={'contractVersion':CONTRACT,'decisionOwner':'ZENCORE_ANALYSIS','decision':'ENTRY_AUTHORIZED','executionTimeframe':'2','symbol':'XAUUSD','side':'BUY','entry':100,'sl':99,'tp1':101,'tp2':102,'tp3':103}
    cmd=signed(kind,{**{k:snap[k] for k in ('symbol','side','entry','sl','tp1','tp2','tp3')},'analysisContractVersion':CONTRACT,'strategy':STRATEGY,'schemaVersion':SCHEMA,'analysisSnapshot':snap,'lotPerLayer':.01,'layers':2,'strategyMode':'TF2_SCALPING','exitPolicy':None})
+  if force_reset:cmd=signed('SYSTEM_STOP',{'masterResetVersion':'MASTER_RESET_FORCE_V2','masterResetScope':'ALL_ACCOUNT'})
   if tamper:cmd['signature']='tampered'
   calls=[];clock=[100.5];acks=[]
   class Api:
@@ -81,3 +82,13 @@ class OnHandoffTests(unittest.TestCase):
    with self.subTest(options=options):
     path,_,_=self.run_case(kind='PLACE_SETUP',**options)
     self.assertFalse((path/'command.tsv').exists())
+
+ def test_force_reset_stop_renews_stopped_lease_without_requiring_on(self):
+  path,calls,acks=self.run_case(state='STOPPED',force_reset=True)
+  self.assertEqual(read_fields(path/'command.tsv')['masterResetScope'],'ALL_ACCOUNT')
+  self.assertEqual(read_fields(path/'lease.tsv')['desiredState'],'STOPPED');self.assertEqual(acks,[])
+  self.assertEqual(calls,['/api/execution/commands/next','/api/execution/heartbeat'])
+ def test_force_reset_rejects_old_ea_before_handoff(self):
+  path,calls,acks=self.run_case(force_reset=True,reset_capable=False)
+  self.assertFalse((path/'command.tsv').exists());self.assertEqual(acks[0]['code'],'EA_MASTER_RESET_UPGRADE_REQUIRED')
+  self.assertNotIn('/api/execution/heartbeat',calls)

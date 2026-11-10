@@ -35,7 +35,7 @@ class AccountHandover{
   }catch(e){await c.query('ROLLBACK');if(e.code==='23505')throw fail('E-mel ini sudah digunakan.',409);throw e;}finally{c.release();}
  }
  async masterReset(actor,userId,input={}){
-  admin(actor);if(input.confirmation!=='RESET')throw fail('Sahkan Master Reset dahulu.',400);
+  admin(actor);if(input.confirmation!=='RESET'||input.closeAllAccount!==true||input.resetPolicy!=='MASTER_RESET_FORCE_V2')throw fail('Admin perlu sahkan tutup SEMUA posisi dan pending order akaun MT5 ini sebelum Master Reset.',400);
   if(input.commandId){
    if(!/^[0-9a-f-]{36}$/i.test(input.commandId))throw fail('Rujukan reset tidak sah.',400);
    const done=(await this.pool.query('SELECT generation FROM zencore_account_resets WHERE user_id=$1 AND command_id=$2',[userId,input.commandId])).rows[0];
@@ -48,24 +48,27 @@ class AccountHandover{
   let command;
   if(input.commandId){
    command=(await this.pool.query("SELECT * FROM zencore_autotrade_commands WHERE id=$1 AND user_id=$2 AND pod_id=$3 AND command_type='SYSTEM_STOP'",[input.commandId,userId,pod.id])).rows[0];
-   if(!command||command.payload?.masterResetVersion!=='MASTER_RESET_V1'||command.payload?.masterResetGeneration!==generation)throw fail('Rujukan reset sudah tidak sah. Muat semula akaun.');
+   if(!command||command.payload?.masterResetVersion!=='MASTER_RESET_FORCE_V2'||command.payload?.masterResetGeneration!==generation)throw fail('Rujukan reset sudah tidak sah. Muat semula akaun.');
    if(command.status==='EXECUTED'){
-    if(command.result?.code!=='MASTER_RESET_READY')throw fail('EA belum menyokong Master Reset. Pasang EA 2.18 dan Connector terkini, kemudian cuba semula.');
+    if(command.result?.code!=='MASTER_RESET_FORCE_READY')throw fail('EA belum menyokong Master Reset. Pasang EA 2.19 dan Connector terkini, kemudian cuba semula.');
+    if(command.payload?.masterResetScope!=='ALL_ACCOUNT')throw fail('Skop reset tidak sah.');
+    if(!pod.last_seen_at||new Date(pod.last_seen_at).getTime()<new Date(command.acknowledged_at).getTime()||(await this.tradingState(userId)).positions?.length)return {ok:true,pending:true,commandId:command.id,message:'EA sudah menutup akaun. Menunggu laporan MT5 terkini mengesahkan kosong.'};
     return {...await this.reset(actor,userId,{confirmation:'RESET',masterCommandId:command.id}),completed:true};
    }
+   if(['TYPE_REJECTED','EA_MASTER_RESET_UPGRADE_REQUIRED'].includes(command.result?.code))throw fail('Kemas kini Connector 2.1.15 / Manager 1.0.7 dan EA 2.19 untuk Master Reset tutup semua.');
    if(!['PENDING','DELIVERED'].includes(command.status)||new Date(command.expires_at).getTime()<=this.now())throw fail('Reset belum selesai: '+(command.result?.code||'Arahan luput. Semak Connector/EA dan cuba semula.'));
-   return {ok:true,pending:true,commandId:command.id,message:'Menunggu Connector dan EA mengesahkan STOP serta reset. Jangan tutup Manager/MT5.'};
+   return {ok:true,pending:true,commandId:command.id,message:'Menunggu EA menutup semua posisi, membatalkan pending order dan mengesahkan reset. Jangan tutup Manager/MT5.'};
   }
-  const existing=(await this.pool.query("SELECT id FROM zencore_autotrade_commands WHERE user_id=$1 AND pod_id=$2 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion'='MASTER_RESET_V1' AND payload->>'masterResetGeneration'=$3 AND ((status IN ('PENDING','DELIVERED') AND expires_at>NOW()) OR (status='EXECUTED' AND result->>'code'='MASTER_RESET_READY')) ORDER BY created_at DESC LIMIT 1",[userId,pod.id,String(generation)])).rows[0];
-  if(existing)return this.masterReset(actor,userId,{confirmation:'RESET',commandId:existing.id});
-  const t=await this.stopTrading(userId,{generation});
-  return {ok:true,pending:true,commandId:t.control.pendingCommandId,message:'Master Reset dimulakan. Menunggu pengesahan EA.'};
+  const existing=(await this.pool.query("SELECT id FROM zencore_autotrade_commands WHERE user_id=$1 AND pod_id=$2 AND command_type='SYSTEM_STOP' AND payload->>'masterResetVersion'='MASTER_RESET_FORCE_V2' AND payload->>'masterResetGeneration'=$3 AND ((status IN ('PENDING','DELIVERED') AND expires_at>NOW()) OR (status='EXECUTED' AND result->>'code'='MASTER_RESET_FORCE_READY')) ORDER BY created_at DESC LIMIT 1",[userId,pod.id,String(generation)])).rows[0];
+  if(existing)return this.masterReset(actor,userId,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId:existing.id});
+  const t=await this.stopTrading(userId,{generation,closeAllAccount:true});
+  return {ok:true,pending:true,commandId:t.control.pendingCommandId,message:'Master Reset dimulakan: menutup semua posisi dan membatalkan pending order akaun MT5 ini.'};
  }
  async reset(actor,userId,input){admin(actor);if(input.confirmation!=='RESET')throw fail('Taip RESET untuk mengesahkan reset akaun.',400);const hash=await hashPassword('zc123'),c=await this.pool.connect();try{await c.query('BEGIN');const u=await this.row(userId,c,true);
    const profile=(await c.query('SELECT * FROM zencore_autotrade_profiles WHERE user_id=$1 FOR UPDATE',[userId])).rows[0],pod=(await c.query('SELECT * FROM zencore_mt5_secure_pods WHERE user_id=$1 FOR UPDATE',[userId])).rows[0],hosted=(await c.query('SELECT * FROM zencore_mt5_hosted_accounts WHERE user_id=$1 FOR UPDATE',[userId])).rows[0];
    if(input.masterCommandId){
     const proof=(await c.query("SELECT * FROM zencore_autotrade_commands WHERE id=$1 AND user_id=$2 AND pod_id=$3 FOR UPDATE",[input.masterCommandId,userId,pod?.id])).rows[0];
-    if(!proof||proof.command_type!=='SYSTEM_STOP'||proof.status!=='EXECUTED'||proof.result?.code!=='MASTER_RESET_READY'||proof.payload?.masterResetVersion!=='MASTER_RESET_V1'||proof.payload?.masterResetGeneration!==(u.handover_generation||0))throw fail('Pengesahan Master Reset tidak sepadan.');
+    if(!proof||proof.command_type!=='SYSTEM_STOP'||proof.status!=='EXECUTED'||proof.result?.code!=='MASTER_RESET_FORCE_READY'||proof.payload?.masterResetVersion!=='MASTER_RESET_FORCE_V2'||proof.payload?.masterResetScope!=='ALL_ACCOUNT'||proof.payload?.masterResetGeneration!==(u.handover_generation||0))throw fail('Pengesahan Master Reset tidak sepadan.');
    }
    if(profile&&(profile.desired_state!=='STOPPED'||!['STOPPED','UNPROVISIONED'].includes(profile.effective_state)))throw fail('STOP Auto Trade sebelum reset akaun.');
    if((await c.query('SELECT 1 FROM zencore_mt5_positions WHERE user_id=$1 LIMIT 1',[userId])).rowCount)throw fail('Masih ada posisi MT5. Reset tidak dibenarkan.');
