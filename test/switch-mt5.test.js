@@ -12,3 +12,9 @@ test('switch requires admin and cannot reuse master reset receipt',async()=>{
  const h=new AccountHandover({pool:{query:async()=>({rows:[{generation:1,operation:'MASTER_RESET'}]})}});
  await a.rejects(h.switchMt5({role:'client',status:'active'},'one',{}),{status:403});await a.rejects(h.switchMt5(actor,'one',{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId:'12345678-1234-1234-1234-123456789012'}),/Jenis tindakan/);
 });
+test('onboarding completion remains independent of account-switch preservation',async()=>{
+ const seen=[],query=async(sql,args)=>{seen.push(sql);if(sql.includes('SELECT * FROM zencore_users'))return {rows:[{role:'client',status:'active',handover_state:'USER_PROFILE',handover_generation:0}]};if(sql.includes('to_regclass'))return {rows:[{name:null}]};return {rows:[]};};
+ const h=new AccountHandover({pool:{connect:async()=>({query,release(){}})}});
+ const r=await h.complete('one',{generation:0,displayName:'New Trader',email:'new@example.com',phone:'0123456789',newPassword:'NewTrader2026!',confirmPassword:'NewTrader2026!'});
+ a.equal(r.state,'LIVE');a.ok(seen.some(s=>s.includes("handover_state='LIVE'")));a.ok(!seen.some(s=>s.includes("handover_state='ADMIN_SETUP'")));
+});
