@@ -77,13 +77,13 @@
   $('featuredSide').textContent='';$('featuredReason').textContent='';
   const assessment=valid&&best.assessment?.status==='AVAILABLE'?best.assessment:null;
   const strength=assessment?assessment.overall+'%':'—',range=assessment?.range?format(assessment.range.low,best.symbol)+'–'+format(assessment.range.high,best.symbol):'—';
-  $('featuredChecks').replaceChildren(el('p','Entry: '+format(valid?p.entry:null,best.symbol)+' • Overall Setup Strength '+strength,'pine-analysis-line'),el('p','SL: '+format(valid?p.sl:null,best.symbol),'pine-analysis-line'),el('p','🎯 Jangkauan setup: '+range+' • Anggaran indikator, bukan % win','pine-analysis-line'));
+  $('featuredChecks').replaceChildren(el('p','Entry: '+format(valid?p.entry:null,best.symbol)+' • Overall Setup Strength '+strength,'pine-analysis-line'),el('p','SL: '+format(valid?p.sl:null,best.symbol),'pine-analysis-line'),el('p','🎯 Jangkauan setup: '+range+' • Anggaran indikator, bukan % win','pine-analysis-line'),...(!assessment?[el('p',best.assessment?.reason||'Menunggu bacaan Pine lengkap untuk Strength.','pine-analysis-line')]:[]));
   $('featuredEntry').textContent=format(valid?p.entry:null,best.symbol);$('featuredTp').textContent=format(valid?p.tp1:null,best.symbol);$('featuredSl').textContent=format(valid?p.sl:null,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
   const cards=[];
   for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'FOREX'));card.append(head);
    card.classList.toggle('single',visible.filter(v=>v.symbol===symbol).length===1);for(const v of visible.filter(v=>v.symbol===symbol)){const m=v.market||{},n=m.strategyNormal||{},row=el('div',undefined,'market-view'),top=el('div');top.append(el('span','TF'+v.timeframe+' · '+tfName(v.timeframe),'tf-label'));row.append(top);
-    const current=fresh(v),known=value=>current&&typeof value==='string'&&value.trim()?value:'—';
-    const readings=[['Arah market',current&&['BUY','SELL'].includes(n.side)?n.side:'—'],['Keadaan market',known(m.marketStructure)],['Momentum',known(m.momentum)],['Support terdekat',format(current?m.nearestSupport:null,symbol)],['Resistance terdekat',format(current?m.nearestResistance:null,symbol)],['Panduan ZenCore',known(m.proTip)]];
+    const advisor=n.sop?.advisor||{},levels=v.nearbyLevels||{},current=fresh(v),known=value=>current&&typeof value==='string'&&value.trim()?value:'—';
+    const readings=[['Arah market',current&&['BUY','SELL'].includes(n.side)?n.side:'—'],['Keadaan market',known(m.marketStructure||advisor.trend||advisor.dashboard?.structure)],['Momentum',known(m.momentum||advisor.momentum)],['Support terdekat',format(current?(m.nearestSupport??levels.supports?.[0]):null,symbol)],['Resistance terdekat',format(current?(m.nearestResistance??levels.resistances?.[0]):null,symbol)],['Panduan ZenCore',known(m.proTip||advisor.proTip)]];
     const list=el('dl',undefined,'market-summary');for(const [label,value] of readings){const item=el('div');item.append(el('dt',label),el('dd',value));list.append(item);}row.append(list);
     const a=el('a','Lihat Analysis TF'+v.timeframe+' ↗');a.href=link(symbol,v.timeframe);row.append(a);card.append(row);
    }cards.push(card);

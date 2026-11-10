@@ -5,11 +5,12 @@ const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const clamp=x=>Math.max(0,Math.min(1,x));
 function assess(m,now=Date.now(),candles=[]){
  const n=m?.strategyNormal||{},s=n.sop||{},p=n.plan||{},tf=String(m?.timeframe||'').replace(/m$/,''),sign=n.side==='BUY'?1:n.side==='SELL'?-1:0;
- const at=m?.signalObservedAt||m?.receivedAt;
+ const at=m?.signalObservedAt;
  const base={version:VERSION,asOf:now,sourceAt:at||null,timeframe:tf,side:n.side||null,setupKey:m?.setupKey||null,status:'INCOMPLETE',overall:null,targets:null,range:null,coverage:0,missing:[],warnings:[],groups:[],plan:{...p},meaning:'TECHNICAL_SUPPORT_NOT_WIN_PROBABILITY'};
- if(!['2','15'].includes(tf)||!sign||n.solid!==true){base.missing.push('direction/timeframe');return base;}
- if(!finite(at)||at>now+5000||now-at>(tf==='2'?60000:30000)){base.status='STALE';return base;}
- if(!['entry','sl','tp1','tp2','tp3'].every(k=>finite(p[k])&&p[k]>0)||sign*(p.entry-p.sl)<=0||sign*(p.tp1-p.entry)<=0||sign*(p.tp2-p.tp1)<=0||sign*(p.tp3-p.tp2)<=0){base.missing.push('validPlan');return base;}
+ if(!['2','15'].includes(tf)||!sign){base.missing.push('direction/timeframe');base.reason='Arah setup belum tersedia.';return base;}
+ if(n.solid!==true){base.missing.push('solid');base.reason='SOLID belum aktif; tunggu signal Pine.';return base;}
+ if(!finite(at)||at>now+5000||now-at>(tf==='2'?60000:30000)){base.status='STALE';base.reason='Data Pine belum segar; tunggu kemas kini.';return base;}
+ if(!['entry','sl','tp1','tp2','tp3'].every(k=>finite(p[k])&&p[k]>0)||sign*(p.entry-p.sl)<=0||sign*(p.tp1-p.entry)<=0||sign*(p.tp2-p.tp1)<=0||sign*(p.tp3-p.tp2)<=0){base.missing.push('validPlan');base.reason='Pelan entry, SL dan TP belum lengkap atau tidak sah.';return base;}
  const h=s['hema'+tf]||{},bar=s.currentBar||m;
  const v={fast:m.hemaFast??m.hema20??h.fast,slow:m.hemaSlow??m.hema40??h.slow,e9:m.ema9,e20:m.ema20,e50:m.ema50,wt1:m.waveTrend1??h.waveTrend1,wt2:m.waveTrend2??h.waveTrend2,rsi:m.rsi,chop:m.chopIndex??s.chopIndex,volume:m.relativeVolume,mtf:s.mtfScore,atr:s.atrReference??m.atr,open:bar.open,high:bar.high,low:bar.low,close:bar.close,power:s.marketPower};
  base.inputs={...v,forecast:s.forecast||null};
@@ -23,13 +24,14 @@ function assess(m,now=Date.now(),candles=[]){
  add('Volume',5,['volume'],()=>clamp(v.volume/1.2));
  add('MTF',10,['mtf'],()=>clamp((sign*v.mtf+3)/6));
  const f=String(s.forecast||'').toUpperCase(),aligned=sign===1?f.startsWith('BULLISH'):f.startsWith('BEARISH'),opposed=sign===1?f.startsWith('BEARISH'):f.startsWith('BULLISH');
- if(!/^(BULLISH|BEARISH|NEUTRAL)/.test(f))base.missing.push('forecast');
- add('Forecast',15,['power'],()=>aligned?clamp(v.power/100):opposed?0:0.5);
+ if(!/^(BULLISH|BEARISH|NEUTRAL|CHOPPY)/.test(f))base.missing.push('forecast');
+ add('Forecast',15,['power'],()=>aligned?clamp(v.power/100):opposed||f.startsWith('CHOPPY')?0:0.5);
  if(!finite(v.atr)||v.atr<=0)base.missing.push('atr');
  if(v.rsi<0||v.rsi>100||v.chop<0||v.chop>100||v.power<0||v.power>100||Math.abs(v.mtf)>3||v.volume<0||v.high<Math.max(v.open,v.close)||v.low>Math.min(v.open,v.close))base.missing.push('invalidIndicatorRange');
  base.missing=[...new Set(base.missing)];base.coverage=base.groups.reduce((a,g)=>a+(g.score===null?0:g.weight),0);
- if(base.missing.length)return base;
+ if(base.missing.length){base.reason='Input Pine belum lengkap: '+base.missing.join(', ')+'.';return base;}
  let total=base.groups.reduce((a,g)=>a+g.score,0);
+ if(f.startsWith('CHOPPY')){total=Math.min(total,55);base.warnings.push('Forecast CHOPPY — market berulang-alik');}
  if(opposed){total=Math.min(total,55);base.warnings.push('Forecast melawan arah setup');}
  if(sign*v.mtf<=-2){total=Math.min(total,55);base.warnings.push('MTF melawan arah setup');}
  if(v.chop>=60){total=Math.min(total,55);base.warnings.push('Market berulang-alik');}
@@ -52,4 +54,14 @@ function evaluate(records){
  }
  return {version:VERSION,scope:'LATEST_500_RETAINED_SIGNALS',groups,note:'Pemerhatian TP sahaja; bukan kadar kemenangan atau TP sebelum SL. Rekod lama tanpa snapshot dikecualikan.'};
 }
-module.exports={assess,evaluate,VERSION};
+const diagnosticState=new Map();
+function diagnose(a,now=Date.now()){
+ if(!['2','15'].includes(a?.timeframe))return;
+ const value={timeframe:a.timeframe,status:a.status,missing:a.missing,coverage:a.coverage,reason:a.reason||null};
+ const key=JSON.stringify(value),last=diagnosticState.get(a.timeframe);
+ if(last&&last.key===key&&now-last.at<60000)return;
+ diagnosticState.set(a.timeframe,{key,at:now});
+ // Operational field names only: no credentials, accounts, users or raw feed payloads.
+ console.info('Pine Strength health:',JSON.stringify(value));
+}
+module.exports={assess,evaluate,diagnose,VERSION};
