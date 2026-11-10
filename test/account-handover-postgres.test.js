@@ -48,5 +48,25 @@ test('real handover lifecycle, onboarding atomicity and safe account reset prese
   await pool.query("UPDATE zencore_users SET display_name='Next Client' WHERE id=$1",[id2]);
   a.equal((await h2.masterReset(admin,id2,{confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_FORCE_V2',commandId:job.commandId})).completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'Next Client','replayed completion cannot reset next owner');
 
+  // Offline/expired reset is explicitly a logical disconnect, never a broker-close claim.
+  const third=await M.findUser(store,'ZCuser 3'),id3=third.id,pair3=await service.connectLocalEa(id3);
+  await service.heartbeat(pair3.podToken,beat);await service.saveSettings(id3,{capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});
+  await pool.query("UPDATE zencore_autotrade_profiles SET desired_state='ON',effective_state='ON' WHERE user_id=$1",[id3]);
+  await pool.query("INSERT INTO zencore_mt5_positions(user_id,ticket,data) VALUES($1,'unconfirmed','{}')",[id3]);
+  await a.rejects(h2.reset(admin,id3,{confirmation:'RESET',abandonExecution:true,release:true}),/STOP/,'JSON cannot bypass normal reset guards');
+  const expired=crypto.randomUUID(),pod3=await tradeStore.getPodForUser(id3);
+  await pool.query("INSERT INTO zencore_autotrade_commands(id,user_id,pod_id,command_type,payload,signature,signed_envelope,expires_at) VALUES($1,$2,$3,'SYSTEM_STOP',$4::jsonb,$5,'{}',NOW()-INTERVAL '1 minute')",[expired,id3,pod3.id,JSON.stringify({masterResetVersion:'MASTER_RESET_FORCE_V2',masterResetScope:'ALL_ACCOUNT',masterResetGeneration:0}),'a'.repeat(64)]);
+  await pool.query("UPDATE zencore_mt5_secure_pods SET last_seen_at=NOW()-INTERVAL '5 minutes' WHERE user_id=$1",[id3]);
+  const releaseRequest={confirmation:'RESET',closeAllAccount:true,resetPolicy:'MASTER_RESET_RELEASE_V3',allowUnconfirmedDisconnect:true,resetGeneration:0};
+  const released=await h2.masterReset(admin,id3,releaseRequest);a.equal(released.completed,true);a.equal(released.brokerCloseConfirmed,false);a.match(released.message,/BROKER BELUM DISAHKAN/);a.equal(released.generation,1);
+  a.equal((await pool.query('SELECT 1 FROM zencore_autotrade_commands WHERE user_id=$1',[id3])).rowCount,0);a.equal((await store.findUserForLogin(legacy.email)).display_name,'Legacy');
+  a.equal((await store.findUserForLogin('zcuser3@managed.zencore.invalid')).display_name,'ZCuser 3');a.equal(await tradeStore.getProfile(id3),null);a.equal((await tradeStore.listPositions(id3)).length,0);
+  await a.rejects(service.heartbeat(pair3.podToken,beat),{code:'INVALID_POD_TOKEN'});await a.rejects(service.connectLocalEa(id3),{code:'LINK_RESET_WAIT'});
+  // A new setup is accepted after lease drain; an old request cannot erase it.
+  await pool.query("UPDATE zencore_mt5_secure_pods SET revoked_at=NOW()-INTERVAL '31 seconds' WHERE user_id=$1",[id3]);
+  const new3=await service.connectLocalEa(id3);await service.heartbeat(new3.podToken,beat);await service.saveSettings(id3,{capitalUsd:500,lotPerLayer:.02,layers:1,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});
+  a.equal((await h2.masterReset(admin,id3,releaseRequest)).brokerCloseConfirmed,false);a.equal((await tradeStore.getProfile(id3)).capitalUsd,500);a.equal((await tradeStore.getPodForUser(id3)).id,new3.podId);
+  a.equal((await h2.masterReset(admin,id3,{...releaseRequest,commandId:expired})).brokerCloseConfirmed,false);
+
  }finally{if(alerts){clearInterval(alerts.timer);clearInterval(alerts.cleanupTimer);}await store?.close();await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await db.end();}
 });
