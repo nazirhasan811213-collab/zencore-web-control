@@ -140,23 +140,24 @@ function currentPineMessage(e,p,s={},time){
  const reason=entryAnalysis(e,s).map(x=>x.replace(/^Sebab entry: /,'')).join('\n');
  const bar=s.entryCandle||s.currentBar;
  const candle=bar&&Number.isFinite(bar.open)&&Number.isFinite(bar.close)?(bar.close>bar.open?'BULLISH':bar.close<bar.open?'BEARISH':'DOJI'):s.entryCandle?(buy?'BULLISH':'BEARISH'):null;
+ const a=e.setupAssessment,available=a?.status==='AVAILABLE',strength=x=>available&&Number.isFinite(x)?x+'%':'—',range=available&&a.range?price(a.range.low)+'–'+price(a.range.high):'—';
  const d=s.pineReading||{},rsi=numeric(d.rsi),fast=numeric(d.hemaFast),slow=numeric(d.hemaSlow),power=numeric(s.power);
  const hema=fast===null||slow===null?'—':fast>slow?'hijau':fast<slow?'merah':'mendatar';
  const momentum=typeof d.momentum==='string'?d.momentum.replace(/[\x00-\x1f]/g,' ').slice(0,70):'—';
  return [
   `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'PELUANG RE-ENTRY':'PELUANG ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
   `${e.symbol} • ${e.side}`,'',
-  `Entry: ${price(p.entry)} • Overall Setup Strength —`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)} • Strength —`,`TP2: ${price(p.tp2)} • Strength —`,`TP3: ${price(p.tp3)} • Strength —`,
-  '🎯 Jangkauan setup: —','',
+  `Entry: ${price(p.entry)} • Overall Setup Strength ${strength(a?.overall)}`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)} • Strength ${strength(a?.targets?.tp1)}`,`TP2: ${price(p.tp2)} • Strength ${strength(a?.targets?.tp2)}`,`TP3: ${price(p.tp3)} • Strength ${strength(a?.targets?.tp3)}`,
+  `🎯 Jangkauan setup: ${range}`,'',
   'Sebab entry:',...reason.split(/;\s*|\n/).filter(Boolean).map(t=>'• '+t),'',
   '📊 ANALISIS PINE',
   `• Candle entry: ${candle||'—'} • HEMA ${hema}`,
   `• RSI ${rsi===null?'—':rsi.toFixed(1)} • Momentum ${momentum}`,
   `• Forecast ${s.forecast||'—'} • Skor ${power!==null&&power>=0&&power<=100?power+'/100':'—'}`,'',
-  'Rumusan AI ZenCore:',`• Ikut pelan ${e.side}; jangkauan belum disahkan.`,
+  'Rumusan AI ZenCore:',`• ${available?(a.warnings.filter(x=>!x.startsWith('Skor teknikal')).join('; ')||'Bacaan indikator menyokong pelan '+e.side):'Data Strength belum lengkap: '+(a?.missing?.join(', ')||a?.status||'snapshot lama')}.`,
   'Coach Tips:',...(reentry?[`• Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup.`,'• Jangan tambah layer di luar tetapan.']:['• Ikut lot/layer dan SL.','• Jangan tambah posisi untuk cover rugi.']),
   ...require('./telegram-dashboard-context').compactLines(require('./telegram-dashboard-context').snapshot({timeframe:tf,signalObservedAt:s.signalObservedAt,strategyNormal:{sop:s}},tf),tf),
-  '', 'Strength bukan % win • — = belum tersedia.',
+  '', 'Strength = skor teknikal, bukan % win. Julat ialah anggaran ATR.',
   '📊 Signal sahaja — BELUM pengesahan order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
