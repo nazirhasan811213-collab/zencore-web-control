@@ -113,32 +113,77 @@ class Api:
         return value
 
 
-def install_ea(data_folder):
-    data_folder = Path(data_folder)
-    if not (data_folder/'MQL5').is_dir(): raise RuntimeError('Pilih folder melalui MT5: File > Open Data Folder.')
-    experts = data_folder/'MQL5'/'Experts'/'ZenCore'
-    experts.mkdir(parents=True,exist_ok=True)
-    source = experts/'ZenCoreExecutor.mq5'
-    shutil.copyfile(RESOURCE/'ZenCoreExecutor.mq5',source)
-    origin_file = data_folder/'origin.txt'
-    candidates = []
-    if origin_file.exists():
-        raw=origin_file.read_bytes()
-        encoding = 'utf-16' if raw.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-16-le' if b'\x00' in raw else 'utf-8-sig'
-        origin = raw.decode(encoding).strip('\x00\r\n ').strip('"')
-        candidates.append(Path(origin)/'metaeditor64.exe')
-    candidates.extend([data_folder/'metaeditor64.exe',Path(r'C:\Program Files\InterStellar MT5\metaeditor64.exe'),Path(r'C:\Program Files\MetaTrader 5\metaeditor64.exe')])
-    editor = next((p for p in candidates if p.is_file()),None)
-    if editor is None:
-        raise RuntimeError('MetaEditor tidak ditemui. Compile ZenCoreExecutor.mq5 melalui MetaEditor (F7).')
-    log = experts/'compile.log'
-    # Remove prior binary so a stale EX5 can never masquerade as a successful build.
+def terminal_origin(data_folder):
+    try:
+        raw=(Path(data_folder)/'origin.txt').read_bytes()
+        encoding='utf-16' if raw.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-16-le' if b'\x00' in raw else 'utf-8-sig'
+        return Path(raw.decode(encoding).strip('\x00\r\n ').strip('"'))
+    except (OSError,UnicodeError):return None
+
+def resolve_mt5_folder(selected,terminal_root=None):
+    folder=Path(selected).resolve()
+    if folder.name.upper()=='MQL5':folder=folder.parent
+    # A standard MT5 program folder is different from its live data folder.
+    if (folder/'terminal64.exe').is_file():
+        root=Path(terminal_root or Path(os.environ.get('APPDATA','.'))/'MetaQuotes'/'Terminal')
+        matches=[]
+        for candidate in root.glob('*/MQL5'):
+            origin=terminal_origin(candidate.parent)
+            if origin and origin.resolve()==folder:matches.append(candidate.parent.resolve())
+        if len(matches)>1:raise RuntimeError('MT5_DATA_FOLDER_AMBIGUOUS')
+        if len(matches)==1:return matches[0]
+    if not (folder/'MQL5').is_dir():raise RuntimeError('MT5_DATA_FOLDER_REQUIRED')
+    return folder
+
+def find_metaeditor(data_folder):
+    folder=Path(data_folder);origin=terminal_origin(folder)
+    candidates=([origin/'metaeditor64.exe'] if origin else [])+[folder/'metaeditor64.exe',Path(r'C:\Program Files\InterStellar MT5\metaeditor64.exe'),Path(r'C:\Program Files\MetaTrader 5\metaeditor64.exe')]
+    return next((p for p in candidates if p.is_file()),None)
+
+INSTALL_MESSAGES={
+    'MT5_DATA_FOLDER_REQUIRED':'Folder tidak betul. MT5 kedua > File > Open Data Folder. Pilih folder yang mengandungi MQL5.',
+    'MT5_DATA_FOLDER_AMBIGUOUS':'Lebih satu data folder ditemui. Pilih terus melalui MT5 kedua > File > Open Data Folder.',
+    'METAEDITOR_NOT_FOUND':'MetaEditor tidak ditemui. Pilih metaeditor64.exe milik MT5 ini, atau compile ZenCoreExecutor.mq5 dengan F7.',
+    'METAEDITOR_INVALID':'Pilih fail metaeditor64.exe, bukan terminal64.exe.',
+    'EA_COMPILE_FAILED':'EA gagal compile. Semak compile.log dalam MQL5/Experts/ZenCore; jangan guna EX5 lama.',
+    'EA_COMPILE_TIMEOUT':'Compile EA mengambil terlalu lama. Semak MetaEditor dan cuba semula.',
+    'EA_FOLDER_PERMISSION':'Folder EA tidak boleh ditulis. Semak permission Windows atau fail EA yang sedang digunakan.',
+    'MT5_FOLDER_ALREADY_ASSIGNED':'Folder MT5 ini sudah dipilih slot lain. Pilih data folder terminal kedua yang berasingan.',
+}
+def install_error_message(error):
+    if isinstance(error,PermissionError):return INSTALL_MESSAGES['EA_FOLDER_PERMISSION']
+    if isinstance(error,subprocess.TimeoutExpired):return INSTALL_MESSAGES['EA_COMPILE_TIMEOUT']
+    return INSTALL_MESSAGES.get(str(error),'Pemasangan EA gagal. Semak folder MT5, MetaEditor dan permission Windows.')
+
+def install_ea(data_folder,editor_path=None):
+    data_folder=resolve_mt5_folder(data_folder)
+    experts=data_folder/'MQL5'/'Experts'/'ZenCore';experts.mkdir(parents=True,exist_ok=True)
+    source=experts/'ZenCoreExecutor.mq5';shutil.copyfile(RESOURCE/'ZenCoreExecutor.mq5',source)
+    editor=Path(editor_path) if editor_path else find_metaeditor(data_folder)
+    if editor is None:raise RuntimeError('METAEDITOR_NOT_FOUND')
+    if editor.name.lower()!='metaeditor64.exe' or not editor.is_file():raise RuntimeError('METAEDITOR_INVALID')
+    log=experts/'compile.log'
     source.with_suffix('.ex5').unlink(missing_ok=True)
+    # A prior log must not be mistaken for the current compilation report.
+    log.unlink(missing_ok=True)
     subprocess.run([str(editor),'/compile:'+str(source),'/log:'+str(log)],timeout=120,
       creationflags=subprocess.CREATE_NO_WINDOW,check=False)
-    if not source.with_suffix('.ex5').exists():
-        raise RuntimeError('EA_COMPILE_FAILED — semak compile.log dalam folder Experts\\ZenCore.')
+    if not source.with_suffix('.ex5').is_file() or source.with_suffix('.ex5').stat().st_size==0:raise RuntimeError('EA_COMPILE_FAILED')
     return experts
+
+
+def choose_mt5_install(parent,title):
+    selected=filedialog.askdirectory(parent=parent,title=title+' — MT5 File > Open Data Folder')
+    if not selected:return None
+    try:folder=resolve_mt5_folder(selected)
+    except Exception as error:
+        messagebox.showerror('Folder MT5',install_error_message(error),parent=parent);return None
+    editor=find_metaeditor(folder)
+    if editor is None:
+        chosen=filedialog.askopenfilename(parent=parent,title='Pilih metaeditor64.exe milik terminal MT5 ini',filetypes=[('MetaEditor MT5','metaeditor64.exe'),('Windows executable','*.exe')])
+        if not chosen:return None
+        editor=Path(chosen)
+    return folder,editor
 
 
 def install_app():
@@ -502,12 +547,14 @@ class App:
         if not self.runner and not self.pairing and not self.switching:self.refresh()
         self.root.after(2000,self.watch_accounts)
     def install(self):
-        folder=self.folder.get()
+        selection=choose_mt5_install(self.root,'Pasang EA')
+        if not selection:return
+        folder,editor=selection;self.folder.set(str(folder))
         def task():
             try:
-                install_ea(folder);install_app()
-                self.update('EA dipasang. Refresh Navigator, pasang pada satu chart dan hidupkan Algo Trading.')
-            except Exception as e:self.update(str(e) if isinstance(e,RuntimeError) else 'Pemasangan gagal; semak folder MT5.')
+                install_ea(folder,editor);install_app()
+                self.update('EA dipasang. Refresh Navigator, attach pada satu chart dalam MT5 ini, hidupkan Algo Trading, kemudian Cari akaun.')
+            except Exception as error:self.update(install_error_message(error))
         threading.Thread(target=task,daemon=True).start()
     def change_account(self):
         if self.pairing or self.switching: return

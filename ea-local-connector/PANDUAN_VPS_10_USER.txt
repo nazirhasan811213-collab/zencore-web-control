@@ -1,8 +1,8 @@
-ZENCORE VPS CONNECTOR MANAGER 1.0.4
+ZENCORE VPS CONNECTOR MANAGER 1.0.5
 10 terminal MT5 / 10 akaun ZenCore dalam satu sesi Windows.
 
 KANDUNGAN
-ZenCoreVPSSetup-1.0.4.exe — installer Manager.
+ZenCoreVPSSetup-1.0.5.exe — installer Manager.
 ZenCoreExecutor.mq5 — EA 2.17 yang sama untuk setiap terminal.
 VPS_10_USER.csv — senarai ID dan lembaran pemetaan admin.
 
@@ -18,7 +18,7 @@ Tempoh aktif client 14 hari bermula selepas profil user lengkap; pembaharuan han
 SETUP OLEH ADMIN
 1. Log masuk ke Windows VPS. Jalankan semua 10 terminal dalam pengguna Windows yang sama.
 2. Pastikan setiap terminal mempunyai folder pemasangan/data sendiri. Login akaun MT5 yang betul pada terminal masing-masing.
-3. Pasang ZenCoreVPSSetup-1.0.4.exe sekali. Tutup Connector lama terlebih dahulu; jangan jalankan Connector lama bersama Manager.
+3. Pasang ZenCoreVPSSetup-1.0.5.exe sekali. Tutup Connector lama terlebih dahulu; jangan jalankan Connector lama bersama Manager.
    Installer menggantikan autostart Connector lama dengan Manager. Ia tidak menutup MT5 atau mengubah posisi.
 4. Buka terminal pertama. File > Open Data Folder. Salin/lengkapkan lokasi folder untuk rujukan.
 5. Dalam baris ZCuser 1, klik Pasang EA dan pilih folder data terminal itu. Manager salin EA dan cuba compile melalui MetaEditor.
@@ -46,7 +46,7 @@ RESET AKAUN UNTUK DIGUNAKAN SEMULA
 - Manager akan membuang pautan yang dibatalkan. Tunggu pelepasan link (sekitar 30 saat), semak akaun MT5, kemudian admin pautkan, setup dan serah semula.
 - Reset TIDAK menutup order broker. Jika masih ada posisi, reset ditolak; selesaikan pengurusan posisi dahulu mengikut pelan trader.
 - Catatan audit reset admin dikekalkan tanpa maklumat peribadi lama.
-- TP/SL manual tersuai memerlukan Manager 1.0.4 dan EA 2.17 pada setiap terminal. Versi lama terus menyokong nilai default.
+- TP/SL manual tersuai memerlukan Manager 1.0.5 dan EA 2.17 pada setiap terminal. Versi lama terus menyokong nilai default.
 
 SEMAKAN SEBELUM SERAHAN (SETIAP USER)
 [ ] ID web betul.
@@ -81,14 +81,14 @@ Tiada order broker atau Telegram sebenar dihantar dalam ujian pakej.
 
 AUTO EXIT ENTRY MANUAL: User boleh ubah TP1/TP2/TP3/SL dalam Auto Trade dan Simpan. Medan kosong guna default 2/4/6/3. TP1 < TP2 < TP3; semua jarak positif. Tetapan berkuat kuasa untuk posisi manual baharu selepas EA menerima Simpan; pelan posisi sedia ada dikekalkan.
 
-KEMAS KINI 1.0.4 / CONNECTOR 2.1.12 (LEASE)
+KEMAS KINI 1.0.5 / CONNECTOR 2.1.13 (LEASE)
 Keluar Manager lama sebelum installer. Guna Windows user sama; pautan DPAPI dikekalkan.
 Semak setiap profil selepas buka semula. Jangan Reset Link atau ulang order lama.
 Lease diperbaharui sebelum PLACE_SETUP, tanpa memanjangkan signal atau mengabaikan STOP.
 EA 2.17 dikekalkan. Pembaharuan ini tidak memerlukan ubah lot/layer atau Pine.
 Satu pemasangan masih 10 slot; akaun sistem tambahan tidak menambah slot secara automatik.
 
-RESET SATU SLOT DAN TUKAR CLIENT (MANAGER 1.0.4)
+RESET SATU SLOT DAN TUKAR CLIENT (MANAGER 1.0.5)
 1. OFF di web akaun lama. Selesaikan posisi ZenCore dan tunggu arahan MT5 selesai.
 2. Klik Reset pada baris slot berkenaan dan sahkan. Slot lain terus berjalan.
 3. Reset memadam token/diagnostik Connector slot itu dan mengosongkan ID serta pilihan MT5.
@@ -102,3 +102,19 @@ Jika reset ditolak, pautan lama disimpan PAUSED untuk disemak; boleh klik Sambun
 atau selesaikan punca dan klik Reset semula. Posisi/EA offline/arah belum selesai menghalang reset.
 Folder fizikal ZCuser-1 hingga ZCuser-10 kini mewakili SLOT, bukan semestinya ID client pada baris.
 Jangan salin token antara slot. Client sama atau MT5 sama tidak boleh dipautkan kepada dua slot.
+
+TAMBAH FOLDER MT5 KEDUA — MANAGER 1.0.5
+1. Buka terminal MT5 KEDUA dan login akaun client kedua.
+2. MT5 kedua > File > Open Data Folder. Gunakan folder ini untuk slot kedua.
+3. Manager baris slot kedua > Folder MT5 / EA. Pilih data folder tadi atau subfolder MQL5.
+   Folder program boleh dikenal pasti melalui origin.txt; jika padanan tidak pasti, pilih data folder terus.
+4. Jika diminta, pilih metaeditor64.exe dalam pemasangan broker MT5 kedua.
+5. Tunggu EA dipasang. Dalam MT5 kedua: Navigator > Refresh > ZenCoreExecutor > attach pada SATU chart.
+6. Hidupkan Algo Trading dan Allow Algo Trading. Klik Cari semua MT5 dalam Manager.
+7. Pada slot kedua isi ID client kedua, pilih akaun MT5 kedua dan gunakan password ZenCore client kedua.
+8. Klik Pautkan. Tetapan lot/layer dan ON/OFF kekal melalui web.
+
+Folder yang berjaya dipasang direkod berasingan setiap slot dan diingati selepas restart.
+Folder sama ditolak untuk slot lain. Reset satu slot membuang rekod folder slot itu sahaja.
+Pemasangan folder tidak login broker, tidak attach EA automatik dan tidak menekan ON.
+Jika ralat, mesej kini menjelaskan folder/MetaEditor/compile/permission — tidak lagi sekadar Pautan gagal.
