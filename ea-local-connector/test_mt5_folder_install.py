@@ -7,7 +7,7 @@ from vps_manager import Manager,Vault
 
 class FolderInstallTests(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
+  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name).resolve()
  def terminal(self,n):
   program=self.root/('broker '+str(n));program.mkdir();(program/'terminal64.exe').write_bytes(b'terminal');(program/'metaeditor64.exe').write_bytes(b'editor')
   data=self.root/'terminals'/str(n);(data/'MQL5').mkdir(parents=True);(data/'origin.txt').write_bytes(str(program).encode('utf-16'))
