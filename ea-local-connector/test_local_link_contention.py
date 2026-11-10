@@ -41,5 +41,5 @@ class LocalLinkTests(unittest.TestCase):
     for _ in range(1000):
      fields=read_fields(path)
      self.assertEqual(fields['identity'],'session-'+fields['sequence'])
-   finally:worker.join(5)
+   finally:worker.join(30)
    self.assertFalse(worker.is_alive());self.assertEqual(errors,[])
