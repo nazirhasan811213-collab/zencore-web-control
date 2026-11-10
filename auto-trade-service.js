@@ -868,7 +868,13 @@ function createAutoTradeService(options = {}) {
     };
   }
 
+  async function requireNoMasterReset(userId) {
+    const c=await store.masterResetCommand?.(userId);
+    if(c && ((['PENDING','DELIVERED'].includes(c.status)&&c.expiresAt>now())||(c.status==='EXECUTED'&&c.result?.code==='MASTER_RESET_READY')))
+      throw serviceError('MASTER_RESET_PENDING','Master Reset sedang berjalan. Tunggu admin menyelesaikan reset.',409);
+  }
   async function saveSettings(userId, input = {}) {
+    await requireNoMasterReset(userId);
     if (Core.containsForbiddenCredentialKey(input)) {
       throw serviceError('CREDENTIAL_REJECTED', 'Jangan masukkan ID, password atau server MT5 pada halaman ini.', 400);
     }
@@ -928,6 +934,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function turnOn(userId, input = {}) {
+    await requireNoMasterReset(userId);
     if(options.entryAccessAllowed&&!await options.entryAccessAllowed(userId))throw serviceError('ACCOUNT_NOT_LIVE','Akaun belum live. Lengkapkan serahan admin dan profil dahulu.',403);
     const allowDemoExecution = executionAllowed(userId, await store.getPodForUser(userId));
     if (!allowDemoExecution) {
@@ -1017,7 +1024,7 @@ function createAutoTradeService(options = {}) {
     return state(userId);
   }
 
-  async function stop(userId) {
+  async function stop(userId, reset = null) {
     const [pod, hostedAccount] = await Promise.all([
       store.getPodForUser(userId),
       activeHostedAccount(userId)
@@ -1047,9 +1054,17 @@ function createAutoTradeService(options = {}) {
       await store.appendAudit(userId, 'SYSTEM_STOPPED', { reason: 'NO_POD' });
       return state(userId);
     }
+    if(reset){
+      if(!isLocalEa(pod))throw serviceError('MASTER_RESET_LOCAL_REQUIRED','Master Reset memerlukan EA + Connector tempatan.',409);
+      const positions=await store.listPositions(userId);
+      if(positions.length)throw serviceError('MASTER_RESET_POSITIONS_OPEN','Masih ada posisi MT5. Selesaikan posisi sebelum Master Reset.',409);
+      const profile=await store.getProfile(userId);
+      if(profile)await store.saveSettings(userId,{...profile,manualExit:{enabled:false}});
+    }
     const issued = await issueCommand({
       userId, podId: pod.id, type: 'SYSTEM_STOP',
-      payload: { keepExitManagement: true, blockNewEntriesImmediately: true }
+      payload: { keepExitManagement: true, blockNewEntriesImmediately: true,
+        ...(reset?{masterResetVersion:'MASTER_RESET_V1',masterResetGeneration:reset.generation}:{} ) }
     });
     await store.setControl(userId, {
       desiredState: 'STOPPED', effectiveState: 'STOPPING',

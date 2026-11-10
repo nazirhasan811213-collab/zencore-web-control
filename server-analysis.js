@@ -167,7 +167,7 @@ if (AUTH_ENABLED) {
     }
     if(process.env.ZENCORE_MANAGED_VPS_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS account provisioning unavailable; existing accounts unchanged');}}
     if(process.env.ZENCORE_MANAGED_VPS_EXTENSION_BATCH){try{const managed=await require('./managed-vps-accounts').bootstrap(store.pool,{batch:process.env.ZENCORE_MANAGED_VPS_EXTENSION_BATCH,defaultIbCode:DEFAULT_IB_CODE});console.log(`Managed VPS extension accounts ready: count=${managed.count} new=${managed.created}`);}catch(_){console.error('Managed VPS extension provisioning unavailable; existing accounts unchanged');}}
-    if(store.pool){accountHandover=new (require('./account-handover').AccountHandover)({pool:store.pool,tradingState:userId=>autoTradeState.service.state(userId)});await accountHandover.init();console.log(`Account handover ready: initialized=${accountHandover.initialized}`);}
+    if(store.pool){accountHandover=new (require('./account-handover').AccountHandover)({pool:store.pool,tradingState:userId=>autoTradeState.service.state(userId),stopTrading:(id,reset)=>autoTradeState.service.stop(id,reset)});await accountHandover.init();console.log(`Account handover ready: initialized=${accountHandover.initialized}`);}
     authState.store = store;
     authState.service = createAuthService({
       store,
@@ -618,7 +618,7 @@ async function handleManagementApi(req, res, pathname, session) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
       }
-      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|setup\/state|setup\/settings|setup\/execution-diagnostics)$/i);
+      const lifecycle=pathname.match(/^\/api\/admin\/clients\/([0-9a-f-]{36})\/(handover|handover\/release|reset-account|master-reset|setup\/state|setup\/settings|setup\/execution-diagnostics)$/i);
       if(lifecycle){res.setHeader('Cache-Control','no-store');if(!accountHandover)return sendJson(res,503,{ok:false,error:'Servis serahan belum tersedia.'});const id=lifecycle[1],action=lifecycle[2];
         if(req.method==='GET'&&action==='handover')return sendJson(res,200,await accountHandover.status(id));
         if(req.method==='GET'&&action==='setup/state'){await accountHandover.row(id);const state=await autoTradeState.service.state(id);state.control.canTurnOn=false;state.control.canEnter=false;state.control.strategyReason='SETUP ADMIN — lengkapkan serahan dan profil user dahulu.';state.setupTarget=await accountHandover.status(id);return sendJson(res,200,state);}
@@ -626,6 +626,7 @@ async function handleManagementApi(req, res, pathname, session) {
         if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
         if(req.method==='PUT'&&action==='setup/settings'){const target=await accountHandover.row(id);if(require('./account-handover').state(target)!=='ADMIN_SETUP')return sendJson(res,409,{ok:false,error:'Setup ini hanya dibuka pada fasa Admin Setup.'});return sendJson(res,200,await autoTradeState.service.saveSettings(id,body));}
         if(req.method==='POST'&&action==='handover/release')return sendJson(res,200,await accountHandover.release(session.user,id));
+        if(req.method==='POST'&&action==='master-reset')return sendJson(res,200,await accountHandover.masterReset(session.user,id,body));
         if(req.method==='POST'&&action==='reset-account')return sendJson(res,200,await accountHandover.reset(session.user,id,body));
         return sendJson(res,405,{ok:false,error:'Kaedah tidak dibenarkan.'});
       }

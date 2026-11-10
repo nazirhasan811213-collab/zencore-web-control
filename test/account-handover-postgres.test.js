@@ -28,5 +28,24 @@ test('real handover lifecycle, onboarding atomicity and safe account reset prese
   const cmd=crypto.randomUUID();await pool.query("INSERT INTO zencore_autotrade_commands(id,user_id,pod_id,command_type,signature,signed_envelope,expires_at) VALUES($1,$2,$3,'PLACE_SETUP',$4,'{}',NOW()+INTERVAL '1 minute')",[cmd,id,podBefore.id,'a'.repeat(64)]);await a.rejects(h.reset(admin,id,{confirmation:'RESET'}),e=>e.status===409&&/arahan/.test(e.message));await pool.query('DELETE FROM zencore_autotrade_commands WHERE id=$1',[cmd]);
   await pool.query('UPDATE zencore_mt5_secure_pods SET last_seen_at=NOW() WHERE user_id=$1',[id]);const reset=await h.reset(admin,id,{confirmation:'RESET'});a.equal(reset.state,'ADMIN_SETUP');const row=await M.findUser(store,'ZCuser 1');a.equal(row.display_name,'ZCuser 1');a.equal(row.phone,null);a.equal(row.ic_number,null);a.equal(row.handover_generation,1);a.ok(await verifyPassword('zc123',row.password_hash));a.equal(await tradeStore.getProfile(id),null);a.equal((await alerts.get(id)).verified,false);a.equal((await alerts.get(legacy.id)).verified,true);a.equal((await store.findUserForLogin(legacy.email)).display_name,'Legacy');
   await a.rejects(service.heartbeat(podToken,beat));a.equal((await pool.query('SELECT * FROM zencore_account_resets WHERE user_id=$1',[id])).rowCount,1);await a.rejects(h.complete(id,complete),e=>e.status===409);
+  // One admin action waits for a reset-aware EA before clearing the client account.
+  const client2=await M.findUser(store,'ZCuser 2'),id2=client2.id,h2=new AccountHandover({pool,tradingState:id=>service.state(id),stopTrading:(id,reset)=>service.stop(id,reset)});
+  await h2.init();const pair2=await service.connectLocalEa(id2);await service.heartbeat(pair2.podToken,beat);
+  await service.saveSettings(id2,{capitalUsd:200,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING',riskAcknowledged:true});
+  await pool.query("UPDATE zencore_autotrade_profiles SET desired_state='ON',effective_state='ON' WHERE user_id=$1",[id2]);
+  let job=await h2.masterReset(admin,id2,{confirmation:'RESET'});a.equal(job.pending,true);
+  await a.rejects(service.turnOn(id2,{}),{code:'MASTER_RESET_PENDING'});
+  let resetCommand=(await service.nextCommand(pair2.podToken)).command;a.equal(resetCommand.type,'SYSTEM_STOP');a.equal(resetCommand.payload.masterResetVersion,'MASTER_RESET_V1');
+  await service.acknowledgeCommand(pair2.podToken,resetCommand.id,{status:'EXECUTED',code:'STOPPED'});
+  await a.rejects(h2.masterReset(admin,id2,{confirmation:'RESET',commandId:job.commandId}),/EA 2.18/);
+  a.ok(await tradeStore.getPodForUser(id2),'old EA cannot trigger account wipe');
+  job=await h2.masterReset(admin,id2,{confirmation:'RESET'});resetCommand=(await service.nextCommand(pair2.podToken)).command;
+  await service.acknowledgeCommand(pair2.podToken,resetCommand.id,{status:'EXECUTED',code:'MASTER_RESET_READY'});
+  await service.heartbeat(pair2.podToken,beat);
+  const completed=await h2.masterReset(admin,id2,{confirmation:'RESET',commandId:job.commandId});a.equal(completed.completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'ZCuser 2');
+  await a.rejects(service.heartbeat(pair2.podToken,beat),{code:'INVALID_POD_TOKEN'});
+  await pool.query("UPDATE zencore_users SET display_name='Next Client' WHERE id=$1",[id2]);
+  a.equal((await h2.masterReset(admin,id2,{confirmation:'RESET',commandId:job.commandId})).completed,true);a.equal((await M.findUser(store,'ZCuser 2')).display_name,'Next Client','replayed completion cannot reset next owner');
+
  }finally{if(alerts){clearInterval(alerts.timer);clearInterval(alerts.cleanupTimer);}await store?.close();await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await db.end();}
 });
