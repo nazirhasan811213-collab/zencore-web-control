@@ -3,9 +3,9 @@ import hashlib,json,os,queue,sys,threading,time
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
-from connector import Runner,Api,dpapi,install_ea,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES
+from connector import Runner,Api,dpapi,install_ea,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.0.4'
+VERSION='1.0.5'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def slot_number(value):
@@ -39,11 +39,18 @@ class Vault:
     def load(self,slot):
         p=self.path(slot);return json.loads(self.protect(p.read_bytes(),True)) if p.exists() else None
     def remove(self,slot):self.path(slot).unlink(missing_ok=True)
+    def folder_path(self,slot):return self.path(slot).with_name('terminal-folder.json')
+    def load_folder(self,slot):
+        p=self.folder_path(slot)
+        try:return json.loads(p.read_text())['folder'] if p.exists() else None
+        except (OSError,ValueError,KeyError,TypeError):return None
+    def save_folder(self,slot,folder):atomic_write(self.folder_path(slot),json.dumps({'folder':str(folder)}))
+    def remove_folder(self,slot):self.folder_path(slot).unlink(missing_ok=True)
 
 class Manager:
     def __init__(self,common=COMMON,vault=None,status=lambda *_:None,api_factory=Api,runner_factory=Runner):
         self.common=Path(common);self.vault=vault or Vault();self.status=status;self.api_factory=api_factory;self.runner_factory=runner_factory
-        self.lock=threading.RLock();self.configs={};self.runners={};self.threads={};self.pending={};self.closing=False
+        self.lock=threading.RLock();self.configs={};self.runners={};self.threads={};self.pending={};self.closing=False;self.installing={};self.folders={n:f for n in range(1,11) if (f:=self.vault.load_folder(n))}
     def discover(self):
         found=[]
         for p in self.common.glob('*/heartbeat.tsv'):
@@ -59,7 +66,7 @@ class Manager:
     def pair(self,slot,channel,password,login=None):
         slot_number(slot);channel=Path(channel);login=(login or ('ZCuser '+str(slot))).strip()
         with self.lock:
-            if slot in self.configs or slot in self.pending:raise RuntimeError('PROFILE_ALREADY_PAIRED')
+            if slot in self.configs or slot in self.pending or slot in self.installing:raise RuntimeError('PROFILE_ALREADY_PAIRED')
             if self.reserved(slot,channel):raise RuntimeError('MT5_ALREADY_ASSIGNED')
             f=read_fields(channel/'heartbeat.tsv');heartbeat(f,f)
             if channel.resolve()!=expected_channel(self.common,f).resolve():raise RuntimeError('CHANNEL_BINDING_INVALID')
@@ -81,6 +88,18 @@ class Manager:
             self.start(slot);return cfg
         finally:
             with self.lock:self.pending.pop(slot,None)
+    def install(self,slot,folder,editor=None):
+        slot_number(slot);folder=resolve_mt5_folder(folder)
+        with self.lock:
+            if slot in self.installing or slot in self.pending:raise RuntimeError('PROFILE_RESET_PENDING')
+            if any(n!=slot and Path(f).resolve()==folder for n,f in {**self.folders,**self.installing}.items()):raise RuntimeError('MT5_FOLDER_ALREADY_ASSIGNED')
+            self.installing[slot]=str(folder)
+        try:
+            experts=install_ea(folder,editor)
+            with self.lock:self.vault.save_folder(slot,folder);self.folders[slot]=str(folder)
+            return experts
+        finally:
+            with self.lock:self.installing.pop(slot,None)
     def unpaired(self,slot):
         with self.lock:
             self.vault.remove(slot);self.configs.pop(slot,None)
@@ -109,7 +128,7 @@ class Manager:
     def reset(self,slot):
         slot_number(slot)
         with self.lock:
-            if slot in self.pending:raise RuntimeError('PROFILE_RESET_PENDING')
+            if slot in self.pending or slot in self.installing:raise RuntimeError('PROFILE_RESET_PENDING')
             cfg=self.configs.get(slot) or self.vault.load(slot)
             if cfg:config_valid(cfg,slot,self.common)
             self.pending[slot]={**(cfg or {}),'resetting':True}
@@ -117,6 +136,7 @@ class Manager:
             self.pause(slot)
             reset_connector_data(cfg,runner=self.runners.get(slot),config_path=self.vault.path(slot),common=self.common)
             with self.lock:
+                self.vault.remove_folder(slot);self.folders.pop(slot,None)
                 self.configs.pop(slot,None);self.runners.pop(slot,None);self.threads.pop(slot,None)
             self.status(slot,'RESET SELESAI — isi ID client baharu dan pautkan MT5')
         finally:
@@ -159,7 +179,7 @@ class App:
             value=tk.StringVar();self.choices[n]=value;combo=ttk.Combobox(grid,textvariable=value,state='readonly',width=40);combo.grid(row=n,column=1,sticky='ew',padx=5);self.options[n]=combo
             b=ttk.Button(grid,text='Pautkan',command=lambda k=n:self.action(k));b.grid(row=n,column=2,padx=4);self.buttons[n]=b
             tools=ttk.Frame(grid);tools.grid(row=n,column=3,padx=4)
-            ttk.Button(tools,text='Pasang EA',command=lambda k=n:self.install(k)).pack(side='left')
+            ttk.Button(tools,text='Folder MT5 / EA',command=lambda k=n:self.install(k)).pack(side='left')
             reset=ttk.Button(tools,text='Reset',command=lambda k=n:self.reset(k));reset.pack(side='left',padx=3);self.reset_buttons[n]=reset
             state=tk.StringVar(value='BELUM DIPAUTKAN');self.states[n]=state;ttk.Label(grid,textvariable=state,wraplength=330).grid(row=n,column=4,sticky='w',padx=5)
         ttk.Label(main,text='ON/OFF, lot, layer, waktu dan SOP dikawal melalui akaun web setiap user. Manager tidak mengaktifkan trading.').pack(anchor='w')
@@ -177,15 +197,15 @@ class App:
         with self.manager.lock:configs=dict(self.manager.configs)
         for n,cfg in configs.items():
             label=cfg['tradeMode']+' • ****'+cfg['account'][-4:]+' • '+cfg['server'];self.choices[n].set(label);self.logins[n].set(cfg['zenCoreLogin']);self.login_entries[n].configure(state='readonly')
-    def task(self,n,fn):
+    def task(self,n,fn,stage="LINK"):
         if n in self.busy:return
-        self.busy.add(n);self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.states[n].set('Memproses...')
+        self.busy.add(n);self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
         def run():
             try:fn()
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,install_error_message(e) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
@@ -205,8 +225,14 @@ class App:
             self.manager.reset(n);self.events.put((n,'RESET_CLEAR'))
         self.task(n,perform)
     def install(self,n):
-        folder=filedialog.askdirectory(title='ZCuser '+str(n)+' — pilih MT5 File > Open Data Folder')
-        if folder:self.task(n,lambda:(install_ea(folder),self.events.put((n,'EA dipasang. Refresh Navigator dan attach pada satu chart.'))))
+        if n in self.busy:return
+        selection=choose_mt5_install(self.root,'Slot '+str(n))
+        if not selection:return
+        folder,editor=selection
+        def perform():
+            self.manager.install(n,folder,editor)
+            self.events.put((n,'EA dipasang. Dalam MT5 ini: Navigator > Refresh > attach ZenCoreExecutor pada satu chart. Kemudian Cari semua MT5 dan Pautkan.'))
+        self.task(n,perform,stage='INSTALL')
     def pump(self):
         for _ in range(150):
             try:n,s=self.events.get_nowait()
