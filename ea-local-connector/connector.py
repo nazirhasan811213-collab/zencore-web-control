@@ -13,8 +13,12 @@ import subprocess
 import sys
 import threading
 import time
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+except ImportError:
+    # Transport and protocol tests can run without a desktop. GUI still requires Tk.
+    tk = filedialog = messagebox = ttk = None
 import urllib.error
 import urllib.request
 import webbrowser
