@@ -144,7 +144,7 @@ function currentPineMessage(e,p,s={},time){
  const summary=`Setup ${e.side} lulus pengesahan semasa. TP1 berjarak ${price(reward)} USD; risiko ke SL ${price(risk)} USD.`;
  const tips=reentry?`Guna pelan baharu selepas semua posisi TF${tf} disahkan tutup. Jangan tambah layer di luar tetapan.`:'Ikut lot/layer dan SL yang ditetapkan. Jangan tambah posisi untuk cover rugi.';
  return [
-  `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'RE-ENTRY':'ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
+  `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'PELUANG RE-ENTRY':'PELUANG ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
   `${e.symbol} • ${e.side}`,'',
   `Entry: ${price(p.entry)}`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)}`,`TP2: ${price(p.tp2)}`,`TP3: ${price(p.tp3)}`,'',
   'Sebab entry:',reason,
@@ -152,7 +152,7 @@ function currentPineMessage(e,p,s={},time){
   'Rumusan AI ZenCore:',summary,
   'Coach Tips:',tips,'',
   ...require('./telegram-dashboard-context').lines(require('./telegram-dashboard-context').snapshot({timeframe:tf,signalObservedAt:s.signalObservedAt,strategyNormal:{sop:s}},tf),tf),'',
-  'Signal sahaja • semak order MT5.',`🕒 ${time} MYT • ZC-${e.id}`
+  '📊 Signal analisis sahaja — BELUM pengesahan order MT5.','🔔 Posisi sebenar hanya disahkan melalui notifikasi POSISI SUDAH DIBUKA.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
 

@@ -203,7 +203,7 @@ def readiness_message(code):
     messages={
         'TERMINAL_OFFLINE':'MT5 terputus dari broker. Tunggu connection pulih, kemudian ON semula.',
         'TERMINAL_ALGO_DISABLED':'Hidupkan butang Algo Trading MT5, kemudian ON semula.',
-        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.19 pada chart; versi lama tidak menyokong plan tepat.',
+        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.20 pada chart; versi lama tidak menyokong plan tepat.',
         'SL_POLICY_REJECTED':'Polisi SL tidak sepadan. Entry ditolak; kemas kini Connector dan EA.',
         'BROKER_STOP_DISTANCE':'Broker menolak jarak SL. Entry belum dibuka.',
         'ENTRY_OUTSIDE_PLAN':'Harga sudah di luar julat entry hingga TP1. Order tidak dikejar.',
@@ -211,6 +211,12 @@ def readiness_message(code):
         'EA_ALGO_DISABLED':'EA > Properties > Allow Algo Trading mesti ON.',
         'ACCOUNT_TRADE_DISABLED':'Broker tidak memberi permission trading pada akaun ini.',
         'ACCOUNT_EXPERT_DISABLED':'Broker tidak memberi permission Expert Advisor pada akaun ini.',
+        'NETTING_POSITION_EXISTS':'Akaun netting masih ada posisi simbol ini. Entry baharu tidak ditambah.',
+        'SETUP_POSITION_EXISTS':'Setup TF yang sama masih terbuka. Tunggu semua posisi tutup.',
+        'ENTRY_PLAN_INVALID':'Susunan harga entry, SL dan TP tidak sah. Semak pelan Pine.',
+        'QUOTE_NOT_READY':'Harga broker belum tersedia. Tunggu quote MT5.',
+        'RISK_FILE_WRITE_FAILED':'Fail pelan risiko tidak boleh ditulis. Semak permission folder Common MT5.',
+        'BROKER_ENTRY_REJECTED':'Broker menolak order. Semak retcode dan Experts MT5.',
         'LEASE_NOT_READY':'Kebenaran EA belum sah. Semak Cloud, akaun dan sesi MT5; tunggu sambungan pulih. Jangan reset pautan atau ulang order lama.',
         'LEASE_EXPIRED':'Kebenaran sambungan tamat. Tunggu Connector tersambung, kemudian ON semula.',
         'LEASE_STOPPED':'Web sedang STOP. Semak akaun dan tekan ON semula.',
@@ -223,8 +229,9 @@ def readiness_message(code):
     return messages.get(code,'Arahan ditolak: '+str(code or 'UNKNOWN')[:40])
 
 class Runner:
-    def __init__(self,config,status,on_unpaired=None):
+    def __init__(self,config,status,on_unpaired=None,background_lease=True):
         self.config=config; self.status=status; self.on_unpaired=on_unpaired; self.api=Api(); self.stop=threading.Event()
+        self.lease_lock=threading.RLock();self.background_lease=background_lease
         self.next_link_check=0
         self.channel=Path(config['channel'])
         self.last_verified=0
@@ -324,7 +331,7 @@ class Runner:
             result=read_fields(result_path)
             try:
                 self.api.request('/api/execution/commands/'+result['id']+'/ack',
-                  {'status':result['status'],'code':result['code'],'brokerOrderId':result.get('brokerOrderId','')},self.config['podToken'])
+                  {'status':result['status'],'code':result['code'],'brokerOrderId':result.get('brokerOrderId',''),'message':result.get('detail','')[:180]},self.config['podToken'])
             except RuntimeError as error:
                 if str(error) != 'COMMAND_NOT_FOUND': raise
             delivered=self.delivered_at.pop(result['id'],None)
@@ -335,9 +342,14 @@ class Runner:
             self.timing(result['id'],'ACKNOWLEDGED',**measurements)
             self.last_result=(result.get('status'),result.get('code'))
             result_path.unlink()
-    def renew_lease(self, local):
+    def renew_lease(self, local, api=None):
+        with self.lease_lock:
+            local=read_fields(self.channel/'heartbeat.tsv')
+            heartbeat(local,self.config)
+            return self._renew_lease(local, api or self.api)
+    def _renew_lease(self, local, api):
         self.connection_stage='CLOUD_HEARTBEAT'
-        response=self.api.request('/api/execution/heartbeat',heartbeat(local,self.config),self.config['podToken'])
+        response=api.request('/api/execution/heartbeat',heartbeat(local,self.config),self.config['podToken'])
         if self.stop.is_set(): return False
         current=read_fields(self.channel/'heartbeat.tsv')
         heartbeat(current,self.config)
@@ -358,10 +370,24 @@ class Runner:
         self.next_heartbeat=time.monotonic()+2
         return True
     def invalidate_lease(self):
-        try:
-            atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config.get('account',''),
-              'server':self.config.get('server',''),'expiresAt':0,'desiredState':'STOPPED'}))
-        except OSError: pass  # Existing lease still has a bounded 12-second expiry.
+        with self.lease_lock:
+            try:
+                atomic_write(self.channel/'lease.tsv',encode_fields({'account':self.config.get('account',''),
+                  'server':self.config.get('server',''),'expiresAt':0,'desiredState':'STOPPED'}))
+            except OSError: pass  # Existing lease still has a bounded 12-second expiry.
+    def maintain_lease(self, api=None):
+        # Independent HTTP client: a slow command fetch/ACK must not starve permission renewal.
+        api=api or Api()
+        while not self.stop.is_set():
+            try:
+                with self.lease_lock:
+                    if time.monotonic()>=self.next_heartbeat:
+                        local=read_fields(self.channel/'heartbeat.tsv')
+                        heartbeat(local,self.config)
+                        self._renew_lease(local,api)
+            except Exception:
+                self.invalidate_lease();self.next_heartbeat=0
+            self.stop.wait(.25)
     def monitor_broker_metadata(self):
         # Optional, independent HTTP client/thread: never delay command polling or leases.
         if self.stop.wait(5): return
@@ -376,6 +402,7 @@ class Runner:
                 delay=10
             self.stop.wait(delay)
     def run(self):
+        if self.background_lease:threading.Thread(target=self.maintain_lease,daemon=True,name='ZenCore-lease').start()
         if self.config.get('podToken') and self.config.get('account') and self.config.get('server'):
             threading.Thread(target=self.monitor_broker_metadata,daemon=True).start()
         while not self.stop.is_set():

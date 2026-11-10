@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.19'
-CONNECTOR_BUILD = '2.1.15'
+EA_VERSION = '2.20'
+CONNECTOR_BUILD = '2.1.16'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -39,7 +39,15 @@ def atomic_write(path, text):
         stream.write(text)
         stream.flush()
         os.fsync(stream.fileno())
-    os.replace(tmp, path)
+    # MT5 can briefly hold the destination open on Windows. Retry the same atomic
+    # replacement; never remove the valid destination or rewrite a partial command.
+    for attempt in range(6):
+        try:
+            os.replace(tmp, path)
+            break
+        except PermissionError:
+            if attempt==5:raise
+            time.sleep(.02*(attempt+1))
 
 
 def read_fields(path):

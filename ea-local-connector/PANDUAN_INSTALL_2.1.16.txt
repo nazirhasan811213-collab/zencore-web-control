@@ -1,8 +1,8 @@
-ZENCORE CONNECTOR 2.1.15 / EA 2.19 — MASTER RESET TUTUP SEMUA
+ZENCORE CONNECTOR 2.1.16 / EA 2.20 — MASTER RESET TUTUP SEMUA
 
-Pasang ZenCoreSetup-2.1.15.exe untuk PC biasa, atau ZenCoreVPSSetup-1.0.7.exe untuk VPS.
+Pasang ZenCoreSetup-2.1.16.exe untuk PC biasa, atau ZenCoreVPSSetup-1.0.8.exe untuk VPS.
 Keluar aplikasi lama dahulu. Guna Windows user sama. Pautan/lot/layer sedia ada dikekalkan.
-Pasang/compile EA 2.19 pada setiap terminal melalui Connector/Manager, Refresh Navigator dan
+Pasang/compile EA 2.20 pada setiap terminal melalui Connector/Manager, Refresh Navigator dan
 attach EA baharu pada satu chart. Jangan jalankan Connector biasa bersama VPS Manager.
 Pilih masa tanpa arahan sedang dihantar untuk kemas kini aplikasi/EA.
 
@@ -21,7 +21,7 @@ Jika broker menolak, market tutup, Algo Trading OFF, akaun tidak dibenarkan trad
 terputus, reset belum dianggap selesai. Sebahagian posisi/order mungkin sudah ditutup/dibatalkan.
 Semak mesej, pulihkan sambungan/permission dan cuba Master Reset semula jika perlu.
 Tidak mengubah akaun client/slot lain. Tidak menghantar entry baharu atau menekan ON.
-Fungsi ini memerlukan EA 2.19 dan Connector baharu; versi lama tidak dibenarkan mengesahkan forced reset.
+Fungsi ini memerlukan EA 2.20 dan Connector baharu; versi lama tidak dibenarkan mengesahkan forced reset.
 
 RESET SETEMPAT DALAM CONNECTOR
 Butang Reset Connector/Reset slot setempat kekal tidak menutup posisi; ia memerlukan posisi kosong.
@@ -29,3 +29,12 @@ Gunakan Master Reset dalam admin untuk penutupan automatik serta reset penuh.
 
 SOP entry/re-entry, SL dan TP tidak diubah. MT5 dan Connector mesti online.
 Tiada order broker, reset client live atau Telegram sebenar dihantar semasa ujian pakej.
+
+PEMBAIKAN STABILITI 10 NOVEMBER 2026
+Connector 2.1.16 / VPS Manager 1.0.8 / EA 2.20.
+Lease diperbaharui pada laluan berasingan daripada polling/ACK; TTL kekal 12 saat.
+Fail terkunci seketika dicuba semula secara terhad tanpa memadam fail sah.
+EA melaporkan sebab khusus: posisi netting/setup masih ada, pelan tidak sah, lease, quote atau fail risiko.
+Pasang installer baharu dan compile/gantikan EA pada setiap terminal. Lot/layer web dikekalkan.
+Signal PELUANG ENTRY ialah analisis. Hanya POSISI SUDAH DIBUKA mengesahkan posisi MT5.
+Jangan reset atau hantar semula order lama. Semak Experts jika broker menolak order.
