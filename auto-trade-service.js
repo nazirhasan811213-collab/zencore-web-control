@@ -1029,6 +1029,7 @@ function createAutoTradeService(options = {}) {
       store.getPodForUser(userId),
       activeHostedAccount(userId)
     ]);
+    if(reset?.expectedPodTokenHash){const expected=await store.findPodByTokenHash(reset.expectedPodTokenHash);if(!expected||expected.userId!==userId||expected.id!==pod?.id)throw serviceError('ACCOUNT_BINDING_CHANGED','Pautan slot sudah berubah. Reset dibatalkan.',409);}
     if (typeof store.cancelPendingEntryCommands === 'function') {
       await store.cancelPendingEntryCommands(userId, 'SYSTEM_STOP_REQUESTED');
     }
@@ -1063,7 +1064,7 @@ function createAutoTradeService(options = {}) {
     const issued = await issueCommand({
       userId, podId: pod.id, type: 'SYSTEM_STOP',
       payload: { keepExitManagement: true, blockNewEntriesImmediately: true,
-        ...(reset?{masterResetVersion:'MASTER_RESET_FORCE_V2',masterResetScope:'ALL_ACCOUNT',masterResetGeneration:reset.generation}:{} ) }
+        ...(reset?{masterResetVersion:'MASTER_RESET_FORCE_V2',masterResetScope:'ALL_ACCOUNT',masterResetGeneration:reset.generation,...(reset.expectedPodTokenHash?{bindingEpochHash:reset.expectedPodTokenHash}:{})}:{} ) }
     });
     await store.setControl(userId, {
       desiredState: 'STOPPED', effectiveState: 'STOPPING',
@@ -1187,6 +1188,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function queuedEntryIsCurrent(command, diagnostic = {}){
+    if(command.payload?.bindingEpochHash){const expected=await store.findPodByTokenHash(command.payload.bindingEpochHash);if(!expected||expected.id!==command.podId||expected.userId!==command.userId){diagnostic.reason='ACCOUNT_BINDING_CHANGED';return false;}}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&options.entryAccessAllowed&&!await options.entryAccessAllowed(command.userId)){diagnostic.accountAccess='ACCOUNT_EXPIRED_OR_DISABLED';return false;}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;

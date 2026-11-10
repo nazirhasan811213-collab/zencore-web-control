@@ -10,6 +10,7 @@ test('HTTP cannot bypass pending handover while manager pairing and onboarding r
   for(const p of ['/app','/analysis','/auto-trade','/account']){const r=await req(p);a.equal(r.status,302);a.equal(r.headers.get('location'),'/onboarding');}
   for(const [p,m]of [['/api/analysis/timeframes','GET'],['/api/auto-trade/on','POST'],['/api/auto-trade/settings','PUT'],['/api/account/profile','GET']]){const r=await req(p,m,m==='GET'?undefined:{});a.equal(r.status,403);a.equal((await r.json()).code,'ACCOUNT_HANDOVER_REQUIRED');}
   a.equal((await req('/onboarding')).status,200);a.equal((await req('/auth/me')).status,200);a.equal((await req('/api/auto-trade/ea-connect','POST',{})).status,201);
-  for(const action of ['reset-account','master-reset']){const denied=await req('/api/admin/clients/'+body.user.id+'/'+action,'POST',{confirmation:'RESET'});a.equal(denied.status,403);}
+  a.equal((await req('/api/admin/vps/resolve','POST',{loginId:'ZCuser 11'})).status,403);
+  for(const action of ['reset-account','master-reset','setup/ea-connect']){const denied=await req('/api/admin/clients/'+body.user.id+'/'+action,'POST',{confirmation:'RESET'});a.equal(denied.status,403);}
  }finally{await new Promise(r=>{child.once('exit',r);child.kill('SIGTERM');setTimeout(()=>{child.kill('SIGKILL');r();},1000).unref();});fs.rmSync(dir,{recursive:true,force:true});}
 });

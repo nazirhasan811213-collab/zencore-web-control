@@ -1,5 +1,5 @@
 #property strict
-#property version "2.20"
+#property version "2.21"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -10,6 +10,7 @@ string channel,account,server,eaSession,ownerPod,boundMode;
 string keys[],values[];
 int lockHandle=INVALID_HANDLE;
 bool armed=false;
+bool resumePending=false;
 bool manualEnabled=false;
 long manualSince=0;
 double manualTp1=0,manualTp2=0,manualTp3=0,manualSl=0;
@@ -117,12 +118,12 @@ bool VolumeValid(string symbol,double value){
  double minv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN),maxv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MAX),step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
  return step>0 && value>=minv-1e-9 && value<=maxv+1e-9 && MathAbs(value/step-MathRound(value/step))<1e-6;
 }
-void SaveState(){WriteAtomic("state.tsv",Row("armed",armed?"1":"0")+Row("symbols",enabledSymbols)+Row("ownerPod",ownerPod));}
+void SaveState(){WriteAtomic("state.tsv",Row("armed",(armed||resumePending)?"1":"0")+Row("symbols",enabledSymbols)+Row("ownerPod",ownerPod));}
 bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.20")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V3")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.21")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V3")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -510,7 +511,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
 
 string MasterResetIdle(){
  for(int k=PositionsTotal()-1;k>=0;k--){ulong ticket=PositionGetTicket(k);if(IsManaged(ticket))return "MASTER_RESET_POSITIONS_OPEN";}
- manualEnabled=false;manualSince=0;ownerPod="";enabledSymbols="";
+ armed=false;resumePending=false;manualEnabled=false;manualSince=0;ownerPod="";enabledSymbols="";
  manualTp1=2;manualTp2=4;manualTp3=6;manualSl=3;
  bool saved=WriteAtomic("state.tsv",Row("armed","0")+Row("symbols","")+Row("ownerPod","")) && SaveManualConfig();
  return saved?"MASTER_RESET_READY":"MASTER_RESET_SAVE_FAILED";
@@ -541,7 +542,7 @@ string MasterResetForce(string pod){
 }
 void Process(){
  if(!FileIsExist(channel+"\\command.tsv",FILE_COMMON))return;
- if(!ReadFields("command.tsv")){armed=false;return;}
+ if(!ReadFields("command.tsv")){resumePending=armed||resumePending;armed=false;return;}
  string masterResetVersion=Get("masterResetVersion"),masterResetScope=Get("masterResetScope");
  processingStarted=GetTickCount64();
  string id=Get("id"),type=Get("type"),c=Get("symbol"),symbol=Broker(c),commandPod=Get("podId");
@@ -560,10 +561,10 @@ void Process(){
  bool configEnabled=Get("manualEnabled")=="1";double cfgTp1=Val("manualtp1"),cfgTp2=Val("manualtp2"),cfgTp3=Val("manualtp3"),cfgSl=Val("manualsl");
  string actionReason[4];string actionType[4];double actionValue[4];
  for(int i=0;i<4;i++){actionType[i]=Get("a"+(string)i+"type");actionValue[i]=Val("a"+(string)i+"value");actionReason[i]=Get("a"+(string)i+"reason");}
- if(!ValidId(id)){armed=false;return;}
+ if(!ValidId(id)){armed=false;resumePending=false;return;}
  if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
- !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
+ !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;resumePending=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
  if((long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
  if(FileIsExist(channel+"\\"+id+".started",FILE_COMMON)){
   // Existing result is authoritative. Never overwrite it or execute a replay.
@@ -571,7 +572,7 @@ void Process(){
   else FileDelete(channel+"\\command.tsv",FILE_COMMON);
   return;
  }
- if(!WriteAtomic(id+".started","intent")){armed=false;return;}
+ if(!WriteAtomic(id+".started","intent")){armed=false;resumePending=false;return;}
  bool ok=false;string code="BROKER_REJECTED";
  if(type=="MANUAL_EXIT_CONFIG"){
   // Signed by Connector; fresh lease binds even when auto entry is STOPPED.
@@ -579,7 +580,7 @@ void Process(){
   ok=bound && layerPolicyValid && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl) && (configVersion=="MANUAL_TF2_EXIT_V3" || (configVersion=="MANUAL_TF2_EXIT_V2" && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3))));
   bool newlyEnabled=!manualEnabled || ownerPod!=commandPod;
   if(ok&&configEnabled&&newlyEnabled)ok=ExcludeExistingManual();
-  if(ok){ownerPod=commandPod;manualEnabled=configEnabled;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
+  if(ok){if(ownerPod!=commandPod)resumePending=false;ownerPod=commandPod;manualEnabled=configEnabled;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
  }
  else if(type=="MANUAL_EXIT_ACTION"){
   ok=false;
@@ -601,7 +602,7 @@ void Process(){
   code=ok?"MANUAL_MANAGED":"MANUAL_EXIT_ACTION_REJECTED";
  }
  else if(type=="SYSTEM_STOP"){
-  armed=false;SaveState();ok=true;code="STOPPED";
+  armed=false;resumePending=false;SaveState();ok=true;code="STOPPED";
   if(masterResetVersion=="MASTER_RESET_V1"){code=MasterResetIdle();ok=code=="MASTER_RESET_READY";}
   else if(masterResetVersion=="MASTER_RESET_FORCE_V2"){code=masterResetScope=="ALL_ACCOUNT"?MasterResetForce(commandPod):"MASTER_RESET_SCOPE_REJECTED";ok=code=="MASTER_RESET_FORCE_READY";}
  }
@@ -611,7 +612,7 @@ void Process(){
   if(code=="READY" && !(layers>=1 && layers<=10 && lot>0 && symbols!=""))code="ON_SETTINGS_INVALID";
   if(code=="READY")code=LeaseReason(commandPod);
   ok=code=="READY";
-  if(ok){ownerPod=commandPod;armed=true;enabledSymbols=symbols;code="ARMED";}else{armed=false;}
+  if(ok){ownerPod=commandPod;armed=true;resumePending=false;enabledSymbols=symbols;code="ARMED";}else{armed=false;resumePending=false;}
   if(!ok)Print("ZenCore SYSTEM_ON rejected: ",code);
   SaveState();
  }
@@ -623,7 +624,7 @@ void Process(){
   else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
- else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
+ else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;resumePending=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
  else if(type=="MANAGE_POSITION" && symbol!="" && actions>=1 && actions<=4 && Permissions()){
   ok=true;
   for(int i=0;i<actions;i++){
@@ -639,7 +640,7 @@ void Process(){
 bool BindCurrentAccount(){
  string currentAccount=(string)AccountInfoInteger(ACCOUNT_LOGIN),currentServer=AccountInfoString(ACCOUNT_SERVER);
  if(lockHandle!=INVALID_HANDLE && account==currentAccount && server==currentServer && boundMode==AccountMode())return true;
- armed=false;manualEnabled=false;manualSince=0;
+ armed=false;resumePending=false;manualEnabled=false;manualSince=0;
  if(lockHandle!=INVALID_HANDLE){
   SaveState();FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);
   FileClose(lockHandle);lockHandle=INVALID_HANDLE;
@@ -655,32 +656,39 @@ bool BindCurrentAccount(){
  eaSession=StringSubstr(Hash(account+server+(string)GetMicrosecondCount()+(string)ChartID()),0,32);
  if(eaSession==""){FileClose(lockHandle);lockHandle=INVALID_HANDLE;return false;}
  MapSymbols();
- if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");ownerPod=Get("ownerPod");}
+ if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");ownerPod=Get("ownerPod");resumePending=armed && ownerPod!="" && enabledSymbols!="";}
  if(ReadFields("manual-config.tsv") && Get("podId")==ownerPod && ((Get("version")=="MANUAL_TF2_EXIT_V2" && Val("tp1")==2 && Val("tp2")==4 && Val("tp3")==6 && Val("sl")==3) || (Get("version")=="MANUAL_TF2_EXIT_V3" && ValidManualDistances(Val("tp1"),Val("tp2"),Val("tp3"),Val("sl"))))){manualEnabled=Get("enabled")=="1";manualSince=(long)Val("since");manualTp1=Val("tp1");manualTp2=Val("tp2");manualTp3=Val("tp3");manualSl=Val("sl");}
  // A restored ARMED state cannot enter until this session receives a fresh owner lease.
- armed=false; // Reattach/account switch always needs a newly verified SYSTEM_ON.
+ armed=false; // Wait for a fresh owner lease before restoring an earlier signed ON.
  return Heartbeat();
+}
+// Restores only the same account/owner's previously signed ON. No order is issued here.
+void TryResumeEntry(){
+ if(!resumePending || armed || ownerPod=="" || enabledSymbols=="")return;
+ if(!Permissions() || !FreshLease())return;
+ armed=true;resumePending=false;SaveState();Print("ZenCore ENTRY_RESUMED_FROM_OWNER_LEASE");
 }
 int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=2.20 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=2.21 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTick(){
  if(lockHandle!=INVALID_HANDLE && account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER)){ManageLocalStepLock();ManageManual();}
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 2.20 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 2.21 • menunggu login MT5 / channel tersedia");return;}
+ TryResumeEntry();
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
- if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  Process();
+ if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
+ if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
- if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- Comment("ZenCore 2.20 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.21 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

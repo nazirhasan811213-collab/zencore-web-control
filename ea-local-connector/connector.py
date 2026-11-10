@@ -153,6 +153,7 @@ INSTALL_MESSAGES={
 def install_error_message(error):
     if isinstance(error,PermissionError):return INSTALL_MESSAGES['EA_FOLDER_PERMISSION']
     if isinstance(error,subprocess.TimeoutExpired):return INSTALL_MESSAGES['EA_COMPILE_TIMEOUT']
+    if isinstance(error,OSError):return 'Pemasangan EA gagal ('+type(error).__name__+'; kod '+str(getattr(error,'winerror',None) or error.errno or 'UNKNOWN')+'). Semak folder/MetaEditor dan permission Windows.'
     return INSTALL_MESSAGES.get(str(error),'Pemasangan EA gagal. Semak folder MT5, MetaEditor dan permission Windows.')
 
 def install_ea(data_folder,editor_path=None):
@@ -172,10 +173,35 @@ def install_ea(data_folder,editor_path=None):
     return experts
 
 
+def discover_mt5_folders(terminal_root=None):
+    root=Path(terminal_root or Path(os.environ.get('APPDATA','.'))/'MetaQuotes'/'Terminal')
+    found=[]
+    for mql in root.glob('*/MQL5'):
+        if not mql.is_dir():continue
+        folder=mql.parent.resolve();origin=terminal_origin(folder)
+        found.append({'folder':folder,'label':(origin.name if origin else 'MT5')+' • '+folder.name,'origin':origin})
+    return sorted(found,key=lambda item:str(item['folder']).casefold())
+
 def choose_mt5_install(parent,title):
-    selected=filedialog.askdirectory(parent=parent,title=title+' — MT5 File > Open Data Folder')
+    found=discover_mt5_folders();selected=[]
+    if found:
+        dialog=tk.Toplevel(parent);dialog.title(title);dialog.transient(parent);dialog.grab_set()
+        ttk.Label(dialog,text='Pilih terminal MT5. Folder data dikesan secara automatik.').pack(padx=18,pady=12)
+        choice=ttk.Combobox(dialog,state='readonly',width=75,values=[x['label'] for x in found]);choice.current(0);choice.pack(padx=18,pady=8)
+        def pick():selected.append(str(found[choice.current()]['folder']));dialog.destroy()
+        def browse():
+            value=filedialog.askdirectory(parent=dialog,title='MT5 > File > Open Data Folder')
+            if value:selected.append(value);dialog.destroy()
+        row=ttk.Frame(dialog);row.pack(padx=18,pady=12)
+        ttk.Button(row,text='Pilih folder ini',command=pick).pack(side='left',padx=5)
+        ttk.Button(row,text='Folder lain...',command=browse).pack(side='left',padx=5)
+        ttk.Button(row,text='Batal',command=dialog.destroy).pack(side='left',padx=5)
+        parent.wait_window(dialog)
+    else:
+        value=filedialog.askdirectory(parent=parent,title=title+' — MT5 File > Open Data Folder')
+        if value:selected.append(value)
     if not selected:return None
-    try:folder=resolve_mt5_folder(selected)
+    try:folder=resolve_mt5_folder(selected[0])
     except Exception as error:
         messagebox.showerror('Folder MT5',install_error_message(error),parent=parent);return None
     editor=find_metaeditor(folder)
@@ -203,7 +229,7 @@ def readiness_message(code):
     messages={
         'TERMINAL_OFFLINE':'MT5 terputus dari broker. Tunggu connection pulih, kemudian ON semula.',
         'TERMINAL_ALGO_DISABLED':'Hidupkan butang Algo Trading MT5, kemudian ON semula.',
-        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.20 pada chart; versi lama tidak menyokong plan tepat.',
+        'EA_POLICY_UPGRADE_REQUIRED':'Pasang EA 2.21 pada chart; versi lama tidak menyokong plan tepat.',
         'SL_POLICY_REJECTED':'Polisi SL tidak sepadan. Entry ditolak; kemas kini Connector dan EA.',
         'BROKER_STOP_DISTANCE':'Broker menolak jarak SL. Entry belum dibuka.',
         'ENTRY_OUTSIDE_PLAN':'Harga sudah di luar julat entry hingga TP1. Order tidak dikejar.',
@@ -271,7 +297,7 @@ class Runner:
         self.connection_stage='EA_HEARTBEAT'
         local=read_fields(self.channel/'heartbeat.tsv')
         report=heartbeat(local,self.config)
-        self.latest_local={k:local.get(k) for k in ('writtenAt','terminalConnected','terminalTradeAllowed','accountTradeAllowed','expertTradeAllowed','executorPolicyVersion','eaVersion','positionCount')}
+        self.latest_local={k:local.get(k) for k in ('writtenAt','terminalConnected','terminalTradeAllowed','accountTradeAllowed','expertTradeAllowed','executorPolicyVersion','eaVersion','executionArmed','resumePending','positionCount')}
         if local.get('accountBindingVersion') != 'ACCOUNT_SESSION_V1': raise ValueError('EA_UPGRADE_REQUIRED')
         self.config['eaSession'] = local['eaSession']
         if self.stop.is_set(): return
@@ -298,6 +324,7 @@ class Runner:
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
                 force_reset=signed['type']=='SYSTEM_STOP' and signed.get('payload',{}).get('masterResetVersion')=='MASTER_RESET_FORCE_V2'
+                if force_reset and signed.get('payload',{}).get('bindingEpochHash') and signed['payload']['bindingEpochHash']!=hashlib.sha256(self.config['podToken'].encode()).hexdigest():raise ValueError('ACCOUNT_BINDING_CHANGED')
                 if force_reset and local.get('masterResetVersion')!='MASTER_RESET_FORCE_V2':raise ValueError('EA_MASTER_RESET_UPGRADE_REQUIRED')
                 # Command fetch can outlive the previous lease, or ON/STOP can change between polls.
                 # Refresh server permission after verifying the command, before handing it to EA.
@@ -544,6 +571,7 @@ class App:
         try:local['writtenAt']=int(raw.get('writtenAt',0))
         except (ValueError,TypeError):local['writtenAt']=0
         local['executorPolicyVersion']=raw.get('executorPolicyVersion')
+        if 'executionArmed' in raw:local['executionArmed']=raw.get('executionArmed')=='1'
         if runner:
             cloud={'lastCloudHeartbeatMs':runner.last_cloud_heartbeat_ms,'consecutiveFailures':max(runner.failure_count,runner.lease_failure_count),'desiredState':'STOPPED' if runner.stop.is_set() else runner.desired_state,'entryBlockedReason':runner.entry_blocked_reason}
         cards=status_cards(local,cloud,int(time.time()*1000),bool(runner))

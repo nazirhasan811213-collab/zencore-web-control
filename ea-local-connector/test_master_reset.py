@@ -34,7 +34,7 @@ class MasterResetTests(unittest.TestCase):
 #include <string>
 #include <cassert>
 using string=std::string;using ulong=unsigned long;
-bool manualEnabled=true;long manualSince=100;string ownerPod="old",enabledSymbols="XAUUSD";
+bool armed=true,resumePending=true;bool manualEnabled=true;long manualSince=100;string ownerPod="old",enabledSymbols="XAUUSD";
 double manualTp1=9,manualTp2=10,manualTp3=11,manualSl=12;
 bool owned=true,writeOk=true;int writes=0;
 int PositionsTotal(){return 1;}ulong PositionGetTicket(int){return 1;}bool IsManaged(ulong){return owned;}
@@ -61,7 +61,7 @@ int main(){
 #include <cassert>
 using string=std::string;using ulong=unsigned long;
 string account="123",server="Broker",eaSession="session",ownerPod="pod",enabledSymbols="XAUUSD";
-bool manualEnabled=true;long manualSince=100;double manualTp1=9,manualTp2=10,manualTp3=11,manualSl=12;
+bool armed=true,resumePending=true;bool manualEnabled=true;long manualSince=100;double manualTp1=9,manualTp2=10,manualTp3=11,manualSl=12;
 std::map<string,string> fields;bool readOk=true,permit=true,writeOk=true;int writes=0;ulong selected=0,failClose=0,failOrder=0;
 std::vector<ulong> positions,orders,closed,cancelled;
 long UtcMs(){return 1000;}long StringToInteger(string x){return std::stol(x);}

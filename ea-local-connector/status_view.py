@@ -11,6 +11,7 @@ def status_cards(local=None, cloud=None, now_ms=0, paired=False):
     exact=local.get('executorPolicyVersion')=='EXACT_ANALYSIS_V2'
     enabled=cloud.get('desiredState')=='ON' and cloud_fresh and permission and exact and server[1]=='good'
     entry=('ENTRY DIBENARKAN','good') if enabled else ('ENTRY STOPPED','warn')
+    if enabled and local.get('executionArmed') is False:entry=('MENUNGGU EA READY','warn')
     if paired and fresh and not exact:entry=('KEMAS KINI EA 2.00','bad')
     if cloud.get('entryBlockedReason')=='GLOBAL_ENTRY_PAUSED':entry=('SERVER PAUSED','warn')
     return {'mt5':mt5,'cloud':server,'entry':entry}
