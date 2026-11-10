@@ -152,7 +152,7 @@ function currentPineMessage(e,p,s={},time){
   'Rumusan AI ZenCore:',summary,
   'Coach Tips:',tips,'',
   ...require('./telegram-dashboard-context').lines(require('./telegram-dashboard-context').snapshot({timeframe:tf,signalObservedAt:s.signalObservedAt,strategyNormal:{sop:s}},tf),tf),'',
-  '📊 Signal analisis sahaja — BELUM pengesahan order MT5.','🔔 Posisi sebenar hanya disahkan melalui notifikasi POSISI SUDAH DIBUKA.',`🕒 ${time} MYT • ZC-${e.id}`
+  '📊 Signal sahaja — BELUM pengesahan order MT5.','🔔 Posisi sebenar hanya disahkan melalui notifikasi POSISI SUDAH DIBUKA.',`🕒 ${time} MYT • ZC-${e.id}`
  ].join('\n');
 }
 

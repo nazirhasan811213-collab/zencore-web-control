@@ -4,7 +4,7 @@ const {telegramMessage}=require('../analysis-telegram');
 for(const tf of ['2','15'])for(const side of ['BUY','SELL'])for(const again of [false,true])test(`structured ${again?'re-entry':'entry'} TF${tf} ${side}: prices first, bounded evidence and analysis`,()=>{
  const sign=side==='BUY'?1:-1,e={kind:'ENTRY',symbol:'XAUUSD',timeframe:tf,side,time:Date.now(),id:'LAYOUT',telegramPlan:{entry:4100,sl:4100-sign*4,tp1:4100+sign*1.5,tp2:4100+sign*2.5,tp3:4100+sign*3.5},telegramSop:{version:tf==='2'?'SOLID_TF2_3GREEN_HEMA23_V2':'SOLID_TF15_3GREEN_HEMA1545_2L_V1',tf:tf+'m',solid:true,green:5,cycleKind:again?'FOLLOWUP':'INITIAL',gates:['entry','hema','wt','sop','x','y'].map(key=>({key,pass:true}))}};
  const text=telegramMessage(e);a.match(text,new RegExp(`ZENCORE \\| PELUANG ${again?'RE-ENTRY':'ENTRY'} TF${tf}`));
- const markers=['Entry:','SL:','TP1:','TP2:','TP3:','Sebab entry:','Rumusan AI ZenCore:','Coach Tips:','Signal analisis sahaja'];for(let i=1;i<markers.length;i++)a.ok(text.indexOf(markers[i])>text.indexOf(markers[i-1]),markers[i]);
+ const markers=['Entry:','SL:','TP1:','TP2:','TP3:','Sebab entry:','Rumusan AI ZenCore:','Coach Tips:','Signal sahaja'];for(let i=1;i<markers.length;i++)a.ok(text.indexOf(markers[i])>text.indexOf(markers[i-1]),markers[i]);
  for(const name of ['Entry','SL','TP1','TP2','TP3'])a.match(text,new RegExp('\\n'+name+': [0-9,.]+\\n'));
  a.match(text,new RegExp(`HEMA ${side==='BUY'?'hijau':'merah'}`));a.ok(text.length<1400);a.match(text,/BELUM pengesahan order MT5/);a.doesNotMatch(text,/ORDER EXECUTED|Win rate|undefined|NaN|screenshot/i);
 });
