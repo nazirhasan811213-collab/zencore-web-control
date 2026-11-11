@@ -148,6 +148,8 @@ bool Heartbeat(){
     text+=Row(p+"fillRiskVersion",Get("version"))+Row(p+"tp1",Get("tp1"))+Row(p+"tp2",Get("tp2"))+Row(p+"tp3",Get("tp3"));
     if(Get("sl")!="")text+=Row(p+"initialSl",Get("sl"));
    }
+  }else if(IsManual(ticket)){
+   text+=Row(p+"tp1",Get("tp1"))+Row(p+"tp2",Get("tp2"))+Row(p+"tp3",Get("tp3"))+Row(p+"initialSl",Get("sl"));
   }
   text+=Row(p+"origin",IsManual(ticket)?"MANUAL":"ZENCORE")+Row(p+"positionId",(string)PositionGetInteger(POSITION_IDENTIFIER))+Row(p+"strategyMode",(ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC15?"TF15_INTRA":"TF2_SCALPING")+Row(p+"ticket",(string)ticket)+Row(p+"symbol",c)+Row(p+"side",PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL")+
   Row(p+"volume",Num(PositionGetDouble(POSITION_VOLUME)))+Row(p+"entry",Num(PositionGetDouble(POSITION_PRICE_OPEN)))+
