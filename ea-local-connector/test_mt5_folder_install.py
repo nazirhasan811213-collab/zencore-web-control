@@ -47,3 +47,20 @@ class FolderInstallTests(unittest.TestCase):
    if isinstance(error,PermissionError):self.assertIn('tidak boleh ditulis',message)
    else:self.assertIn(expected,message)
    self.assertNotIn('private path',message);self.assertNotIn('PAUTAN',message)
+ def test_pasted_folder_is_used_without_opening_another_picker(self):
+  program,data=self.terminal(2)
+  with patch.object(connector,'discover_mt5_folders',side_effect=AssertionError('unexpected discovery')):
+   self.assertEqual(connector.choose_mt5_install(None,'Pasang EA','  "'+str(data)+'"  '),(data,program/'metaeditor64.exe'))
+ def test_vps_install_uses_pasted_folder_for_requested_slot(self):
+  from types import SimpleNamespace
+  from vps_manager import App
+  from unittest.mock import Mock
+  import queue
+  program,data=self.terminal(2)
+  manager=SimpleNamespace(folders={2:str(data)},install=Mock())
+  app=SimpleNamespace(busy=set(),root=None,manager=manager,events=queue.Queue(),
+                      task=lambda n,fn,stage:fn())
+  with patch('vps_manager.simpledialog.askstring',return_value=str(data)) as prompt,patch.object(connector,'discover_mt5_folders',side_effect=AssertionError('unexpected discovery')):
+   App.install(app,2)
+  self.assertEqual(prompt.call_args.kwargs['initialvalue'],str(data))
+  manager.install.assert_called_once_with(2,data,program/'metaeditor64.exe')

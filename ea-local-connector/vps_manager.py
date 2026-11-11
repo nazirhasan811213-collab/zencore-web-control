@@ -2,10 +2,10 @@
 import hashlib,json,os,queue,sys,threading,time,webbrowser
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk,filedialog,messagebox
+from tkinter import ttk,filedialog,messagebox,simpledialog
 from connector import Runner,Api,dpapi,install_ea,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.1'
+VERSION='1.1.2'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def slot_number(value):
@@ -337,7 +337,13 @@ class App:
         self.task(n,perform)
     def install(self,n):
         if n in self.busy:return
-        selection=choose_mt5_install(self.root,'Slot '+str(n))
+        title='Slot '+str(n)+' — Folder MT5'
+        preferred=simpledialog.askstring(title,
+            'Tampal alamat daripada MT5 > File > Open Data Folder.\n'
+            'Biarkan kosong untuk pilih folder daripada senarai.',
+            initialvalue=self.manager.folders.get(n,''),parent=self.root)
+        if preferred is None:return
+        selection=choose_mt5_install(self.root,title,preferred)
         if not selection:return
         folder,editor=selection
         def perform():
