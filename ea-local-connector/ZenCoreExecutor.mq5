@@ -67,18 +67,22 @@ string Get(string key){for(int i=0;i<ArraySize(keys);i++)if(keys[i]==key)return 
 double Val(string key){return StringToDouble(Get(key));}
 string Broker(string source){for(int i=0;i<9;i++)if(canonical[i]==source)return brokerSymbols[i];return "";}
 string Canonical(string symbol){for(int i=0;i<9;i++)if(brokerSymbols[i]==symbol)return canonical[i];return "";}
-void MapSymbols(){
- for(int i=0;i<9;i++){
-  brokerSymbols[i]="";
-  if(i==0 && GoldBrokerSymbol!=""){if(SymbolSelect(GoldBrokerSymbol,true))brokerSymbols[i]=GoldBrokerSymbol;continue;}
-  if(SymbolSelect(canonical[i],true)){brokerSymbols[i]=canonical[i];continue;}
-  string found="";int count=0;
-  for(int j=0;j<SymbolsTotal(false);j++){
-   string candidate=SymbolName(j,false),upper=candidate;StringToUpper(upper);
-   if(StringFind(upper,canonical[i])>=0 || (i==0 && upper=="GOLD")){found=candidate;count++;}
-  }
-  if(count==1 && SymbolSelect(found,true))brokerSymbols[i]=found;
+string ResolveBrokerSymbol(int i){
+ if(i==0 && GoldBrokerSymbol!="")return SymbolSelect(GoldBrokerSymbol,true)?GoldBrokerSymbol:"";
+ if(SymbolSelect(canonical[i],true))return canonical[i];
+ string found="";int count=0;
+ for(int j=0;j<SymbolsTotal(false);j++){
+  string candidate=SymbolName(j,false),upper=candidate;StringToUpper(upper);
+  if(StringFind(upper,canonical[i])>=0 || (i==0 && upper=="GOLD")){found=candidate;count++;}
  }
+ return count==1 && SymbolSelect(found,true)?found:"";
+}
+void MapSymbols(){for(int i=0;i<9;i++)brokerSymbols[i]=ResolveBrokerSymbol(i);}
+string RefreshGoldMapping(bool immediate=false){
+ if(brokerSymbols[0]!="" || !TerminalInfoInteger(TERMINAL_CONNECTED))return brokerSymbols[0];
+ static ulong last=0;ulong now=GetTickCount64();
+ if(immediate || last==0 || now-last>=2000){last=now;brokerSymbols[0]=ResolveBrokerSymbol(0);}
+ return brokerSymbols[0];
 }
 bool IsManual(ulong ticket){
  if(!PositionSelectByTicket(ticket) || (ulong)PositionGetInteger(POSITION_MAGIC)!=0 || PositionGetString(POSITION_SYMBOL)!=Broker("XAUUSD") || AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return false;
@@ -580,6 +584,10 @@ void Process(){
   else FileDelete(channel+"\\command.tsv",FILE_COMMON);
   return;
  }
+ // A terminal can bind before its broker symbol catalogue is available.
+ // Retry discovery at execution without extending the command or guessing an alias.
+ if(type=="PLACE_SETUP" && c=="XAUUSD" && symbol=="")symbol=RefreshGoldMapping(true);
+ if((long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
  if(!WriteAtomic(id+".started","intent")){armed=false;resumePending=false;return;}
  bool ok=false;string code="BROKER_REJECTED";
  if(type=="MANUAL_EXIT_CONFIG"){
@@ -625,7 +633,7 @@ void Process(){
   SaveState();
  }
  else if(type=="PLACE_SETUP"){
-  lastEntryCode="SYMBOL_NOT_AVAILABLE";
+  lastEntryCode="ADMIN_GOLD_SYMBOL_REQUIRED";
   string executionTf=Get("executionTimeframe");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
@@ -688,6 +696,7 @@ void OnTick(){
 }
 void OnTimer(){
  if(!BindCurrentAccount()){Comment("ZenCore 2.22 • menunggu login MT5 / channel tersedia");return;}
+ RefreshGoldMapping();
  TryResumeEntry();
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
@@ -697,6 +706,7 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
+ if(Broker("XAUUSD")==""){Comment("ZenCore 2.22 • Admin: tetapkan GoldBrokerSymbol ikut Market Watch.");return;}
  Comment("ZenCore 2.22 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

@@ -247,6 +247,7 @@ def readiness_message(code):
         'NETTING_POSITION_EXISTS':'Akaun netting masih ada posisi simbol ini. Entry baharu tidak ditambah.',
         'SETUP_POSITION_EXISTS':'Setup TF yang sama masih terbuka. Tunggu semua posisi tutup.',
         'ENTRY_PLAN_INVALID':'Susunan harga entry, SL dan TP tidak sah. Semak pelan Pine.',
+        'ADMIN_GOLD_SYMBOL_REQUIRED':'Admin: isi GoldBrokerSymbol dalam EA Inputs dengan nama penuh simbol emas dari Market Watch.',
         'QUOTE_NOT_READY':'Harga broker belum tersedia. Tunggu quote MT5.',
         'RISK_FILE_WRITE_FAILED':'Fail pelan risiko tidak boleh ditulis. Semak permission folder Common MT5.',
         'BROKER_ENTRY_REJECTED':'Broker menolak order. Semak retcode dan Experts MT5.',
