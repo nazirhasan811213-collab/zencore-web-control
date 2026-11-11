@@ -1,12 +1,31 @@
 """One desktop manager, ten isolated existing Connector Runners. No MT5 passwords."""
-import hashlib,json,os,queue,sys,threading,time,webbrowser
+import hashlib,json,os,queue,sys,tempfile,threading,time,webbrowser
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk,filedialog,messagebox
-from connector import Runner,Api,dpapi,install_ea,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
+from tkinter import ttk,filedialog,messagebox,simpledialog
+from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.1'
+VERSION='1.1.3'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
+
+def install_ea(folder,editor=None):
+    # Ship the compiled EA. The VPS never needs MetaEditor or its compiler files.
+    artifact=RESOURCE/'ZenCoreExecutor.ex5'
+    try:data=artifact.read_bytes()
+    except FileNotFoundError as error:
+        raise RuntimeError('VPS_EA_PACKAGE_MISSING') from error
+    if not data.startswith(b'EX5') or len(data)<1024:
+        raise RuntimeError('VPS_EA_PACKAGE_MISSING')
+    experts=resolve_mt5_folder(folder)/'MQL5'/'Experts'/'ZenCore'
+    experts.mkdir(parents=True,exist_ok=True)
+    temp=None
+    try:
+        with tempfile.NamedTemporaryFile(dir=experts,suffix='.tmp',delete=False) as stream:
+            temp=Path(stream.name);stream.write(data)
+        os.replace(temp,experts/'ZenCoreExecutor.ex5')
+    finally:
+        if temp is not None:temp.unlink(missing_ok=True)
+    return experts
 
 def slot_number(value):
     if isinstance(value,bool) or not isinstance(value,int) or not 1<=value<=10:raise ValueError('INVALID_SLOT')
@@ -315,7 +334,7 @@ class App:
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'ADMIN_REQUIRED','ADMIN_LOGIN_REQUIRED','ADMIN_SETUP_REQUIRED','MT5_FOLDER_ACCOUNT_MISMATCH','PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,install_error_message(e) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,('Fail EA siap compile tiada. Pasang semula pakej VPS Manager 1.1.3.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
@@ -337,7 +356,13 @@ class App:
         self.task(n,perform)
     def install(self,n):
         if n in self.busy:return
-        selection=choose_mt5_install(self.root,'Slot '+str(n))
+        title='Slot '+str(n)+' — Folder MT5'
+        preferred=simpledialog.askstring(title,
+            'Tampal alamat daripada MT5 > File > Open Data Folder.\n'
+            'Biarkan kosong untuk pilih folder daripada senarai.',
+            initialvalue=self.manager.folders.get(n,''),parent=self.root)
+        if preferred is None:return
+        selection=choose_mt5_install(self.root,title,preferred,require_editor=False)
         if not selection:return
         folder,editor=selection
         def perform():
@@ -362,12 +387,16 @@ class App:
 def main():
     if sys.platform!='win32':raise SystemExit('Windows diperlukan.')
     if '--self-test' in sys.argv:
-        sample=b'VPS manager packaging';assert dpapi(dpapi(sample),True)==sample;assert (RESOURCE/'ZenCoreExecutor.mq5').is_file()
+        sample=b'VPS manager packaging';assert dpapi(dpapi(sample),True)==sample;assert (RESOURCE/'ZenCoreExecutor.ex5').is_file()
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory);(folder/'MQL5').mkdir()
+            installed=install_ea(folder)/'ZenCoreExecutor.ex5'
+            assert installed.read_bytes()==(RESOURCE/'ZenCoreExecutor.ex5').read_bytes()
         root=tk.Tk();app=App(root,test_mode=True);root.update();assert len(app.states)==10 and len(app.reset_buttons)==10 and len(app.logins)==10
         if '--preview' in sys.argv:
             from PIL import ImageGrab
             ImageGrab.grab(bbox=(root.winfo_rootx(),root.winfo_rooty(),root.winfo_rootx()+root.winfo_width(),root.winfo_rooty()+root.winfo_height())).save('dist/VPS-Manager-Preview.png')
-        root.destroy();Path('dist/vps-validation.json').write_text(json.dumps({'ok':True,'managerVersion':VERSION,'slots':10,'eaVersion':EA_VERSION,'connectorBuild':CONNECTOR_BUILD,'dpapi':True}));return
+        root.destroy();Path('dist/vps-validation.json').write_text(json.dumps({'ok':True,'managerVersion':VERSION,'slots':10,'eaVersion':EA_VERSION,'connectorBuild':CONNECTOR_BUILD,'dpapi':True,'compiledEaInstalled':True}));return
     # Share the legacy Connector lock so two apps cannot write the same EA leases.
     INSTALL.mkdir(parents=True,exist_ok=True)
     import msvcrt

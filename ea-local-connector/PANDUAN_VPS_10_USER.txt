@@ -1,12 +1,12 @@
-ZENCORE VPS MANAGER 1.1.1 — DRAF MODUL 1
-Connector 2.1.19 / EA 2.21
-Server kekal PAUSED. Kit ujian ini tidak memberi kebenaran untuk live semula.
+ZENCORE VPS MANAGER 1.1.3
+Connector 2.1.20 / EA 2.21
+Status Auto Trade dikawal dari ZenCore web.
 
 ALIRAN ADMIN
 0. Isi ID + password ADMIN, klik Sahkan Admin. Password tidak disimpan.
-1. Pada slot, klik 1 Folder / EA. Pilih terminal daripada senarai folder data MT5 yang dikesan.
-   Jika terminal portable/folder khas tidak tersenarai, gunakan Folder lain.
-   Manager memasang sumber EA dan compile dengan MetaEditor terminal tersebut.
+1. Pada slot yang betul, klik 1 Folder / EA dan tampal alamat MT5 > File > Open Data Folder.
+   Folder yang sudah disimpan akan diisi semula. Kosongkan kotak untuk membuka senarai terminal.
+   Manager menyalin ZenCoreExecutor.ex5 yang sudah dikompil. MetaEditor tidak diperlukan.
 2. Dalam MT5, Refresh Navigator dan attach ZenCoreExecutor pada SATU chart sahaja.
    Login broker dibuat dalam MT5; password broker tidak diberikan kepada Manager.
    Hidupkan Algo Trading dan pastikan akaun/server betul.
