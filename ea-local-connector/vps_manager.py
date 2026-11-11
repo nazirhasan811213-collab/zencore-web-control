@@ -5,17 +5,23 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.3'
+VERSION='1.1.4'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
+def compiled_ea_payload():
+    # The installer keeps a second copy beside the EXE, outside PyInstaller's temp folder.
+    candidates=[RESOURCE/'ZenCoreExecutor.ex5']
+    if getattr(sys,'frozen',False):
+        candidates.insert(0,Path(sys.executable).parent/'ZenCoreExecutor.ex5')
+    for artifact in candidates:
+        try:data=artifact.read_bytes()
+        except OSError:continue
+        if len(data)>=1024 and data.startswith(b'EX5'):
+            return data
+    raise RuntimeError('VPS_EA_PACKAGE_MISSING')
+
 def install_ea(folder,editor=None):
-    # Ship the compiled EA. The VPS never needs MetaEditor or its compiler files.
-    artifact=RESOURCE/'ZenCoreExecutor.ex5'
-    try:data=artifact.read_bytes()
-    except FileNotFoundError as error:
-        raise RuntimeError('VPS_EA_PACKAGE_MISSING') from error
-    if not data.startswith(b'EX5') or len(data)<1024:
-        raise RuntimeError('VPS_EA_PACKAGE_MISSING')
+    data=compiled_ea_payload()
     experts=resolve_mt5_folder(folder)/'MQL5'/'Experts'/'ZenCore'
     experts.mkdir(parents=True,exist_ok=True)
     temp=None
@@ -334,7 +340,7 @@ class App:
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'ADMIN_REQUIRED','ADMIN_LOGIN_REQUIRED','ADMIN_SETUP_REQUIRED','MT5_FOLDER_ACCOUNT_MISMATCH','PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,('Fail EA siap compile tiada. Pasang semula pakej VPS Manager 1.1.3.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.4.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
@@ -387,11 +393,13 @@ class App:
 def main():
     if sys.platform!='win32':raise SystemExit('Windows diperlukan.')
     if '--self-test' in sys.argv:
-        sample=b'VPS manager packaging';assert dpapi(dpapi(sample),True)==sample;assert (RESOURCE/'ZenCoreExecutor.ex5').is_file()
+        sample=b'VPS manager packaging';assert dpapi(dpapi(sample),True)==sample;payload=compiled_ea_payload()
+        if '--require-sidecar' in sys.argv:
+            assert (Path(sys.executable).parent/'ZenCoreExecutor.ex5').read_bytes()==payload
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory);(folder/'MQL5').mkdir()
             installed=install_ea(folder)/'ZenCoreExecutor.ex5'
-            assert installed.read_bytes()==(RESOURCE/'ZenCoreExecutor.ex5').read_bytes()
+            assert installed.read_bytes()==payload
         root=tk.Tk();app=App(root,test_mode=True);root.update();assert len(app.states)==10 and len(app.reset_buttons)==10 and len(app.logins)==10
         if '--preview' in sys.argv:
             from PIL import ImageGrab

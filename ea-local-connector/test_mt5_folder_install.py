@@ -77,3 +77,12 @@ class FolderInstallTests(unittest.TestCase):
    bundled.unlink()
    with self.assertRaisesRegex(RuntimeError,'VPS_EA_PACKAGE_MISSING'):install_ea(data)
    self.assertEqual(dest.read_bytes(),payload)
+
+ def test_vps_installed_copy_works_if_embedded_ea_is_missing(self):
+  from vps_manager import install_ea
+  _,data=self.terminal(2)
+  app=self.root/'installed';app.mkdir()
+  payload=b'EX5'+b'fixture'*1024
+  (app/'ZenCoreExecutor.ex5').write_bytes(payload)
+  with patch('vps_manager.RESOURCE',self.root/'missing'),patch('vps_manager.sys.frozen',True,create=True),patch('vps_manager.sys.executable',str(app/'ZenCoreVPSManager.exe')):
+   self.assertEqual((install_ea(data)/'ZenCoreExecutor.ex5').read_bytes(),payload)
