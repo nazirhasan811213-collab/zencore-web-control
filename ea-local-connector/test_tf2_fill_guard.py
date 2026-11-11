@@ -14,14 +14,16 @@ int main(){
  assert(!Tf2EntryPriceAllowed(false,4014.00,4014.14));
  assert(!Tf2EntryPriceAllowed(true,4015.86,4015.86));
  assert(Tf2EntryPriceAllowed(true,4015.50,4015.86));
- for(bool buy:{false,true})for(double risk:{0.1,0.5,1.0,2.0,2.5,3.0,3.5,4.0})for(double drift:{-1.0,0.0,0.2,1.5,3.0}){
-  double sign=buy?1:-1,planned=4000-sign*risk,fill=4000+sign*drift;
-  double stop=Tf2EntryStop(buy,fill,planned,risk);
-  if(sign*(fill-planned)>0){assert(Tf2EntryRiskAllowed(buy,fill,stop,risk));assert(sign*(stop-planned)>=-1e-8);}
-  else assert(!Tf2EntryRiskAllowed(buy,fill,stop,risk));
+ assert(std::abs(Tf2EntryStop(false,4061.0,.01)-4065.0)<1e-8);
+ assert(std::abs(Tf2EntryStop(true,4061.0,.01)-4057.0)<1e-8);
+ for(bool buy:{false,true})for(double tick:{.001,.01,.03,.25})for(double price:{4061.0,4061.017,4064.10}){
+  double stop=Tf2EntryStop(buy,price,tick);
+  double risk=buy?price-stop:stop-price;
+  assert(Tf2EntryRiskAllowed(buy,price,stop,4));
+  assert(risk>=4-tick-1e-8);
+  assert(std::abs(stop/tick-std::round(stop/tick))<1e-8);
  }
- assert(!Tf2EntryRiskAllowed(true,4016,4012.36,2));
- assert(Tf2EntryRiskAllowed(true,4016,Tf2EntryStop(true,4016,4012.36,2),2));
+ assert(Tf2EntryStop(false,4061.0,0)==0);
  assert(!Tf2EntryRiskAllowed(true,100,96,4.01));
  assert(Tf2EntryRiskAllowed(true,100,97,3));
  assert(Tf2EntryRiskAllowed(true,100,96,4));
@@ -33,6 +35,6 @@ int main(){
 '''
   with tempfile.TemporaryDirectory() as tmp:
    p=pathlib.Path(tmp);cpp=p/'guard.cpp';out=p/'guard'
-   cpp.write_text('#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathMax std::max\n#define MathMin std::min\n'+rules+main)
+   cpp.write_text('#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathCeil std::ceil\n#define MathFloor std::floor\n'+rules+main)
    subprocess.run([compiler,'-std=c++17',str(cpp),'-o',str(out)],check=True,capture_output=True)
    subprocess.run([str(out)],check=True,capture_output=True)

@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.21'
+EA_VERSION = '2.22'
 CONNECTOR_BUILD = '2.1.21'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
