@@ -1,5 +1,9 @@
+KEMAS KINI VPS MANAGER 1.1.2
+Klik 1 Folder / EA pada slot yang betul. Tampal alamat MT5 > File > Open Data Folder.
+Folder slot sedia ada akan diisi semula. Kosongkan kotak untuk membuka senarai folder.
+
 ZENCORE VPS MANAGER 1.1.1 — DRAF MODUL 1
-Connector 2.1.19 / EA 2.21
+Connector 2.1.20 / EA 2.21
 Server kekal PAUSED. Kit ujian ini tidak memberi kebenaran untuk live semula.
 
 ALIRAN ADMIN
