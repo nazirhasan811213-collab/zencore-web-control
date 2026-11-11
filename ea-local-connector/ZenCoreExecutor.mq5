@@ -625,7 +625,10 @@ void Process(){
   SaveState();
  }
  else if(type=="PLACE_SETUP"){
-  lastEntryCode="SYMBOL_NOT_AVAILABLE";
+  // The broker catalogue may have been unavailable during EA initialization.
+  // Refresh a missing mapping before rejecting this fresh command.
+  if(symbol==""){MapSymbols();symbol=Broker(c);}
+  lastEntryCode="BROKER_SYMBOL_MAPPING_REQUIRED";
   string executionTf=Get("executionTimeframe");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
