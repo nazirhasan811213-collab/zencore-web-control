@@ -242,6 +242,9 @@ bool Tf2EntryRiskAllowed(bool buy,double fill,double sl,double maximumRisk){
  double risk=buy?fill-sl:sl-fill;
  return fill>0 && sl>0 && maximumRisk>0 && maximumRisk<=4.0 && risk>0 && risk<=maximumRisk+1e-8;
 }
+double ExecutionInitialStopAfterFill(bool retainOrderStop,bool buy,double orderStop,double fill,double distance,double tickSize){
+ return retainOrderStop?orderStop:ExecutionStop(buy,fill,distance,tickSize);
+}
 double ExecutionTarget(double fill,double planEntry,double target){return fill+(target-planEntry);}
 // End pure TF2 entry price rules.
 bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion="",string executionTf=""){
@@ -312,10 +315,11 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    for(int j=PositionsTotal()-1;j>=0;j--){ulong t=PositionGetTicket(j);if(IsOwn(t) && PositionGetInteger(POSITION_IDENTIFIER)==identifier){filledTicket=t;break;}}
    if(filledTicket==0)return RejectEntry("EXECUTION_FILL_LOOKUP_FAILED");
    double fill=PositionGetDouble(POSITION_PRICE_OPEN),currentSl=PositionGetDouble(POSITION_SL);
-   double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
+   // Native TF2 keeps the SL sent with this order, even if the fill slips.
+   double safeSl=Price(symbol,ExecutionInitialStopAfterFill(guardedTf2,buy,initialSl,fill,stopDistance,entryTickSize));
    double t1=Price(symbol,ExecutionTarget(fill,entry,tp1)),t2=Price(symbol,ExecutionTarget(fill,entry,tp2)),t3=Price(symbol,ExecutionTarget(fill,entry,tp3));
    double fillRisk=buy?fill-safeSl:safeSl-fill;
-   bool protectedFill=(!guardedTf2 || Tf2EntryPriceAllowed(buy,fill,tp1)) && safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8 &&
+   bool protectedFill=(!guardedTf2 || Tf2EntryPriceAllowed(buy,fill,tp1)) && safeSl>0 && fillRisk>0 && (guardedTf2 || fillRisk<=stopDistance+1e-8) &&
      (buy?fill<t1 && t1<t2 && t2<t3:t3>0 && fill>t1 && t1>t2 && t2>t3);
    if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3)));
    if(protectedFill && MathAbs(safeSl-currentSl)>1e-8)protectedFill=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();

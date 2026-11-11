@@ -24,6 +24,9 @@ int main(){
   assert(std::abs(stop/tick-std::round(stop/tick))<1e-8);
  }
  assert(ExecutionStop(false,4061.0,4,0)==0);
+ assert(std::abs(ExecutionInitialStopAfterFill(true,true,3996,4000.25,4,.01)-3996)<1e-8);
+ assert(std::abs(ExecutionInitialStopAfterFill(true,false,4004,3999.75,4,.01)-4004)<1e-8);
+ assert(std::abs(ExecutionInitialStopAfterFill(false,true,3996,4000.25,4,.01)-3996.25)<1e-8);
  assert(std::abs(ExecutionStop(true,4061,5.23,.01)-4055.77)<1e-8);
  assert(std::abs(ExecutionTarget(4061,4062,4059.5)-4058.5)<1e-8);
  assert(std::abs(ExecutionTarget(4061,4062,4064.5)-4063.5)<1e-8);
