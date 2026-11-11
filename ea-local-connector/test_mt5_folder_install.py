@@ -47,3 +47,7 @@ class FolderInstallTests(unittest.TestCase):
    if isinstance(error,PermissionError):self.assertIn('tidak boleh ditulis',message)
    else:self.assertIn(expected,message)
    self.assertNotIn('private path',message);self.assertNotIn('PAUTAN',message)
+ def test_pasted_folder_is_used_without_opening_another_picker(self):
+  program,data=self.terminal(2)
+  with patch.object(connector,'discover_mt5_folders',side_effect=AssertionError('unexpected discovery')):
+   self.assertEqual(connector.choose_mt5_install(None,'Pasang EA','  "'+str(data)+'"  '),(data,program/'metaeditor64.exe'))
