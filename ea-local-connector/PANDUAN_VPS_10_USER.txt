@@ -1,5 +1,5 @@
 ZENCORE VPS MANAGER 1.1.5
-Connector 2.1.21 / EA 2.21
+Connector 2.1.21 / EA 2.22
 Status Auto Trade dikawal dari ZenCore web.
 
 ALIRAN ADMIN
@@ -10,7 +10,7 @@ ALIRAN ADMIN
 2. Dalam MT5, Refresh Navigator dan attach ZenCoreExecutor pada SATU chart sahaja.
    Login broker dibuat dalam MT5; password broker tidak diberikan kepada Manager.
    Hidupkan Algo Trading dan pastikan akaun/server betul.
-   Klik Cari semua MT5. EA 2.21 membolehkan padanan folder dibuat secara automatik.
+   Klik Cari semua MT5. EA 2.22 membolehkan padanan folder dibuat secara automatik.
    Isi ID ZenCore client pada slot, kemudian klik 2 Sambung EA.
    Admin tidak perlu password client untuk laluan ini.
 3. Klik 3 Auto Trade. Browser membuka halaman setup admin untuk client tepat.

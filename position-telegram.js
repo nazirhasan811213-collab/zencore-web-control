@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('node:crypto'),Access=require('./account-access'),Handover=require('./account-handover');
+const FILL_PLANS=new Set(['MT5_FILL_PLAN_V1','FILL_PRICE_ATR_V1']);
 const AGE=120000,WAIT=6000,MODES=['TF2_SCALPING','TF15_INTRA'];
 const privateChat=id=>/^[1-9]\d{0,19}$/.test(String(id||''));
 const allowed=(u,at)=>Access.allowed(u,at)&&Handover.canTrade(u)&&u.role!=='viewer';
@@ -20,14 +21,14 @@ function matching(g,positions){return (positions||[]).filter(p=>Number.isFinite(
 function message(g,positions,at,key){
  const volume=positions.reduce((n,p)=>n+p.volume,0),entry=positions.reduce((n,p)=>n+p.entry*p.volume,0)/volume;
  const price=n=>Number.isFinite(n)&&n>0?n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3}):'Belum dilaporkan';
- const lines=['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | POSISI SUDAH DIBUKA','──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`Entry purata: ${price(entry)}`,`Posisi disahkan: ${positions.length} • ${Number(volume.toFixed(3))} lot`];
+ const lines=['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | POSISI SUDAH DIBUKA'+(g.reentry?' • RE-ENTRY':''),'──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`${positions.length===1?'Entry MT5':'Entry purata MT5'}: ${price(entry)}`,`Posisi disahkan: ${positions.length} • ${Number(volume.toFixed(3))} lot`];
  if(g.directionMismatch)lines.push('⚠️ Arah posisi berbeza daripada pelan. Semak MT5 segera.');
  if(g.expected>positions.length)lines.push(`Pelan: ${g.expected} layer • setakat pengesahan ini`);
  const values=positions.map(p=>p.activeSl);
  if(values.every(n=>Number.isFinite(n)&&n>0))lines.push(values.every(n=>n===values[0])?`SL: ${price(values[0])}`:`SL setiap posisi: ${price(Math.min(...values))} – ${price(Math.max(...values))}`);
  else lines.push('SL: Semak setiap posisi di MT5');
- for(const k of ['tp1','tp2','tp3']){const a=positions.map(p=>p[k]);if(a.every(n=>Number.isFinite(n)&&n>0))lines.push(`${k.toUpperCase()}: ${a.every(n=>n===a[0])?price(a[0]):price(Math.min(...a))+' – '+price(Math.max(...a))}`);}
- lines.push('','✅ Posisi sebenar disahkan di MT5.','• Semak pelan SL/TP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━');return lines.join('\n');
+ if(positions.every(p=>g.manual||FILL_PLANS.has(p.fillRiskVersion)))for(const k of ['tp1','tp2','tp3']){const a=positions.map(p=>p[k]);if(a.every(n=>Number.isFinite(n)&&n>0))lines.push(`${k.toUpperCase()}: ${a.every(n=>n===a[0])?price(a[0]):price(Math.min(...a))+' – '+price(Math.max(...a))}`);}
+ lines.push('','✅ Posisi sebenar disahkan di MT5.','• SL aktif daripada MT5; TP ialah sasaran EA jika dipaparkan.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━');return lines.join('\n');
 }
 function closeMessage(g,at,key){
  const ps=g.positions||[],volume=ps.reduce((n,p)=>n+p.volume,0);
@@ -58,6 +59,7 @@ class PositionTelegram{
     const command=await this.store.setupForPosition(userId,podId,'XAUUSD',g.mode,g.setupId);
     if(!command||command.podId!==podId||command.userId!==userId||command.payload?.accountFingerprint!==accountFingerprint){this.count('setup_not_matched');continue;}
     g.directionMismatch=command.payload?.side!==g.side;
+    const snap=command.payload?.analysisSnapshot;g.reentry=snap?.cycleKind==='FOLLOWUP'||snap?.entryAnchor==='FILL_PRICE_ATR_V1';
     g.expected=Math.max(1,Math.min(10,Number(command.payload.layers)||g.positions.length));
    }else g.expected=1;
    this.count('setup_matched');const key=crypto.createHash('sha256').update(JSON.stringify([userId,accountFingerprint,u.handover_generation||0,g.key])).digest('hex');

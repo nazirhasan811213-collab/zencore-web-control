@@ -27,3 +27,14 @@ test('close message reports only confirmed closure without inventing financial o
  const text=closeMessage(g,at,'b'.repeat(64));a.match(text,/SETUP SUDAH DITUTUP/);a.match(text,/2 • 0\.02 lot/);a.match(text,/History MT5/);a.doesNotMatch(text,/profit|untung:|SL HIT|callback|Sudah lihat/i);
  a.equal(groups([p({openedAt:at-86400000})],at,true).length,1,'historical open positions can be tracked for future closure');
 });
+test('confirmed alerts show only fill-based targets and preserve per-layer ranges',()=>{
+ const ps=[p({side:'SELL',entry:4061,activeSl:4065,tp1:4059.5,tp2:4058.5,tp3:4057.5,fillRiskVersion:'MT5_FILL_PLAN_V1'}),
+  p({side:'SELL',positionId:'457',entry:4060.9,activeSl:4064.9,tp1:4059.4,tp2:4058.4,tp3:4057.4,fillRiskVersion:'MT5_FILL_PLAN_V1'})];
+ const g=groups(ps,at)[0];g.reentry=true;
+ const text=message(g,ps,at,'a'.repeat(64));
+ a.match(text,/RE-ENTRY/);a.match(text,/Entry purata MT5: 4,060\.95/);a.match(text,/4,064\.90 – 4,065\.00/);
+ a.match(text,/TP1: 4,059\.40 – 4,059\.50/);
+ a.doesNotMatch(message(g,[{...ps[0],fillRiskVersion:null}],at,'a'.repeat(64)),/TP1:/);
+ const manual={...ps[0],origin:'MANUAL',fillRiskVersion:null};
+ a.match(message(groups([manual],at)[0],[manual],at,'a'.repeat(64)),/TP1: 4,059\.50/);
+});

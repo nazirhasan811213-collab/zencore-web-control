@@ -28,7 +28,7 @@ jobs:
           $p = Start-Process dist/ZenCoreVPSManager.exe -ArgumentList '--self-test','--preview' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Manager packaged validation failed' }
           $v = Get-Content dist/vps-validation.json -Raw | ConvertFrom-Json
-          if (-not $v.ok -or $v.slots -ne 10 -or $v.eaVersion -ne '2.21' -or $v.managerVersion -ne '1.1.5' -or $v.connectorBuild -ne '2.1.21' -or -not $v.dpapi -or -not $v.compiledEaInstalled) { throw 'Manager validation incomplete' }
+          if (-not $v.ok -or $v.slots -ne 10 -or $v.eaVersion -ne '2.22' -or $v.managerVersion -ne '1.1.5' -or $v.connectorBuild -ne '2.1.21' -or -not $v.dpapi -or -not $v.compiledEaInstalled) { throw 'Manager validation incomplete' }
       - name: Build and smoke-test installer
         shell: pwsh
         run: |

@@ -27,4 +27,4 @@ Name: "{userprograms}\ZenCore Connector"; Filename: "{app}\ZenCoreConnector.exe"
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ZenCoreConnector"; ValueData: """{app}\ZenCoreConnector.exe"" --background"; Flags: uninsdeletevalue
 [Run]
-Filename: "{app}\ZenCoreConnector.exe"; Description: "Buka ZenCore dan pasang EA 2.21"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ZenCoreConnector.exe"; Description: "Buka ZenCore dan pasang EA 2.22"; Flags: nowait postinstall skipifsilent

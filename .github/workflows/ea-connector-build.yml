@@ -36,7 +36,7 @@ jobs:
           $result = Get-Content dist/validation.json -Raw | ConvertFrom-Json
           if (-not $result.ok -or -not $result.eaResource -or -not $result.dpapi -or -not $result.tkGui) { throw 'Packaged EXE validation incomplete.' }
           if ($result.connectorBuild -ne '2.1.21') { throw 'Wrong Connector build.' }
-          if ($result.eaVersion -ne '2.21') { throw 'Wrong EA version embedded.' }
+          if ($result.eaVersion -ne '2.22') { throw 'Wrong EA version embedded.' }
       - name: Build easy Windows setup
         shell: pwsh
         run: |
@@ -55,7 +55,7 @@ jobs:
           $check = Start-Process $installed -ArgumentList '--self-test', '--output=dist/setup-validation.json' -Wait -PassThru
           if ($check.ExitCode -ne 0) { throw 'Installed Connector smoke test failed.' }
           $report = Get-Content dist/setup-validation.json -Raw | ConvertFrom-Json
-          if (-not $report.ok -or $report.eaVersion -ne '2.21') { throw 'Installed EA version mismatch.' }
+          if (-not $report.ok -or $report.eaVersion -ne '2.22') { throw 'Installed EA version mismatch.' }
           $remove = Start-Process (Join-Path $testDir 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
           if ($remove.ExitCode -ne 0) { throw 'Setup uninstall test failed.' }
       - uses: actions/upload-artifact@v4

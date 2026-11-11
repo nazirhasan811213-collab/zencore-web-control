@@ -146,7 +146,7 @@ function currentPineMessage(e,p,s={},time){
  const momentum=typeof d.momentum==='string'?d.momentum.replace(/[\x00-\x1f]/g,' ').slice(0,70):'—';
  return [
   `${buy?'🟢':'🔴'} ZENCORE | ${reentry?'PELUANG RE-ENTRY':'PELUANG ENTRY'} TF${tf} • ${tf==='15'?'INTRA':'SCALP'}`,
-  `${e.symbol} • ${e.side}`,'',
+  `${e.symbol} • ${e.side}`,'','Pelan Pine • Harga rujukan sebelum MT5:',
   `Entry: ${price(p.entry)} • Overall Setup Strength ${strength(a?.overall)}`,`SL: ${price(p.sl)}`,`TP1: ${price(p.tp1)} • Strength ${strength(a?.targets?.tp1)}`,`TP2: ${price(p.tp2)} • Strength ${strength(a?.targets?.tp2)}`,`TP3: ${price(p.tp3)} • Strength ${strength(a?.targets?.tp3)}`,
   `🎯 Jangkauan setup: ${range}`,'',
   'Sebab entry:',...reason.split(/;\s*|\n/).filter(Boolean).map(t=>'• '+t),'',
