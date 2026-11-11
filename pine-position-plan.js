@@ -33,11 +33,12 @@ function management(market,positions,command,at){
  if(!valid(command))return null;
  const p=command.payload,s=p.analysisSnapshot,own=ownPositions(positions,p.symbol,p.strategyMode),observed=Number(market?.signalObservedAt||market?.receivedAt);
  if(!matches(command,own)||String(market?.timeframe)!==String(s.executionTimeframe)||market.symbol!==p.symbol||!Number.isFinite(observed)||at-observed>30000||observed>at+5000)return null;
+ const fillAnchored=own.some(x=>x.fillRiskVersion==='MT5_FILL_PLAN_V1');
  const sign=p.side==='BUY'?1:-1,quotes=own.map(x=>x.currentPrice);
  if(quotes.some(x=>!Number.isFinite(x)||x<=0))return null;
  const quote=sign>0?Math.min(...quotes):Math.max(...quotes),hit=t=>sign*(quote-t)>=0;
  const source=market.positionManagement||{},freshExit=own.every(x=>Number.isFinite(x.openedAt)&&observed>=x.openedAt);
- const chartClose=freshExit&&(market.nativeChartExitAll===true&&market.feedChannel==='EXECUTION'||market.setupKey===s.setupKey&&['CLOSE_50_NOW','EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(source.action));
+ const chartClose=freshExit&&(market.nativeChartExitAll===true&&market.feedChannel==='EXECUTION'||market.setupKey===s.setupKey&&(['CLOSE_50_NOW','EXIT_ALL','EXIT_REMAINING'].includes(source.action)||!fillAnchored&&source.action==='EXIT_SL'));
  const pm={action:chartClose?'EXIT_ALL':'HOLD',slMoveTriggered:false,entryAnchor:ANCHOR,entryCommandId:command.id,reason:chartClose?'Chart Close → CLOSE ALL setup aktif':'Exit ikut pelan '+(s.cycleKind==='FOLLOWUP'?'RE-ENTRY':'ENTRY')};
  const tf15Be=s.exitLockVersion==='PINE_STEPLOCK_BE_TF15_V1';
  let target=null,label='INITIAL';
@@ -45,7 +46,7 @@ function management(market,positions,command,at){
  else if(hit(p.tp3)){target=p.tp2;label='TP2_LOCKED';}
  else if(hit(p.tp2)){target=p.tp1;label='TP1_LOCKED';}
  else if(hit(p.tp1)&&(tf15Be||sign*(quote-p.entry)>1.50)){target=tf15Be?p.entry:p.entry+sign*1.50;label=tf15Be?'ENTRY_BE':'ENTRY_PLUS_150';}
- if(!chartClose&&target!==null&&own.some(x=>!Number.isFinite(x.activeSl)||x.activeSl<=0||sign*(target-x.activeSl)>0.000001))Object.assign(pm,{slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:target,slLockLabel:label});
+ if(!fillAnchored&&!chartClose&&target!==null&&own.some(x=>!Number.isFinite(x.activeSl)||x.activeSl<=0||sign*(target-x.activeSl)>0.000001))Object.assign(pm,{slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:target,slLockLabel:label});
  return {...market,setupKey:s.setupKey,strategyNormal:{...market.strategyNormal,side:p.side,entrySopVersion:s.analysisSopVersion,plan:{entry:p.entry,sl:p.sl,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3}},positionManagement:pm};
 }
 module.exports={ANCHOR,valid,matches,ownPositions,resolve,view,management};

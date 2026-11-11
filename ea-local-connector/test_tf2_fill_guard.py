@@ -14,16 +14,19 @@ int main(){
  assert(!Tf2EntryPriceAllowed(false,4014.00,4014.14));
  assert(!Tf2EntryPriceAllowed(true,4015.86,4015.86));
  assert(Tf2EntryPriceAllowed(true,4015.50,4015.86));
- assert(std::abs(Tf2EntryStop(false,4061.0,.01)-4065.0)<1e-8);
- assert(std::abs(Tf2EntryStop(true,4061.0,.01)-4057.0)<1e-8);
+ assert(std::abs(ExecutionStop(false,4061.0,4,.01)-4065.0)<1e-8);
+ assert(std::abs(ExecutionStop(true,4061.0,4,.01)-4057.0)<1e-8);
  for(bool buy:{false,true})for(double tick:{.001,.01,.03,.25})for(double price:{4061.0,4061.017,4064.10}){
-  double stop=Tf2EntryStop(buy,price,tick);
+  double stop=ExecutionStop(buy,price,4,tick);
   double risk=buy?price-stop:stop-price;
   assert(Tf2EntryRiskAllowed(buy,price,stop,4));
   assert(risk>=4-tick-1e-8);
   assert(std::abs(stop/tick-std::round(stop/tick))<1e-8);
  }
- assert(Tf2EntryStop(false,4061.0,0)==0);
+ assert(ExecutionStop(false,4061.0,4,0)==0);
+ assert(std::abs(ExecutionStop(true,4061,5.23,.01)-4055.77)<1e-8);
+ assert(std::abs(ExecutionTarget(4061,4062,4059.5)-4058.5)<1e-8);
+ assert(std::abs(ExecutionTarget(4061,4062,4064.5)-4063.5)<1e-8);
  assert(!Tf2EntryRiskAllowed(true,100,96,4.01));
  assert(Tf2EntryRiskAllowed(true,100,97,3));
  assert(Tf2EntryRiskAllowed(true,100,96,4));

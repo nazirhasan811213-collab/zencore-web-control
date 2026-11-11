@@ -59,7 +59,7 @@ bool LoadOwnRisk(ulong ticket){
  if(!IsOwn(ticket))return false;
  string symbol=PositionGetString(POSITION_SYMBOL),comment=PositionGetString(POSITION_COMMENT);
  long identifier=PositionGetInteger(POSITION_IDENTIFIER);
- if(ReadFields("fill-risk-"+(string)identifier+".tsv") && Get("symbol")==symbol && Get("version")=="FILL_PRICE_ATR_V1")return true;
+ if(ReadFields("fill-risk-"+(string)identifier+".tsv") && Get("symbol")==symbol && (Get("version")=="FILL_PRICE_ATR_V1" || Get("version")=="MT5_FILL_PLAN_V1"))return true;
  int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
  return prefix>0 && ReadFields("risk-"+StringSubstr(comment,prefix)+".tsv") && Get("symbol")==symbol;
 }
@@ -179,10 +179,11 @@ bool CloseTicket(ulong ticket,double volume){
  req.type_filling=(fill & SYMBOL_FILLING_FOK)!=0?ORDER_FILLING_FOK:ORDER_FILLING_IOC;
  return OrderSend(req,res) && (res.retcode==TRADE_RETCODE_DONE || res.retcode==TRADE_RETCODE_DONE_PARTIAL);
 }
-bool CloseGroup(string symbol,int percent,ulong scope=0){
+bool CloseGroup(string symbol,int percent,ulong scope=0,bool chartStop=false){
  ulong tickets[];double total=0;
  for(int i=0;i<PositionsTotal();i++){
   ulong t=PositionGetTicket(i);if(!IsOwn(t) || (scope!=0 && (ulong)PositionGetInteger(POSITION_MAGIC)!=scope) || (symbol!="" && PositionGetString(POSITION_SYMBOL)!=symbol))continue;
+  if(chartStop && LoadOwnRisk(t) && Get("version")=="MT5_FILL_PLAN_V1")continue;
   if(percent==50 && FileIsExist(channel+"\\half-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done",FILE_COMMON))continue;
   int n=ArraySize(tickets);ArrayResize(tickets,n+1);tickets[n]=t;total+=PositionGetDouble(POSITION_VOLUME);
  }
@@ -210,6 +211,7 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  bool ok=true;
  for(int i=0;i<PositionsTotal();i++){
   ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket) || (scope!=0 && (ulong)PositionGetInteger(POSITION_MAGIC)!=scope) || PositionGetString(POSITION_SYMBOL)!=symbol)continue;
+  if(LoadOwnRisk(ticket) && Get("version")=="MT5_FILL_PLAN_V1")continue; // Per-ticket locks are managed locally.
   double old=PositionGetDouble(POSITION_SL),sl=Price(symbol,kind=="MOVE_SL_ENTRY"?PositionGetDouble(POSITION_PRICE_OPEN):target);
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if((ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC && LoadOwnRisk(ticket) && Get("exitLockVersion")=="PINE_STEPLOCK_150_TP3_PLUS3_V1"){
@@ -228,18 +230,19 @@ bool RejectEntry(string code){lastEntryCode=code;return false;}
 bool Tf2EntryPriceAllowed(bool buy,double quote,double tp1){
  return quote>0 && tp1>0 && (buy?quote<tp1:quote>tp1);
 }
-double Tf2EntryStop(bool buy,double price,double tickSize){
- if(price<=0 || tickSize<=0)return 0;
- double ticks=(price+(buy?-4.0:4.0))/tickSize;
- // Round toward entry if the broker cannot represent an exact 4.00 offset.
+double ExecutionStop(bool buy,double price,double distance,double tickSize){
+ if(price<=0 || distance<=0 || tickSize<=0)return 0;
+ double ticks=(price+(buy?-distance:distance))/tickSize;
+ // Round toward entry if the broker cannot represent the requested offset.
  return (buy?MathCeil(ticks-1e-8):MathFloor(ticks+1e-8))*tickSize;
 }
 bool Tf2EntryRiskAllowed(bool buy,double fill,double sl,double maximumRisk){
  double risk=buy?fill-sl:sl-fill;
  return fill>0 && sl>0 && maximumRisk>0 && maximumRisk<=4.0 && risk>0 && risk<=maximumRisk+1e-8;
 }
+double ExecutionTarget(double fill,double planEntry,double target){return fill+(target-planEntry);}
 // End pure TF2 entry price rules.
-bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion=""){
+bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion="",string executionTf=""){
  lastEntryCode="ENTRY_REJECTED";
  if(c!="XAUUSD")return RejectEntry("SYMBOL_REJECTED");
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return RejectEntry("STRATEGY_MODE_INVALID");
@@ -254,9 +257,12 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(!VolumeValid(symbol,lot))return RejectEntry("VOLUME_INVALID");
  if(side!="BUY" && side!="SELL")return RejectEntry("SIDE_REJECTED");
  bool buy=side=="BUY";
- bool guardedTf2=strategyMode=="TF2_SCALPING" && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
+ bool guardedTf2=strategyMode=="TF2_SCALPING" && executionTf=="2" && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
+ bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
+ bool fillPlan=guardedTf2 || fillTf15;
  const double guardRisk=4.0;
- double entryTickSize=guardedTf2?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
+ double stopDistance=guardedTf2?guardRisk:MathAbs(entry-sl);
+ double entryTickSize=fillPlan?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
  if(fillAnchor && AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return RejectEntry("FILL_REENTRY_HEDGING_REQUIRED");
@@ -276,25 +282,19 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  MqlTick tick;if(!SymbolInfoTick(symbol,tick) || tick.bid<=0 || tick.ask<=0)return RejectEntry("QUOTE_NOT_READY");
  // Analysis owns entry qualification. Broker stop-distance and quote checks remain.
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
- if(guardedTf2){
-  double quote=buy?tick.ask:tick.bid;
-  if(!Tf2EntryPriceAllowed(buy,quote,tp1))return RejectEntry("TF2_ENTRY_PAST_TP1");
-  sl=Price(symbol,Tf2EntryStop(buy,quote,entryTickSize));
-  if(!Tf2EntryRiskAllowed(buy,quote,sl,guardRisk))return RejectEntry("TF2_FILL_RISK_INVALID");
- }
- if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)return RejectEntry("BROKER_STOP_DISTANCE");
  if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return RejectEntry("RISK_FILE_WRITE_FAILED");
  // Store chart targets locally so StepLock survives a TradingView/feed outage.
- if(!WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
+ if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
  for(int i=0;i<layers;i++){
   if(!Permissions())return RejectEntry(i>0?"SETUP_PARTIAL":PermissionReason());
   leaseCode=LeaseReason(ownerPod);if(leaseCode!="READY")return RejectEntry(i>0?"SETUP_PARTIAL":leaseCode);
   if(!SymbolInfoTick(symbol,tick) || tick.ask<=0 || tick.bid<=0)return RejectEntry("QUOTE_NOT_READY");
-  if(guardedTf2){
+  if(fillPlan){
    double quote=buy?tick.ask:tick.bid;
-   if(!Tf2EntryPriceAllowed(buy,quote,tp1))return RejectEntry(i>0?"TF2_PARTIAL_ENTRY_PAST_TP1":"TF2_ENTRY_PAST_TP1");
-   sl=Price(symbol,Tf2EntryStop(buy,quote,entryTickSize));
-   if(!Tf2EntryRiskAllowed(buy,quote,sl,guardRisk))return RejectEntry("TF2_FILL_RISK_INVALID");
+   if(guardedTf2 && !Tf2EntryPriceAllowed(buy,quote,tp1))return RejectEntry(i>0?"TF2_PARTIAL_ENTRY_PAST_TP1":"TF2_ENTRY_PAST_TP1");
+   sl=Price(symbol,ExecutionStop(buy,quote,stopDistance,entryTickSize));
+   double quoteRisk=buy?quote-sl:sl-quote;
+   if(sl<=0 || quoteRisk<=0 || quoteRisk>stopDistance+1e-8)return RejectEntry("EXECUTION_SL_INVALID");
   }
   if(!fillAnchor && (buy?sl>=tick.bid-distance:sl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
   // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
@@ -302,18 +302,22 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
   if(fillAnchor && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
   bool sent=buy?trade.Buy(lot,symbol,0,initialSl,0,(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20)):trade.Sell(lot,symbol,0,initialSl,0,(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20));
   if(!sent || !BrokerDone() || MathAbs(trade.ResultVolume()-lot)>1e-8)return RejectEntry(i>0?"SETUP_PARTIAL":"BROKER_ENTRY_REJECTED");
-  if(guardedTf2){
+  if(fillPlan){
    ulong deal=trade.ResultDeal(),filledTicket=0;long identifier=0;
    if(HistoryDealSelect(deal))identifier=HistoryDealGetInteger(deal,DEAL_POSITION_ID);
    for(int j=PositionsTotal()-1;j>=0;j--){ulong t=PositionGetTicket(j);if(IsOwn(t) && PositionGetInteger(POSITION_IDENTIFIER)==identifier){filledTicket=t;break;}}
-   if(filledTicket==0)return RejectEntry("TF2_FILL_LOOKUP_FAILED");
+   if(filledTicket==0)return RejectEntry("EXECUTION_FILL_LOOKUP_FAILED");
    double fill=PositionGetDouble(POSITION_PRICE_OPEN),currentSl=PositionGetDouble(POSITION_SL);
-   double safeSl=Price(symbol,Tf2EntryStop(buy,fill,entryTickSize));
-   bool protectedFill=Tf2EntryPriceAllowed(buy,fill,tp1) && Tf2EntryRiskAllowed(buy,fill,safeSl,guardRisk);
+   double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
+   double t1=Price(symbol,ExecutionTarget(fill,entry,tp1)),t2=Price(symbol,ExecutionTarget(fill,entry,tp2)),t3=Price(symbol,ExecutionTarget(fill,entry,tp3));
+   double fillRisk=buy?fill-safeSl:safeSl-fill;
+   bool protectedFill=(!guardedTf2 || Tf2EntryPriceAllowed(buy,fill,tp1)) && safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8 &&
+     (buy?fill<t1 && t1<t2 && t2<t3:t3>0 && fill>t1 && t1>t2 && t2>t3);
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3)));
    if(protectedFill && MathAbs(safeSl-currentSl)>1e-8)protectedFill=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
    if(!protectedFill){
-    if(!CloseTicket(filledTicket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore TF2_FILL_GUARD_CLOSE_PENDING ticket=",filledTicket);
-    return RejectEntry("TF2_FILL_GUARD_REJECTED");
+    if(!IsOwn(filledTicket) || !CloseTicket(filledTicket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore EXECUTION_PLAN_CLOSE_PENDING ticket=",filledTicket);
+    return RejectEntry("EXECUTION_PLAN_REJECTED");
    }
   }
   if(fillAnchor){
@@ -621,7 +625,7 @@ void Process(){
   string executionTf=Get("executionTimeframe");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
-  else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion);
+  else if(symbol!="")ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;resumePending=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
@@ -629,7 +633,7 @@ void Process(){
   ok=true;
   for(int i=0;i<actions;i++){
    bool done=false;
-   if(actionType[i]=="CLOSE_PERCENT" && (actionValue[i]==50 || actionValue[i]==100))done=CloseGroup(symbol,(int)actionValue[i],scope);
+   if(actionType[i]=="CLOSE_PERCENT" && (actionValue[i]==50 || actionValue[i]==100))done=CloseGroup(symbol,(int)actionValue[i],scope,actionReason[i]=="EXIT_SL");
    else if(actionType[i]=="MOVE_SL_ENTRY" || actionType[i]=="MOVE_SL_TP1" || actionType[i]=="MOVE_SL_TP2")done=MoveGroup(symbol,actionType[i],actionValue[i],scope);
    if(!done)ok=false;
   }

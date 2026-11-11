@@ -74,3 +74,15 @@ test('restored TF15 BE exit keeps TP2/TP3 locks, full close, no extension, and r
   a.equal(P.valid(command),false);
  }
 });
+
+test('MT5 fill plan ignores chart price exits and retains fresh native chart closes',()=>{
+ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP']){
+  const {command,position,market}=fixture(tf,side,kind);
+  position.fillRiskVersion='MT5_FILL_PLAN_V1';
+  position.currentPrice=command.payload.tp3;
+  const m={...market,setupKey:command.payload.analysisSnapshot.setupKey};
+  a.equal(Core.buildManagementCommand(P.management({...m,positionManagement:{action:'EXIT_SL'}},[position],command,NOW)),null);
+  const out=P.management({...m,nativeChartExitAll:true},[position],command,NOW);
+  a.deepEqual(Core.buildManagementCommand(out).payload.actions,[{type:'CLOSE_PERCENT',percent:100,reason:'EXIT_ALL'}]);
+ }
+});
