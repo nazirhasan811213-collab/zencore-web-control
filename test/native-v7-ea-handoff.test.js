@@ -44,9 +44,19 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`native V7 TF${
  const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'2',localEaExecutionUserIds:[id],commandSigningKey:'test-only-handoff-key-longer-than-thirty-two-bytes',getLatestMarket:()=>market});
  await svc.saveSettings(id,{capitalUsd:1000,lotPerLayer:.02,layers:3,symbols:['XAUUSD'],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',modeSettings:{TF2_SCALPING:{gold:{enabled:true,lotPerLayer:.02,layers:3},fx:{enabled:false}},TF15_INTRA:{gold:{enabled:true,lotPerLayer:.02,layers:3},fx:{enabled:false}}},riskAcknowledged:true});
  await store.setControl(id,{desiredState:'ON',effectiveState:'ON'});
+ const read=store.nextCommandForPod.bind(store);
+ let checked;
+ const checkedEmpty=new Promise(resolve=>{checked=resolve;});
+ store.nextCommandForPod=async (...args)=>{
+  const result=await read(...args);
+  if(!result)checked();
+  return result;
+ };
+ const pending=svc.nextCommand(token,500);
+ await checkedEmpty;
  assert.equal((await svc.dispatchMarkets([market])).queued,1);
  assert.equal((await svc.dispatchMarkets([market])).queued,0);
- const {command}=await svc.nextCommand(token);assert.ok(command);
+ const {command}=await pending;assert.ok(command,'a waiting Connector must receive the newly queued entry');
  const envelope=JSON.parse(Buffer.from(command.signedEnvelope,'base64url'));for(const k of ['id','type','payload','createdAt','expiresAt'])assert.deepEqual(JSON.parse(JSON.stringify(command[k])),envelope[k],k);
  const result=spawnSync('python3',['-c',python],{input:JSON.stringify({identity,key:svc.commandSigningKeyForPod(podId),command,now:f.now}),encoding:'utf8'});
  assert.equal(result.status,0,result.stderr);

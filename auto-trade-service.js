@@ -242,6 +242,20 @@ function createAutoTradeService(options = {}) {
     };
   }
 
+  // Bounded, per-pod wake-up. The queue remains the source of truth.
+  const commandWaiters = new Map();
+  function prepareCommandWait(podId, waitMs) {
+    if (!(waitMs > 0) || commandWaiters.has(podId) || commandWaiters.size >= 256) return null;
+    let wake;
+    const ready = new Promise(resolve => { wake = resolve; });
+    const timer = setTimeout(() => wake(false), Math.min(waitMs, 500));
+    const notify = () => wake(true);
+    commandWaiters.set(podId, notify);
+    return { ready, close() {
+      clearTimeout(timer);
+      if (commandWaiters.get(podId) === notify) commandWaiters.delete(podId);
+    }};
+  }
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs, notAfterMs = Infinity }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
     if (Core.containsForbiddenCredentialKey(payload)) {
@@ -263,7 +277,9 @@ function createAutoTradeService(options = {}) {
       signedEnvelope: Buffer.from(canonicalCommand(unsigned)).toString('base64url'),
       dedupeKey
     };
-    return store.createCommand(command);
+    const issued = await store.createCommand(command);
+    if (issued.created) commandWaiters.get(podId)?.();
+    return issued;
   }
 
   async function issueHostedCommand({ userId, accountId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs, notAfterMs = Infinity }) {
@@ -1254,10 +1270,21 @@ function createAutoTradeService(options = {}) {
     return delivery.ok;
   }
   const entryDeliverySeen=new Set();
-  async function nextCommand(rawToken) {
+  async function nextCommand(rawToken, waitMs = 0) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
-    const command = await store.nextCommandForPod(pod.id, now());
+    const waiter = prepareCommandWait(pod.id, waitMs);
+    let command;
+    try {
+      command = await store.nextCommandForPod(pod.id, now());
+      if (!command && waiter && await waiter.ready) {
+        const current = await authenticatePod(rawToken);
+        if (!current || current.id !== pod.id) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
+        command = await store.nextCommandForPod(pod.id, now());
+      }
+    } finally {
+      waiter?.close();
+    }
     if (!command) return { ok: true, command: null, serverTime: now() };
     const deliveryDiagnostic = {};
     if(!await queuedEntryIsCurrent(command, deliveryDiagnostic)){

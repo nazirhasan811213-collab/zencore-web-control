@@ -321,7 +321,10 @@ class Runner:
             return
         self.connection_stage='COMMAND_FETCH'
         fetch_started=time.monotonic()
-        result=self.api.request('/api/execution/commands/next',token=self.config['podToken'])
+        # An opt-in wait lets the server wake this Connector as soon as a command is queued.
+        path='/api/execution/commands/next'+('?wait=1' if getattr(self,'wait_for_commands',False) else '')
+        result=self.api.request(path,token=self.config['podToken'])
+        self.command_fetch_seconds=time.monotonic()-fetch_started
         fetch_ms=(time.monotonic()-fetch_started)*1000
         if result.get('command'):
             command=result['command']
@@ -459,13 +462,16 @@ class Runner:
                 delay=10
             self.stop.wait(delay)
     def run(self):
+        self.wait_for_commands=True
         if self.background_lease:threading.Thread(target=self.maintain_lease,daemon=True,name='ZenCore-lease').start()
         if self.config.get('podToken') and self.config.get('account') and self.config.get('server'):
             threading.Thread(target=self.monitor_broker_metadata,daemon=True).start()
         while not self.stop.is_set():
             delay=.5
             try:
+                self.command_fetch_seconds=0
                 self.cycle()
+                if self.command_fetch_seconds>=.5:delay=.05
                 self.failure_count=0
                 if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'))
             except Exception as error:
