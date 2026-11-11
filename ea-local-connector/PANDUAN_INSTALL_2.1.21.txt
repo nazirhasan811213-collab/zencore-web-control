@@ -1,0 +1,30 @@
+ZENCORE CONNECTOR 2.1.21 / EA 2.21
+Installer PC biasa: ZenCoreSetup-2.1.21.exe
+Installer VPS: ZenCoreVPSSetup-1.1.1.exe
+
+PC BIASA
+Login broker dalam MT5. Pasang Connector menggunakan Windows user yang sama.
+Pilih folder atau tampal alamat dari MT5 > File > Open Data Folder.
+Klik Pasang / kemas kini EA. Connector terus guna folder yang dipilih.
+Jika diminta, pilih metaeditor64.exe daripada pemasangan MT5 tersebut.
+Compile EA 2.21, Refresh Navigator dan attach pada satu chart sahaja.
+Pautkan akaun ZenCore sendiri; lot/layer/ON/OFF disimpan melalui web.
+Ralat sambungan sementara dipulihkan tanpa OFF/ON berulang.
+Restart EA boleh memulihkan ON terdahulu selepas lease baharu sah, untuk pemilik sama.
+OFF disengajakan atau SERVER PAUSED tidak dipintas. Tiada order lama dihantar semula.
+
+VPS ADMIN
+Gunakan Manager, Sahkan Admin dan ikut 1 Folder/EA -> 2 Sambung EA -> 3 Auto Trade.
+Lihat PANDUAN_VPS_10_USER.txt untuk serahan dan Kosongkan slot.
+EA baharu diperlukan bagi padanan folder dan pemulihan sesi.
+Jangan jalankan dua Connector/Manager untuk channel akaun yang sama.
+
+Ujian installer dan logik automatik tidak menggantikan pengesahan VPS/broker sebenar.
+Tiada jaminan sifar kelewatan. Semak log masa untuk membuktikan latensi sebenar.
+
+KELUARAN MODUL — 11 NOVEMBER 2026
+Manager 1.1.1 menambah Tukar MT5 tanpa reset profil/password/folder.
+Kosongkan kekal Master Reset penuh. Tukar MT5 memerlukan semakan risiko/settings semula.
+Jika status penutupan broker belum disahkan, semak akaun lama terus dalam MT5.
+Connector 2.1.21 meminta server menghantar arahan sebaik ia tersedia. EA kekal 2.21.
+Kemas kini Windows tidak dilakukan oleh deployment web; admin perlu memasang keluaran ini.

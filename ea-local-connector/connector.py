@@ -126,7 +126,7 @@ def terminal_origin(data_folder):
     except (OSError,UnicodeError):return None
 
 def resolve_mt5_folder(selected,terminal_root=None):
-    folder=Path(selected).resolve()
+    folder=Path(os.path.expandvars(os.fspath(selected).strip().strip('"'))).expanduser().resolve()
     if folder.name.upper()=='MQL5':folder=folder.parent
     # A standard MT5 program folder is different from its live data folder.
     if (folder/'terminal64.exe').is_file():
@@ -187,8 +187,9 @@ def discover_mt5_folders(terminal_root=None):
         found.append({'folder':folder,'label':(origin.name if origin else 'MT5')+' • '+folder.name,'origin':origin})
     return sorted(found,key=lambda item:str(item['folder']).casefold())
 
-def choose_mt5_install(parent,title):
-    found=discover_mt5_folders();selected=[]
+def choose_mt5_install(parent,title,preferred_folder=None,*,require_editor=True):
+    selected=[preferred_folder] if preferred_folder and str(preferred_folder).strip() else []
+    found=discover_mt5_folders() if not selected else []
     if found:
         dialog=tk.Toplevel(parent);dialog.title(title);dialog.transient(parent);dialog.grab_set()
         ttk.Label(dialog,text='Pilih terminal MT5. Folder data dikesan secara automatik.').pack(padx=18,pady=12)
@@ -202,13 +203,14 @@ def choose_mt5_install(parent,title):
         ttk.Button(row,text='Folder lain...',command=browse).pack(side='left',padx=5)
         ttk.Button(row,text='Batal',command=dialog.destroy).pack(side='left',padx=5)
         parent.wait_window(dialog)
-    else:
+    elif not selected:
         value=filedialog.askdirectory(parent=parent,title=title+' — MT5 File > Open Data Folder')
         if value:selected.append(value)
     if not selected:return None
     try:folder=resolve_mt5_folder(selected[0])
     except Exception as error:
         messagebox.showerror('Folder MT5',install_error_message(error),parent=parent);return None
+    if not require_editor:return folder,None
     editor=find_metaeditor(folder)
     if editor is None:
         chosen=filedialog.askopenfilename(parent=parent,title='Pilih metaeditor64.exe milik terminal MT5 ini',filetypes=[('MetaEditor MT5','metaeditor64.exe'),('Windows executable','*.exe')])
@@ -319,7 +321,10 @@ class Runner:
             return
         self.connection_stage='COMMAND_FETCH'
         fetch_started=time.monotonic()
-        result=self.api.request('/api/execution/commands/next',token=self.config['podToken'])
+        # An opt-in wait lets the server wake this Connector as soon as a command is queued.
+        path='/api/execution/commands/next'+('?wait=1' if getattr(self,'wait_for_commands',False) else '')
+        result=self.api.request(path,token=self.config['podToken'])
+        self.command_fetch_seconds=time.monotonic()-fetch_started
         fetch_ms=(time.monotonic()-fetch_started)*1000
         if result.get('command'):
             command=result['command']
@@ -457,13 +462,16 @@ class Runner:
                 delay=10
             self.stop.wait(delay)
     def run(self):
+        self.wait_for_commands=True
         if self.background_lease:threading.Thread(target=self.maintain_lease,daemon=True,name='ZenCore-lease').start()
         if self.config.get('podToken') and self.config.get('account') and self.config.get('server'):
             threading.Thread(target=self.monitor_broker_metadata,daemon=True).start()
         while not self.stop.is_set():
             delay=.5
             try:
+                self.command_fetch_seconds=0
                 self.cycle()
+                if self.command_fetch_seconds>=.5:delay=.05
                 self.failure_count=0
                 if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'))
             except Exception as error:
@@ -539,12 +547,12 @@ class App:
         root.bind('<MouseWheel>',lambda event:canvas.yview_scroll(int(-event.delta/120),'units'))
         setup=ttk.Frame(box,padding=20);setup.pack(fill='x',pady=(0,12))
         ttk.Label(setup,text='1   Pasang EA pada MT5',style='Card.TLabel').pack(anchor='w')
-        ttk.Label(setup,text='Pilih data folder terminal yang hendak digunakan.',style='Muted.TLabel').pack(anchor='w',pady=(4,8))
+        ttk.Label(setup,text='Pilih terminal atau tampal alamat daripada MT5 → File → Open Data Folder.',style='Muted.TLabel').pack(anchor='w',pady=(4,8))
         candidates=list((Path(os.environ.get('APPDATA','.'))/'MetaQuotes'/'Terminal').glob('*/MQL5'))
         if len(candidates)==1:self.folder.set(str(candidates[0].parent))
         row=ttk.Frame(setup);row.pack(fill='x',pady=4)
         folders=ttk.Combobox(row,textvariable=self.folder,values=[str(p.parent) for p in candidates]);folders.pack(side='left',fill='x',expand=True)
-        ttk.Button(row,text='Pilih folder',command=lambda:self.folder.set(filedialog.askdirectory() or self.folder.get())).pack(side='left',padx=(8,0))
+        ttk.Button(row,text='Pilih folder',command=lambda:self.folder.set(filedialog.askdirectory(parent=self.root,mustexist=True) or self.folder.get())).pack(side='left',padx=(8,0))
         ttk.Button(setup,text='Pasang / kemas kini EA '+EA_VERSION,style='Accent.TButton',command=self.install).pack(anchor='w',pady=8)
         ttk.Label(setup,text='MT5 → File → Open Data Folder. Selepas pasang, Refresh Navigator,\nletak ZenCoreExecutor pada satu chart XAUUSD dan hidupkan Algo Trading.',style='Muted.TLabel').pack(anchor='w')
         link=ttk.Frame(box,padding=20);link.pack(fill='x',pady=(0,12))
@@ -633,7 +641,7 @@ class App:
         if not self.runner and not self.pairing and not self.switching:self.refresh()
         self.root.after(2000,self.watch_accounts)
     def install(self):
-        selection=choose_mt5_install(self.root,'Pasang EA')
+        selection=choose_mt5_install(self.root,'Pasang EA',self.folder.get())
         if not selection:return
         folder,editor=selection;self.folder.set(str(folder))
         def task():

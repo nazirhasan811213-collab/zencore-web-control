@@ -1446,7 +1446,7 @@ async function handleExecutionApi(req, res, pathname) {
       return sendJson(res, 200, await autoTradeState.service.heartbeat(token, body));
     }
     if (req.method === 'GET' && pathname === '/api/execution/commands/next') {
-      return sendJson(res, 200, await autoTradeState.service.nextCommand(token));
+      return sendJson(res, 200, await autoTradeState.service.nextCommand(token, new URL(req.url, 'http://localhost').searchParams.get('wait') === '1' ? 500 : 0));
     }
     const match = pathname.match(/^\/api\/execution\/commands\/([0-9a-f-]{36})\/ack$/i);
     if (req.method === 'POST' && match) {

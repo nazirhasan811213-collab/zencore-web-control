@@ -1,13 +1,13 @@
 [Setup]
 AppId=ZenCoreVPSConnectorManager
 AppName=ZenCore VPS Connector Manager
-AppVersion=1.1.1
+AppVersion=1.1.5
 AppPublisher=ZenCore
 DefaultDirName={localappdata}\ZenCore\VPSConnector
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=ZenCoreVPSSetup-1.1.1
+OutputBaseFilename=ZenCoreVPSSetup-1.1.5
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -16,7 +16,7 @@ RestartApplications=no
 UninstallDisplayIcon={app}\ZenCoreVPSManager.exe
 [Files]
 Source: "..\dist\ZenCoreVPSManager.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "ZenCoreExecutor.mq5"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ZenCoreExecutor.ex5"; DestDir: "{app}"; Flags: ignoreversion
 Source: "PANDUAN_VPS_10_USER.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "VPS_10_USER.csv"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]

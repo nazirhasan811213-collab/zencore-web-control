@@ -19,7 +19,7 @@ class RecoveryTests(unittest.TestCase):
      runner.stop.set();return {'command':None}
    runner.api=Remote()
    with patch('connector.time.monotonic',return_value=100),patch('protocol.time.time',return_value=NOW/1000),patch.object(runner.stop,'wait',return_value=False):runner.run()
-   self.assertEqual(calls,['/api/execution/commands/next','/api/execution/heartbeat','/api/execution/commands/next'])
+   self.assertEqual(calls,['/api/execution/commands/next?wait=1','/api/execution/heartbeat','/api/execution/commands/next?wait=1'])
    self.assertEqual(read_fields(channel/'lease.tsv')['desiredState'],'STOPPED')
  def test_health_file_replaces_previous_record_without_secrets(self):
   with tempfile.TemporaryDirectory() as folder:
