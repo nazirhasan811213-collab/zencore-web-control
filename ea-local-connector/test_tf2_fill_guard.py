@@ -24,6 +24,11 @@ int main(){
   assert(std::abs(stop/tick-std::round(stop/tick))<1e-8);
  }
  assert(ExecutionStop(false,4061.0,4,0)==0);
+ // MT5 quotes of 4000 may fill at different prices; the confirmed plan uses the fill.
+ assert(std::abs(ExecutionStop(true,4000.25,4,.01)-3996.25)<1e-8);
+ assert(std::abs(ExecutionStop(false,3999.75,4,.01)-4003.75)<1e-8);
+ assert(std::abs(ExecutionTarget(4000.25,4000,4001.5)-4001.75)<1e-8);
+ assert(std::abs(ExecutionTarget(3999.75,4000,3998.5)-3998.25)<1e-8);
  assert(std::abs(ExecutionStop(true,4061,5.23,.01)-4055.77)<1e-8);
  assert(std::abs(ExecutionTarget(4061,4062,4059.5)-4058.5)<1e-8);
  assert(std::abs(ExecutionTarget(4061,4062,4064.5)-4063.5)<1e-8);

@@ -298,7 +298,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    double quoteRisk=buy?quote-sl:sl-quote;
    if(sl<=0 || quoteRisk<=0 || quoteRisk>stopDistance+1e-8)return RejectEntry("EXECUTION_SL_INVALID");
   }
-  if(!fillAnchor && (buy?sl>=tick.bid-distance:sl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
+  // For native TF2, send the fixed quote-based stop and let the broker
+  // validate its own minimum distance. Never send the order without its stop.
+  if(!guardedTf2 && !fillAnchor && (buy?sl>=tick.bid-distance:sl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
   // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
   double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
   if(fillAnchor && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))return RejectEntry("BROKER_STOP_DISTANCE");
