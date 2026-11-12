@@ -346,7 +346,9 @@ class Runner:
                     if not self.renew_lease(local): return
                     if signed['type'] in ('SYSTEM_ON','PLACE_SETUP') and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
-                if remaining_ms <= 0: raise ValueError('COMMAND_EXPIRED')
+                direct=fields.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
+                if direct and local.get('directEntryPolicy')!='PINE_DIRECT_FILL_GAP4_V1':raise ValueError('EA_DIRECT_POLICY_UPGRADE_REQUIRED')
+                if remaining_ms <= 0 and not direct: raise ValueError('COMMAND_EXPIRED')
                 fields['expiresAt']=int(time.time()*1000+remaining_ms)
             except (ValueError,KeyError,TypeError) as error:
                 code=validation_code(error)

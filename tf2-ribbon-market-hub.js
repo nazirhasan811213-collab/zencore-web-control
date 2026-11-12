@@ -25,12 +25,13 @@ function decode(row,batch){
 const entries=new Map(), channels=new Map();
 function ingest(batch,now=Date.now()){
  const out=[];
- if(batch?.feedVersion!=='TF2_REALTIME_V1'||String(batch.timeframe)!=='2'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>60000||now-batch.emittedAt< -5000)return out;
+ const directBatch=batch?.feedChannel==='EXECUTION'&&batch.markets?.some(r=>r?.[66]?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7'&&r[66].entryEvent===true);
+ if(batch?.feedVersion!=='TF2_REALTIME_V1'||String(batch.timeframe)!=='2'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||(!directBatch&&now-batch.emittedAt>60000)||now-batch.emittedAt< -5000)return out;
  for(const row of batch.markets){
   if(!Array.isArray(row)||row.length!==67||row[0]!=='XAUUSD'||row[65]?.version!=='HEMA2_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
   const d=decode(row,batch);if(!d||!Number.isFinite(d.time)||!Number.isFinite(d.close))continue;
   const channelKey=d.symbol+'|'+batch.feedChannel;
-  const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt))continue;
+  const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt)&&!require('./pine-direct-entry').isEvent(d))continue;
   d.receivedAt=now;
   // Pine may recalculate the closing tick after sending its entry pulse.
   // Keep the original authorization when an otherwise identical close snapshot
@@ -48,7 +49,7 @@ function ingest(batch,now=Date.now()){
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
   require('./indicator-chart-history').history.observe(m,now);
-  channels.set(channelKey,m);
+  if(!prev||m.signalObservedAt>prev.signalObservedAt)channels.set(channelKey,m);
   const current=entries.get(d.symbol);
   // A separate Dashboard instance can complete the same source at another tick.
   // Never replace the execution identity/plan with its independently timed copy.

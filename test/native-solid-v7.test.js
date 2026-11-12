@@ -39,8 +39,10 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`V7 TF${tf} ${s
  store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
  const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'2',localEaExecutionUserIds:[user],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'a-test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(sym,frame)=>frame===tf?m:null});
  await svc.saveSettings(user,{capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',riskAcknowledged:true});await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+ a.equal((await svc.dispatchMarkets([m])).queued,0,'old transport cannot execute the new policy');
+ await svc.heartbeat(token,{accountFingerprint:'a'.repeat(64),accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1'});
  a.equal((await svc.dispatchMarkets([m])).queued,1);a.equal((await svc.dispatchMarkets([m])).queued,0);
- const {command}=await svc.nextCommand(token);a.ok(command);a.equal(command.payload.side,side);a.equal(command.payload.layers,2);a.equal(command.payload.lotPerLayer,.01);a.equal(command.expiresAt,f.now+60000);
+ const {command}=await svc.nextCommand(token);a.ok(command);a.equal(command.payload.side,side);a.equal(command.payload.layers,2);a.equal(command.payload.lotPerLayer,.01);a.equal(command.expiresAt,require('../pine-direct-entry').NO_DEADLINE);
  const cp=require('child_process').spawnSync('python',['-c',"import json,sys;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify(command),encoding:'utf8'});
  a.equal(cp.status,0,cp.stderr);a.equal(JSON.parse(cp.stdout).exitLockVersion,tf==='15'?'PINE_STEPLOCK_BE_TF15_V1':'PINE_STEPLOCK_150_TP3_PLUS3_V1');
 });

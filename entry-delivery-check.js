@@ -4,6 +4,7 @@ const Core=require('./auto-trade-core');
 // can change the final binary decimal without changing an executable price.
 const samePrice=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=1e-6;
 function checkEntryDelivery(command,market,at=Date.now()){
+ if(require('./pine-direct-entry').isCommand(command))return {ok:true,reason:null};
  const p=command.payload||{},snap=p.analysisSnapshot||{},n=market?.strategyNormal;
  const nativePolicy=require('./tf2-ribbon-scalping').NATIVE_POLICY;
  const nativeV7=snap.qualificationPolicyVersion===nativePolicy&&n?.sop?.entryPolicyVersion===nativePolicy;
