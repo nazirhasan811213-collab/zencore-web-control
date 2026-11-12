@@ -655,7 +655,7 @@
     }
   });
 
-  async function saveManualExitOnly() {
+  async function saveManualExitOnly(event) {
     const checkbox=byId('manualExitEnabled'),button=byId('saveManualExitButton');
     checkbox.disabled=true;button.disabled=true;
     setText('manualExitError','');
@@ -663,7 +663,8 @@
     try {
       const enabled=checkbox.checked;
       // OFF remains usable even if the user is halfway through editing a target.
-      const body=enabled?selectedSettings().manualExit:{...(currentState?.settings?.manualExit||{}),enabled:false};
+      const disabling=event?.target===checkbox&&!enabled;
+      const body=disabling?{...(currentState?.settings?.manualExit||{}),enabled:false}:selectedSettings().manualExit;
       const state=await api('/api/auto-trade/manual-exit',{method:'PUT',body:JSON.stringify(body)});
       for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=state.settings.manualExit[k];
       checkbox.checked=state.settings.manualExit.enabled;

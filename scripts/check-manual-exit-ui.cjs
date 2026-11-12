@@ -23,6 +23,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
   await page.locator('#manualTp1').fill('7');await page.locator('#saveSettingsButton').click();await page.getByText('TP manual mesti mengikut turutan TP1 < TP2 < TP3.',{exact:true}).waitFor();a.equal(saved.tp1,2);
   await page.locator('#manualTp1').fill('1.5');await page.locator('#manualTp2').fill('2.5');await page.locator('#manualTp3').fill('3.5');await page.locator('#manualSl').fill('4');await page.locator('#saveManualExitButton').click();await page.waitForFunction(()=>document.getElementById('manualExitSaveStatus').textContent.includes('tersimpan'));a.equal(saved.sl,4);a.equal(posted.sl,'4');a.equal(posted.modeSettings,undefined);
   await page.locator('#manualExitEnabled').uncheck();await page.waitForFunction(()=>!document.getElementById('manualExitEnabled').disabled);a.equal(saved.enabled,false);
+  await page.locator('#manualSl').fill('5');await page.locator('#saveManualExitButton').click();await page.waitForFunction(()=>!document.getElementById('saveManualExitButton').disabled);a.equal(saved.sl,5);a.equal(saved.enabled,false);
   await page.locator('#manualExitEnabled').check();await page.waitForFunction(()=>!document.getElementById('manualExitEnabled').disabled);a.equal(saved.enabled,true);
   a.deepEqual(errors,[]);console.log('Manual exit UI: editable, saved custom hydration, blank defaults, reload persistence, invalid ordering blocked. No broker orders.');
  }finally{await browser.close();}
