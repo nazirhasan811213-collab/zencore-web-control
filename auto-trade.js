@@ -236,6 +236,7 @@
     const sync=state.manualExitSync;
     if(sync&&['PENDING','DELIVERED'].includes(sync.status))setText('manualExitStatus','TETAPAN MENUNGGU PENGESAHAN EA');
     if(sync&&['REJECTED','FAILED','EXPIRED'].includes(sync.status))setText('manualExitStatus','TETAPAN GAGAL: '+(sync.code||sync.status));
+    if(state.connection?.online!==false&&state.settings?.manualExit?.enabled&&state.pod?.manualExitEnabled&&state.pod?.manualExitVersion!=='MANUAL_STEPLOCK_V4')setText('manualExitStatus','EA LAMA • KEMAS KINI EA 2.26 UNTUK STEP LOCK MANUAL');
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
     hydrateModeDraft(settings);
