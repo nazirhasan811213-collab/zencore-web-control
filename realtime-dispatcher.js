@@ -1,10 +1,11 @@
 'use strict';
+const PineDirect=require('./pine-direct-entry');
 const {createCoalescingDispatcher}=require('./coalescing-dispatcher');
 const {createEntryDecision,entryConfirmationsPass,createManagementDecision}=require('./analysis-execution-contract');
 // A webhook event already contains the analyzed market: no local HTTP reread.
 // Only matching current dashboard confirmations may preserve a queued trigger.
 function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
- const pending=new Map(),latest=new Map();
+ const pending=new Map(),latest=new Map(),directPending=new Map();
  // Ribbon Dashboard is display-only for BOTH TFs. Only EXECUTION can replace order authority.
  const tf2Ribbon=m=>['2','15'].includes(String(m?.timeframe))&&m?.strategyNormal?.entrySopVersion===`NORMAL_20261001_TF${m.timeframe}_RIBBON_V1`;
  const executionInput=m=>!tf2Ribbon(m)||m.feedChannel==='EXECUTION';
@@ -17,15 +18,18 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
    // Events received during a fallback fetch take priority over that fetched copy.
    if(pending.size){markets=[...pending.values()];pending.clear();}
   }
+  if(directPending.size){markets=[...(markets||[]),...directPending.values()];directPending.clear();}
   if(markets)markets=markets.filter(executionInput);
   if(markets)for(const m of markets){const k=key(m),old=latest.get(k);if(!old||Number(m.signalObservedAt||m.receivedAt)>=Number(old.signalObservedAt||old.receivedAt))latest.set(k,m);}
-  await dispatch(markets,m=>latest.get(key(m))===m || sameConfirmation(m,latest.get(key(m))));
+  await dispatch(markets,m=>PineDirect.isEvent(m) || latest.get(key(m))===m || sameConfirmation(m,latest.get(key(m))));
  },onError);
  function sameConfirmation(entry,current){return current?.feedChannel==='DASHBOARD'&&entryConfirmationsPass(current)&&
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
   if(!executionInput(m))return;
   if(!m||!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol)||!['2','3','15'].includes(String(m.timeframe)))return;
+  const direct=PineDirect.decision(m);
+  if(direct){directPending.set(direct.signalKey,m);const k=key(m),old=latest.get(k);if(!old||m.signalObservedAt>=old.signalObservedAt)latest.set(k,m);return tick();}
   const k=key(m),previous=pending.get(k),old=latest.get(k);
   if(old&&Number(m.signalObservedAt||m.receivedAt)<Number(old.signalObservedAt||old.receivedAt)){
    // Independent TradingView alerts can arrive in reverse channel order.

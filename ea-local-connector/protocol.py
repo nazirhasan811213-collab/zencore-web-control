@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.22'
+EA_VERSION = '2.23'
 CONNECTOR_BUILD = '2.1.21'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
@@ -92,7 +92,8 @@ def verified_command(command, signing_key, pod_id, now_ms=None):
     if signed.get('podId') != pod_id: raise ValueError('WRONG_POD')
     if not UUID.fullmatch(str(signed.get('id',''))): raise ValueError('INVALID_COMMAND_ID')
     now_ms = int(time.time()*1000) if now_ms is None else now_ms
-    if not isinstance(signed.get('expiresAt'), (int,float)) or signed['expiresAt'] <= now_ms:
+    direct = signed.get('type')=='PLACE_SETUP' and signed.get('payload',{}).get('analysisSnapshot',{}).get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
+    if not isinstance(signed.get('expiresAt'), (int,float)) or (not direct and signed['expiresAt'] <= now_ms):
         raise ValueError('COMMAND_EXPIRED')
     if signed.get('createdAt', now_ms+1) > now_ms+30000: raise ValueError('CLOCK_SKEW')
     return signed
@@ -170,6 +171,9 @@ def command_fields(command, identity):
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
                     if snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
+            if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
+                if snap.get('maxEntryGap')!=4 or execution_tf not in ('2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
+                fields['executionPolicy']='PINE_DIRECT_FILL_GAP4_V1'
             fields['side'] = payload['side']
             fields['slPolicy']='EXACT_ANALYSIS_V2'
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
@@ -240,7 +244,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion')=='MANUAL_TF2_EXIT_V3', 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'directEntryPolicy':fields.get('directEntryPolicy'), 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
@@ -274,7 +278,7 @@ def broker_metadata(fields, selected_identity, now_ms=None):
 
 
 VALIDATION_CODES = frozenset((
- 'EA_MASTER_RESET_UPGRADE_REQUIRED',
+ 'EA_MASTER_RESET_UPGRADE_REQUIRED','EA_DIRECT_POLICY_UPGRADE_REQUIRED','DIRECT_POLICY_REJECTED',
  'ACCOUNT_BINDING_CHANGED','INVALID_MT5_IDENTITY','EA_SESSION_INVALID','ENVELOPE_TOO_LARGE','SIGNATURE_REJECTED','ENVELOPE_MISMATCH','WRONG_POD',
  'INVALID_COMMAND_ID','COMMAND_EXPIRED','CLOCK_SKEW','INVALID_NUMBER',
  'STRATEGY_MODE_REJECTED','TIMEFRAME_MODE_MISMATCH','VOLUME_INVALID','LAYERS_INVALID','TF15_SNAPSHOT_REQUIRED','SYSTEM_CONTRACT_REJECTED',

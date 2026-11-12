@@ -29,6 +29,13 @@ def local_heartbeat():
        'specCount':0,'positionCount':0}
 
 class TransportTests(unittest.TestCase):
+    def test_direct_entry_has_no_time_expiry_but_keeps_signature_binding(self):
+        command=signed('PLACE_SETUP',{'analysisSnapshot':{'executionPolicy':'PINE_DIRECT_FILL_GAP4_V1'}})
+        self.assertEqual(verified_command(command,KEY,POD,NOW+3600000)['id'],ID)
+        with self.assertRaisesRegex(ValueError,'WRONG_POD'):verified_command(command,KEY,'wrong',NOW+3600000)
+        with self.assertRaisesRegex(ValueError,'SIGNATURE_REJECTED'):verified_command(command,'wrong',POD,NOW+3600000)
+        with self.assertRaisesRegex(ValueError,'COMMAND_EXPIRED'):verified_command(signed('SYSTEM_STOP'),KEY,POD,NOW+3600000)
+
     def test_hmac_matches_server_key_string_and_rejects_modified_fields(self):
         command=signed()
         self.assertEqual(verified_command(command,KEY,POD,NOW)['id'],ID)

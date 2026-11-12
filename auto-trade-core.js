@@ -455,17 +455,18 @@
   }
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
-    if (!tradingWindow(settings.tradingSchedule,at).allowed) return null;
+    const direct=typeof module==='object'&&module.exports?require('./pine-direct-entry').decision(market):null;
+    if (!direct && !tradingWindow(settings.tradingSchedule,at).allowed) return null;
     const observed=number(market.signalObservedAt);
     const modernEvent=['2','3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
-    if(observed!==null&&(at-observed>(modernEvent?60000:30000)||observed>at+5000))return null;
+    if(!direct&&observed!==null&&(at-observed>(modernEvent?60000:30000)||observed>at+5000))return null;
     const validation = validateSettings(settings);
     const selected = validation.value.strategyMode;
     const mode=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
     const tf = String(market.timeframe || market.strategyNormal?.tf || '').replace(/m$/, '');
     // Never reuse a TF2/legacy signal for a TF10 account.
     if(!['2','3','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
-    const decision = Contract.createEntryDecision(market);
+    const decision = direct || Contract.createEntryDecision(market);
     if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
     const symbol = snapshot.symbol;
@@ -481,7 +482,7 @@
     });
     return {
       signalKey: decision.signalKey,
-      notAfterMs: snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
+      notAfterMs: direct?Infinity:snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: snapshot,

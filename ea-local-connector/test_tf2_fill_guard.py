@@ -10,6 +10,14 @@ class FillGuard(unittest.TestCase):
   rules=rules[rules.index('bool Tf2EntryPriceAllowed'):]
   main=r'''
 int main(){
+ for(double sign:{-1.0,1.0}){
+  assert(PineEntryGapAllowed(4000+sign*3.99,4000));
+  assert(!PineEntryGapAllowed(4000+sign*4,4000));
+  assert(!PineEntryGapAllowed(4000+sign*4.01,4000));
+ }
+ assert(PineEntryGapAllowed(4000,4000));
+ assert(!PineEntryGapAllowed(NAN,4000));
+ assert(!PineEntryGapAllowed(4000,0));
  assert(!Tf2EntryPriceAllowed(true,4016.00,4015.86));
  assert(!Tf2EntryPriceAllowed(false,4014.00,4014.14));
  assert(!Tf2EntryPriceAllowed(true,4015.86,4015.86));
@@ -43,6 +51,6 @@ int main(){
 '''
   with tempfile.TemporaryDirectory() as tmp:
    p=pathlib.Path(tmp);cpp=p/'guard.cpp';out=p/'guard'
-   cpp.write_text('#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathCeil std::ceil\n#define MathFloor std::floor\n'+rules+main)
+   cpp.write_text('#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathCeil std::ceil\n#define MathFloor std::floor\n#define MathIsValidNumber std::isfinite\n#define MathAbs std::abs\n'+rules+main)
    subprocess.run([compiler,'-std=c++17',str(cpp),'-o',str(out)],check=True,capture_output=True)
    subprocess.run([str(out)],check=True,capture_output=True)

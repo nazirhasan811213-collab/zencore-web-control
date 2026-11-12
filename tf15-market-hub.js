@@ -25,12 +25,13 @@ function decode(row,batch){
 const entries=new Map(), channels=new Map();
 function ingest(batch,now=Date.now()){
  const out=[];
- if(batch?.feedVersion!=='TF15_REALTIME_V1'||String(batch.timeframe)!=='15'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||now-batch.emittedAt>(batch.feedChannel==='EXECUTION'&&batch.markets.some(r=>r?.[66]?.entryRuleVersion===S.RULE&&r?.[66]?.entryEvent===true)?60000:30000)||now-batch.emittedAt< -5000)return out;
+ const directBatch=batch?.feedChannel==='EXECUTION'&&batch.markets?.some(r=>r?.[66]?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7'&&r[66].entryEvent===true);
+ if(batch?.feedVersion!=='TF15_REALTIME_V1'||String(batch.timeframe)!=='15'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||(!directBatch&&now-batch.emittedAt>(batch.feedChannel==='EXECUTION'&&batch.markets.some(r=>r?.[66]?.entryRuleVersion===S.RULE&&r?.[66]?.entryEvent===true)?60000:30000))||now-batch.emittedAt< -5000)return out;
  for(const row of batch.markets){
   if(!Array.isArray(row)||row.length!==67||row[0]!=='XAUUSD'||row[65]?.version!=='HEMA15_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
   const d=decode(row,batch);if(!d||!Number.isFinite(d.time)||!Number.isFinite(d.close))continue;
   const channelKey=d.symbol+'|'+batch.feedChannel;
-  const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt))continue;
+  const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt)&&!require('./pine-direct-entry').isEvent(d))continue;
   d.receivedAt=now;
   // V6 may recalculate the same closing tick after its entry pulse. Preserve
   // only an identical confirmed plan for <=1s; never renew the original deadline.
@@ -38,7 +39,7 @@ function ingest(batch,now=Date.now()){
   const n=S.strategy(d,now);
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
   require('./indicator-chart-history').history.observe(m,now);
-  channels.set(channelKey,m);
+  if(!prev||m.signalObservedAt>prev.signalObservedAt)channels.set(channelKey,m);
   const current=entries.get(d.symbol);
   if(!current||m.signalObservedAt>=current.signalObservedAt)entries.set(d.symbol,m);
   out.push(m);
