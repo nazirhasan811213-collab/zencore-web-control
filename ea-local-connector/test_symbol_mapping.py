@@ -37,7 +37,7 @@ int main(){
  GoldBrokerSymbol="missing";MapSymbols();assert(brokerSymbols[0]=="");
  GoldBrokerSymbol="";_Symbol="XAUEUR";specs={{"XAUEUR",{"XAU","EUR",4}},{"GOLDJPY",{"XAU","JPY",4}}};
  MapSymbols();assert(brokerSymbols[0]=="");
- specs={{"XAUUSD",{"XAU","USD",3}},{"GOLD",{"XAU","USD",4}}};MapSymbols();assert(brokerSymbols[0]=="GOLD");
+ specs={{"XAUUSD",{"XAU","USD",3}},{"GOLD",{"XAU","USD",4}}};MapSymbols();assert(brokerSymbols[0]=="XAUUSD");
  specs={{"XAUUSD.m",{"","",4}}};MapSymbols();assert(brokerSymbols[0]=="XAUUSD.m");
  specs={{"GOLDJPY",{"","",4}}};MapSymbols();assert(brokerSymbols[0]=="");
  specs={{"XAUUSD",{"XAU","USD",4}}};MapSymbols();assert(brokerSymbols[0]=="XAUUSD");

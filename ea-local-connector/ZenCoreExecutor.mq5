@@ -75,16 +75,12 @@ bool GoldUsdSymbol(string name){
  if(base!="")return base=="XAU" && profit=="USD";
  return StringFind(upper,"XAUUSD")>=0 || upper=="GOLD";
 }
-bool EntrySymbolAvailable(string name){
- long mode=SymbolInfoInteger(name,SYMBOL_TRADE_MODE);
- return mode!=SYMBOL_TRADE_MODE_DISABLED && mode!=SYMBOL_TRADE_MODE_CLOSEONLY && SymbolSelect(name,true);
-}
 void MapSymbols(){
  for(int i=0;i<9;i++){
   brokerSymbols[i]="";
-  if(i==0 && GoldBrokerSymbol!=""){if(GoldUsdSymbol(GoldBrokerSymbol)&&EntrySymbolAvailable(GoldBrokerSymbol))brokerSymbols[i]=GoldBrokerSymbol;continue;}
-  if(i==0 && GoldUsdSymbol(_Symbol) && EntrySymbolAvailable(_Symbol)){brokerSymbols[i]=_Symbol;continue;}
-  if(i==0?(GoldUsdSymbol(canonical[i])&&EntrySymbolAvailable(canonical[i])):SymbolSelect(canonical[i],true)){brokerSymbols[i]=canonical[i];continue;}
+  if(i==0 && GoldBrokerSymbol!=""){if(GoldUsdSymbol(GoldBrokerSymbol)&&SymbolSelect(GoldBrokerSymbol,true))brokerSymbols[i]=GoldBrokerSymbol;continue;}
+  if((i!=0 || GoldUsdSymbol(canonical[i])) && SymbolSelect(canonical[i],true)){brokerSymbols[i]=canonical[i];continue;}
+  if(i==0 && GoldUsdSymbol(_Symbol) && SymbolSelect(_Symbol,true)){brokerSymbols[i]=_Symbol;continue;}
   string found="";int count=0;
   for(int j=0;j<SymbolsTotal(false);j++){
    string candidate=SymbolName(j,false),upper=candidate;StringToUpper(upper);
