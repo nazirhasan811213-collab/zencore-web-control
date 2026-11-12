@@ -5,8 +5,8 @@ const {createAutoTradeService}=require('../auto-trade-service');
 const at=1790000000000,userId='11111111-1111-4111-8111-111111111111';
 const cfg={version:'MANUAL_TF2_EXIT_V2',enabled:true,timeframeMinutes:2,tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:"WARN_ONLY"};
 const settings={capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],riskAcknowledged:true,manualExit:cfg};
-async function setup(capability=true){
- const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-that-is-longer-than-thirty-two-bytes',allowDemoExecution:true,allowedDemoOwnershipModes:['TRADER_OWNED_EA_LOCAL'],now:()=>at});
+async function setup(capability=true, clock=()=>at){
+ const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-that-is-longer-than-thirty-two-bytes',allowDemoExecution:true,allowedDemoOwnershipModes:['TRADER_OWNED_EA_LOCAL'],now:clock});
  const {podToken}=await service.connectLocalEa(userId);
  await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',manualExitVersion:capability==='custom'?'MANUAL_TF2_EXIT_V3':capability?'MANUAL_TF2_EXIT_V2':null,manualExitCustomSupported:capability==='custom',positions:[]});
  return {store,service,podToken};
@@ -91,4 +91,34 @@ test('queued manual ON config is revoked after user saves OFF',async()=>{
  const revoked=[...store.commands.values()].flat().find(c=>c.payload.manualExit.enabled===true);
  assert.equal(revoked.status,'REJECTED');
  const {command}=await service.nextCommand(podToken);assert.equal(command.payload.manualExit.enabled,false);
+});
+
+test('manual settings save separately without arming or changing entry presets',async()=>{
+ const {service,store,podToken}=await setup('custom');await service.saveSettings(userId,settings);
+ const before=await store.getProfile(userId);
+ const state=await service.saveManualExit(userId,{enabled:true,tp1:1.5,tp2:2.5,tp3:3.5,sl:4});
+ assert.equal(state.settings.manualExit.sl,4);assert.equal(state.control.desiredState,'STOPPED');
+ assert.deepEqual(state.settings.modeSettings,before.modeSettings);
+ assert.equal([...store.commands.values()].flat().some(c=>['SYSTEM_ON','PLACE_SETUP'].includes(c.type)),false);
+ await assert.rejects(service.saveManualExit(userId,{enabled:true,tp1:5,tp2:2,tp3:3,sl:4}),e=>e.code==='VALIDATION_ERROR');
+ assert.equal((await store.getProfile(userId)).manualExit.sl,4);
+});
+test('manual config remains deliverable after a disconnected minute, with latest-value validation',async()=>{
+ let clock=at;const {service,podToken}=await setup('custom',()=>clock);
+ await service.saveSettings(userId,settings);clock+=60000;
+ const {command}=await service.nextCommand(podToken);
+ assert.equal(command.type,'MANUAL_EXIT_CONFIG');assert.ok(command.expiresAt>clock);
+});
+test('OFF revokes queued manual closes and prevents further manual actions',async()=>{
+ const {service,store,podToken}=await setup('custom');await service.saveSettings(userId,settings);
+ const config=(await service.nextCommand(podToken)).command;
+ await service.acknowledgeCommand(podToken,config.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
+ await store.replacePositions(userId,[{ticket:'555',positionId:'666',origin:'MANUAL',symbol:'XAUUSD',side:'SELL',strategyMode:'TF2_SCALPING',volume:.02,entry:4000,openedAt:at-1000}],at);
+ const market={symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'CLOSE_50_NOW'}};
+ await service.dispatchMarkets([market]);
+ await service.saveManualExit(userId,{enabled:false});
+ for(let i=0;i<3;i++){const c=(await service.nextCommand(podToken)).command;assert.notEqual(c?.type,'MANUAL_EXIT_ACTION');if(c)await service.acknowledgeCommand(podToken,c.id,{status:'EXECUTED',code:'MANUAL_EXIT_OFF'});}
+ await service.dispatchMarkets([market]);
+ const actions=[...store.commands.values()].flat().filter(c=>c.type==='MANUAL_EXIT_ACTION');
+ assert.equal(actions.length,1);assert.equal(actions[0].status,'REJECTED');
 });

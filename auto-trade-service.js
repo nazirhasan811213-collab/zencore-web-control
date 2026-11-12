@@ -270,7 +270,7 @@ function createAutoTradeService(options = {}) {
     const createdAt = now();
     const unsigned = {
       id: crypto.randomUUID(), userId, podId, type, payload,
-      createdAt, expiresAt: PineDirect.isCommand({type,payload})?PineDirect.NO_DEADLINE:Math.min(createdAt + Math.max(15_000, ttlMs), notAfterMs)
+      createdAt, expiresAt: (type==='MANUAL_EXIT_CONFIG'||PineDirect.isCommand({type,payload}))?PineDirect.NO_DEADLINE:Math.min(createdAt + Math.max(15_000, ttlMs), notAfterMs)
     };
     const command = {
       ...unsigned,
@@ -383,14 +383,15 @@ function createAutoTradeService(options = {}) {
   }
 
   async function state(userId) {
-    const [profile, pod, positions, audit, pairing, hostedAccount] = await Promise.all([
+    const [profile, pod, positions, audit, pairing, hostedAccount, recentCommands] = await Promise.all([
       store.getProfile(userId),
       store.getPodForUser(userId),
       store.listPositions(userId),
       store.listAudit(userId, 30),
       typeof store.getActivePairingForUser === 'function'
         ? store.getActivePairingForUser(userId, now()) : null,
-      activeHostedAccount(userId)
+      activeHostedAccount(userId),
+      store.listRecentCommands(userId,100)
     ]);
     if(isLocalEa(pod)&&positions.length){
       const plans=new Map();
@@ -449,6 +450,7 @@ function createAutoTradeService(options = {}) {
         canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
+      manualExitSync:(()=>{const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
         ownershipMode: pod.ownershipMode,
@@ -890,6 +892,25 @@ function createAutoTradeService(options = {}) {
     if(c?.payload?.masterResetVersion==='MASTER_RESET_FORCE_V2'||(c && ((['PENDING','DELIVERED'].includes(c.status)&&c.expiresAt>now())||(c.status==='EXECUTED'&&['MASTER_RESET_READY','MASTER_RESET_FORCE_READY'].includes(c.result?.code)))))
       throw serviceError('MASTER_RESET_PENDING','Master Reset sedang berjalan. Tunggu admin menyelesaikan reset.',409);
   }
+  async function saveManualExit(userId, input = {}) {
+    await requireNoMasterReset(userId);
+    if(Core.containsForbiddenCredentialKey(input))throw serviceError('CREDENTIAL_REJECTED','Credential tidak dibenarkan.',400);
+    if(typeof input.enabled!=='boolean')throw serviceError('VALIDATION_ERROR','Pilih ON atau OFF Auto Exit.',400);
+    const pod=await store.getPodForUser(userId),previous=await store.getProfile(userId);
+    if(!isLocalEa(pod)||!['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Pasang EA yang menyokong Auto Exit manual.',409);
+    const validation=Core.validateSettings({manualExit:input});
+    const errors=Object.fromEntries(Object.entries(validation.errors).filter(([key])=>key.startsWith('manualExit.')));
+    if(Object.keys(errors).length)throw serviceError('VALIDATION_ERROR',Object.values(errors)[0],400,errors);
+    const config=validation.value.manualExit;
+    if(config.enabled&&config.version==='MANUAL_TF2_EXIT_V3'&&pod.manualExitVersion!=='MANUAL_TF2_EXIT_V3')throw serviceError('MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED','TP/SL tersuai memerlukan EA dan Connector terkini.',409);
+    if(!previous)throw serviceError('SETTINGS_REQUIRED','Simpan konfigurasi awal dahulu.',409);
+    // Preserve entry controls and presets; a manual toggle must never arm auto entry.
+    await store.saveSettings(userId,{...previous,manualExit:config});
+    await store.appendAudit(userId,'MANUAL_EXIT_SETTINGS_SAVED',{manualExit:config});
+    await issueCommand({userId,podId:pod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:config.enabled?config:Core.validateSettings({manualExit:{enabled:false}}).value.manualExit}});
+    return state(userId);
+  }
+
   async function saveSettings(userId, input = {}) {
     await requireNoMasterReset(userId);
     if (Core.containsForbiddenCredentialKey(input)) {
@@ -1234,6 +1255,7 @@ function createAutoTradeService(options = {}) {
       return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
+      if((await store.getProfile(command.userId))?.manualExit?.enabled!==true)return false;
       const p=command.payload||{},positions=await store.listPositions(command.userId);
       if(now()-p.sourceAt>30000||p.sourceAt>now()+5000||!positions.some(x=>x.origin==='MANUAL'&&x.ticket===p.ticket&&x.positionId===p.positionId&&x.side===p.side))return false;
       if(typeof options.getLatestMarket==='function'){
@@ -1659,7 +1681,7 @@ function createAutoTradeService(options = {}) {
         const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
         if (!management&&!manualManagement) continue;
         const sourceAt=Number(market.signalObservedAt||market.receivedAt);
-        if(!hostedAccount&&['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion)&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
+        if(profile.manualExit?.enabled===true&&!hostedAccount&&['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion)&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
           const side=market.strategyNormal?.side;
           const actions=(manualManagement?.payload.actions||[]).filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){
@@ -1725,6 +1747,7 @@ function createAutoTradeService(options = {}) {
     nextHostedCommand,
     acknowledgeHostedCommand,
     saveSettings,
+    saveManualExit,
     turnOn,
     stop,
     emergencyCloseAll,

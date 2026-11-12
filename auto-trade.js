@@ -232,7 +232,10 @@
   function renderSettings(state) {
     const manualCount=(state.positions||[]).filter(p=>p.origin==='MANUAL'&&p.symbol==='XAUUSD').length;
     setText('manualLayerStatus',state.connection?.online===false?'Layer aktif: data MT5 offline':`Layer aktif: ${manualCount} / 10${manualCount>=10?' • HAD DICAPAI — berhenti tambah entry':''}${manualCount>10?' • layer tambahan tetap dilindungi':''}`);
-    setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.pod?.manualExitEnabled?'EA AUTO EXIT ON':state.settings?.manualExit?.enabled?'MENUNGGU PENGESAHAN EA':'AUTO EXIT OFF • posisi diambil alih terus dilindungi');
+    setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.settings?.manualExit?.enabled?(state.pod?.manualExitEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN'):(state.pod?.manualExitEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal'));
+    const sync=state.manualExitSync;
+    if(sync&&['PENDING','DELIVERED'].includes(sync.status))setText('manualExitStatus','TETAPAN MENUNGGU PENGESAHAN EA');
+    if(sync&&['REJECTED','FAILED','EXPIRED'].includes(sync.status))setText('manualExitStatus','TETAPAN GAGAL: '+(sync.code||sync.status));
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
     hydrateModeDraft(settings);
@@ -651,6 +654,30 @@
       button.disabled = false;
     }
   });
+
+  async function saveManualExitOnly() {
+    const checkbox=byId('manualExitEnabled'),button=byId('saveManualExitButton');
+    checkbox.disabled=true;button.disabled=true;
+    setText('manualExitError','');
+    setText('manualExitSaveStatus','Menghantar tetapan kepada EA…');
+    try {
+      const enabled=checkbox.checked;
+      // OFF remains usable even if the user is halfway through editing a target.
+      const body=enabled?selectedSettings().manualExit:{...(currentState?.settings?.manualExit||{}),enabled:false};
+      const state=await api('/api/auto-trade/manual-exit',{method:'PUT',body:JSON.stringify(body)});
+      for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=state.settings.manualExit[k];
+      checkbox.checked=state.settings.manualExit.enabled;
+      render(state);
+      setText('manualExitSaveStatus','Tetapan tersimpan. Tunggu pengesahan EA. TP/SL baharu untuk posisi baharu.');
+    } catch(error) {
+      checkbox.checked=currentState?.settings?.manualExit?.enabled===true;
+      setText('manualExitError',error.message);
+      setText('manualExitSaveStatus','Tetapan belum berjaya disimpan.');
+    } finally { checkbox.disabled=false;button.disabled=false; }
+  }
+  byId('manualExitEnabled')?.addEventListener('change',saveManualExitOnly);
+  byId('saveManualExitButton')?.addEventListener('click',saveManualExitOnly);
+  for(const id of ['manualTp1','manualTp2','manualTp3','manualSl'])byId(id)?.addEventListener('input',()=>setText('manualExitSaveStatus','Nilai diubah — tekan SIMPAN TP/SL MANUAL.'));
 
   byId('turnOnButton')?.addEventListener('click', () => {
     setText('onError', '');
