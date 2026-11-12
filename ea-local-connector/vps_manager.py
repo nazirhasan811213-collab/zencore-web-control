@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.7'
+VERSION='1.1.8'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def compiled_ea_payload():
@@ -340,7 +340,7 @@ class App:
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'ADMIN_REQUIRED','ADMIN_LOGIN_REQUIRED','ADMIN_SETUP_REQUIRED','MT5_FOLDER_ACCOUNT_MISMATCH','PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.7.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.8.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
