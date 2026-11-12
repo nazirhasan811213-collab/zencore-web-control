@@ -1,0 +1,20 @@
+ZENCORE CONNECTOR 2.1.24 / EA 2.25
+
+1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
+2. Jalankan ZenCoreSetup-2.1.24.exe dan buka ZenCore Connector.
+3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
+4. Tekan Pasang / kemas kini EA 2.25 dan pastikan Experts menunjukkan EA_READY version=2.25.
+5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
+
+Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
+Beza mutlak harga Ask/ Bid dengan entry pelan Pine >= USD4: sekat entry.
+SL dan setiap TP bermula daripada harga fill sebenar setiap posisi, dengan jarak pelan Pine.
+Setiap event hanya sekali; arahan pendua tidak membuka order baharu.
+Akaun hedging diperlukan untuk pelan berasingan setiap posisi/layer.
+Jika fill broker melepasi had, EA cuba tutup posisi dan melaporkan kejadian.
+
+Pakej ini tidak mengandungi password atau pautan akaun pengguna.
+
+Auto Exit manual: OFF menghentikan pengurusan EA; SL/TP broker sedia ada kekal. Tick/untick di web dihantar terus. Simpan TP/SL Manual untuk tetapan posisi baharu.
+
+Padanan Gold: guna chart Gold USD broker jika ada beberapa simbol aktif. GoldBrokerSymbol yang diisi sendiri mesti nama simbol sebenar broker.

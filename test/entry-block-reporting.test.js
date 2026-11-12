@@ -1,0 +1,20 @@
+'use strict';
+const test=require('node:test'),a=require('node:assert/strict');
+const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService}=require('../auto-trade-service');
+test('split-feed waiting and dashboard updates do not generate false blocked entry records',async()=>{
+ const store=new MemoryAutoTradeStore(),svc=createAutoTradeService({store,allowLocalEaExecution:true,commandSigningKey:'test-signing-key-more-than-thirty-two-bytes'});
+ await svc.connectLocalEa('report-user');
+ await store.saveSettings('report-user',{capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING'});
+ await store.setControl('report-user',{desiredState:'ON',effectiveState:'ON'});
+ const m={symbol:'XAUUSD',timeframe:'2',setupKey:'hold',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',entryEvent:false,strategyNormal:{solid:true,lifecycleState:'EVENT_EXPIRED'}};
+ await svc.dispatchMarkets([m]);
+ await svc.dispatchMarkets([{...m,feedChannel:'DASHBOARD',entryEvent:true}]);
+ a.equal((await store.listAudit('report-user',100)).filter(x=>x.type==='ENTRY_BLOCKED').length,0);
+ await svc.dispatchMarkets([{...m,entryEvent:true,entryAuthorizedAt:1}]);
+ let blocks=(await store.listAudit('report-user',100)).filter(x=>x.type==='ENTRY_BLOCKED');
+ a.equal(blocks.length,1);a.equal(blocks[0].detail.reason,'CONNECTION_NOT_READY');
+ await svc.dispatchMarkets([{...m,entryEvent:true,entryAuthorizedAt:1}]);
+ a.equal((await store.listAudit('report-user',100)).filter(x=>x.type==='ENTRY_BLOCKED').length,1);
+ await svc.dispatchMarkets([{...m,entryEvent:true,entryAuthorizedAt:2}]);
+ a.equal((await store.listAudit('report-user',100)).filter(x=>x.type==='ENTRY_BLOCKED').length,2);
+});

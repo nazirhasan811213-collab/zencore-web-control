@@ -1479,12 +1479,16 @@ function createAutoTradeService(options = {}) {
 
   const entryBlockSeen=new Map();
   async function reportEntryBlock(profile,market,reason,extra={}){
-    if(!market?.strategyNormal?.solid&&market?.strategyNormal?.lifecycleState!=='EVENT_EXPIRED')return;
-    const k=[profile.userId,market.timeframe,market.setupKey,reason].join('|'),at=now();
+    // A dashboard/hold update is not an attempted order. Keep connection health
+    // visible in diagnostics without writing a new rejection every minute.
+    if(market?.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2' &&
+       (market.feedChannel!=='EXECUTION'||market.entryEvent!==true))return;
+    if(market?.entryEvent!==true&&!market?.strategyNormal?.solid&&market?.strategyNormal?.lifecycleState!=='EVENT_EXPIRED')return;
+    const k=[profile.userId,market.timeframe,market.setupKey,market.entryAuthorizedAt,reason].join('|'),at=now();
     if(at-(entryBlockSeen.get(k)||0)<60000)return;
     if(entryBlockSeen.size>=1000)entryBlockSeen.clear();
     entryBlockSeen.set(k,at);
-    await store.appendAudit(profile.userId,'ENTRY_BLOCKED',{symbol:market.symbol,timeframe:String(market.timeframe),setupKey:market.setupKey,reason,lifecycleState:market.strategyNormal?.lifecycleState||null,analysisReason:market.strategyNormal?.reason||null,...extra});
+    await store.appendAudit(profile.userId,'ENTRY_BLOCKED',{symbol:market.symbol,timeframe:String(market.timeframe),setupKey:market.setupKey,entryEvent:market.entryEvent===true,entryAuthorizedAt:market.entryAuthorizedAt||null,reason,lifecycleState:market.strategyNormal?.lifecycleState||null,analysisReason:market.strategyNormal?.reason||null,...extra});
   }
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
     const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];

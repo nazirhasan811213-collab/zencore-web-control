@@ -1,5 +1,5 @@
 #property strict
-#property version "2.24"
+#property version "2.25"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -67,19 +67,31 @@ string Get(string key){for(int i=0;i<ArraySize(keys);i++)if(keys[i]==key)return 
 double Val(string key){return StringToDouble(Get(key));}
 string Broker(string source){for(int i=0;i<9;i++)if(canonical[i]==source)return brokerSymbols[i];return "";}
 string Canonical(string symbol){for(int i=0;i<9;i++)if(brokerSymbols[i]==symbol)return canonical[i];return "";}
+// Symbol resolution: prefer an explicitly chosen Gold chart, never an arbitrary suffix.
+bool GoldUsdSymbol(string name){
+ string base=SymbolInfoString(name,SYMBOL_CURRENCY_BASE),profit=SymbolInfoString(name,SYMBOL_CURRENCY_PROFIT),upper=name;
+ StringToUpper(base);StringToUpper(profit);StringToUpper(upper);
+ if(profit!="" && profit!="USD")return false;
+ if(base!="")return base=="XAU" && profit=="USD";
+ return StringFind(upper,"XAUUSD")>=0 || upper=="GOLD";
+}
 void MapSymbols(){
  for(int i=0;i<9;i++){
   brokerSymbols[i]="";
-  if(i==0 && GoldBrokerSymbol!=""){if(SymbolSelect(GoldBrokerSymbol,true))brokerSymbols[i]=GoldBrokerSymbol;continue;}
-  if(SymbolSelect(canonical[i],true)){brokerSymbols[i]=canonical[i];continue;}
+  if(i==0 && GoldBrokerSymbol!=""){if(GoldUsdSymbol(GoldBrokerSymbol)&&SymbolSelect(GoldBrokerSymbol,true))brokerSymbols[i]=GoldBrokerSymbol;continue;}
+  if((i!=0 || GoldUsdSymbol(canonical[i])) && SymbolSelect(canonical[i],true)){brokerSymbols[i]=canonical[i];continue;}
+  if(i==0 && GoldUsdSymbol(_Symbol) && SymbolSelect(_Symbol,true)){brokerSymbols[i]=_Symbol;continue;}
   string found="";int count=0;
   for(int j=0;j<SymbolsTotal(false);j++){
    string candidate=SymbolName(j,false),upper=candidate;StringToUpper(upper);
-   if(StringFind(upper,canonical[i])>=0 || (i==0 && upper=="GOLD")){found=candidate;count++;}
+   bool matches=i==0?GoldUsdSymbol(candidate):StringFind(upper,canonical[i])>=0;
+   long mode=SymbolInfoInteger(candidate,SYMBOL_TRADE_MODE);
+   if(matches && (i!=0 || (mode!=SYMBOL_TRADE_MODE_DISABLED && mode!=SYMBOL_TRADE_MODE_CLOSEONLY))){found=candidate;count++;}
   }
   if(count==1 && SymbolSelect(found,true))brokerSymbols[i]=found;
  }
 }
+// End symbol resolution.
 bool IsManual(ulong ticket){
  if(!PositionSelectByTicket(ticket) || (ulong)PositionGetInteger(POSITION_MAGIC)!=0 || PositionGetString(POSITION_SYMBOL)!=Broker("XAUUSD") || AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return false;
  string name="manual-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
@@ -123,7 +135,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.24")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V3")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.25")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_TF2_EXIT_V3")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -688,14 +700,14 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=2.24 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=2.25 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTick(){
  if(lockHandle!=INVALID_HANDLE && account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER)){ManageLocalStepLock();ManageManual();}
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 2.24 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 2.25 • menunggu login MT5 / channel tersedia");return;}
  TryResumeEntry();
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
@@ -705,6 +717,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
- Comment("ZenCore 2.24 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.25 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
