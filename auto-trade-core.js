@@ -381,8 +381,8 @@
       value: {
         ...identity.value,
         accountFingerprint,
-        manualExitVersion:input.manualExitVersion==='MANUAL_TF2_EXIT_V3' && input.manualExitCustomSupported===true ? 'MANUAL_TF2_EXIT_V3' : input.manualExitVersion==='MANUAL_TF2_EXIT_V2' ? 'MANUAL_TF2_EXIT_V2' : null,
-        manualExitEnabled:['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(input.manualExitVersion)&&input.manualExitEnabled===true,
+        manualExitVersion:['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(input.manualExitVersion) && input.manualExitCustomSupported===true ? input.manualExitVersion : input.manualExitVersion==='MANUAL_TF2_EXIT_V2' ? 'MANUAL_TF2_EXIT_V2' : null,
+        manualExitEnabled:['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(input.manualExitVersion)&&input.manualExitEnabled===true,
         tradeMode,
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,

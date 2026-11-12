@@ -8,7 +8,7 @@ const settings={capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],riskA
 async function setup(capability=true, clock=()=>at){
  const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-that-is-longer-than-thirty-two-bytes',allowDemoExecution:true,allowedDemoOwnershipModes:['TRADER_OWNED_EA_LOCAL'],now:clock});
  const {podToken}=await service.connectLocalEa(userId);
- await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',manualExitVersion:capability==='custom'?'MANUAL_TF2_EXIT_V3':capability?'MANUAL_TF2_EXIT_V2':null,manualExitCustomSupported:capability==='custom',positions:[]});
+ await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',manualExitVersion:capability==='step'?'MANUAL_STEPLOCK_V4':capability==='custom'?'MANUAL_TF2_EXIT_V3':capability?'MANUAL_TF2_EXIT_V2':null,manualExitCustomSupported:['custom','step'].includes(capability),positions:[]});
  return {store,service,podToken};
 }
 test('manual distances accept custom values and use defaults per blank field',()=>{
@@ -121,4 +121,15 @@ test('OFF revokes queued manual closes and prevents further manual actions',asyn
  await service.dispatchMarkets([market]);
  const actions=[...store.commands.values()].flat().filter(c=>c.type==='MANUAL_EXIT_ACTION');
  assert.equal(actions.length,1);assert.equal(actions[0].status,'REJECTED');
+});
+
+test('manual step lock accepts custom presets but never dispatches Pine close instructions',async()=>{
+ const {service,store,podToken}=await setup('step');
+ const state=await service.saveSettings(userId,{...settings,manualExit:{...cfg,tp1:1.5,tp2:2.5,tp3:3.5,sl:4}});
+ assert.equal(state.pod.manualExitVersion,'MANUAL_STEPLOCK_V4');assert.equal(state.settings.manualExit.sl,4);
+ const config=(await service.nextCommand(podToken)).command;assert.equal(config.type,'MANUAL_EXIT_CONFIG');
+ await service.acknowledgeCommand(podToken,config.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
+ await store.replacePositions(userId,[{ticket:'555',positionId:'666',origin:'MANUAL',symbol:'XAUUSD',side:'SELL',strategyMode:'TF2_SCALPING',volume:.02,entry:4000,openedAt:at-1000}],at);
+ for(const action of ['CLOSE_50_NOW','EXIT_REMAINING','EXIT_ALL','EXIT_SL'])await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action,oppositeYellow:true}}]);
+ assert.equal([...store.commands.values()].flat().filter(c=>['MANUAL_EXIT_ACTION','MANAGE_POSITION','PLACE_SETUP'].includes(c.type)).length,0);
 });
