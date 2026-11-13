@@ -4,7 +4,7 @@ Status Auto Trade dikawal dari ZenCore web.
 
 ALIRAN ADMIN
 0. Isi ID + password ADMIN, klik Sahkan Admin. Password tidak disimpan.
-1. Pada slot yang betul, klik 1 Folder / EA dan tampal alamat MT5 > File > Open Data Folder.
+1. Pada slot yang betul, klik 1 Pasang EA dan tampal alamat MT5 > File > Open Data Folder.
    Folder yang sudah disimpan akan diisi semula. Kosongkan kotak untuk membuka senarai terminal.
    Manager menyalin ZenCoreExecutor.ex5 yang sudah dikompil. MetaEditor tidak diperlukan.
 2. Dalam MT5, Refresh Navigator dan attach ZenCoreExecutor pada SATU chart sahaja.
@@ -13,7 +13,7 @@ ALIRAN ADMIN
    Klik Cari semua MT5. EA 2.22 membolehkan padanan folder dibuat secara automatik.
    Isi ID ZenCore client pada slot, kemudian klik 2 Sambung EA.
    Admin tidak perlu password client untuk laluan ini.
-3. Klik 3 Auto Trade. Browser membuka halaman setup admin untuk client tepat.
+3. Klik 3 Buka Web. Browser membuka halaman setup admin untuk client tepat.
    Login admin di browser jika diminta; simpan lot/layer/TF, waktu dan pilihan exit.
 4. Selepas MT5 READY, konfigurasi lengkap, Auto Trade STOP dan tiada posisi:
    Admin membuka serahan pada halaman client. User melengkapkan profil dan password baharu.

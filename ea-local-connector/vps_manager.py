@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.12'
+VERSION='1.1.13'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def compiled_ea_payload():
@@ -254,7 +254,7 @@ class Manager:
 
 class App:
     def __init__(self,root,test_mode=False):
-        self.root=root;self.events=queue.Queue();self.busy=set();self.options={};self.choices={};self.states={};self.buttons={};self.logins={};self.reset_buttons={};self.switch_buttons={};self.login_entries={};self.test_mode=test_mode
+        self.root=root;self.events=queue.Queue();self.busy=set();self.options={};self.choices={};self.states={};self.buttons={};self.logins={};self.install_buttons={};self.web_buttons={};self.reset_buttons={};self.switch_buttons={};self.login_entries={};self.test_mode=test_mode
         self.manager=Manager(status=lambda n,s:self.events.put((n,s)))
         root.title('ZenCore VPS Manager '+VERSION+' • Connector '+CONNECTOR_BUILD+' • 10 MT5');root.geometry(str(min(1380,max(960,root.winfo_screenwidth()-60)))+'x'+str(min(780,max(600,root.winfo_screenheight()-80))));root.minsize(900,600);root.configure(bg='#091823')
         style=ttk.Style();style.theme_use('clam');style.configure('TFrame',background='#091823');style.configure('TLabel',background='#091823',foreground='#e5f3f8');style.configure('TButton',padding=7);style.configure('TCombobox',padding=5)
@@ -275,8 +275,10 @@ class App:
             value=tk.StringVar();self.choices[n]=value;combo=ttk.Combobox(grid,textvariable=value,state='readonly',width=40);combo.grid(row=n,column=1,sticky='ew',padx=5);self.options[n]=combo
             b=ttk.Button(grid,text='2 Sambung EA',command=lambda k=n:self.action(k));b.grid(row=n,column=2,padx=4);self.buttons[n]=b
             tools=ttk.Frame(grid);tools.grid(row=n,column=3,padx=4)
-            ttk.Button(tools,text='1 Folder / EA',command=lambda k=n:self.install(k)).pack(side='left')
-            ttk.Button(tools,text='3 Auto Trade',command=lambda k=n:self.open_setup(k)).pack(side='left',padx=3)
+            install=ttk.Button(tools,text='1 Pasang EA',command=lambda k=n:self.install(k))
+            install.pack(side='left');self.install_buttons[n]=install
+            web=ttk.Button(tools,text='3 Buka Web',command=lambda k=n:self.open_setup(k))
+            web.pack(side='left',padx=3);self.web_buttons[n]=web
             switch=ttk.Button(tools,text='Tukar MT5',command=lambda k=n:self.switch_mt5(k));switch.pack(side='left',padx=3);self.switch_buttons[n]=switch
             reset=ttk.Button(tools,text='Kosongkan',command=lambda k=n:self.clear_slot(k));reset.pack(side='left',padx=3);self.reset_buttons[n]=reset
             state=tk.StringVar(value='BELUM DIPAUTKAN');self.states[n]=state;ttk.Label(grid,textvariable=state,wraplength=260).grid(row=n,column=4,sticky='w',padx=5)
@@ -296,8 +298,15 @@ class App:
             finally:self.admin_login_busy=False
         threading.Thread(target=work,daemon=True).start()
     def open_setup(self,n):
-        try:webbrowser.open(self.manager.setup_url(n))
-        except RuntimeError:self.states[n].set('Sambungkan EA kepada ID client dahulu.')
+        if n in self.busy:return
+        try:url=self.manager.setup_url(n)
+        except RuntimeError:
+            self.states[n].set('Sambungkan EA kepada ID client dahulu.')
+            return
+        try:
+            if not webbrowser.open(url):raise webbrowser.Error()
+        except (webbrowser.Error,OSError):
+            self.states[n].set('Browser tidak dapat dibuka. Semak browser lalai Windows.')
     def clear_slot(self,n):
         if n in self.busy:return
         if not self.manager.admin_api:self.states[n].set('Sahkan Admin dahulu untuk kosongkan slot.');return
@@ -313,7 +322,7 @@ class App:
         if not self.manager.admin_api:self.states[n].set('Sahkan Admin dahulu.');return
         if not messagebox.askyesno('Tukar akaun MT5','Cuba tutup SEMUA posisi dan pending order akaun lama, termasuk manual/EA lain. Pautan lama dibatalkan. Profil/password dan folder dikekalkan. Jika offline, posisi broker mungkin masih terbuka. Teruskan?'):return
         def perform():
-            result=self.manager.clear_slot(n,preserve_profile=True);self.events.put((n,'RESET_CLEAR'))
+            result=self.manager.clear_slot(n,preserve_profile=True);self.events.put((n,'SWITCH_CLEAR'))
             text='Login MT5 baharu pada folder sama, kemudian Sambung EA dan semak Auto Trade.'
             if result.get('brokerCloseConfirmed') is False:text='POSISI BROKER BELUM DISAHKAN TUTUP. '+text
             self.events.put((n,text))
@@ -334,13 +343,15 @@ class App:
             label=cfg['tradeMode']+' • ****'+cfg['account'][-4:]+' • '+cfg['server'];self.choices[n].set(label);self.logins[n].set(cfg['zenCoreLogin']);self.login_entries[n].configure(state='readonly')
     def task(self,n,fn,stage="LINK"):
         if n in self.busy:return
-        self.busy.add(n);self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.switch_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
+        self.busy.add(n)
+        for buttons in (self.install_buttons,self.web_buttons):buttons[n].configure(state='disabled')
+        self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.switch_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
         def run():
             try:fn()
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'ADMIN_REQUIRED','ADMIN_LOGIN_REQUIRED','ADMIN_SETUP_REQUIRED','MT5_FOLDER_ACCOUNT_MISMATCH','PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.12.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.13.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
@@ -362,7 +373,7 @@ class App:
         self.task(n,perform)
     def install(self,n):
         if n in self.busy:return
-        title='Slot '+str(n)+' — Folder MT5'
+        title='Pasang EA • Slot '+str(n)
         preferred=simpledialog.askstring(title,
             'Tampal alamat daripada MT5 > File > Open Data Folder.\n'
             'Biarkan kosong untuk pilih folder daripada senarai.',
@@ -381,8 +392,10 @@ class App:
             except queue.Empty:break
             if n==0:self.admin_status.set(s);continue
             if s is None:self.busy.discard(n)
+            elif s=='SWITCH_CLEAR':self.choices[n].set('')
             elif s=='RESET_CLEAR':self.choices[n].set('');self.logins[n].set('');self.states[n].set('RESET SELESAI — isi ID client baharu')
             else:self.states[n].set(s[:180])
+            for buttons in (self.install_buttons,self.web_buttons):buttons[n].configure(state='disabled' if n in self.busy else 'normal')
             self.reset_buttons[n].configure(state='disabled' if n in self.busy else 'normal');self.switch_buttons[n].configure(state='disabled' if n in self.busy else 'normal')
             cfg=self.manager.configs.get(n);self.login_entries[n].configure(state='readonly' if cfg or n in self.busy else 'normal');self.buttons[n].configure(text='Sambung' if cfg and cfg.get('paused') else 'Henti' if cfg else '2 Sambung EA',state='disabled' if n in self.busy else 'normal')
         self.root.after(150,self.pump)
@@ -401,6 +414,24 @@ def main():
             installed=install_ea(folder)/'ZenCoreExecutor.ex5'
             assert installed.read_bytes()==payload
         root=tk.Tk();app=App(root,test_mode=True);root.update();assert len(app.states)==10 and len(app.reset_buttons)==10 and len(app.logins)==10
+        from unittest.mock import patch
+        with patch.object(app,'install') as install, patch('webbrowser.open') as browser:
+            for slot,button in app.install_buttons.items():
+                button.invoke()
+                install.assert_called_with(slot)
+            browser.assert_not_called()
+        with patch.object(app,'action') as action, patch.object(app,'switch_mt5') as switch, patch.object(app,'clear_slot') as clear:
+            for slot in app.buttons:
+                app.buttons[slot].invoke()
+                app.switch_buttons[slot].invoke()
+                app.reset_buttons[slot].invoke()
+                action.assert_called_with(slot)
+                switch.assert_called_with(slot)
+                clear.assert_called_with(slot)
+        with patch.object(app,'open_setup') as open_setup:
+            for slot,button in app.web_buttons.items():
+                button.invoke()
+                open_setup.assert_called_with(slot)
         if '--preview' in sys.argv:
             from PIL import ImageGrab
             ImageGrab.grab(bbox=(root.winfo_rootx(),root.winfo_rooty(),root.winfo_rootx()+root.winfo_width(),root.winfo_rooty()+root.winfo_height())).save('dist/VPS-Manager-Preview.png')
