@@ -1,6 +1,7 @@
 """ZenCore Windows desktop Connector. Native GUI; credentials encrypted with user DPAPI."""
 import ctypes
 import hashlib
+import http.client
 import http.cookiejar
 import json
 import queue
@@ -93,6 +94,9 @@ RESET_MESSAGES={
     'ACCOUNT_CHANGED':'Reset ditolak: login semula akaun MT5 lama untuk semak posisi dahulu.',
 }
 
+TRANSIENT_HTTP_STATUS = frozenset((408, 429, 500, 502, 503, 504))
+TRANSIENT_NETWORK_ERRORS = frozenset({'NETWORK_UNAVAILABLE', *(f'HTTP_{status}' for status in TRANSIENT_HTTP_STATUS)})
+
 class Api:
     def __init__(self):
         handler = urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
@@ -106,13 +110,18 @@ class Api:
         if data is not None: headers['Content-Type']='application/json'
         req = urllib.request.Request(BASE+path, None if data is None else json.dumps(data).encode(), headers)
         try:
-            with self.opener.open(req, timeout=10) as result:
+            # A heartbeat must fail fast enough to retry before the 12-second lease expires.
+            timeout = 4 if path == '/api/execution/heartbeat' else 10
+            with self.opener.open(req, timeout=timeout) as result:
                 value = json.loads(result.read(200000))
         except urllib.error.HTTPError as error:
+            if error.code in TRANSIENT_HTTP_STATUS:
+                error.close()
+                raise RuntimeError(f'HTTP_{error.code}') from None
             try: code = json.loads(error.read(2000)).get('code','HTTP_'+str(error.code))
             except Exception: code = 'HTTP_'+str(error.code)
             raise RuntimeError(code) from None
-        except (urllib.error.URLError, TimeoutError, socket.timeout):
+        except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError, http.client.IncompleteRead):
             raise RuntimeError('NETWORK_UNAVAILABLE') from None
         if value.get('ok') is False: raise RuntimeError(value.get('code','REQUEST_REJECTED'))
         return value
@@ -296,7 +305,7 @@ class Runner:
         except (OSError,ValueError,TypeError):pass
     def connection_health(self, code):
         # Fixed codes only: no credentials, account identifiers or response bodies.
-        safe={'LOCAL_FILE_LOCKED','EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','EA_SESSION_CHANGED','ACCOUNT_BINDING_CHANGED','NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504','CONNECTION_PENDING','CONNECTED'}
+        safe={'LOCAL_FILE_LOCKED','EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','EA_SESSION_CHANGED','ACCOUNT_BINDING_CHANGED','CONNECTION_PENDING','CONNECTED'} | TRANSIENT_NETWORK_ERRORS
         code=code if code in safe else 'CONNECTION_PENDING'
         try:
             atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':self.connection_stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count)}))
@@ -390,7 +399,11 @@ class Runner:
     def lease_failed(self,error):
         # Called under lease_lock: stopped workers must never touch a replacement lease.
         if self.stop.is_set():return
-        self.invalidate_lease();self.next_heartbeat=0;self.desired_state='STOPPED'
+        if str(error) not in TRANSIENT_NETWORK_ERRORS:
+            self.invalidate_lease();self.desired_state='STOPPED'
+        # A transport failure cannot grant or extend permission. Let the
+        # last verified lease expire on its original deadline.
+        self.next_heartbeat=0
         self.lease_failure_count+=1
         self.lease_retry_at=time.monotonic()+reconnect_delay(self.lease_failure_count)
         raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) else str(error)
@@ -445,7 +458,7 @@ class Runner:
                         self.renew_lease(api=api)
                     delay=max(delay,self.lease_retry_at-time.monotonic())
             except Exception:
-                # renew_lease already revoked permission and scheduled a shared backoff.
+                # renew_lease already scheduled a shared backoff.
                 # In particular, a late response after STOP must not erase a new lease.
                 if self.stop.is_set():break
                 delay=max(delay,self.lease_retry_at-time.monotonic())
@@ -477,9 +490,8 @@ class Runner:
                 self.failure_count=0
                 if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'))
             except Exception as error:
-                self.invalidate_lease()
-                # A failed poll invalidates permission. Recovery MUST renew it even
-                # when the previous periodic heartbeat was not yet due.
+                if str(error) not in TRANSIENT_NETWORK_ERRORS:
+                    self.invalidate_lease()
                 self.next_heartbeat=0
                 self.failure_count+=1
                 raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
@@ -505,7 +517,7 @@ class Runner:
                     'TRANSPORT_REPLACED':'Pautan diganti oleh Connector lain. Semak PC yang aktif.',
                 }
                 self.status(code+' — '+hints.get(code,'Entry baharu menunggu sambungan; Connector cuba semula.'))
-                delay=reconnect_delay(self.failure_count) if code in ('NETWORK_UNAVAILABLE','HTTP_429','HTTP_502','HTTP_503','HTTP_504') else 2
+                delay=reconnect_delay(self.failure_count) if code in TRANSIENT_NETWORK_ERRORS else 2
             self.stop.wait(delay)
         self.invalidate_lease()
 

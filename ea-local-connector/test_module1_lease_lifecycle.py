@@ -18,9 +18,11 @@ class ModuleOneLeaseTests(unittest.TestCase):
     def request(self,*args,**kwargs):return {'desiredState':'ON'}
    class PausedApi:
     def request(self,*args,**kwargs):return {'desiredState':'ON','entryBlockedReason':'GLOBAL_ENTRY_PAUSED'}
+   self.assertTrue(runner.renew_lease(api=HealthyApi()))
    for _ in range(20):
+    previous=read_fields(Path(folder)/'lease.tsv')
     with runner.lease_lock:runner.lease_failed(RuntimeError('NETWORK_UNAVAILABLE'))
-    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
+    self.assertEqual(read_fields(Path(folder)/'lease.tsv'),previous)
     with patch('connector.time.monotonic',return_value=runner.lease_retry_at+1):self.assertTrue(runner.renew_lease(api=HealthyApi()))
     self.assertEqual(read_fields(Path(folder)/'lease.tsv')['desiredState'],'ON')
    self.assertEqual(runner.config,saved)
