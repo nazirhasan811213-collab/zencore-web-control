@@ -5,7 +5,7 @@ class SymbolMapping(unittest.TestCase):
   compiler=shutil.which('g++')
   if not compiler:self.skipTest('Native compiler unavailable')
   source=pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
-  rules=source.split('// Symbol resolution:')[1].split('// End symbol resolution.')[0]
+  rules=source.split('// Symbol resolution:')[1].split('bool IsManual(')[0]
   rules=rules[rules.index('bool GoldUsdSymbol'):]
   harness=r'''
 #include <string>
@@ -19,6 +19,7 @@ const int SYMBOL_TRADE_MODE_DISABLED=0,SYMBOL_TRADE_MODE_CLOSEONLY=3;
 struct Spec {string base,profit;int mode=4;};
 std::map<string,Spec> specs;
 string canonical[9]={"XAUUSD","EURUSD","GBPUSD","USDJPY","USDCAD","USDCHF","EURJPY","GBPJPY","EURGBP"},brokerSymbols[9],GoldBrokerSymbol,_Symbol;
+string Broker(string source){for(int i=0;i<9;i++)if(canonical[i]==source)return brokerSymbols[i];return "";}
 string SymbolInfoString(string s,int p){if(!specs.count(s))return "";return p==1?specs[s].base:specs[s].profit;}
 int SymbolInfoInteger(string s,int){return specs.count(s)?specs[s].mode:0;}
 bool SymbolSelect(string s,bool){return specs.count(s);}

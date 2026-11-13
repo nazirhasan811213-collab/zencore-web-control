@@ -472,7 +472,7 @@
     if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
     const symbol = snapshot.symbol;
-    if (!validation.value.symbols.includes(symbol)) return null;
+    if (!direct && !validation.value.symbols.includes(symbol)) return null;
     const execution = effectiveSettings({...validation.value,strategyMode:mode}, symbol);
     if (!execution.enabled || !execution.lotPerLayer || !execution.layers) return null;
     const risk = calculateRisk({
