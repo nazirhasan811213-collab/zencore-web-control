@@ -298,8 +298,15 @@ class App:
             finally:self.admin_login_busy=False
         threading.Thread(target=work,daemon=True).start()
     def open_setup(self,n):
-        try:webbrowser.open(self.manager.setup_url(n))
-        except RuntimeError:self.states[n].set('Sambungkan EA kepada ID client dahulu.')
+        if n in self.busy:return
+        try:url=self.manager.setup_url(n)
+        except RuntimeError:
+            self.states[n].set('Sambungkan EA kepada ID client dahulu.')
+            return
+        try:
+            if not webbrowser.open(url):raise webbrowser.Error()
+        except (webbrowser.Error,OSError):
+            self.states[n].set('Browser tidak dapat dibuka. Semak browser lalai Windows.')
     def clear_slot(self,n):
         if n in self.busy:return
         if not self.manager.admin_api:self.states[n].set('Sahkan Admin dahulu untuk kosongkan slot.');return
@@ -315,7 +322,7 @@ class App:
         if not self.manager.admin_api:self.states[n].set('Sahkan Admin dahulu.');return
         if not messagebox.askyesno('Tukar akaun MT5','Cuba tutup SEMUA posisi dan pending order akaun lama, termasuk manual/EA lain. Pautan lama dibatalkan. Profil/password dan folder dikekalkan. Jika offline, posisi broker mungkin masih terbuka. Teruskan?'):return
         def perform():
-            result=self.manager.clear_slot(n,preserve_profile=True);self.events.put((n,'RESET_CLEAR'))
+            result=self.manager.clear_slot(n,preserve_profile=True);self.events.put((n,'SWITCH_CLEAR'))
             text='Login MT5 baharu pada folder sama, kemudian Sambung EA dan semak Auto Trade.'
             if result.get('brokerCloseConfirmed') is False:text='POSISI BROKER BELUM DISAHKAN TUTUP. '+text
             self.events.put((n,text))
@@ -336,7 +343,9 @@ class App:
             label=cfg['tradeMode']+' • ****'+cfg['account'][-4:]+' • '+cfg['server'];self.choices[n].set(label);self.logins[n].set(cfg['zenCoreLogin']);self.login_entries[n].configure(state='readonly')
     def task(self,n,fn,stage="LINK"):
         if n in self.busy:return
-        self.busy.add(n);self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.switch_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
+        self.busy.add(n)
+        for buttons in (self.install_buttons,self.web_buttons):buttons[n].configure(state='disabled')
+        self.buttons[n].configure(state='disabled');self.reset_buttons[n].configure(state='disabled');self.switch_buttons[n].configure(state='disabled');self.states[n].set('Memasang EA pada folder MT5...' if stage=='INSTALL' else 'Memproses...')
         def run():
             try:fn()
             except Exception as e:
@@ -383,8 +392,10 @@ class App:
             except queue.Empty:break
             if n==0:self.admin_status.set(s);continue
             if s is None:self.busy.discard(n)
+            elif s=='SWITCH_CLEAR':self.choices[n].set('')
             elif s=='RESET_CLEAR':self.choices[n].set('');self.logins[n].set('');self.states[n].set('RESET SELESAI — isi ID client baharu')
             else:self.states[n].set(s[:180])
+            for buttons in (self.install_buttons,self.web_buttons):buttons[n].configure(state='disabled' if n in self.busy else 'normal')
             self.reset_buttons[n].configure(state='disabled' if n in self.busy else 'normal');self.switch_buttons[n].configure(state='disabled' if n in self.busy else 'normal')
             cfg=self.manager.configs.get(n);self.login_entries[n].configure(state='readonly' if cfg or n in self.busy else 'normal');self.buttons[n].configure(text='Sambung' if cfg and cfg.get('paused') else 'Henti' if cfg else '2 Sambung EA',state='disabled' if n in self.busy else 'normal')
         self.root.after(150,self.pump)
@@ -409,6 +420,14 @@ def main():
                 button.invoke()
                 install.assert_called_with(slot)
             browser.assert_not_called()
+        with patch.object(app,'action') as action, patch.object(app,'switch_mt5') as switch, patch.object(app,'clear_slot') as clear:
+            for slot in app.buttons:
+                app.buttons[slot].invoke()
+                app.switch_buttons[slot].invoke()
+                app.reset_buttons[slot].invoke()
+                action.assert_called_with(slot)
+                switch.assert_called_with(slot)
+                clear.assert_called_with(slot)
         with patch.object(app,'open_setup') as open_setup:
             for slot,button in app.web_buttons.items():
                 button.invoke()
