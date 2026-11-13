@@ -1273,7 +1273,7 @@ function createAutoTradeService(options = {}) {
     if(['2','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='2'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF2_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
-    if(PineDirect.isCommand(command))return ((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&profile?.symbols?.includes(command.payload.symbol)&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
+    if(PineDirect.isCommand(command))return ((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     // A queued signal may outlive a heartbeat that reports a fill. Recheck at
     // delivery as well as dispatch; every layer of this TF must be closed.
@@ -1606,7 +1606,7 @@ function createAutoTradeService(options = {}) {
         if (hostedAccount) {
           if (typeof store.hasRecentHostedEntryCommand === 'function' &&
               await store.hasRecentHostedEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
-        } else if (!pineCurrent && typeof store.hasRecentEntryCommand === 'function' &&
+        } else if (!direct && !pineCurrent && typeof store.hasRecentEntryCommand === 'function' &&
             await store.hasRecentEntryCommand(profile.userId, symbol, now() - 5 * 60 * 1000, String(market.timeframe)==='15'?'TF15_INTRA':'TF2_SCALPING')) continue;
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
