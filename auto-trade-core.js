@@ -39,7 +39,7 @@
   }
 
   function normaliseSymbol(value) {
-    return String(value || '').toUpperCase().replace(/^.*:/, '').replace(/[^A-Z0-9._-]/g, '');
+    return String(value || '').toUpperCase().replace(/^.*:/, '').replace(/[^A-Z0-9._#&+!-]/g, '');
   }
 
   function escapeHtml(value) {
@@ -115,12 +115,14 @@
       exitPolicy: input.strategyExitPolicies?.[mode] || null };
   }
 
+  function validTradeSymbol(symbol) { return /^[A-Z0-9][A-Z0-9._#&+!-]{0,31}$/.test(symbol); }
+
   function validateSettings(input = {}) {
     const capitalUsd = number(input.capitalUsd);
     const lotPerLayer = number(input.lotPerLayer);
     const layers = Number(input.layers);
     const symbols = [...new Set((Array.isArray(input.symbols) ? input.symbols : ['XAUUSD'])
-      .map(normaliseSymbol).filter(symbol => TRADE_SYMBOLS.includes(symbol)))];
+      .map(value => String(value ?? '').trim().toUpperCase()).filter(validTradeSymbol))];
     const errors = {};
     if (input.tradingSchedule != null && (typeof input.tradingSchedule !== 'object' || typeof input.tradingSchedule.enabled !== 'boolean')) errors.tradingSchedule = 'Status jadual trade mesti ON atau OFF.';
     if (input.tradingSchedule?.skipNews != null && typeof input.tradingSchedule.skipNews !== 'boolean') errors.tradingSchedule = 'Pilihan news mesti trade atau skip.';
@@ -154,7 +156,7 @@
         const lot = number(Object.hasOwn(raw,'lotPerLayer') ? raw.lotPerLayer : input.lotPerLayer);
         const count = Number(Object.hasOwn(raw,'layers') ? raw.layers : mode === 'TF15_INTRA' ? 2 : input.layers);
         if (lot === null || lot <= 0 || lot > 100) errors[mode + '.' + group + '.lotPerLayer'] = 'Lot Gold dan currency mesti lebih 0 hingga 100.';
-        if (!Number.isInteger(count) || count < 1 || count > 10) errors[mode + '.' + group + '.layers'] = 'Layer mesti antara 1 hingga 10.';
+        if (!Number.isInteger(count) || count < 1 || count > 32767) errors[mode + '.' + group + '.layers'] = 'Layer mesti nombor bulat positif yang boleh disimpan.';
         modeSettings[mode][group] = {...(Object.hasOwn(raw,'enabled')?{enabled:true}:{}),lotPerLayer: lot === null ? null : round(lot, 5), layers: count};
       }
     }
@@ -165,8 +167,8 @@
     if (lotPerLayer === null || lotPerLayer <= 0 || lotPerLayer > 100) {
       errors.lotPerLayer = 'Lot setiap layer mesti lebih 0 dan tidak melebihi 100.';
     }
-    if (!Number.isInteger(layers) || layers < 1 || layers > 10) {
-      errors.layers = 'Pilih antara 1 hingga 10 layer.';
+    if (!Number.isInteger(layers) || layers < 1 || layers > 32767) {
+      errors.layers = 'Masukkan bilangan layer yang sah.';
     }
     if (!symbols.length) errors.symbols = 'Pilih sekurang-kurangnya satu pair.';
 
@@ -328,13 +330,13 @@
     const ticket = String(raw.ticket || '').replace(/[^0-9]/g, '').slice(0, 32);
     const symbol = normaliseSymbol(raw.symbol);
     const side = String(raw.side || '').toUpperCase();
-    if (!ticket || !SUPPORTED_MARKETS.includes(symbol) || !['BUY', 'SELL'].includes(side)) return null;
+    if (!ticket || !validTradeSymbol(symbol) || !['BUY', 'SELL'].includes(side)) return null;
     const numeric = key => {
       const value = number(raw[key]);
       return value === null ? null : value;
     };
     const volume = numeric('volume');
-    if (volume === null || volume <= 0 || volume > 1000) return null;
+    if (volume === null || volume <= 0) return null;
     const stage = String(raw.exitStage || 'HOLD').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
     const lock = String(raw.slLock || 'INITIAL').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 32);
     return {
@@ -531,7 +533,7 @@
   return {
     SUPPORTED_MARKETS,
     STRATEGY_MODES,
-    TRADE_SYMBOLS,
+    TRADE_SYMBOLS, validTradeSymbol,
     malaysiaTradingSchedule,
     tradingWindow,
     effectiveSettings,

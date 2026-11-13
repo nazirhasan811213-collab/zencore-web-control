@@ -32,7 +32,7 @@ test('TF15 volume is exactly two layers and cannot consume TF2 or fake TF15 feed
   assert.equal(Core.buildSetupCommand({...market('GBPUSD'),timeframe:'10'},config.value),null);
 });
 test('invalid mode, out-of-range TF15 layers, invalid group lot are rejected',()=>{
-  for (const input of [settings({strategyMode:'BUY'}), settings({modeSettings:{TF15_INTRA:{fx:{lotPerLayer:.01,layers:11}}}}),
+  for (const input of [settings({strategyMode:'BUY'}), settings({modeSettings:{TF15_INTRA:{fx:{lotPerLayer:.01,layers:0}}}}),
     settings({modeSettings:{TF2_SCALPING:{fx:{lotPerLayer:0,layers:2}}}})]) {
     assert.equal(Core.validateSettings(input).ok,false);
   }

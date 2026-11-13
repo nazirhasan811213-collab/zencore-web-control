@@ -282,6 +282,7 @@ if (AUTH_ENABLED) {
         getLatestMarket:(symbol,tf)=>autoTradeState.realtimeDispatcher?.getLatestMarket(symbol,tf),
         onDispatchDiagnostic: report => console.log('ZenCore pair dispatch:', JSON.stringify(report)),
         allowedDemoSymbols: AUTOTRADE_DEMO_SYMBOLS,
+        allowMt5Symbols: true,
         requiredDemoConnectorVersion: AUTOTRADE_DEMO_CONNECTOR_VERSION,
         hostedMt5Enabled: HOSTED_MT5_ENABLED,
         hostedWorkerEnabled: GCP_HOSTED_WORKER_ENABLED,

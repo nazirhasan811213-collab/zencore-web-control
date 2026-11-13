@@ -4,7 +4,7 @@ const POLICY='PINE_DIRECT_FILL_GAP4_V1';
 const NO_DEADLINE=253402300799000; // finite compatibility timestamp; no trading TTL
 function isEvent(m={}) {
  const meta=m.setupMeta||{};
- return m.symbol==='XAUUSD'&&['2','15'].includes(String(m.timeframe))&&
+ return /^[A-Z0-9][A-Z0-9._#&+!-]{0,31}$/.test(m.symbol || '')&&['2','15'].includes(String(m.timeframe))&&
   m.feedChannel==='EXECUTION'&&m.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'&&
   m.entryEvent===true&&meta.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7';
 }
@@ -21,7 +21,7 @@ function decision(m={}) {
   strategy:'NORMAL_3M_SOP_V32',schemaVersion:'32.3-EXIT-STEPLOCK',symbol:m.symbol,side,...p,
   executionPolicy:POLICY,maxEntryGap:4,executionTimeframe:tf,entryAnchor:'MT5_FILL_PLAN_V1',
   analysisSopVersion:`NORMAL_20261001_TF${tf}_RIBBON_V1`,entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',
-  qualificationPolicyVersion:meta.entryPolicyVersion,exitLockVersion:tf==='15'?'PINE_STEPLOCK_BE_TF15_V1':'PINE_STEPLOCK_150_TP3_PLUS3_V1',
+  qualificationPolicyVersion:meta.entryPolicyVersion,exitLockVersion:m.symbol!=='XAUUSD'?'MT5_FILL_STEPLOCK':tf==='15'?'PINE_STEPLOCK_BE_TF15_V1':'PINE_STEPLOCK_150_TP3_PLUS3_V1',
   setupKey:m.setupKey,signalObservedAt:m.signalObservedAt,sourceReceivedAt:m.receivedAt,
   entryAuthorizedAt:m.entryAuthorizedAt,qualifiedAt:meta.completedAt,cycleKind:meta.cycleKind,
   confirmationEvidence:{owner:'PINE',executionPolicy:POLICY}};

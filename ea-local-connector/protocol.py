@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.26'
-CONNECTOR_BUILD = '2.1.25'
+EA_VERSION = '2.27'
+CONNECTOR_BUILD = '2.1.26'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -28,6 +28,7 @@ def account_fingerprint(identity):
     return hashlib.sha256(json.dumps([identity['server'], str(identity['account']), identity.get('tradeMode','DEMO')],
                                    ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
 
+MT5_SYMBOL = re.compile(r'[A-Z0-9][A-Z0-9._#&+!-]{0,31}')
 SUPPORTED = ('XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP')
 
 
@@ -147,7 +148,7 @@ def command_fields(command, identity):
             raise ValueError('SYSTEM_CONTRACT_REJECTED')
         settings = payload['settings']
         symbols = settings['symbols']
-        if not symbols or any(s not in SUPPORTED for s in symbols): raise ValueError('INVALID_SYMBOLS')
+        if not symbols or any(not MT5_SYMBOL.fullmatch(s) for s in symbols): raise ValueError('INVALID_SYMBOLS')
         fields.update(symbols=','.join(symbols), lot=number(settings['lotPerLayer']), layers=int(settings['layers']))
     elif kind in ('PLACE_SETUP', 'MANAGE_POSITION'):
         snap = payload.get('analysisSnapshot', {})
@@ -157,7 +158,8 @@ def command_fields(command, identity):
             snap.get('decisionOwner') != 'ZENCORE_ANALYSIS' or snap.get('decision') != decision):
             raise ValueError('ANALYSIS_CONTRACT_REJECTED')
         symbol = payload.get('symbol')
-        if symbol not in SUPPORTED or snap.get('symbol') != symbol: raise ValueError('SYMBOL_REJECTED')
+        if (not isinstance(symbol,str) or not MT5_SYMBOL.fullmatch(symbol) or
+                (symbol not in SUPPORTED and not (kind=='PLACE_SETUP' and snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1')) or snap.get('symbol') != symbol): raise ValueError('SYMBOL_REJECTED')
         fields['symbol'] = symbol
         if kind == 'PLACE_SETUP':
             for key in ('side','entry','sl','tp1','tp2','tp3'):
@@ -169,7 +171,7 @@ def command_fields(command, identity):
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
-                    if snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
+                    if not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
                 if snap.get('maxEntryGap')!=4 or execution_tf not in ('2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
@@ -244,7 +246,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'directEntryPolicy':fields.get('directEntryPolicy'), 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')

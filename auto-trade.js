@@ -208,10 +208,11 @@
   const editingMode=()=>displayedMode==='BOTH'?configuredMode:displayedMode;
   function hydrateModeDraft(settings) {
     const normalized = Core.validateSettings(settings).value;
+    byId('tradeSymbols').value = normalized.symbols.join(', ');
     modeDraft = JSON.parse(JSON.stringify(normalized.modeSettings));
     displayedMode = 'BOTH';
     for (const [mode,lotId,layerId] of [['TF2_SCALPING','lotPerLayer','layers'],['TF15_INTRA','tf15LotPerLayer','tf15Layers']]) {
-      const asset=modeDraft[mode].gold;
+      const asset=modeDraft[mode][normalized.symbols.includes('XAUUSD')?'gold':'fx'];
       const selected=normalized.strategyMode==='BOTH'||normalized.strategyMode===mode;
       byId(lotId).value=selected&&asset.enabled!==false?asset.lotPerLayer??'':'';
       byId(layerId).value=selected&&asset.enabled!==false?asset.layers??'':'';
@@ -222,8 +223,9 @@
     for (const [mode,lotId,layerId,totalId,statusId] of [['TF2_SCALPING','lotPerLayer','layers','tf2Total','tf2EntryState'],['TF15_INTRA','tf15LotPerLayer','tf15Layers','tf15Total','tf15EntryState']]) {
       const lot=byId(lotId).value, layers=byId(layerId).value;
       const enabled=lot!==''&&layers!=='';
-      modeDraft[mode]={gold:{enabled,lotPerLayer:enabled?lot:null,layers:enabled?layers:null},fx:{enabled:false,lotPerLayer:null,layers:null}};
-      const valid=enabled&&Number(lot)>0&&Number(lot)<=100&&Number.isInteger(Number(layers))&&Number(layers)>=1&&Number(layers)<=10;
+      const asset={enabled,lotPerLayer:enabled?lot:null,layers:enabled?layers:null};
+      modeDraft[mode]={gold:{...asset},fx:{...asset}};
+      const valid=enabled&&Number(lot)>0&&Number(lot)<=100&&Number.isInteger(Number(layers))&&Number(layers)>=1&&Number(layers)<=32767;
       setText(totalId,valid?(Number(lot)*Number(layers)).toFixed(3)+' lot':'—');
       setText(statusId,!enabled?'TIADA ENTRY':valid?'ENTRY AKTIF':'SEMAK INPUT');
     }
@@ -380,7 +382,7 @@
   function selectedSettings() {
     if (!modeDraft) hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}}});
     storeModeFields();
-    const symbols = ['XAUUSD'];
+    const symbols = byId('tradeSymbols').value.split(',').map(value=>value.trim()).filter(Boolean);
     return {
       strategyMode: 'BOTH', modeSettings: modeDraft,
       manualExit:{enabled:byId('manualExitEnabled').checked,...Object.fromEntries(['tp1','tp2','tp3','sl'].map(k=>[k,byId('manual'+k[0].toUpperCase()+k.slice(1)).value]))},

@@ -28,7 +28,7 @@ function ingest(batch,now=Date.now()){
  const directBatch=batch?.feedChannel==='EXECUTION'&&batch.markets?.some(r=>r?.[66]?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7'&&r[66].entryEvent===true);
  if(batch?.feedVersion!=='TF2_REALTIME_V1'||String(batch.timeframe)!=='2'||batch.schemaVersion!=='32.3-EXIT-STEPLOCK'||batch.feedUpdateVersion!=='SPLIT_CHANNEL_BOOTSTRAP_V2'||!['EXECUTION','DASHBOARD'].includes(batch.feedChannel)||!Array.isArray(batch.markets)||!Number.isFinite(batch.emittedAt)||(!directBatch&&now-batch.emittedAt>60000)||now-batch.emittedAt< -5000)return out;
  for(const row of batch.markets){
-  if(!Array.isArray(row)||row.length!==67||row[0]!=='XAUUSD'||row[65]?.version!=='HEMA2_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
+  if(!Array.isArray(row)||row.length!==67||(row[0]!=='XAUUSD' && !(row[66]?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7' && /^[A-Z0-9][A-Z0-9._#&+!-]{0,31}$/.test(row[0])))||row[65]?.version!=='HEMA2_LIVE_V1'||row[66]?.entryRuleVersion!==S.RULE)continue;
   const d=decode(row,batch);if(!d||!Number.isFinite(d.time)||!Number.isFinite(d.close))continue;
   const channelKey=d.symbol+'|'+batch.feedChannel;
   const prev=channels.get(channelKey);if(prev&&(d.time<prev.sourceBarTime||d.signalObservedAt<=prev.signalObservedAt)&&!require('./pine-direct-entry').isEvent(d))continue;
