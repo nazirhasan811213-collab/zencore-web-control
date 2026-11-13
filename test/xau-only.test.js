@@ -3,10 +3,10 @@ const Core=require('../auto-trade-core');
 const Contract=require('../analysis-execution-contract');
 const {MemoryAutoTradeStore,PostgresAutoTradeStore}=require('../auto-trade-store');
 const {SYMBOLS,dualAnalysis}=require('../analysis-dual-model');
-test('only XAUUSD is selectable; legacy selections normalize without altering gold settings',()=>{
+test('Gold dashboard scope and saved MT5 symbols are independent',()=>{
  assert.deepEqual(Core.TRADE_SYMBOLS,['XAUUSD']);assert.deepEqual(SYMBOLS,['XAUUSD']);
  const v=Core.validateSettings({capitalUsd:100,lotPerLayer:.01,layers:5,strategyMode:'BOTH',symbols:['XAUUSD','GBPUSD','GBPJPY']});
- assert.equal(v.ok,true);assert.deepEqual(v.value.symbols,['XAUUSD']);assert.equal(v.value.layers,5);assert.equal(v.value.lotPerLayer,.01);
+ assert.equal(v.ok,true);assert.deepEqual(v.value.symbols,['XAUUSD','GBPUSD','GBPJPY']);assert.equal(v.value.layers,5);assert.equal(v.value.lotPerLayer,.01);
  assert.throws(()=>dualAnalysis([],'GBPJPY'),/INVALID_SYMBOL/);
 });
 test('removed currencies cannot authorize entry, but existing position exit remains available',()=>{

@@ -19,7 +19,7 @@ test('TF2/TF15/Both choose own timeframe and sizing; other entry pairs rejected'
    assert.equal(!!c,allowed);if(c){assert.equal(c.payload.layers,tf==='15'?2:3);assert.equal(c.payload.exitPolicy,null);}}
  }
  assert.equal(Contract.createEntryDecision(market('2','EURUSD')),null);
- assert.equal(Core.validateSettings({...settings('BOTH'),symbols:['EURUSD']}).ok,false);
+ assert.equal(Core.validateSettings({...settings('BOTH'),symbols:['EURUSD']}).ok,true);
 });
 test('TF15 compact ingress authorizes unconfirmed entry and isolates management',()=>{
  const [m]=Hub.ingest(batch(),now);assert.equal(m.strategyNormal.state,'READY');assert.equal(m.timeframe,'15');assert.equal(m.positionManagement.action,'IDLE');
