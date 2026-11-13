@@ -1,4 +1,4 @@
-import json,tempfile,unittest,urllib.error
+import io,json,tempfile,unittest,urllib.error
 from pathlib import Path
 from unittest.mock import patch
 from connector import Runner,Api
@@ -34,6 +34,28 @@ class RecoveryTests(unittest.TestCase):
   api=Api()
   with patch.object(api.opener,'open',side_effect=urllib.error.URLError('sensitive detail')):
    with self.assertRaisesRegex(RuntimeError,'^NETWORK_UNAVAILABLE$'):api.request('/api/execution/heartbeat',token='secret')
+ def test_heartbeat_times_out_early_and_gateway_codes_survive_json_error_bodies(self):
+  api=Api()
+  for status in (408, 429, 500, 502, 503, 504):
+   error=urllib.error.HTTPError('https://example.invalid',status,'temporary',{},io.BytesIO(b'{"code":"INTERNAL_ERROR"}'))
+   with patch.object(api.opener,'open',side_effect=error) as request:
+    with self.assertRaisesRegex(RuntimeError,f'^HTTP_{status}$'):
+     api.request('/api/execution/heartbeat',token='secret')
+    self.assertEqual(request.call_args.kwargs['timeout'],4)
+
+ def test_lost_ack_keeps_same_result_for_retry(self):
+  with tempfile.TemporaryDirectory() as folder:
+   runner=Runner({'channel':folder,'podToken':'secret'},lambda _:None,background_lease=False)
+   result=Path(folder)/(IDENTITY['account']+'.result')
+   atomic_write(result,encode_fields({'id':'same-command','status':'EXECUTED','code':'SETUP_OPENED'}))
+   with patch.object(runner.api,'request',side_effect=[RuntimeError('NETWORK_UNAVAILABLE'),{'ok':True}]) as request:
+    with self.assertRaisesRegex(RuntimeError,'NETWORK_UNAVAILABLE'):
+     runner.flush_results()
+    self.assertTrue(result.exists())
+    runner.flush_results()
+    self.assertEqual(request.call_args_list[0],request.call_args_list[1])
+    self.assertFalse(result.exists())
+
  def test_retry_is_bounded_and_does_not_renew_permission_offline(self):
   with tempfile.TemporaryDirectory() as folder:
    runner=Runner({'channel':folder},lambda _:None,background_lease=False);waits=[]
