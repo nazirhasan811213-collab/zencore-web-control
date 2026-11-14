@@ -206,7 +206,7 @@
   const editingMode=()=>byId('riskTimeframe')?.value==='15'?'TF15_INTRA':'TF2_SCALPING';
   function hydrateModeDraft(settings) {
     const normalized = Core.validateSettings(settings).value;
-    byId('tradeSymbols').value = normalized.symbols.join(', ');
+    byId('tradeSymbols').value = ['XAUUSD','BTCUSD'].filter(symbol=>normalized.symbols.includes(symbol)).join(',') || 'XAUUSD';
     modeDraft = JSON.parse(JSON.stringify(normalized.modeSettings));
     for (const [mode,lotId,layerId] of [['TF2_SCALPING','lotPerLayer','layers'],['TF15_INTRA','tf15LotPerLayer','tf15Layers']]) {
       const asset=modeDraft[mode][normalized.symbols.includes('XAUUSD')?'gold':'fx'];
@@ -537,7 +537,7 @@
     riskSelect.innerHTML = Core.TRADE_SYMBOLS.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
     hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}}});
     byId('settingsForm')?.addEventListener('input', event => {
-      if (!event.target.matches('input')) return;
+      if (!event.target.matches('input, select')) return;
       if (['tf15LotPerLayer','tf15Layers'].includes(event.target.id)) byId('riskTimeframe').value='15';
       if (['lotPerLayer','layers'].includes(event.target.id)) byId('riskTimeframe').value='2';
       settingsDirty = true;

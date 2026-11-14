@@ -33,9 +33,10 @@ with tempfile.TemporaryDirectory() as folder:
  assert len(fetches)==1, 'pending EA command must not be fetched or replaced twice'
  print(json.dumps({'fields':read_fields(Path(folder)/'command.tsv'),'lease':read_fields(Path(folder)/'lease.tsv')}))
 `;
-for(const symbol of ['XAUUSD','US500.CASH','BTCUSD'])for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`native V7 symbol=${symbol} TF${tf} ${side} reaches real Connector mailbox with unchanged plan and account binding`,async()=>{
+for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`native V7 symbol=${scenario} TF${tf} ${side} reaches real Connector mailbox with unchanged plan and account binding`,async()=>{
  const {f,ingest}=fixture(tf,side),sign=side==='BUY'?1:-1;
  Object.assign(f.row[66],{entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',nativeSolid:{version:'NATIVE_SOLID_LABEL_V1',barTime:f.row[1],pulse:true,basis:4100-sign,rsi:50}});
+ const symbol=scenario==='DUAL'?(side==='BUY'?'BTCUSD':'XAUUSD'):scenario;
  const delayed=symbol==='US500.CASH', layers=delayed?12:3;
  f.row[0]=symbol;
  const market=ingest();assert.ok(market);
@@ -45,10 +46,10 @@ for(const symbol of ['XAUUSD','US500.CASH','BTCUSD'])for(const tf of ['2','15'])
  const pod={id:podId,userId:id,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',accountFingerprint:crypto.createHash('sha256').update(JSON.stringify([identity.server,identity.account,identity.tradeMode])).digest('hex'),lastSeenAt:f.now,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
  store.podsByUser.set(id,pod);store.podsByToken.set(hash,pod);
  const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'2',allowMt5Symbols:true,localEaExecutionUserIds:[id],commandSigningKey:'test-only-handoff-key-longer-than-thirty-two-bytes',getLatestMarket:()=>market});
- await svc.saveSettings(id,{capitalUsd:1000,lotPerLayer:.02,layers,symbols:[symbol],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',modeSettings:{TF2_SCALPING:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}},TF15_INTRA:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}}},riskAcknowledged:true});
- await svc.heartbeat(token,{accountFingerprint:pod.accountFingerprint,accountBindingVersion:'ACCOUNT_SESSION_V1',accountExecutionVersion:'REAL_DEMO_V1',eaSession:identity.eaSession,accountMask:'****5678',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1',expandedEntryPolicy:true,btcUsdChart:symbol==='BTCUSD'});
+ await svc.saveSettings(id,{capitalUsd:1000,lotPerLayer:.02,layers,symbols:scenario==='DUAL'?['XAUUSD','BTCUSD']:[symbol],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',modeSettings:{TF2_SCALPING:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}},TF15_INTRA:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}}},riskAcknowledged:true});
+ await svc.heartbeat(token,{accountFingerprint:pod.accountFingerprint,accountBindingVersion:'ACCOUNT_SESSION_V1',accountExecutionVersion:'REAL_DEMO_V1',eaSession:identity.eaSession,accountMask:'****5678',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1',expandedEntryPolicy:true,btcUsdChart:scenario!=='DUAL'&&symbol==='BTCUSD',dualPairExecution:scenario==='DUAL'});
  await store.setControl(id,{desiredState:'ON',effectiveState:'ON'});
- if(symbol==='BTCUSD'){
+ if(scenario==='BTCUSD'){
   const wrongChart={...market,symbol:'XAUUSD'};
   assert.equal((await svc.dispatchMarkets([wrongChart])).queued,0);
  }
