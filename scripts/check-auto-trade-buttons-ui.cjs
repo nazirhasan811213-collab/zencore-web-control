@@ -4,10 +4,11 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
  const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],calls=[];
  let effective='STOPPED',diagnostics='failure',stopFails=true,acceptDialog=false;
  const initial=V.state({data:dataset()},Date.now()).settings;
- const state=()=>{const s=V.state({data:dataset()},Date.now());s.settings=structuredClone(initial);s.control.desiredState=effective;s.control.effectiveState=effective;s.control.canEnter=effective==='ON';return s;};
+ const state=()=>{const s=V.state({data:dataset()},Date.now());s.settings=structuredClone(initial);s.pod={...s.pod,symbolSpecs:{XAUUSD:{tickSize:.01,tickValue:1,volumeMin:.01,volumeMax:10,volumeStep:.01}}};s.control.desiredState=effective;s.control.effectiveState=effective;s.control.canEnter=effective==='ON';return s;};
  page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>acceptDialog?d.accept():d.dismiss());
  await page.route('**/*',async r=>{const p=new URL(r.request().url()).pathname,method=r.request().method();
   if(p==='/auth/me')return r.fulfill({json:{ok:true,user:{id:'test-only',role:'client',status:'active'}}});
+  if(p==='/api/analysis/timeframes')return r.fulfill({json:{views:[{timeframe:2,status:'LIVE',market:{symbol:'XAUUSD',strategyNormal:{plan:{entry:4000,sl:3998}}}},{timeframe:15,status:'LIVE',market:{symbol:'XAUUSD',strategyNormal:{plan:{entry:4010,sl:4006}}}}]}});
   if(p==='/api/auto-trade/state')return r.fulfill({json:state()});
   if(p==='/api/auto-trade/execution-diagnostics')return r.fulfill(diagnostics==='failure'?{status:503,json:{error:'Diagnostic test failure'}}:{json:{commands:[{type:'PLACE_SETUP',symbol:'XAUUSD',timeframe:'2',status:'FAILED',resultCode:'LEASE_EXPIRED',createdAt:Date.now()}]}});
   if(method==='POST'&&p.startsWith('/api/auto-trade/')){
@@ -25,6 +26,14 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
  try{
   await page.goto('http://localhost/auto-trade');await page.getByText('Diagnostik belum tersedia. Status MT5 dan kawalan Auto Trade dikekalkan.',{exact:true}).waitFor({state:'attached'});
   a.equal(await page.locator('#masterStateText').innerText(),'STOPPED');a.equal(await page.locator('#turnOnButton').isEnabled(),true);
+  await page.waitForFunction(()=>document.getElementById('riskEntry').textContent.replaceAll(',', '').includes('4000'));
+  await page.locator('#riskTimeframe').selectOption('15');
+  a.match(await page.locator('#riskEntry').textContent(),/4,?010/);
+  a.equal(await page.locator('#applyRecommendationButton').isEnabled(),true);
+  await page.locator('#riskTimeframe').selectOption('2');
+  const box2=await page.locator('.tf-setting-card').nth(0).boundingBox();
+  const box15=await page.locator('.tf-setting-card').nth(1).boundingBox();
+  a.equal(box2.y,box15.y,'TF2 and TF15 share a row on desktop');
   const values=async()=>page.locator('#settingsForm input,#settingsForm select').evaluateAll(xs=>xs.map(x=>[x.id,x.value,x.type==='checkbox'?x.checked:null]));const before=await values();
   await page.locator('#turnOnButton').click();await page.locator('#onDialog .dialog-cancel').click();a.equal(calls.length,0);
   await page.locator('#turnOnButton').click();await page.locator('#onConfirmation').fill('WRONG');await page.locator('#confirmOnButton').click();await page.getByText('Pengesahan ON tidak sah.',{exact:true}).waitFor();a.equal(await page.locator('#confirmOnButton').isEnabled(),true);
