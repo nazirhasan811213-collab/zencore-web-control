@@ -48,6 +48,7 @@ uint errorCode=TRADE_RETCODE_REQUOTE;
 bool hasOrder=false, moveQuoteAfterReject=false;
 int transientCount=1;
 ulong GetTickCount64(){return now;}
+bool IsBtcUsdChart(){return false;}
 bool IsStopped(){return false;}
 void Sleep(int ms){now+=ms;}
 bool Heartbeat(){longestPulseGap=std::max(longestPulseGap,now-lastPulse);lastPulse=now;return true;}

@@ -370,12 +370,13 @@
 
   async function refreshMarkets() {
     try {
-      const [general, gold] = await Promise.allSettled([
+      const [general, gold, btc] = await Promise.allSettled([
         api('/api/markets'),
-        api('/api/analysis/timeframes?symbol=XAUUSD')
+        api('/api/analysis/timeframes?symbol=XAUUSD'),
+        api('/api/analysis/timeframes?symbol=BTCUSD')
       ]);
-      markets = (general.value?.markets || []).filter(item => Core.normaliseSymbol(item.symbol) !== 'XAUUSD');
-      for (const view of gold.value?.views || []) {
+      markets = (general.value?.markets || []).filter(item => !['XAUUSD','BTCUSD'].includes(Core.normaliseSymbol(item.symbol)));
+      for (const view of [...(gold.value?.views || []),...(btc.value?.views || [])]) {
         if (view.status === 'LIVE' && view.market) markets.push({...view.market, timeframe:view.timeframe});
       }
       updateRiskPreview();

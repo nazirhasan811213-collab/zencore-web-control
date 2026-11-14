@@ -37,6 +37,15 @@ function ingest(batch,now=Date.now()){
   // only an identical confirmed plan for <=1s; never renew the original deadline.
   if(prev&&d.setupMeta?.entryPolicyVersion===S.NEW_POLICY&&prev.entryEvent===true&&d.entryEvent===false&&prev.confirmed&&d.confirmed&&d.feedChannel==='EXECUTION'&&d.time===prev.sourceBarTime&&d.signalObservedAt-prev.signalObservedAt<=1000&&d.setupKey===prev.setupKey&&d.setupMeta.completedAt===prev.setupMeta?.completedAt&&d.close===prev.close&&d.entry===prev.entry&&d.sl===prev.sl&&d.tp1===prev.tp1&&d.tp2===prev.tp2&&d.tp3===prev.tp3&&d.positionExitAction===prev.positionExitAction&&d.nativeChartExitAll===prev.nativeChartExitAll&&S.entryDecision(prev,now)&&S.strategy(d,now).state==='READY')continue;
   const n=S.strategy(d,now);
+  if(d.symbol==='BTCUSD' && d.setupMeta?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7'){
+   const side=d.setupMeta.solidSide, sign=side==='BUY'?1:side==='SELL'?-1:0;
+   const [entry,sl,tp1,tp2,tp3]=[d.normal3Entry,d.initialSl,d.tp1,d.tp2,d.tp3];
+   if(sign && [entry,sl,tp1,tp2,tp3].every(x=>Number.isFinite(x)&&x>0) &&
+      [entry-sl,tp1-entry,tp2-tp1,tp3-tp2].every(x=>sign*x>0)){
+    n.plan={side,entry,sl,tp1,tp2,tp3};
+    if(require('./pine-direct-entry').decision(d))n.state='READY';
+   }
+  }
   const m={...d,price:d.close,sourceBarTime:d.time,feedMode:batch.confirmed?'BAR-CLOSE':'INTRABAR',strategyNormal:n,positionManagement:{action:d.nativeChartExitAll?'EXIT_ALL':d.positionExitAction,reason:d.nativeChartExitAll?'Native chart close signal':d.exitReason,slMoveTriggered:d.slMoveTriggered,slMoveAction:d.slMoveAction,activeSl:d.activeSl,slLockLabel:d.slLockLabel}};
   require('./indicator-chart-history').history.observe(m,now);
   if(!prev||m.signalObservedAt>prev.signalObservedAt)channels.set(channelKey,m);
