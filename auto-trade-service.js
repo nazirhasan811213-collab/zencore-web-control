@@ -1173,6 +1173,14 @@ function createAutoTradeService(options = {}) {
   const directEntryPods=new Set();
   const expandedEntryPods=new Set();
   const btcChartPods=new Set();
+  const dualPairPods=new Set();
+  function pairAllowed(profile,podId,symbol){
+    if(!['XAUUSD','BTCUSD'].includes(symbol))return !btcChartPods.has(podId);
+    if(dualPairPods.has(podId))return profile?.symbols?.includes(symbol)===true;
+    return symbol==='BTCUSD'
+      ? btcChartPods.has(podId)&&profile?.symbols?.includes(symbol)
+      : !btcChartPods.has(podId)&&profile?.symbols?.includes(symbol);
+  }
   async function heartbeat(rawToken,input={}){
     const pod=await authenticatePod(rawToken);
     if(!pod)throw serviceError('INVALID_POD_TOKEN','Secure Pod tidak dibenarkan.',401);
@@ -1198,6 +1206,7 @@ function createAutoTradeService(options = {}) {
     const seenAt = now();
     const updated = await store.updatePodHeartbeat(pod.id, heartbeatValidation.value, seenAt, pod.tokenHash);
     if (!updated) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Akaun MT5 berubah. OFF dan pautkan semula.', 409);
+    if(input.dualPairExecution===true)dualPairPods.add(pod.id);else dualPairPods.delete(pod.id);
     if(input.btcUsdChart===true)btcChartPods.add(pod.id);else btcChartPods.delete(pod.id);
     if(input.expandedEntryPolicy===true)expandedEntryPods.add(pod.id);else expandedEntryPods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
@@ -1275,9 +1284,7 @@ function createAutoTradeService(options = {}) {
     if(['2','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='2'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF2_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
-    if(PineDirect.isCommand(command))return (command.payload.symbol==='BTCUSD'
-      ? btcChartPods.has(command.podId)&&profile?.symbols?.includes('BTCUSD')
-      : !btcChartPods.has(command.podId))&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
+    if(PineDirect.isCommand(command))return pairAllowed(profile,command.podId,command.payload.symbol)&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     // A queued signal may outlive a heartbeat that reports a fill. Recheck at
     // delivery as well as dispatch; every layer of this TF must be closed.
@@ -1602,9 +1609,7 @@ function createAutoTradeService(options = {}) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(['2','3'].includes(options.scalpingTimeframe)&&(![options.scalpingTimeframe,'15'].includes(String(market.timeframe))||String(market.timeframe)==='2'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF2_RIBBON_V1'))continue;
         if (!direct&&(!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market))) continue;
-        if(direct && (symbol==='BTCUSD'
-          ? !btcChartPods.has(pod.id)||!profile.symbols.includes('BTCUSD')
-          : btcChartPods.has(pod.id)))continue;
+        if(direct && !pairAllowed(profile,pod.id,symbol))continue;
         if (!allowedDemoSymbols.includes(symbol) && !(options.allowMt5Symbols && direct))continue;
         if(!direct&&!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
         const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);

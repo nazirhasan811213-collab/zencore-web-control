@@ -49,6 +49,9 @@ bool hasOrder=false, moveQuoteAfterReject=false;
 int transientCount=1;
 ulong GetTickCount64(){return now;}
 bool IsBtcUsdChart(){return false;}
+bool GoldUsdSymbol(string){return true;}
+string EntrySymbol(string){return _Symbol;}
+string BtcEntrySymbol(){return "BTCUSD";}
 bool IsStopped(){return false;}
 void Sleep(int ms){now+=ms;}
 bool Heartbeat(){longestPulseGap=std::max(longestPulseGap,now-lastPulse);lastPulse=now;return true;}
@@ -172,7 +175,7 @@ int main(){
  assert(std::abs(positions[0].volume-.025)<1e-8);
  assert(std::abs(positions[0].sl-ExecutionStop(true,positions[0].entry,2,.01))<1e-8);
  partialAt=-1;calls=0;sends=0;positions.clear();missingQuotes=20;
- enabledSymbols="EURUSD"; // Direct orders use the chart, regardless of cached EA symbol settings.
+ enabledSymbols="XAUUSD,BTCUSD";
  assert(Run(true,12,"")&&calls==12&&sends==12);
  for(uint reason:{TRADE_RETCODE_REQUOTE,TRADE_RETCODE_PRICE_CHANGED,TRADE_RETCODE_PRICE_OFF,TRADE_RETCODE_TOO_MANY_REQUESTS}){
   calls=0;sends=0;positions.clear();transientAt=4;errorCode=reason;

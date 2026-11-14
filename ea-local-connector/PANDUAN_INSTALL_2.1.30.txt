@@ -1,9 +1,9 @@
-ZENCORE CONNECTOR 2.1.29 / EA 2.29
+ZENCORE CONNECTOR 2.1.30 / EA 2.30
 
 1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
-2. Jalankan ZenCoreSetup-2.1.29.exe dan buka ZenCore Connector.
+2. Jalankan ZenCoreSetup-2.1.30.exe dan buka ZenCore Connector.
 3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
-4. Tekan Pasang / kemas kini EA 2.29 dan pastikan Experts menunjukkan EA_READY version=2.29.
+4. Tekan Pasang / kemas kini EA 2.30 dan pastikan Experts menunjukkan EA_READY version=2.30.
 5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
 
 Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
@@ -22,3 +22,5 @@ Pine Direct menggunakan simbol carta MT5 tempat EA dipasang. EA menunggu harga B
 ENTRY MANUAL AUTO EXIT: TP1 -> SL entry; TP2 -> SL TP1; TP3 -> SL TP2; 2.00 melepasi TP3 -> SL TP3. TP broker dikosongkan pada posisi diambil alih. Tiada exit daripada signal Pine untuk mod manual ini.
 
 Pemulihan rangkaian: Connector cuba semula selepas gangguan sementara.
+
+Pilih XAUUSD, BTCUSD atau kedua-duanya dalam Auto Trade. Satu EA boleh urus kedua-dua simbol. Buat alert Pine berasingan bagi setiap pair dan timeframe yang digunakan.
