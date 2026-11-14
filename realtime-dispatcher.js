@@ -27,7 +27,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
   if(!executionInput(m))return;
-  if(!m||(!PineDirect.isEvent(m)&&!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP'].includes(m.symbol))||!['2','3','15'].includes(String(m.timeframe)))return;
+  if(!m||(!PineDirect.isEvent(m)&&!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'].includes(m.symbol))||!['2','3','15'].includes(String(m.timeframe)))return;
   const direct=PineDirect.decision(m);
   if(direct){directPending.set(direct.signalKey,m);const k=key(m),old=latest.get(k);if(!old||m.signalObservedAt>=old.signalObservedAt)latest.set(k,m);return tick();}
   const k=key(m),previous=pending.get(k),old=latest.get(k);

@@ -33,10 +33,10 @@ with tempfile.TemporaryDirectory() as folder:
  assert len(fetches)==1, 'pending EA command must not be fetched or replaced twice'
  print(json.dumps({'fields':read_fields(Path(folder)/'command.tsv'),'lease':read_fields(Path(folder)/'lease.tsv')}))
 `;
-for(const delayed of [false,true])for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`native V7 delayed=${delayed} TF${tf} ${side} reaches real Connector mailbox with unchanged plan and account binding`,async()=>{
+for(const symbol of ['XAUUSD','US500.CASH','BTCUSD'])for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`native V7 symbol=${symbol} TF${tf} ${side} reaches real Connector mailbox with unchanged plan and account binding`,async()=>{
  const {f,ingest}=fixture(tf,side),sign=side==='BUY'?1:-1;
  Object.assign(f.row[66],{entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',nativeSolid:{version:'NATIVE_SOLID_LABEL_V1',barTime:f.row[1],pulse:true,basis:4100-sign,rsi:50}});
- const symbol=delayed?'US500.CASH':'XAUUSD', layers=delayed?12:3;
+ const delayed=symbol==='US500.CASH', layers=delayed?12:3;
  f.row[0]=symbol;
  const market=ingest();assert.ok(market);
  if(delayed){f.now+=5*60*1000;market.strategyNormal.state='WAIT';market.strategyNormal.sop.gates=[];}
@@ -46,8 +46,13 @@ for(const delayed of [false,true])for(const tf of ['2','15'])for(const side of [
  store.podsByUser.set(id,pod);store.podsByToken.set(hash,pod);
  const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'2',allowMt5Symbols:true,localEaExecutionUserIds:[id],commandSigningKey:'test-only-handoff-key-longer-than-thirty-two-bytes',getLatestMarket:()=>market});
  await svc.saveSettings(id,{capitalUsd:1000,lotPerLayer:.02,layers,symbols:[symbol],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',modeSettings:{TF2_SCALPING:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}},TF15_INTRA:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}}},riskAcknowledged:true});
- await svc.heartbeat(token,{accountFingerprint:pod.accountFingerprint,accountBindingVersion:'ACCOUNT_SESSION_V1',accountExecutionVersion:'REAL_DEMO_V1',eaSession:identity.eaSession,accountMask:'****5678',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1',expandedEntryPolicy:true});
+ await svc.heartbeat(token,{accountFingerprint:pod.accountFingerprint,accountBindingVersion:'ACCOUNT_SESSION_V1',accountExecutionVersion:'REAL_DEMO_V1',eaSession:identity.eaSession,accountMask:'****5678',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1',expandedEntryPolicy:true,btcUsdChart:symbol==='BTCUSD'});
  await store.setControl(id,{desiredState:'ON',effectiveState:'ON'});
+ if(symbol==='BTCUSD'){
+  const wrongChart={...market,symbol:'XAUUSD'};
+  assert.equal((await svc.dispatchMarkets([wrongChart])).queued,0);
+ }
+
  const read=store.nextCommandForPod.bind(store);
  let checked;
  const checkedEmpty=new Promise(resolve=>{checked=resolve;});
