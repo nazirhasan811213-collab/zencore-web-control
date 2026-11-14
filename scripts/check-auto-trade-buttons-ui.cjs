@@ -4,6 +4,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
  const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],calls=[];
  let effective='STOPPED',diagnostics='failure',stopFails=true,acceptDialog=false;
  let initial=V.state({data:dataset()},Date.now()).settings;
+ initial.capitalUsd=900;
  const state=()=>{const s=V.state({data:dataset()},Date.now());s.settings=structuredClone(initial);s.pod={...s.pod,symbolSpecs:{XAUUSD:{tickSize:.01,tickValue:1,volumeMin:.01,volumeMax:10,volumeStep:.01}}};s.control.desiredState=effective;s.control.effectiveState=effective;s.control.canEnter=effective==='ON';return s;};
  page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>acceptDialog?d.accept():d.dismiss());
  await page.route('**/*',async r=>{const p=new URL(r.request().url()).pathname,method=r.request().method();
