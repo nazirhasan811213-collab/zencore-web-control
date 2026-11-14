@@ -8,7 +8,7 @@
   <title>Auto Trade — ZenCore Precision Entry</title>
   <link rel="stylesheet" href="/auth.css?v=1.0">
   <link rel="stylesheet" href="/home.css?v=2.0">
-  <link rel="stylesheet" href="/auto-trade.css?v=20261007.news-choice">
+  <link rel="stylesheet" href="/auto-trade.css?v=20261115.tf-risk">
   <link rel="stylesheet" href="/viewer-mode.css?v=1.1">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
@@ -153,8 +153,9 @@
           </div>
           <form id="settingsForm" novalidate>
             <div class="settings-fields dual-capital"><label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label></div>
+            <div class="settings-fields mt5-symbol-fields"><label><span>SIMBOL MT5 (PISAHKAN DENGAN KOMA)</span><input id="tradeSymbols" type="text" value="XAUUSD" maxlength="1024"></label></div>
             <div class="dual-trade-settings">
-              <label><span>SIMBOL MT5 (PISAHKAN DENGAN KOMA)</span><input id="tradeSymbols" type="text" value="XAUUSD" maxlength="1024"></label><section class="tf-setting-card" aria-labelledby="tf2Heading"><header><h3 id="tf2Heading">Scalping <b>TF2</b></h3><strong id="tf2EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf2Total">—</b></p></section>
+              <section class="tf-setting-card" aria-labelledby="tf2Heading"><header><h3 id="tf2Heading">Scalping <b>TF2</b></h3><strong id="tf2EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf2Total">—</b></p></section>
               <section class="tf-setting-card" aria-labelledby="tf15Heading"><header><h3 id="tf15Heading">Intra <b>TF15</b></h3><strong id="tf15EntryState">TIADA ENTRY</strong></header><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="tf15LotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="tf15Layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf15Total">—</b></p></section>
             </div>
             <p class="tf-empty-note">Lot atau layer kosong = tiada entry selepas Simpan.</p>
@@ -176,7 +177,7 @@
               <legend>WAKTU AKTIF TRADER (MALAYSIA)</legend>
               <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox"><span>Gunakan waktu aktif trader: Asia 8:00–11:30 pagi; Euro 1:30–4:30 petang; US 8:00–11:30 malam dan 2:00–3:30 pagi.</span></label>
               <label><span>WAKTU NEWS</span><select id="newsTradingMode"><option value="trade">Trade waktu news</option><option value="skip">Skip waktu news</option></select></label>
-              <small>Jika pilih skip, rehat entry: 8:30–9:00 malam, 9:30–10:30 malam, 2:00–2:30 pagi. Posisi terbuka terus diurus oleh SL/TP dan SOP exit. Jam tetap setiap hari.</small>
+              <small>Jika pilih skip, rehat entry: 8:30–9:00 malam, 9:30–10:30 malam, 2:00–2:30 pagi. Posisi terbuka terus diurus oleh SL/TP dan SOP exit. Jam tetap setiap hari. Pilihan waktu dan news ini terpakai kepada aliran lama. Pine Direct ikut trigger Pine.</small>
             </fieldset>
 
 
@@ -195,6 +196,7 @@
             <span id="riskLevel" class="risk-level pending">PENDING</span>
           </div>
           <label class="risk-symbol" for="riskSymbol"><span>PAIR RUJUKAN</span><select id="riskSymbol"></select></label>
+          <label class="risk-symbol" for="riskTimeframe"><span>TIMEFRAME</span><select id="riskTimeframe"><option value="2">TF2 Scalping</option><option value="15">TF15 Intraday</option></select></label>
           <div class="risk-figure">
             <span>ANGGARAN RISIKO</span>
             <b id="riskPercent">—</b>
@@ -318,9 +320,9 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/setup-lifecycle.js?v=20261017-v1" defer></script><script src="/tf15-intraday.js?v=20261017-lifecycle-v1" defer></script><script src="/tf2-bar-close.js?v=20261027" defer></script><script src="/tf2-ribbon-scalping.js?v=20261113-mt5-symbols" defer></script><script src="/analysis-execution-contract.js?v=20261113-mt5-symbols" defer></script>
-  <script src="/auto-trade-core.js?v=20261113-mt5-symbols" defer></script>
-  <script src="/auto-trade.js?v=20261113-mt5-symbols" defer></script>
+  <script src="/setup-lifecycle.js?v=20261017-v1" defer></script><script src="/tf15-intraday.js?v=20261017-lifecycle-v1" defer></script><script src="/tf2-bar-close.js?v=20261027" defer></script><script src="/tf2-ribbon-scalping.js?v=20261115-tf-risk" defer></script><script src="/analysis-execution-contract.js?v=20261115-tf-risk" defer></script>
+  <script src="/auto-trade-core.js?v=20261115-tf-risk" defer></script>
+  <script src="/auto-trade.js?v=20261115-tf-risk" defer></script>
   <script src="/viewer-mode.js?v=1.1" defer></script>
 <script src="/workspace-shell.js?v=20261007.2" defer></script>
 </body>

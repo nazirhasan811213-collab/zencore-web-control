@@ -203,14 +203,11 @@
   }
 
   let modeDraft = null;
-  let displayedMode = 'TF2_SCALPING';
-  let configuredMode='TF2_SCALPING';
-  const editingMode=()=>displayedMode==='BOTH'?configuredMode:displayedMode;
+  const editingMode=()=>byId('riskTimeframe')?.value==='15'?'TF15_INTRA':'TF2_SCALPING';
   function hydrateModeDraft(settings) {
     const normalized = Core.validateSettings(settings).value;
     byId('tradeSymbols').value = normalized.symbols.join(', ');
     modeDraft = JSON.parse(JSON.stringify(normalized.modeSettings));
-    displayedMode = 'BOTH';
     for (const [mode,lotId,layerId] of [['TF2_SCALPING','lotPerLayer','layers'],['TF15_INTRA','tf15LotPerLayer','tf15Layers']]) {
       const asset=modeDraft[mode][normalized.symbols.includes('XAUUSD')?'gold':'fx'];
       const selected=normalized.strategyMode==='BOTH'||normalized.strategyMode===mode;
@@ -373,8 +370,14 @@
 
   async function refreshMarkets() {
     try {
-      const payload = await api('/api/markets');
-      markets = Array.isArray(payload.markets) ? payload.markets : [];
+      const [general, gold] = await Promise.allSettled([
+        api('/api/markets'),
+        api('/api/analysis/timeframes?symbol=XAUUSD')
+      ]);
+      markets = (general.value?.markets || []).filter(item => Core.normaliseSymbol(item.symbol) !== 'XAUUSD');
+      for (const view of gold.value?.views || []) {
+        if (view.status === 'LIVE' && view.market) markets.push({...view.market, timeframe:view.timeframe});
+      }
       updateRiskPreview();
     } catch (_) {}
   }
@@ -402,13 +405,19 @@
     setText('fxTotalLotPreview', fxSettings.totalLot == null ? '—' : fxSettings.totalLot.toFixed(3));
     setText('totalLotPreview', validation.value.totalLot == null ? '—' : validation.value.totalLot.toFixed(3));
     setText('riskTotalLot', validation.value.totalLot == null ? '—' : validation.value.totalLot.toFixed(3));
-    const symbol = byId('riskSymbol')?.value || 'XAUUSD';
+    const select = byId('riskSymbol');
+    const symbols = validation.value.symbols.length ? validation.value.symbols : ['XAUUSD'];
+    const current = select.value;
+    if (Array.from(select.options, option => option.value).join(',') !== symbols.join(',')) {
+      select.replaceChildren(...symbols.map(symbol => new Option(symbol, symbol)));
+      if (symbols.includes(current)) select.value = current;
+    }
+    const symbol = select.value;
     const effective = Core.effectiveSettings({...validation.value,strategyMode:editingMode()}, symbol);
     setText('riskTotalLot', effective.totalLot == null ? '—' : effective.totalLot.toFixed(3));
-    const selectedTf = editingMode() === 'TF15_INTRA' ? '15' : '3';
+    const selectedTf = byId('riskTimeframe').value;
     const market = markets.find(item => Core.normaliseSymbol(item.symbol) === symbol && String(item.timeframe || item.strategyNormal?.tf || '').replace(/m$/, '') === selectedTf);
-    const matchingTf = !!market;
-    const plan = matchingTf ? market?.strategyNormal?.plan : null;
+    const plan = market?.strategyNormal?.plan;
     const spec = (currentState?.hostedAccount?.symbolSpecs || currentState?.pod?.symbolSpecs)?.[symbol];
     const risk = Core.calculateRisk({
       ...effective,
@@ -528,12 +537,13 @@
     hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}}});
     byId('settingsForm')?.addEventListener('input', event => {
       if (!event.target.matches('input')) return;
-      if (['tf15LotPerLayer','tf15Layers'].includes(event.target.id)) configuredMode='TF15_INTRA';
-      if (['lotPerLayer','layers'].includes(event.target.id)) configuredMode='TF2_SCALPING';
+      if (['tf15LotPerLayer','tf15Layers'].includes(event.target.id)) byId('riskTimeframe').value='15';
+      if (['lotPerLayer','layers'].includes(event.target.id)) byId('riskTimeframe').value='2';
       settingsDirty = true;
       updateRiskPreview();
     });
     riskSelect.addEventListener('change', updateRiskPreview);
+    byId('riskTimeframe').addEventListener('change', updateRiskPreview);
   }
 
   byId('startAutoTradeButton')?.addEventListener('click', () => {
@@ -626,9 +636,8 @@
 
   byId('applyRecommendationButton')?.addEventListener('click', () => {
     if (!currentRecommendation) return;
-    const fx = byId('riskSymbol').value !== 'XAUUSD';
-    byId(fx ? 'fxLotPerLayer' : editingMode()==='TF15_INTRA'?'tf15LotPerLayer':'lotPerLayer').value = currentRecommendation.lotPerLayer;
-    byId(fx ? 'fxLayers' : editingMode()==='TF15_INTRA'?'tf15Layers':'layers').value = currentRecommendation.layers;
+    byId(editingMode()==='TF15_INTRA'?'tf15LotPerLayer':'lotPerLayer').value = currentRecommendation.lotPerLayer;
+    byId(editingMode()==='TF15_INTRA'?'tf15Layers':'layers').value = currentRecommendation.layers;
     settingsDirty = true;
     updateRiskPreview();
     toast('Cadangan lot dan layer digunakan. Simpan konfigurasi untuk confirm.');
