@@ -1,5 +1,5 @@
 #property strict
-#property version "2.32"
+#property version "2.33"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -7,6 +7,11 @@ const ulong MAGIC=32603231;
 const ulong MAGIC15=32601545;
 input string GoldBrokerSymbol="";
 input string BitcoinBrokerSymbol="";
+enum ZenCoreChartRole{CHART_AUTO=0,CHART_XAUUSD=1,CHART_BTCUSD=2};
+input ZenCoreChartRole EntryChartRole=CHART_AUTO;
+int registeredRole=0;
+long primaryChart=-1;
+ulong nextOwnerAttempt=0;
 string channel,account,server,eaSession,ownerPod,boundMode;
 string keys[],values[];
 int lockHandle=INVALID_HANDLE;
@@ -199,6 +204,35 @@ string BtcEntrySymbol(){
  return match!="" && SymbolSelect(match,true)?match:"";
 }
 // End Bitcoin symbol resolution.
+// Direct entries use a chart role registered when the EA starts.
+string ChartRoleKey(long chart){return "ZenCore.EntryChart."+(string)chart;}
+int SignalChartRole(string source){return source=="XAUUSD"?CHART_XAUUSD:source=="BTCUSD"?CHART_BTCUSD:CHART_AUTO;}
+void RegisterEntryChart(){
+ registeredRole=EntryChartRole;
+ if(registeredRole==CHART_AUTO)
+  registeredRole=IsBtcUsdSymbol(_Symbol)?CHART_BTCUSD:GoldUsdSymbol(_Symbol)?CHART_XAUUSD:CHART_AUTO;
+ if(registeredRole==CHART_AUTO)return;
+ string key=ChartRoleKey(ChartID());
+ GlobalVariableTemp(key);
+ if(GlobalVariableSet(key,registeredRole)==0){registeredRole=CHART_AUTO;Print("ZenCore: ENTRY_CHART_REGISTRATION_FAILED");}
+ else Print("ZenCore: ENTRY_CHART_READY pair=",registeredRole==CHART_BTCUSD?"BTCUSD":"XAUUSD"," symbol=",_Symbol);
+}
+long DirectEntryChart(string source){
+ int role=SignalChartRole(source);
+ if(role==CHART_AUTO)return ChartID();
+ long selected=-1;
+ for(long chart=ChartFirst();chart>=0;chart=ChartNext(chart)){
+  int chartRole=chart==ChartID()?registeredRole:(int)GlobalVariableGet(ChartRoleKey(chart));
+  if(chartRole!=role)continue;
+  if(chart==primaryChart)return chart;
+  if(selected<0 || chart<selected)selected=chart;
+ }
+ return selected;
+}
+string RegisteredChartSymbol(string source){
+ long chart=DirectEntryChart(source);
+ return chart>=0?ChartSymbol(chart):"";
+}
 string ManualPair(string symbol){
  if(IsBtcUsdSymbol(symbol))return "BTCUSD";
  if(Canonical(symbol)=="XAUUSD")return "XAUUSD";
@@ -206,15 +240,18 @@ string ManualPair(string symbol){
 }
 bool ValidManualPairScope(string scope){return scope=="XAUUSD" || scope=="BTCUSD" || scope=="XAUUSD,BTCUSD";}
 bool ManualPairSelected(string pair,string scope){return pair!="" && (scope==pair || scope=="XAUUSD,BTCUSD");}
-bool IsBtcUsdChart(){return IsBtcUsdSymbol(_Symbol);}
+bool IsBtcUsdChart(){return registeredRole==CHART_BTCUSD;}
 bool Heartbeat(){
+ if(lockHandle==INVALID_HANDLE)return false;
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.32")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.33")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
+ string goldChart=RegisteredChartSymbol("XAUUSD");
+ if(goldChart!="")brokerSymbols[0]=goldChart;
  int count=0;
  for(int i=0;i<9;i++){
   string symbol=brokerSymbols[i];if(symbol=="")continue;
@@ -224,7 +261,7 @@ bool Heartbeat(){
   Row(p+"volumeMin",Num(SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN)))+Row(p+"volumeMax",Num(SymbolInfoDouble(symbol,SYMBOL_VOLUME_MAX)))+
   Row(p+"volumeStep",Num(SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP)));count++;
  }
- string btcSymbol=BtcEntrySymbol();
+ string btcSymbol=RegisteredChartSymbol("BTCUSD");
  if(btcSymbol!=""){
   string p="s"+(string)count;
   text+=Row(p+"symbol","BTCUSD")+Row(p+"tickSize",Num(SymbolInfoDouble(btcSymbol,SYMBOL_TRADE_TICK_SIZE)))+
@@ -236,7 +273,7 @@ bool Heartbeat(){
  text+=Row("specCount",(string)count);count=0;
  for(int i=0;i<PositionsTotal();i++){
   ulong ticket=PositionGetTicket(i);if(!IsManaged(ticket))continue;
-  string symbol=PositionGetString(POSITION_SYMBOL),c=IsBtcUsdSymbol(symbol)?"BTCUSD":Canonical(symbol);if(c=="")continue;
+  string symbol=PositionGetString(POSITION_SYMBOL),c=(symbol==btcSymbol || IsBtcUsdSymbol(symbol))?"BTCUSD":Canonical(symbol);if(c=="")continue;
   string p="p"+(string)count;
   string comment=PositionGetString(POSITION_COMMENT);int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
   if(prefix>0){
@@ -371,13 +408,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  const int quoteRetryDelayMs=200;
  const int quoteRetryLimit=4000/quoteRetryDelayMs;
  if(directEntry){
-  bool selectedPair=c=="BTCUSD" || c=="XAUUSD";
-  if(selectedPair && StringFind(","+enabledSymbols+",",","+c+",")<0)
-   return RejectEntry("SYMBOL_DISABLED");
-  if(c=="BTCUSD")symbol=BtcEntrySymbol();
-  else if(c=="XAUUSD")symbol=GoldUsdSymbol(_Symbol)?_Symbol:EntrySymbol(c);
-  else symbol=_Symbol;
-  // Keep existing Gold position reporting keyed to the Pine signal symbol.
+  if((c=="BTCUSD" || c=="XAUUSD") && StringFind(","+enabledSymbols+",",","+c+",")<0)return RejectEntry("SYMBOL_DISABLED");
+  // Process has routed this signal to its registered EA instance.
+  symbol=_Symbol;
   if(c=="XAUUSD")brokerSymbols[0]=symbol;
  }
  if(symbol=="")return RejectEntry("MT5_SYMBOL_UNRESOLVED");
@@ -754,7 +787,7 @@ string MasterResetForce(string pod){
  string reset=MasterResetIdle();
  return reset=="MASTER_RESET_READY"?"MASTER_RESET_FORCE_READY":reset;
 }
-void Process(){
+void Process(bool chartWorker){
  if(!FileIsExist(channel+"\\command.tsv",FILE_COMMON))return;
  if(!ReadFields("command.tsv")){resumePending=armed||resumePending;armed=false;return;}
  string masterResetVersion=Get("masterResetVersion"),masterResetScope=Get("masterResetScope");
@@ -765,7 +798,15 @@ void Process(){
  ulong scope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
  string side=Get("side"),symbols=Get("symbols");
  bool directEntry=type=="PLACE_SETUP" && Get("executionPolicy")=="PINE_DIRECT_FILL_GAP4_V1";
- string symbol=c=="BTCUSD"?BtcEntrySymbol():directEntry?_Symbol:Broker(c);
+ long target=directEntry?DirectEntryChart(c):-1;
+ if(chartWorker){
+  if(!directEntry || SignalChartRole(c)==CHART_AUTO || target!=ChartID())return;
+ }else if(directEntry && target>=0 && target!=ChartID())return;
+ string symbol=directEntry?_Symbol:Broker(c);
+ if(!directEntry && c=="BTCUSD"){
+  symbol=RegisteredChartSymbol(c);
+  if(symbol=="")symbol=BtcEntrySymbol();
+ }
  bool tightTf2=Get("exitPolicyVersion")=="TF2_TIGHT_SL_3C_V1";
  string slPolicy=Get("slPolicy");
  bool fillAnchor=Get("fillAnchor")=="FILL_PRICE_ATR_V1";double riskAtr=Val("riskAtr");string exitLockVersion=Get("exitLockVersion");
@@ -820,11 +861,11 @@ void Process(){
  }
  else if(type=="PLACE_SETUP"){
   if(!directEntry && symbol==""){MapSymbols();symbol=EntrySymbol(c);}
-  lastEntryCode="MT5_SYMBOL_UNRESOLVED";
+  lastEntryCode=directEntry?"EA_ENTRY_CHART_NOT_ATTACHED":"MT5_SYMBOL_UNRESOLVED";
   string executionTf=Get("executionTimeframe");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
-  else if(symbol!="" || directEntry)ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry);
+  else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;resumePending=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
@@ -840,9 +881,28 @@ void Process(){
  }
  Result(id,ok?"EXECUTED":"FAILED",code);
 }
+bool ReadChartWorkerState(){
+ if(!ReadFields("heartbeat.tsv") || Get("terminalDataPath")!=TerminalInfoString(TERMINAL_DATA_PATH) ||
+    Get("account")!=account || Get("server")!=server || Get("tradeMode")!=boundMode ||
+    UtcMs()-(long)Val("writtenAt")>15000 || Get("executionArmed")!="1")return false;
+ eaSession=Get("eaSession");primaryChart=StringToInteger(Get("entryOwnerChart"));
+ if(eaSession=="" || primaryChart<=0)return false;
+ if(!ReadFields("state.tsv") || Get("armed")!="1")return false;
+ ownerPod=Get("ownerPod");enabledSymbols=Get("symbols");armed=ownerPod!="" && enabledSymbols!="";
+ return armed;
+}
+void ProcessMailbox(bool chartWorker){
+ if(!FileIsExist(channel+"\\command.tsv",FILE_COMMON))return;
+ // One chart may read and act on the mailbox at a time.
+ int processingLock=FileOpen(channel+"\\entry-dispatch.lock",FILE_WRITE|FILE_BIN|FILE_COMMON);
+ if(processingLock==INVALID_HANDLE)return;
+ if(!chartWorker || ReadChartWorkerState())Process(chartWorker);
+ FileClose(processingLock);
+}
 bool BindCurrentAccount(){
  string currentAccount=(string)AccountInfoInteger(ACCOUNT_LOGIN),currentServer=AccountInfoString(ACCOUNT_SERVER);
  if(lockHandle!=INVALID_HANDLE && account==currentAccount && server==currentServer && boundMode==AccountMode())return true;
+ if(lockHandle==INVALID_HANDLE && account==currentAccount && server==currentServer && boundMode==AccountMode() && GetTickCount64()<nextOwnerAttempt)return false;
  armed=false;resumePending=false;manualEnabled=false;manualSince=0;
  if(lockHandle!=INVALID_HANDLE){
   SaveState();FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);
@@ -855,7 +915,8 @@ bool BindCurrentAccount(){
  // Existing folders are valid. The exclusive file open proves writability/ownership.
  FolderCreate("ZenCore",FILE_COMMON);FolderCreate(channel,FILE_COMMON);
  lockHandle=FileOpen(channel+"\\ea.lock",FILE_WRITE|FILE_BIN|FILE_COMMON);
- if(lockHandle==INVALID_HANDLE)return false;
+ if(lockHandle==INVALID_HANDLE){nextOwnerAttempt=GetTickCount64()+2000;return false;}
+ primaryChart=ChartID();
  eaSession=StringSubstr(Hash(account+server+(string)GetMicrosecondCount()+(string)ChartID()),0,32);
  if(eaSession==""){FileClose(lockHandle);lockHandle=INVALID_HANDLE;return false;}
  MapSymbols();
@@ -874,24 +935,31 @@ void TryResumeEntry(){
 int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
- if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=2.32 mode=",AccountMode());
+ RegisterEntryChart();
+ if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_PRIMARY_EA.");
+ else Print("ZenCore: EA_READY version=2.33 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTick(){
  if(lockHandle!=INVALID_HANDLE && account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER)){ManageLocalStepLock();ManageManual();}
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 2.32 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){
+  if(registeredRole!=CHART_AUTO && channel!=""){
+   ProcessMailbox(true);
+   Comment("ZenCore 2.33 • Carta entry ",registeredRole==CHART_BTCUSD?"BTCUSD":"XAUUSD");
+  }else Comment("ZenCore 2.33 • menunggu login MT5 / channel tersedia");
+  return;
+ }
  TryResumeEntry();
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
- Process();
+ ProcessMailbox(false);
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
- Comment("ZenCore 2.32 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.33 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
-void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
+void OnDeinit(const int reason){EventKillTimer();if(registeredRole!=CHART_AUTO)GlobalVariableDel(ChartRoleKey(ChartID()));if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

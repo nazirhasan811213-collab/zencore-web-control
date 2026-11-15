@@ -49,3 +49,43 @@ int main(){
    p=pathlib.Path(tmp);(p/'mapping.cpp').write_text(harness+rules+main)
    subprocess.run([compiler,'-std=c++17',str(p/'mapping.cpp'),'-o',str(p/'mapping')],check=True,capture_output=True)
    subprocess.run([str(p/'mapping')],check=True,capture_output=True)
+
+ def test_direct_entry_routes_to_registered_chart_without_symbol_catalogue(self):
+  compiler=shutil.which('g++')
+  if not compiler:self.skipTest('Native compiler unavailable')
+  source=pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
+  role=source[source.index('string ChartRoleKey('):source.index('void RegisterEntryChart()')]
+  route=source[source.index('long DirectEntryChart('):source.index('string RegisteredChartSymbol(')]
+  harness=r'''
+#include <string>
+#include <map>
+#include <cassert>
+using string=std::string;
+enum{CHART_AUTO,CHART_XAUUSD,CHART_BTCUSD};
+long primaryChart=10,localChart=10;
+int registeredRole=CHART_XAUUSD;
+std::map<long,int> charts{{10,CHART_XAUUSD},{20,CHART_BTCUSD},{30,CHART_BTCUSD}};
+long ChartID(){return localChart;}
+long ChartFirst(){return charts.begin()->first;}
+long ChartNext(long chart){auto it=charts.upper_bound(chart);return it==charts.end()?-1:it->first;}
+double GlobalVariableGet(string key){return charts.at(std::stol(key.substr(key.rfind('.')+1)));}
+'''
+  # MQL string cast is equivalent to std::to_string for the chart ID.
+  role=role.replace('(string)chart','std::to_string(chart)')
+  main=r'''
+int main(){
+ assert(DirectEntryChart("XAUUSD")==10);
+ assert(DirectEntryChart("BTCUSD")==20);
+ localChart=30;registeredRole=CHART_BTCUSD;
+ assert(DirectEntryChart("BTCUSD")==20);
+ assert(DirectEntryChart("XAUUSD")==10);
+ charts.erase(20);assert(DirectEntryChart("BTCUSD")==30);
+ charts.erase(10);assert(DirectEntryChart("XAUUSD")==-1);
+}
+'''
+  self.assertIn('symbol=_Symbol;',source[source.index('bool Entry('):source.index('void Result(')])
+  self.assertIn('EA_ENTRY_CHART_NOT_ATTACHED',source)
+  with tempfile.TemporaryDirectory() as tmp:
+   p=pathlib.Path(tmp);(p/'routes.cpp').write_text(harness+role+route+main)
+   subprocess.run([compiler,'-std=c++17',str(p/'routes.cpp'),'-o',str(p/'routes')],check=True,capture_output=True)
+   subprocess.run([str(p/'routes')],check=True,capture_output=True)
