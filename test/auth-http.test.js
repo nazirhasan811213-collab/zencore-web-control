@@ -345,7 +345,8 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     const home = await response.text();
     assert.match(home, /XAUUSD/);
     assert.match(home, /marketGrid/);
-    assert.match(home, /\/analysis\?pair=XAUUSD/);
+    assert.match(home, /id="chartPair"[^>]*><option value="XAUUSD">XAUUSD<\/option><option value="BTCUSD">BTCUSD<\/option>/);
+    assert.match(home, /data-field="analysis"/);
     assert.match(home, /href="\/results"/);
 
     response = await fetch(`${BASE}/market-radar-core.js`);
@@ -366,6 +367,8 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.match(analysisPage, /indicator-chart\.js/);
     response=await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=2`,{headers:{Cookie:cookie}});
     assert.equal(response.status,200);const chart=await response.json();assert.equal(chart.timeframe,'2');assert.equal(chart.source,'PINE_FEED');assert(Array.isArray(chart.candles));
+    response=await fetch(`${BASE}/api/analysis/chart?symbol=BTCUSD&tf=15`,{headers:{Cookie:cookie}});
+    assert.equal(response.status,200);const btcChart=await response.json();assert.equal(btcChart.symbol,'BTCUSD');assert.equal(btcChart.timeframe,'15');assert(Array.isArray(btcChart.candles));
     response=await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=3`,{headers:{Cookie:cookie}});assert.equal(response.status,400);
     response=await fetch(`${BASE}/api/analysis/chart?symbol=EURUSD&tf=2`,{headers:{Cookie:cookie}});assert.equal(response.status,400);
 
