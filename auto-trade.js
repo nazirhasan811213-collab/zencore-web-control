@@ -204,44 +204,56 @@
 
   let modeDraft = null;
   const editingMode=()=>byId('riskTimeframe')?.value==='15'?'TF15_INTRA':'TF2_SCALPING';
+  const tradeFields = [
+    ['TF2_SCALPING','XAUUSD','gold','lotPerLayer','layers','tf2Total'],
+    ['TF2_SCALPING','BTCUSD','fx','btcTf2Lot','btcTf2Layers','btcTf2Total'],
+    ['TF15_INTRA','XAUUSD','gold','tf15LotPerLayer','tf15Layers','tf15Total'],
+    ['TF15_INTRA','BTCUSD','fx','btcTf15Lot','btcTf15Layers','btcTf15Total']
+  ];
   function hydrateModeDraft(settings) {
     const normalized = Core.validateSettings(settings).value;
     byId('tradeSymbols').value = ['XAUUSD','BTCUSD'].filter(symbol=>normalized.symbols.includes(symbol)).join(',') || 'XAUUSD';
-    modeDraft = JSON.parse(JSON.stringify(normalized.modeSettings));
-    for (const [mode,lotId,layerId] of [['TF2_SCALPING','lotPerLayer','layers'],['TF15_INTRA','tf15LotPerLayer','tf15Layers']]) {
-      const asset=modeDraft[mode][normalized.symbols.includes('XAUUSD')?'gold':'fx'];
-      const selected=normalized.strategyMode==='BOTH'||normalized.strategyMode===mode;
-      byId(lotId).value=selected&&asset.enabled!==false?asset.lotPerLayer??'':'';
-      byId(layerId).value=selected&&asset.enabled!==false?asset.layers??'':'';
+    modeDraft = normalized.modeSettings;
+    for(const [mode,symbol,group,lotId,layerId] of tradeFields){
+      const asset=modeDraft[mode][group];
+      const enabled=(normalized.strategyMode==='BOTH'||normalized.strategyMode===mode)&&asset.enabled!==false&&normalized.symbols.includes(symbol);
+      byId(lotId).value=enabled?asset.lotPerLayer??'':'';
+      byId(layerId).value=enabled?asset.layers??'':'';
     }
   }
   function storeModeFields() {
-    if (!modeDraft) return;
-    for (const [mode,lotId,layerId,totalId,statusId] of [['TF2_SCALPING','lotPerLayer','layers','tf2Total','tf2EntryState'],['TF15_INTRA','tf15LotPerLayer','tf15Layers','tf15Total','tf15EntryState']]) {
-      const lot=byId(lotId).value, layers=byId(layerId).value;
-      const enabled=lot!==''&&layers!=='';
-      const asset={enabled,lotPerLayer:enabled?lot:null,layers:enabled?layers:null};
-      modeDraft[mode]={gold:{...asset},fx:{...asset}};
+    if(!modeDraft)return;
+    const symbols=byId('tradeSymbols').value.split(',');
+    for(const section of document.querySelectorAll('[data-auto-pair]'))section.hidden=!symbols.includes(section.dataset.autoPair);
+    const active={TF2_SCALPING:[],TF15_INTRA:[]};
+    for(const [mode,symbol,group,lotId,layerId,totalId] of tradeFields){
+      const lot=byId(lotId).value,layers=byId(layerId).value,enabled=symbols.includes(symbol)&&lot!==''&&layers!=='';
+      modeDraft[mode][group]={enabled,lotPerLayer:enabled?lot:null,layers:enabled?layers:null};
       const valid=enabled&&Number(lot)>0&&Number(lot)<=100&&Number.isInteger(Number(layers))&&Number(layers)>=1&&Number(layers)<=32767;
       setText(totalId,valid?(Number(lot)*Number(layers)).toFixed(3)+' lot':'—');
-      setText(statusId,!enabled?'TIADA ENTRY':valid?'ENTRY AKTIF':'SEMAK INPUT');
+      if(enabled)active[mode].push(valid?'ENTRY AKTIF':'SEMAK INPUT');
+    }
+    for(const [mode,statusId] of [['TF2_SCALPING','tf2EntryState'],['TF15_INTRA','tf15EntryState']]){
+      const states=active[mode];
+      setText(statusId,states.includes('SEMAK INPUT')?'SEMAK INPUT':states.length?'ENTRY AKTIF':'TIADA ENTRY');
     }
   }
 
   function renderSettings(state) {
-    const manualCount=(state.positions||[]).filter(p=>p.origin==='MANUAL'&&p.symbol==='XAUUSD').length;
+    const manualCount=(state.positions||[]).filter(p=>p.origin==='MANUAL'&&(state.settings?.manualExit?.pairScope||'XAUUSD').split(',').includes(p.symbol)).length;
     setText('manualLayerStatus',state.connection?.online===false?'Layer aktif: data MT5 offline':`Layer aktif: ${manualCount} / 10${manualCount>=10?' • HAD DICAPAI — berhenti tambah entry':''}${manualCount>10?' • layer tambahan tetap dilindungi':''}`);
     setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.settings?.manualExit?.enabled?(state.pod?.manualExitEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN'):(state.pod?.manualExitEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal'));
     const sync=state.manualExitSync;
     if(sync?.status==='WAITING_EA')setText('manualExitStatus','TETAPAN DISIMPAN • MENUNGGU EA SERASI');
     if(sync&&['PENDING','DELIVERED'].includes(sync.status))setText('manualExitStatus','TETAPAN MENUNGGU PENGESAHAN EA');
     if(sync&&['REJECTED','FAILED','EXPIRED'].includes(sync.status))setText('manualExitStatus','TETAPAN GAGAL: '+(sync.code||sync.status));
-    if(state.connection?.online!==false&&state.settings?.manualExit?.enabled&&state.pod?.manualExitEnabled&&state.pod?.manualExitVersion!=='MANUAL_STEPLOCK_V4')setText('manualExitStatus','EA LAMA • KEMAS KINI EA 2.26 UNTUK STEP LOCK MANUAL');
+    if(state.connection?.online!==false&&state.settings?.manualExit?.enabled&&state.pod?.manualExitEnabled&&!['MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(state.pod?.manualExitVersion))setText('manualExitStatus','EA LAMA • KEMAS KINI EA 2.26 UNTUK STEP LOCK MANUAL');
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
     hydrateModeDraft(settings);
     byId('capitalUsd').value = settings.capitalUsd ?? '';
     byId('manualExitEnabled').checked=settings.manualExit?.enabled===true;
+    byId('manualExitPair').value=settings.manualExit?.pairScope||'XAUUSD';
     for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=settings.manualExit?.[k] ?? ({tp1:2,tp2:4,tp3:6,sl:3})[k];
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
     byId('tradingScheduleEnabled').checked = settings.tradingSchedule?.enabled === true;
@@ -388,13 +400,14 @@
     if (!modeDraft) hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}}});
     storeModeFields();
     const symbols = byId('tradeSymbols').value.split(',').map(value=>value.trim()).filter(Boolean);
+    const active=Object.values(modeDraft).flatMap(mode=>Object.values(mode)).find(group=>group.enabled);
     return {
       strategyMode: 'BOTH', modeSettings: modeDraft,
-      manualExit:{enabled:byId('manualExitEnabled').checked,...Object.fromEntries(['tp1','tp2','tp3','sl'].map(k=>[k,byId('manual'+k[0].toUpperCase()+k.slice(1)).value]))},
+      manualExit:{enabled:byId('manualExitEnabled').checked,pairScope:byId('manualExitPair').value,...Object.fromEntries(['tp1','tp2','tp3','sl'].map(k=>[k,byId('manual'+k[0].toUpperCase()+k.slice(1)).value]))},
       tradingSchedule: Core.malaysiaTradingSchedule(byId('tradingScheduleEnabled').checked, byId('newsTradingMode').value === 'skip'),
       capitalUsd: byId('capitalUsd').value,
-      lotPerLayer: (Object.values(modeDraft).find(m=>m.gold.enabled)?.gold.lotPerLayer) || 0.01,
-      layers: (Object.values(modeDraft).find(m=>m.gold.enabled)?.gold.layers) || 1,
+      lotPerLayer: active?.lotPerLayer || 0.01,
+      layers: active?.layers || 1,
       symbols
     };
   }
@@ -539,8 +552,9 @@
     hydrateModeDraft({capitalUsd:100,lotPerLayer:0.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',modeSettings:{TF2_SCALPING:{gold:{enabled:false}},TF15_INTRA:{gold:{enabled:false}}}});
     byId('settingsForm')?.addEventListener('input', event => {
       if (!event.target.matches('input, select')) return;
-      if (['tf15LotPerLayer','tf15Layers'].includes(event.target.id)) byId('riskTimeframe').value='15';
-      if (['lotPerLayer','layers'].includes(event.target.id)) byId('riskTimeframe').value='2';
+      if(event.target.closest('.symbol-fieldset'))return;
+      const field=tradeFields.find(([, , ,lotId,layerId])=>[lotId,layerId].includes(event.target.id));
+      if(field){byId('riskTimeframe').value=field[0]==='TF15_INTRA'?'15':'2';byId('riskSymbol').value=field[1];}
       settingsDirty = true;
       updateRiskPreview();
     });
@@ -638,8 +652,10 @@
 
   byId('applyRecommendationButton')?.addEventListener('click', () => {
     if (!currentRecommendation) return;
-    byId(editingMode()==='TF15_INTRA'?'tf15LotPerLayer':'lotPerLayer').value = currentRecommendation.lotPerLayer;
-    byId(editingMode()==='TF15_INTRA'?'tf15Layers':'layers').value = currentRecommendation.layers;
+    const field=tradeFields.find(([mode,symbol])=>mode===editingMode()&&symbol===byId('riskSymbol').value);
+    if(!field)return;
+    byId(field[3]).value=currentRecommendation.lotPerLayer;
+    byId(field[4]).value=currentRecommendation.layers;
     settingsDirty = true;
     updateRiskPreview();
     toast('Cadangan lot dan layer digunakan. Simpan konfigurasi untuk confirm.');
@@ -670,8 +686,8 @@
   });
 
   async function saveManualExitOnly(event) {
-    const checkbox=byId('manualExitEnabled'),button=byId('saveManualExitButton');
-    checkbox.disabled=true;button.disabled=true;
+    const checkbox=byId('manualExitEnabled'),button=byId('saveManualExitButton'),pair=byId('manualExitPair');
+    checkbox.disabled=button.disabled=pair.disabled=true;
     setText('manualExitError','');
     setText('manualExitSaveStatus','Menghantar tetapan kepada EA…');
     try {
@@ -682,17 +698,20 @@
       const state=await api('/api/auto-trade/manual-exit',{method:'PUT',body:JSON.stringify(body)});
       for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=state.settings.manualExit[k];
       checkbox.checked=state.settings.manualExit.enabled;
+      pair.value=state.settings.manualExit.pairScope||'XAUUSD';
       render(state);
       setText('manualExitSaveStatus',state.manualExitSync?.status==='WAITING_EA'
         ?'Tetapan tersimpan. Sambungkan EA dan Connector yang menyokong Auto Exit manual.'
         :'Tetapan tersimpan. Tunggu pengesahan EA. TP/SL baharu untuk posisi baharu.');
     } catch(error) {
       checkbox.checked=currentState?.settings?.manualExit?.enabled===true;
+      pair.value=currentState?.settings?.manualExit?.pairScope||'XAUUSD';
       setText('manualExitError',error.message);
       setText('manualExitSaveStatus','Tetapan belum berjaya disimpan.');
-    } finally { checkbox.disabled=false;button.disabled=false; }
+    } finally { checkbox.disabled=button.disabled=pair.disabled=false; }
   }
   byId('manualExitEnabled')?.addEventListener('change',saveManualExitOnly);
+  byId('manualExitPair')?.addEventListener('change',saveManualExitOnly);
   byId('saveManualExitButton')?.addEventListener('click',saveManualExitOnly);
   for(const id of ['manualTp1','manualTp2','manualTp3','manualSl'])byId(id)?.addEventListener('input',()=>setText('manualExitSaveStatus','Nilai diubah — tekan SIMPAN TP/SL MANUAL.'));
 

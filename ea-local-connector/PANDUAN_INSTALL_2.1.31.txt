@@ -1,9 +1,9 @@
-ZENCORE CONNECTOR 2.1.30 / EA 2.30
+ZENCORE CONNECTOR 2.1.31 / EA 2.31
 
 1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
-2. Jalankan ZenCoreSetup-2.1.30.exe dan buka ZenCore Connector.
+2. Jalankan ZenCoreSetup-2.1.31.exe dan buka ZenCore Connector.
 3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
-4. Tekan Pasang / kemas kini EA 2.30 dan pastikan Experts menunjukkan EA_READY version=2.30.
+4. Tekan Pasang / kemas kini EA 2.31 dan pastikan Experts menunjukkan EA_READY version=2.31.
 5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
 
 Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.

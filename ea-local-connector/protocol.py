@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.30'
-CONNECTOR_BUILD = '2.1.30'
+EA_VERSION = '2.31'
+CONNECTOR_BUILD = '2.1.31'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -127,6 +127,9 @@ def command_fields(command, identity):
         if cfg.get('version') not in ('MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3') or cfg.get('timeframeMinutes')!=2 or not isinstance(cfg.get('enabled'),bool):raise ValueError('EXIT_POLICY_REJECTED')
         if cfg.get('maxActiveLayers')!=10 or cfg.get('limitAction')!='WARN_ONLY':raise ValueError('EXIT_POLICY_REJECTED')
         fields['manualVersion']=cfg['version'];fields['manualMaxLayers']=10;fields['manualLimitAction']='WARN_ONLY'
+        scope=cfg.get('pairScope','XAUUSD')
+        if scope not in ('XAUUSD','BTCUSD','XAUUSD,BTCUSD'):raise ValueError('EXIT_POLICY_REJECTED')
+        fields['manualPairScope']=scope
         fields['manualEnabled']='1' if cfg['enabled'] else '0'
         if cfg['enabled']:
             distances=[float(number(cfg[k])) for k in ('tp1','tp2','tp3','sl')]
@@ -245,7 +248,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'brokerMask':'****MT5', 'tradeMode':fields['tradeMode'], 'connectorVersion':(VERSION if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1' else '1.3.0-ea-local') if fields.get('strategyExecutionVersion')=='TF2_TF15_V1' else ('1.1.0-ea-local' if fields.get('exitPolicyVersion')=='TF2_TIGHT_SL_3C_V1' else '1.0.0-ea-local'),
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
-      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
+      'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
       'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
