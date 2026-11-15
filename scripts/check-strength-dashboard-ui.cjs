@@ -4,7 +4,7 @@ const {cockpit}=require('../trading-cockpit-model');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));let missing=false,missingGold=false;
- function payload(){const now=Date.now();const gold=[2,15].map(tf=>({symbol:'XAUUSD',timeframe:String(tf),receivedAt:now,signalObservedAt:now,price:4100,open:4099,high:4101,low:4098,close:4100,hema20:4100,hema40:4099,ema9:4100,ema20:4099,ema50:4098,waveTrend1:10,waveTrend2:5,rsi:missing?undefined:58,chopIndex:55,relativeVolume:1.2,atr:2,strategyNormal:{tf:tf+'m',state:'WAIT',solid:true,side:'BUY',plan:{entry:4100,sl:4096,tp1:4101.5,tp2:4102.5,tp3:4103.5},sop:{atrReference:2,mtfScore:1,forecast:'CHOPPY',marketPower:65,advisor:{trend:'Sideways',momentum:'Mula perlahan',proTip:'Tunggu arah jelas.'}}}}));const bitcoin=gold.map(m=>({...m,symbol:'BTCUSD',price:m.timeframe==='2'?63711.98:63720, strategyNormal:{...m.strategyNormal,side:'SELL',plan:{entry:m.timeframe==='2'?63759.36:63900,sl:64050,tp1:63620,tp2:63500,tp3:63400}}}));return cockpit([...(missingGold?[]:gold),...bitcoin],now);}
+ function payload(){const now=Date.now();const gold=[2,15].map(tf=>({symbol:'XAUUSD',timeframe:String(tf),receivedAt:now,signalObservedAt:now,price:4100,open:4099,high:4101,low:4098,close:4100,hema20:4100,hema40:4099,ema9:4100,ema20:4099,ema50:4098,waveTrend1:10,waveTrend2:5,rsi:missing?undefined:58,chopIndex:55,relativeVolume:1.2,atr:2,strategyNormal:{tf:tf+'m',state:'WAIT',solid:true,side:'BUY',plan:{entry:4100,sl:4096,tp1:4101.5,tp2:4102.5,tp3:4103.5},sop:{atrReference:2,mtfScore:1,forecast:'CHOPPY',marketPower:65,advisor:{trend:'Sideways',momentum:'Mula perlahan',proTip:'Tunggu arah jelas.',mtfSummary:'TF2 dan TF15 masih bercampur.',aiCoach:'[NASIHAT]: Tunggu candle tutup.'}}}}));const bitcoin=gold.map(m=>({...m,symbol:'BTCUSD',price:m.timeframe==='2'?63711.98:63720, strategyNormal:{...m.strategyNormal,side:'SELL',plan:{entry:m.timeframe==='2'?63759.36:63900,sl:64050,tp1:63620,tp2:63500,tp3:63400}}}));return cockpit([...(missingGold?[]:gold),...bitcoin],now);}
  await page.route('**/*',route=>{const path=new URL(route.request().url()).pathname;
   if(path==='/app'){const html=fs.readFileSync('home.html','utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');return route.fulfill({body:html+'<script>window.EventSource=undefined;</script><script src="/dashboard-live-core.js"></script><script src="/trading-cockpit.js"></script>',contentType:'text/html'});}
   if(path==='/api/trading-cockpit')return route.fulfill({json:payload()});
@@ -30,7 +30,9 @@ const {cockpit}=require('../trading-cockpit-model');
  await firstRow.locator('summary').click();
  assert.match(await firstRow.innerText(),/Sideways/);
  assert.match(await firstRow.innerText(),/Mula perlahan/);
- assert.match(await firstRow.innerText(),/Tunggu arah jelas/);
+ assert.match(await firstRow.innerText(),/Panduan ZenCore\s+Tunggu arah jelas/);
+ assert.match(await firstRow.innerText(),/Rumusan AI\s+TF2 dan TF15 masih bercampur/);
+ assert.match(await firstRow.innerText(),/Nasihat\s+Tunggu candle tutup/);
  await page.getByRole('button',{name:'TF15',exact:true}).click();
  assert.equal(await page.locator('#marketGrid details:visible').count(),2);
  await page.getByRole('button',{name:'Semua TF',exact:true}).click();

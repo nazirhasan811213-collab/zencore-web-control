@@ -43,7 +43,7 @@
   const body=el('div',undefined,'compact-market-body');
   const message=el('p','Butiran tersedia apabila data Pine segar.');
   const readings=el('dl',undefined,'compact-market-readings');
-  const values=['Keadaan market','Panduan ZenCore'].map(label=>{
+  const values=['Keadaan market','Panduan ZenCore','Rumusan AI','Nasihat'].map(label=>{
    const item=el('div'),value=el('dd');
    item.append(el('dt',label),value);readings.append(item);return value;
   });
@@ -139,7 +139,7 @@
    const {symbol,timeframe}=view;
    const {row,status,metrics,message,readings,values}=marketRows.get(symbol+'|'+timeframe);
    row.hidden=filter!=='both'&&String(timeframe)!==filter;
-   const m=view.market,n=m?.strategyNormal,advisor=n?.sop?.advisor||{},levels=view.nearbyLevels||{};
+   const m=view.market,n=m?.strategyNormal,advisor={...m?.dashboard,...n?.sop?.advisor},levels=view.nearbyLevels||{};
    const current=fresh(view)&&m?.symbol===symbol;
    const side=current&&['BUY','SELL'].includes(n?.side)?n.side:null;
    status.textContent=side||(current?'Tunggu setup':'Tiada data segar');
@@ -152,7 +152,9 @@
    const facts=[typeof momentum==='string'&&momentum.trim()?momentum:null,support!=='—'?'Support '+support:null,resistance!=='—'?'Resistance '+resistance:null].filter(Boolean);
    metrics.textContent=current?facts.join(' · '):'';
    if(current){
-    const data=[m.marketStructure||advisor.trend||advisor.dashboard?.structure,m.proTip||advisor.proTip];
+    const coachAdvice=typeof advisor.aiCoach==='string'?advisor.aiCoach.match(/\[NASIHAT\]\s*:[ \t]*([^\r\n]+)/i)?.[1]:null;
+    const data=[m.marketStructure||advisor.trend||advisor.dashboard?.structure,
+     m.proTip||advisor.proTip,advisor.mtfSummary,advisor.advice||coachAdvice];
     values.forEach((value,index)=>{value.textContent=typeof data[index]==='string'&&data[index].trim()?data[index]:'—';});
    }
   }
