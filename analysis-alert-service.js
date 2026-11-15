@@ -130,17 +130,17 @@ class AnalysisAlerts {
   async record(m) {
     const safetySignal=require('./tf2-entry-safety').signal(m);
     if(safetySignal)await this.recordGuide(safetySignal);
-    if(!['XAUUSD','GBPUSD','GBPJPY'].includes(m.symbol))return;
+    if(!['XAUUSD','BTCUSD','GBPUSD','GBPJPY'].includes(m.symbol))return;
     const stateKey=m.symbol+'|'+String(m.timeframe||m.strategyNormal?.tf||'2').replace(/m$/, '');
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>{const base=prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
-      ...e,setupAssessment:require('./setup-strength').assess(m,Date.now(),require('./indicator-chart-history').history.snapshot(String(m.timeframe),m.signalObservedAt||Date.now()).candles),telegramSop:{pineReading:{rsi:m.rsi??null,momentum:typeof m.momentum==='string'?m.momentum:null,hemaFast:m.hemaFast??m.hema20??null,hemaSlow:m.hemaSlow??m.hema40??null},version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
+      ...e,setupAssessment:require('./setup-strength').assess(m,Date.now(),require('./indicator-chart-history').history.snapshot(String(m.timeframe),m.signalObservedAt||Date.now(),m.symbol).candles),telegramSop:{pineReading:{rsi:m.rsi??null,momentum:typeof m.momentum==='string'?m.momentum:null,hemaFast:m.hemaFast??m.hema20??null,hemaSlow:m.hemaSlow??m.hema40??null},version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
         nativeSolid:m.strategyNormal.sop?.nativeSolid,currentBar:m.strategyNormal.sop?.currentBar,entryCandle:m.strategyNormal.sop?.entryCandle,entrySafety:m.strategyNormal.sop?.entrySafety,decisionTimingVersion:m.strategyNormal.sop?.decisionTimingVersion,decisionBarCloseAt:m.strategyNormal.sop?.decisionBarCloseAt,reentryPolicyVersion:m.strategyNormal.sop?.reentryPolicyVersion,lifecycleVersion:m.strategyNormal.sop?.lifecycleVersion,cycleKind:m.strategyNormal.sop?.cycleKind,sourceSetupAt:m.strategyNormal.sop?.sourceSetupAt,reentryContext:m.strategyNormal.sop?.reentryContext,entryPolicyVersion:m.strategyNormal.sop?.entryPolicyVersion,planMode:m.strategyNormal.sop?.planMode,riskTick:m.strategyNormal.sop?.riskTick,movement:m.strategyNormal.sop?.movement,ribbon:m.strategyNormal.sop?.ribbon,riskPlanVersion:m.strategyNormal.sop?.riskPlanVersion,atrPeriod:m.strategyNormal.sop?.atrPeriod,advisor:JSON.parse(JSON.stringify(m.strategyNormal.sop?.advisor||m.dashboard||{})),mtfScore:m.strategyNormal.sop?.mtfScore,window:m.strategyNormal.sop?.window,
         solidHoldActive:m.strategyNormal.sop?.solidHoldActive,solidClosedAt:m.strategyNormal.sop?.solidClosedAt,riskAtrReference:m.strategyNormal.sop?.riskAtrReference,signalObservedAt:m.signalObservedAt,
         chopIndex:m.strategyNormal.sop?.chopIndex,sourceEntry:m.strategyNormal.sop?.sourceEntry,price:m.strategyNormal.sop?.price,triggerAt:m.strategyNormal.sop?.triggerAt,qualifiedAt:m.strategyNormal.sop?.qualifiedAt,
         entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
         m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},
-      telegramMarket:{confirmed:m.confirmed,entryAuthorizedAt:m.entryAuthorizedAt,signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
+      telegramMarket:{pineDirect:m.symbol==='BTCUSD'&&!!require('./pine-direct-entry').decision(m),confirmed:m.confirmed,entryAuthorizedAt:m.entryAuthorizedAt,signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
     }:e);const updates=progress(prev,next,m,base);return [...base.filter(e=>e.kind!=='CLOSE'),...updates,...base.filter(e=>e.kind==='CLOSE')].map(e=>({...e,notificationKey:notificationKey(e,prev)}));};
     if(!this.pool){
       const prev=this.states.get(stateKey);if(prev&&next.time<=prev.time)return;
@@ -187,7 +187,7 @@ class AnalysisAlerts {
   async recordGuide(event){
     if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ANALYSIS_SIGNALS_PAUSED||''))return false;
     if(!this.ready)return false;
-    if(event.kind!=='GUIDE'||event.symbol!=='XAUUSD'||!['2','15'].includes(event.timeframe)||!event.notificationKey||typeof event.guideText!=='string')throw new Error('Invalid scheduled guide');
+    if(event.kind!=='GUIDE'||!['XAUUSD','BTCUSD'].includes(event.symbol)||!['2','15'].includes(event.timeframe)||!event.notificationKey||typeof event.guideText!=='string')throw new Error('Invalid scheduled guide');
     if(!this.pool){
       if(this.notificationKeys.has(event.notificationKey))return true;
       this.notificationKeys.add(event.notificationKey);this.events.push({...event,id:++this.sequence});this.events=this.events.slice(-500);return true;
@@ -248,7 +248,7 @@ class AnalysisAlerts {
           const u=(await this.pool.query('SELECT status,role,access_expires_at,handover_state FROM zencore_users WHERE id=$1',[row.user_id])).rows[0];
           const e=(await this.pool.query('SELECT data FROM zencore_analysis_alerts WHERE id=$1',[row.event_id])).rows[0]?.data;
           // Apply to every notification, including closes and already queued events.
-          if(p.telegramEnabled&&p.verified&&require('./account-access').allowed(u)&&require('./account-handover').canTrade(u)&&u.role!=='viewer'&&e?.symbol==='XAUUSD'&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
+          if(p.telegramEnabled&&p.verified&&require('./account-access').allowed(u)&&require('./account-handover').canTrade(u)&&u.role!=='viewer'&&['XAUUSD','BTCUSD'].includes(e?.symbol)&&!e.telegramDuplicate&&Date.now()-e.time<180000&&
              (e.kind!=='GUIDE'||(typeof e.guideText==='string'&&Date.now()<e.guideValidUntil))&&
              (!['TP_HIT','PULLBACK'].includes(e.kind)||progressAllowed(e))&&
              (e.kind!=='ENTRY'||(e.telegramVersion===1&&!e.telegramDuplicate&&entrySopAllowed(e)&&entryFresh(e)))){

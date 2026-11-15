@@ -41,7 +41,7 @@ test('guide events are Telegram-only and never appear as trade popup events',asy
  const alerts=new AnalysisAlerts();await alerts.init();try{await alerts.recordGuide(G.buildGuide('2',market('2'),candles(),start));const result=await alerts.feed('0');a.equal(result.events.length,0);a.equal(result.cursor,'1');}finally{clearInterval(alerts.cleanupTimer);}
 });
 test('delivery uses guide wording and shared-chat dedup; expired guides are skipped',async()=>{
- const at=Date.now(),events=[G.buildGuide('2',market('2',at),[],at),G.buildGuide('2',market('2',at),[],at),{...G.buildGuide('15',null,[],at),guideValidUntil:at-1}],sent=[],statuses=[],claims=new Set();
+ const at=Date.now(),events=[G.buildGuide('2',market('2',at),[],at),G.buildGuide('2',market('2',at),[],at),{...G.buildGuide('15',null,[],at),guideValidUntil:at-1},G.buildGuide('15',{...market('15',at),symbol:'BTCUSD'},[],at)],sent=[],statuses=[],claims=new Set();
  let batch=events.map((_,i)=>({id:i+1,event_id:i+1,user_id:'user-'+i}));
  const pool={query:async(sql,args=[])=>{
   if(sql.startsWith("UPDATE zencore_telegram_deliveries SET status='sending'")){const rows=batch;batch=[];return{rows};}
@@ -53,7 +53,7 @@ test('delivery uses guide wording and shared-chat dedup; expired guides are skip
   throw Error(sql);
  }};
  const s=new AnalysisAlerts({pool});s.get=async()=>({telegramEnabled:true,verified:true,telegramId:'shared-chat'});s.telegram=async(_,text)=>sent.push(text);
- await s.deliver();a.equal(sent.length,1);a.match(sent[0],/PANDUAN 30 MINIT/);a.doesNotMatch(sent[0],/CLOSE ALL/);a.deepEqual(statuses,['sent','skipped','skipped']);
+ await s.deliver();a.equal(sent.length,2);a.match(sent[0],/PANDUAN 30 MINIT/);a.doesNotMatch(sent[0],/CLOSE ALL/);a.match(sent[1],/BTCUSD/);a.match(sent[1],/PANDUAN 1 JAM/);a.deepEqual(statuses,['sent','skipped','skipped','sent']);
 });
 
 test('TF2 levels use only nearby confirmed swings and do not reuse TP/SL as levels',()=>{
@@ -85,4 +85,22 @@ test('scheduler retries initially missing data before claiming a valid report in
 test('forecast names conditional next direction and tolerates 45-second dashboard cadence for analysis only',()=>{
  const m=market('15',start-45000),report=G.buildGuide('15',m,candles('15'),start);a.equal(report.guideFresh,true);a.match(report.guideText,/JANGKAAN PERGERAKAN SETERUSNYA/);a.match(report.guideText,/Senario utama/);a.match(report.guideText,/Pandangan naik terbatal/);
  a.equal(G.buildGuide('15',{...m,signalObservedAt:start-90001},candles('15'),start).guideFresh,false);
+});
+
+test('BTCUSD and XAUUSD each get independent TF2 and TF15 guide slots and candle history',async()=>{
+ const {ChartHistory}=require('../indicator-chart-history'),history=new ChartHistory(),reports=[],markets=[];
+ for(const symbol of ['XAUUSD','BTCUSD'])for(const tf of ['2','15']){
+  const offset=symbol==='BTCUSD'?64000:0;
+  markets.push({...market(tf),symbol,price:101+offset});
+  for(const candle of candles(tf))history.observe({...candle,symbol,signalObservedAt:candle.observedAt,
+   open:candle.open+offset,close:candle.close+offset,high:candle.high+offset,low:candle.low+offset,
+   hema20:candle.hema20+offset,hema40:candle.hema40+offset},start);
+ }
+ const scheduler=G.createScheduler({now:()=>start,getMarkets:async()=>markets,
+  history:(tf,at,symbol)=>history.snapshot(tf,at,symbol).candles,record:async e=>reports.push(e)});
+ await scheduler.tick();await scheduler.tick();
+ a.equal(reports.length,4);a.equal(new Set(reports.map(e=>e.notificationKey)).size,4);
+ for(const report of reports){a.ok(report.guideFresh);a.match(report.guideText,new RegExp(report.symbol));}
+ a.ok(history.snapshot('2',start,'BTCUSD').candles.every(c=>c.close>64000));
+ a.ok(history.snapshot('2',start).candles.every(c=>c.close<200));
 });

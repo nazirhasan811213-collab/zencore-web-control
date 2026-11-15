@@ -3,13 +3,13 @@
 const MAX_AGE=5*60*60*1000,MAX_BARS=300,finite=Number.isFinite;
 function point(m){
  const tf=String(m?.timeframe),time=m?.sourceBarTime??m?.time;
- if(m?.symbol!=='XAUUSD'||!['2','15'].includes(tf)||!finite(time)||time<=0||
+ if(!['XAUUSD','BTCUSD'].includes(m?.symbol)||!['2','15'].includes(tf)||!finite(time)||time<=0||
    ![m.open,m.high,m.low,m.close].every(v=>finite(v)&&v>0)||m.high<Math.max(m.open,m.close)||m.low>Math.min(m.open,m.close)||m.low>m.high)return null;
  const s=m.strategyNormal?.sop||{},h=s['hema'+tf]||{},signal=s.chartSignal;
  const solidAt=signal?.present?signal.triggeredAt:s.triggerAt;
  const side=signal?.present?signal.side:m.strategyNormal?.solid?m.strategyNormal.side:null;
  const marker=['BUY','SELL'].includes(side)&&finite(solidAt)&&solidAt>=time&&solidAt<time+Number(tf)*60000;
- return {time,timeframe:tf,open:m.open,high:m.high,low:m.low,close:m.close,
+ return {time,symbol:m.symbol,timeframe:tf,open:m.open,high:m.high,low:m.low,close:m.close,
    hema20:finite(m.hema20)?m.hema20:finite(h.fast)?h.fast:null,
    hema40:finite(m.hema40)?m.hema40:finite(h.slow)?h.slow:null,
    basis:finite(m.basis)?m.basis:null,confirmed:m.confirmed===true,

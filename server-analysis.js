@@ -182,7 +182,7 @@ if (AUTH_ENABLED) {
     try{await require('./indicator-chart-history').history.init(store.pool);}catch(_){console.error('Guide history restore unavailable; collecting live candles');}
     if(analysisAlerts.ready&&analysisAlerts.token){
       const guideScheduler=require('./telegram-trade-guide').createScheduler({getMarkets:fetchLocalAnalysisMarkets,
-        history:(tf,at)=>require('./indicator-chart-history').history.snapshot(tf,at).candles,
+        history:(tf,at,symbol)=>require('./indicator-chart-history').history.snapshot(tf,at,symbol).candles,
         record:event=>analysisAlerts.recordGuide(event)});
       const guideTimer=setInterval(()=>guideScheduler.tick().catch(()=>console.error('Scheduled trade guide unavailable')),15000);
       guideTimer.unref?.();

@@ -6,7 +6,9 @@ function signals(m, now = Date.now()) {
   if(scoped && (!['2','3','15'].includes(tf) || m.strategyNormal?.tf!==tf+'m'))return null;
   const time = Number(m.receivedAt);
   if (!time || time > now + 30000 || now - time > 180000) return null;
-  const entry = createEntryDecision(m)?.snapshot;
+  const entry = (m.symbol==='BTCUSD'
+    ? require('./pine-direct-entry').decision(m)
+    : createEntryDecision(m))?.snapshot;
   const close = createManagementDecision(m)?.snapshot.actions.find(a => a.type === 'CLOSE_PERCENT');
   const items = [];
   const entryType=String(m.strategyNormal?.entryType||'');
