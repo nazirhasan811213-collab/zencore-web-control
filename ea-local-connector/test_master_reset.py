@@ -52,7 +52,7 @@ int main(){
 
  @unittest.skipUnless(shutil.which('g++'),'C++ compiler required for deterministic EA logic test')
  def test_actual_force_reset_closes_manual_other_ea_and_orders_and_requires_flat_broker_state(self):
-  source=(Path(__file__).parent/'ZenCoreExecutor.mq5').read_text();start=source.index('string MasterResetIdle(){');end=source.index('\nvoid Process(){',start);functions=source[start:end]
+  source=(Path(__file__).parent/'ZenCoreExecutor.mq5').read_text();start=source.index('string MasterResetIdle(){');end=source.index('\nvoid Process(',start);functions=source[start:end]
   cpp=r'''
 #include <string>
 #include <vector>
