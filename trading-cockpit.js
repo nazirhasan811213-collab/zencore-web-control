@@ -1,10 +1,10 @@
 (() => {
  'use strict';
- const $=id=>document.getElementById(id),symbols=['XAUUSD'];
- let payload=null,failed=false,filter='both',stopped=false,stream=null,streamLive=false,pushedViews=[];
- const Live=window.ZenCoreDashboardLive,tape=Live.createTape(),activity=[],activityState=new Map();let flashTimer=null;
+ const $=id=>document.getElementById(id),symbols=['XAUUSD','BTCUSD'];
+ let payload=null,failed=false,filter='both',stopped=false,streams=[],pushedViews=new Map();
+ const Live=window.ZenCoreDashboardLive,activity=[],activityState=new Map(),cardsBySymbol=new Map();
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
- const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toFixed(symbol==='GBPUSD'?5:3);
+ const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:symbol==='XAUUSD'?3:2});
  const tfName=tf=>tf===2?'SCALPING':'INTRADAY';
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
  function fresh(v){return !failed&&Live.fresh(v);}
@@ -13,8 +13,26 @@
  function tone(v){return ready(v)?v.market.strategyNormal.side==='BUY'?'buy':'sell':'';}
  function dot(id,live){$(id).classList.toggle('live',live);}
  async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
- function views(){return (payload?.pairs||symbols.map(symbol=>({symbol,views:[2,15].map(timeframe=>({timeframe,status:'WAITING',displayState:'WAITING',market:null}))}))).flatMap(p=>p.views.map(v=>({...v,symbol:p.symbol})));}
- function liveViews(){return [...views(),...(streamLive?pushedViews:[])];}
+ function views(){
+  return symbols.flatMap(symbol=>[2,15].map(timeframe=>{
+   const view=payload?.pairs?.find(p=>p.symbol===symbol)?.views?.find(v=>Number(v.timeframe)===timeframe);
+   return {...(view||{timeframe,status:'WAITING',displayState:'WAITING',market:null}),symbol,timeframe};
+  }));
+ }
+ function quotesFor(symbol){
+  return [...(failed?[]:views().filter(v=>v.symbol===symbol)),...(pushedViews.get(symbol)||[])].filter(v=>v.market?.symbol===symbol);
+ }
+ for(const symbol of symbols){
+  const card=$('pairCardTemplate').content.firstElementChild.cloneNode(true);
+  card.dataset.pair=symbol;
+  const fields=Object.fromEntries([...card.querySelectorAll('[data-field]')].map(node=>[node.dataset.field,node]));
+  fields.symbol.textContent=symbol;
+  fields.name.textContent=symbol==='XAUUSD'?'Gold':'Bitcoin';
+  fields.timeframe.setAttribute('aria-label','Timeframe pelan '+symbol);
+  fields.timeframe.onchange=render;
+  cardsBySymbol.set(symbol,{fields,tape:Live.createTape()});
+  $('pairCards').append(card);
+ }
  const dashboardCharts=new Map();
  for(const tf of [2,15]){
   const host=$('dashboardChart'+tf);if(host)dashboardCharts.set(tf,window.ZenCoreIndicatorChart?.mount(host,tf));
@@ -26,61 +44,70 @@
   dashboardCharts.get(tf)?.resize();
  };
  function renderLive(){
-  const now=Date.now(),q=Live.quote(liveViews().filter(()=>!failed||streamLive),now),last=tape.points().at(-1);
-  $('marketClock').textContent=new Date(now).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT';
-  $('liveQuoteStatus').textContent=q?'FEED LIVE':last?'DATA LAMA':'TUNGGU DATA';$('liveQuoteStatus').classList.toggle('live',!!q);document.querySelector('.live-market').classList.toggle('is-live',!!q);
-  if(q){
-   const point=tape.push(q);if(point){
-    $('livePrice').textContent=format(point.price,'XAUUSD');$('livePrice').dataset.direction=point.delta>0?'up':point.delta<0?'down':'flat';
-    if(point.delta!==null&&point.delta!==0){$('livePrice').classList.remove('price-flash');void $('livePrice').offsetWidth;$('livePrice').classList.add('price-flash');clearTimeout(flashTimer);flashTimer=setTimeout(()=>$('livePrice').classList.remove('price-flash'),900);}
-    $('liveDelta').textContent=point.delta===null?'Update price pertama dah masuk.':(point.delta>0?'↑ +':point.delta<0?'↓ −':'→ ')+Math.abs(point.delta).toFixed(3)+' USD / kemas kini';
-    $('liveDelta').className=point.delta>0?'buy':point.delta<0?'sell':'';
-   }
-   const observed=Number(q.market.signalObservedAt)||Number(q.market.receivedAt),age=Math.max(0,now-observed);
-   $('liveSource').textContent='FEED PINE · TF'+q.timeframe;$('liveAge').textContent='UMUR DATA '+(age/1000).toFixed(1)+'s';$('freshnessBar').style.width=Math.max(0,100-age/(Number(q.timeframe)===2?60000:30000)*100)+'%';
-   const delta=tape.points().at(-1)?.delta;$('liveNow').textContent=delta===null?'Price pertama dah masuk.':delta>0?'Price naik berbanding update tadi.':delta<0?'Price turun berbanding update tadi.':'Price masih sama macam update tadi.';
-  }else{
-   $('liveNow').textContent=last?'Ini price terakhir. Tunggu data fresh sebelum check setup.':'Tunggu price latest masuk dari Pine.';$('freshnessBar').style.width='0%';$('liveAge').textContent=last?'UMUR DATA '+Math.max(0,(now-last.at)/1000).toFixed(1)+'s':'UMUR DATA —';$('liveDelta').textContent=last?'Price tak update — data dah lama.':'Price bergerak akan nampak lepas update kedua.';$('liveDelta').className='';$('livePrice').classList.remove('price-flash');
+  const now=Date.now();
+  for(const [symbol,{fields,tape}] of cardsBySymbol){
+   const q=Live.quote(quotesFor(symbol),now);
+   if(q)tape.push(q);
+   const last=tape.points().at(-1);
+   fields.price.textContent=format(last?.price,symbol);
+   fields.quoteStatus.textContent=q?'FEED LIVE':last?'DATA LAMA':'TUNGGU DATA';
+   fields.quoteStatus.classList.toggle('live',!!q);
+   const delta=q?last?.delta:null;
+   fields.delta.textContent=delta==null?'':(delta>0?'↑ +':delta<0?'↓ −':'')+format(Math.abs(delta),symbol)+' USD';
+   fields.delta.className=delta>0?'buy':delta<0?'sell':'';
+   fields.source.textContent=last?'Pine TF'+last.timeframe+' · '+new Date(last.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT':'Menunggu data Pine';
   }
   for(const tf of [2,15]){
-   const latest=liveViews().filter(v=>Number(v.timeframe)===tf&&v.market).sort((a,b)=>Number(b.market.signalObservedAt||b.market.receivedAt)-Number(a.market.signalObservedAt||a.market.receivedAt))[0];
-   dashboardCharts.get(tf)?.update(latest?.market||null,!!latest&&(!failed||streamLive)&&Live.fresh(latest));
+   const latest=quotesFor('XAUUSD').filter(v=>v.timeframe===tf).sort((a,b)=>Number(b.market.signalObservedAt||b.market.receivedAt)-Number(a.market.signalObservedAt||a.market.receivedAt))[0];
+   dashboardCharts.get(tf)?.update(latest?.market||null,!!latest&&Live.fresh(latest));
   }
-  document.dispatchEvent(new CustomEvent('zencore:dashboard',{detail:{views:views(),failed}}));
-  $('liveTfSummary').replaceChildren(...views().map(v=>el('span','TF'+v.timeframe+' · '+state(v),tone(v))));
+  const gold=views().filter(v=>v.symbol==='XAUUSD');
+  document.dispatchEvent(new CustomEvent('zencore:dashboard',{detail:{views:gold,failed}}));
+  $('liveTfSummary').replaceChildren(...gold.map(v=>el('span','TF'+v.timeframe+' · '+state(v),tone(v))));
  }
  function trackActivity(){
   let changed=false;
   for(const v of views()){
-   if(!fresh(v))continue;const n=v.market.strategyNormal||{},s=n.sop||{},key=String(v.timeframe),fingerprint=[state(v),n.side,s.hemaShape?.state,v.market.positionManagement?.action].join('|');
+   if(!fresh(v))continue;const n=v.market.strategyNormal||{},s=n.sop||{},key=v.symbol+'|'+v.timeframe,fingerprint=[state(v),n.side,s.hemaShape?.state,v.market.positionManagement?.action].join('|');
    if(activityState.get(key)===fingerprint)continue;activityState.set(key,fingerprint);
-   changed=true;activity.unshift({at:Number(v.market.signalObservedAt)||Number(v.market.receivedAt),text:'TF'+v.timeframe+' · '+state(v)+(s.hemaShape?' · HEMA '+s.hemaShape.state:'')+(!['HOLD','IDLE','NONE'].includes(v.market.positionManagement?.action||'HOLD')?' · ARAHAN PINE '+v.market.positionManagement.action:'')});
+   changed=true;activity.unshift({at:Number(v.market.signalObservedAt)||Number(v.market.receivedAt),text:v.symbol+' · TF'+v.timeframe+' · '+state(v)+(s.hemaShape?' · HEMA '+s.hemaShape.state:'')+(!['HOLD','IDLE','NONE'].includes(v.market.positionManagement?.action||'HOLD')?' · ARAHAN PINE '+v.market.positionManagement.action:'')});
   }
   activity.splice(6);if(changed&&activity.length)$('marketActivity').replaceChildren(...activity.map(a=>{const li=el('li');li.append(el('time',new Date(a.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT'),el('span',a.text));return li;}));
  }
  function startLiveStream(){
   if(!window.EventSource)return;
-  stream=new EventSource('/api/analysis/timeframes/events?symbol=XAUUSD');
-  stream.addEventListener('timeframes',e=>{try{const j=JSON.parse(e.data);if(j.ok&&j.symbol==='XAUUSD'&&Array.isArray(j.views)){pushedViews=j.views;streamLive=true;renderLive();}}catch(_){}});
-  stream.addEventListener('unavailable',()=>{streamLive=false;renderLive();});stream.onerror=()=>{streamLive=false;renderLive();};
+  for(const symbol of symbols){
+   const stream=new EventSource('/api/analysis/timeframes/events?symbol='+symbol);
+   streams.push(stream);
+   stream.addEventListener('timeframes',e=>{try{
+    const j=JSON.parse(e.data);
+    if(j.ok&&j.symbol===symbol&&Array.isArray(j.views)){
+     pushedViews.set(symbol,j.views);renderLive();
+    }
+   }catch(_){}});
+   const disconnected=()=>{pushedViews.delete(symbol);renderLive();};
+   stream.addEventListener('unavailable',disconnected);stream.onerror=disconnected;
+  }
  }
  function render(){
   renderLive();const all=views(),visible=all.filter(v=>filter==='both'||String(v.timeframe)===filter);
   const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'TUNGGU DATA';
-  const ranked=visible.slice().sort((a,b)=>Number(ready(b))-Number(ready(a))||Number(fresh(b))-Number(fresh(a))||Number(b.market?.strategyNormal?.sop?.sopGreen||0)-Number(a.market?.strategyNormal?.sop?.sopGreen||0));
-  const best=ranked[0],n=best.market?.strategyNormal||{},s=n.sop||{},p=n.plan||{};
-  const valid=fresh(best),side=valid&&['BUY','SELL'].includes(n.side)?n.side:'—';
-  document.querySelector('.featured .kicker').textContent='ZENCORE | ENTRY TF'+best.timeframe+' • '+(Number(best.timeframe)===2?'SCALP':'INTRA');
-  $('featuredPair').textContent=best.symbol+' • '+side;$('featuredTf').textContent='';
-  $('featuredBadge').textContent=ready(best)?'SIGNAL ENTRY':valid?'MENUNGGU ENTRY':'TUNGGU DATA';
-  $('featuredBadge').className='pill'+(ready(best)?' live':'');
-  $('featuredSide').textContent='';$('featuredReason').textContent='';
-  const assessment=valid&&best.assessment?.status==='AVAILABLE'?best.assessment:null;
-  const strength=assessment?assessment.overall+'%':'—',range=assessment?.range?format(assessment.range.low,best.symbol)+'–'+format(assessment.range.high,best.symbol):'—';
-  $('featuredChecks').replaceChildren(el('p','Entry: '+format(valid?p.entry:null,best.symbol)+' • Overall Setup Strength '+strength,'pine-analysis-line'),el('p','SL: '+format(valid?p.sl:null,best.symbol),'pine-analysis-line'),el('p','🎯 Jangkauan setup: '+range+' • Anggaran indikator, bukan % win','pine-analysis-line'),...(!assessment?[el('p',best.assessment?.reason||'Menunggu bacaan Pine lengkap untuk Strength.','pine-analysis-line')]:[]));
-  $('featuredEntry').textContent=format(valid?p.entry:null,best.symbol);$('featuredTp').textContent=format(valid?p.tp1:null,best.symbol);$('featuredSl').textContent=format(valid?p.sl:null,best.symbol);$('featuredLink').href=link(best.symbol,best.timeframe);
+  for(const [symbol,{fields}] of cardsBySymbol){
+   const tf=Number(fields.timeframe.value),v=all.find(v=>v.symbol===symbol&&v.timeframe===tf);
+   const current=fresh(v)&&v.market?.symbol===symbol,n=current?v.market.strategyNormal:null;
+   const plan=n?.plan,assessment=current?v.assessment:null;
+   const setup=ready(v)?'Signal '+n?.side:n?.side?'Menunggu entry · '+n.side:'Menunggu setup';
+   fields.state.textContent=current?setup:'Menunggu data segar';
+   fields.state.className='dashboard-pair-state '+tone(v);
+   for(const key of ['entry','sl','tp1','tp2','tp3'])fields[key].textContent=format(plan?.[key],symbol);
+   const range=assessment?.range;
+   fields.strength.textContent=assessment?.status==='AVAILABLE'
+    ?'Kekuatan setup '+assessment.overall+'%'+(range?' · Julat '+format(range.low,symbol)+'–'+format(range.high,symbol):'')
+    :assessment?.reason||'';
+   fields.analysis.href=link(symbol,tf);
+  }
   const cards=[];
-  for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'FOREX'));card.append(head);
+  for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'BITCOIN'));card.append(head);
    card.classList.toggle('single',visible.filter(v=>v.symbol===symbol).length===1);for(const v of visible.filter(v=>v.symbol===symbol)){const m=v.market||{},n=m.strategyNormal||{},row=el('div',undefined,'market-view'),top=el('div');top.append(el('span','TF'+v.timeframe+' · '+tfName(v.timeframe),'tf-label'));row.append(top);
     const advisor=n.sop?.advisor||{},levels=v.nearbyLevels||{},current=fresh(v),known=value=>current&&typeof value==='string'&&value.trim()?value:'—';
     const readings=[['Arah market',current&&['BUY','SELL'].includes(n.side)?n.side:'—'],['Keadaan market',known(m.marketStructure||advisor.trend||advisor.dashboard?.structure)],['Momentum',known(m.momentum||advisor.momentum)],['Support terdekat',format(current?(m.nearestSupport??levels.supports?.[0]):null,symbol)],['Resistance terdekat',format(current?(m.nearestResistance??levels.resistances?.[0]):null,symbol)],['Panduan ZenCore',known(m.proTip||advisor.proTip)]];
@@ -88,11 +115,8 @@
     const a=el('a','Lihat Analysis TF'+v.timeframe+' ↗');a.href=link(symbol,v.timeframe);row.append(a);card.append(row);
    }cards.push(card);
   }$('marketGrid').replaceChildren(...cards);
-  const [symbol,timeframe]=$('planSelector').value.split('|'),v=all.find(x=>x.symbol===symbol&&String(x.timeframe)===timeframe),plan=v.market?.strategyNormal?.plan||{};
-  const levels=[];for(const [key,label] of [['entry','ENTRY'],['sl','STOP LOSS'],['tp1','TP1'],['tp2','TP2'],['tp3','TP3']]){const l=el('div',undefined,'level '+(key==='sl'?'stop':key==='entry'?'':'target'));l.append(el('small',label),el('b',format(plan[key],symbol)));levels.push(l);}$('planLevels').replaceChildren(...levels);$('planLink').href=link(symbol,timeframe);
-  $('planReason').textContent=!fresh(v)?'Menunggu data segar '+symbol+' TF'+timeframe+'. Paras lama, jika ada, hanya untuk rujukan.':ready(v)?'SOLID '+v.market.strategyNormal.side+' · Semak risiko dan tetapan akaun sebelum execution.':v.market.strategyNormal?.reason||'Setup belum disahkan. Semak checklist dan HEMA.';
  }
- for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};$('planSelector').onchange=render;
+ for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};
  async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF2 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Data tak masuk. Tengah cuba connect balik…';}render();if(!stopped)setTimeout(poll,2000);}
  function renderAccount(a){
   const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
@@ -108,6 +132,6 @@
  }
  api('/auth/me').then(j=>{$('welcomeName').textContent=j.user?.displayName||'Trader';}).catch(()=>{});
  $('logoutButton').onclick=async()=>{$('logoutButton').disabled=true;try{await fetch('/auth/logout',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});}finally{location.replace('/login');}};
- render();startLiveStream();poll();connections();const clockTimer=setInterval(renderLive,1000);window.addEventListener('pagehide',()=>{stopped=true;stream?.close();clearInterval(clockTimer);clearTimeout(flashTimer);});
+ render();startLiveStream();poll();connections();const clockTimer=setInterval(renderLive,1000);window.addEventListener('pagehide',()=>{stopped=true;streams.forEach(stream=>stream.close());clearInterval(clockTimer);});
 })();
 
