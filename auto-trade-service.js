@@ -278,7 +278,7 @@ function createAutoTradeService(options = {}) {
       signedEnvelope: Buffer.from(canonicalCommand(unsigned)).toString('base64url'),
       dedupeKey
     };
-    const issued = await store.createCommand(command);
+    const issued = await store.createCommand(command,type==='SYSTEM_ON');
     if (issued.created) commandWaiters.get(podId)?.();
     return issued;
   }
@@ -383,7 +383,7 @@ function createAutoTradeService(options = {}) {
   }
 
   async function state(userId) {
-    const [profile, pod, positions, audit, pairing, hostedAccount, recentCommands] = await Promise.all([
+    let [profile, pod, positions, audit, pairing, hostedAccount, recentCommands] = await Promise.all([
       store.getProfile(userId),
       store.getPodForUser(userId),
       store.listPositions(userId),
@@ -393,6 +393,13 @@ function createAutoTradeService(options = {}) {
       activeHostedAccount(userId),
       store.listRecentCommands(userId,100)
     ]);
+    if(!hostedAccount&&pod&&profile?.effectiveState==='ARMING'&&profile.pendingCommandId){
+      const command=await store.getControlCommand(userId,pod.id,profile.pendingCommandId);
+      if(command?.type==='SYSTEM_ON'){
+        const status=['PENDING','DELIVERED'].includes(command.status)&&command.expiresAt<=now()?'EXPIRED':command.status;
+        if(!['PENDING','DELIVERED'].includes(status))profile=await settleSystemOn(pod,command,status,command.result)||await store.getProfile(userId);
+      }
+    }
     if(isLocalEa(pod)&&positions.length){
       const plans=new Map();
       for(const position of positions){
@@ -963,9 +970,8 @@ function createAutoTradeService(options = {}) {
     });
     if (localEa && saved.desiredState === 'ON') {
       const pod = await store.getPodForUser(userId);
-      const issued = await issueCommand({ userId, podId: pod.id, type: 'SYSTEM_ON',
+      await issueCommand({ userId, podId: pod.id, type: 'SYSTEM_ON',
         payload: { mode: pod.tradeMode, strategy: 'NORMAL_3M_SOP_V32', exitSchema: '32.3-EXIT-STEPLOCK', settings: validation.value } });
-      await store.setControl(userId, { desiredState: 'ON', effectiveState: 'ARMING', pendingCommandId: issued.command.id, lastError: null });
     }
     const manualPod=localEa?await store.getPodForUser(userId):null;
     if(supportsManualExit(manualPod,validation.value.manualExit))await queueManualExit(userId,manualPod,validation.value.manualExit);
@@ -1054,10 +1060,6 @@ function createAutoTradeService(options = {}) {
         exitSchema: '32.3-EXIT-STEPLOCK',
         settings: settingsValidation.value
       }
-    });
-    await store.setControl(userId, {
-      desiredState: 'ON', effectiveState: 'ARMING',
-      pendingCommandId: issued.command.id, lastError: null
     });
     await store.appendAudit(userId, 'SYSTEM_ON_REQUESTED', { commandId: issued.command.id });
     return state(userId);
@@ -1250,6 +1252,10 @@ function createAutoTradeService(options = {}) {
   }
 
   async function queuedEntryIsCurrent(command, diagnostic = {}){
+    if(command.type==='SYSTEM_ON'){
+      const profile=await store.getProfile(command.userId);
+      if(profile?.desiredState!=='ON'||profile.pendingCommandId!==command.id){diagnostic.reason='ON_COMMAND_SUPERSEDED';return false;}
+    }
     if(command.payload?.bindingEpochHash){const expected=await store.findPodByTokenHash(command.payload.bindingEpochHash);if(!expected||expected.id!==command.podId||expected.userId!==command.userId){diagnostic.reason='ACCOUNT_BINDING_CHANGED';return false;}}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&options.entryAccessAllowed&&!await options.entryAccessAllowed(command.userId)){diagnostic.accountAccess='ACCOUNT_EXPIRED_OR_DISABLED';return false;}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
@@ -1341,6 +1347,7 @@ function createAutoTradeService(options = {}) {
     if(!await queuedEntryIsCurrent(command, deliveryDiagnostic)){
       const reason = deliveryDiagnostic.reason || 'ENTRY_POLICY_CHANGED';
       await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED',message:reason});
+      if(command.type==='SYSTEM_ON')await settleSystemOn(pod,command,'REJECTED',{code:reason});
       await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED',reason,...deliveryDiagnostic});
       console.warn('ZenCore entry delivery revoked:', JSON.stringify({commandId:command.id,symbol:command.payload?.symbol,reason,...deliveryDiagnostic}));
       return {ok:true,command:null,serverTime:now()};
@@ -1362,6 +1369,15 @@ function createAutoTradeService(options = {}) {
       },
       serverTime: now()
     };
+  }
+
+  function settleSystemOn(pod,command,status,result) {
+    const executed=status==='EXECUTED';
+    return store.setControl(pod.userId,{
+      desiredState:executed?'ON':'STOPPED',effectiveState:executed?'ON':'ERROR',pendingCommandId:null,
+      lastError:executed?null:status==='EXPIRED'?'EA belum mengesahkan arahan ON sebelum tamat. Tekan ON SISTEM untuk cuba semula.':
+        result?.message||result?.code||'EA tidak mengesahkan arahan ON.'
+    },{id:pod.id,tokenHash:pod.tokenHash,pendingCommandId:command.id});
   }
 
   async function acknowledgeCommand(rawToken, commandId, input = {}) {
@@ -1394,12 +1410,7 @@ function createAutoTradeService(options = {}) {
     }
 
     if (command.type === 'SYSTEM_ON') {
-      await store.setControl(pod.userId, status === 'EXECUTED' ? {
-        desiredState: 'ON', effectiveState: 'ON', pendingCommandId: null, lastError: null
-      } : {
-        desiredState: 'STOPPED', effectiveState: 'ERROR', pendingCommandId: null,
-        lastError: result.message || result.code || 'Secure Pod menolak arahan ON.'
-      }, {id:pod.id,tokenHash:pod.tokenHash});
+      await settleSystemOn(pod,command,status,result);
     } else if (command.type === 'SYSTEM_STOP' || command.type === 'EMERGENCY_CLOSE_ALL') {
       await store.setControl(pod.userId, status === 'EXECUTED' ? {
         desiredState: 'STOPPED', effectiveState: 'STOPPED', pendingCommandId: null, lastError: null

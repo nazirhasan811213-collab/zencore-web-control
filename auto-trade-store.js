@@ -1029,7 +1029,9 @@ class PostgresAutoTradeStore {
     const result = await this.pool.query(
       `INSERT INTO zencore_autotrade_profiles
         (user_id, desired_state, effective_state, pending_command_id, last_error)
-       SELECT $1, $2, $3, $4, $5 WHERE $6::text IS NULL OR EXISTS (SELECT 1 FROM zencore_mt5_secure_pods WHERE user_id=$1 AND token_hash=$6 AND revoked_at IS NULL FOR UPDATE)
+       SELECT $1, $2, $3, $4, $5
+       WHERE ($6::text IS NULL OR EXISTS (SELECT 1 FROM zencore_mt5_secure_pods WHERE user_id=$1 AND token_hash=$6 AND revoked_at IS NULL FOR UPDATE))
+         AND ($7::uuid IS NULL OR EXISTS (SELECT 1 FROM zencore_autotrade_profiles WHERE user_id=$1))
        ON CONFLICT (user_id) DO UPDATE SET
          desired_state = EXCLUDED.desired_state,
          effective_state = EXCLUDED.effective_state,
@@ -1037,9 +1039,10 @@ class PostgresAutoTradeStore {
          last_error = EXCLUDED.last_error,
          state_version = zencore_autotrade_profiles.state_version + 1,
          updated_at = NOW()
+       WHERE $7::uuid IS NULL OR zencore_autotrade_profiles.pending_command_id=$7
        RETURNING *`,
       [userId, update.desiredState, update.effectiveState,
-        update.pendingCommandId || null, update.lastError || null, expectedPod?.tokenHash || null]
+        update.pendingCommandId || null, update.lastError || null, expectedPod?.tokenHash || null,expectedPod?.pendingCommandId||null]
     );
     return publicProfile(result.rows[0]);
   }
@@ -1197,13 +1200,16 @@ class PostgresAutoTradeStore {
     return result.rows.map(row => ({ ...row.data, updatedAt: timestamp(row.updated_at) }));
   }
 
-  async createCommand(command) {
+  async createCommand(command, armControl = false) {
     try {
-      const result = await this.pool.query(
-        `INSERT INTO zencore_autotrade_commands
+      const insert = `INSERT INTO zencore_autotrade_commands
           (id, user_id, pod_id, command_type, payload, signature, signed_envelope, dedupe_key, expires_at, created_at)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)
-         RETURNING *`,
+         RETURNING *`;
+      const result = await this.pool.query(armControl ? `WITH inserted AS (${insert}),
+        armed AS (UPDATE zencore_autotrade_profiles SET desired_state='ON',effective_state='ARMING',
+          pending_command_id=$1,last_error=NULL,state_version=state_version+1,updated_at=NOW() WHERE user_id=$2)
+        SELECT * FROM inserted` : insert,
         [command.id, command.userId, command.podId, command.type,
           JSON.stringify(command.payload || {}), command.signature, command.signedEnvelope,
           command.dedupeKey || null, new Date(command.expiresAt), new Date(command.createdAt)]
@@ -1218,6 +1224,11 @@ class PostgresAutoTradeStore {
       );
       return { created: false, command: publicCommand(result.rows[0]) };
     }
+  }
+
+  async getControlCommand(userId, podId, commandId) {
+    const {rows}=await this.pool.query('SELECT * FROM zencore_autotrade_commands WHERE id=$1 AND user_id=$2 AND pod_id=$3',[commandId,userId,podId]);
+    return rows[0]?publicCommand(rows[0]):null;
   }
 
   async getBrokerMonitorRecord(userId) {
@@ -1989,10 +2000,11 @@ class MemoryAutoTradeStore {
   }
 
   async setControl(userId, update, expectedPod = null) {
-    if(expectedPod) {const pod=this.podsByUser.get(userId);if(!pod || pod.revokedAt || pod.tokenHash!==expectedPod.tokenHash)return null;}
+    if(expectedPod?.tokenHash) {const pod=this.podsByUser.get(userId);if(!pod || pod.revokedAt || pod.tokenHash!==expectedPod.tokenHash)return null;}
     const current = this.profiles.get(userId) || {
       userId, symbols: [], desiredState: 'STOPPED', effectiveState: 'STOPPED', stateVersion: 0
     };
+    if(expectedPod?.pendingCommandId&&current.pendingCommandId!==expectedPod.pendingCommandId)return null;
     const next = {
       ...current,
       ...update,
@@ -2082,7 +2094,7 @@ class MemoryAutoTradeStore {
 
   async listPositions(userId) { return (this.positions.get(userId) || []).map(item => ({ ...item })); }
 
-  async createCommand(command) {
+  async createCommand(command, armControl = false) {
     const rows = this.commands.get(command.podId) || [];
     if (command.dedupeKey) {
       const existing = rows.find(item => item.userId === command.userId && item.dedupeKey === command.dedupeKey);
@@ -2090,9 +2102,15 @@ class MemoryAutoTradeStore {
     }
     // Match Postgres: signed timestamps are immutable through storage/delivery.
     const row = { ...command, status: 'PENDING', createdAt: command.createdAt ?? Date.now(), deliveredAt: null, acknowledgedAt: null, result: null };
+    if(armControl)await this.setControl(command.userId,{desiredState:'ON',effectiveState:'ARMING',pendingCommandId:command.id,lastError:null});
     rows.push(row);
     this.commands.set(command.podId, rows);
     return { created: true, command: publicCommand(row) };
+  }
+
+  async getControlCommand(userId, podId, commandId) {
+    const row=(this.commands.get(podId)||[]).find(command=>command.id===commandId&&command.userId===userId);
+    return row?publicCommand(row):null;
   }
 
   async getBrokerMonitorRecord(userId) {

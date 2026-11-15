@@ -1009,3 +1009,47 @@ test('expired users still receive StepLock management while new entries are bloc
   assert.equal(command.command.type, 'MANAGE_POSITION');
   assert.equal(command.command.payload.actions[0].type, 'MOVE_SL_TP1');
 });
+
+test('ON intent is visible before connector delivery and immediate ACK survives the request',async()=>{
+  const {store,service,userId,token}=await setup();
+  await service.saveSettings(userId,{capitalUsd:100,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true});
+  const create=store.createCommand.bind(store);
+  store.createCommand=async (...args)=>{
+    const issued=await create(...args);
+    if(args[0].type==='SYSTEM_ON'){
+      assert.equal((await service.heartbeat(token,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',
+        tradeMode:'DEMO',connectorVersion:'1.3.0-ea-local',positions:[]})).desiredState,'ON');
+      const {command}=await service.nextCommand(token);
+      await service.acknowledgeCommand(token,command.id,{status:'EXECUTED',code:'ARMED'});
+    }
+    return issued;
+  };
+  const state=await service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'});
+  assert.equal(state.control.effectiveState,'ON');
+  assert.equal(state.control.pendingCommandId,null);
+});
+
+test('expired ON clears ARMING without treating a live connection as an ACK',async()=>{
+  const {service,userId,token,advance}=await setup();
+  await service.saveSettings(userId,{capitalUsd:100,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true});
+  await service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'});
+  advance(120001);
+  const state=await service.state(userId);
+  assert.equal(state.control.effectiveState,'ERROR');
+  assert.equal(state.control.desiredState,'STOPPED');
+  assert.equal(state.control.pendingCommandId,null);
+  assert.match(state.control.lastError,/ON SISTEM/);
+  assert.equal((await service.nextCommand(token)).command,null);
+});
+
+test('late ON ACK cannot undo a newer STOP request',async()=>{
+  const {service,userId,token}=await setup();
+  await service.saveSettings(userId,{capitalUsd:100,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true});
+  await service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'});
+  const {command}=await service.nextCommand(token);
+  const stopping=await service.stop(userId);
+  await service.acknowledgeCommand(token,command.id,{status:'EXECUTED',code:'ARMED'});
+  const state=await service.state(userId);
+  assert.equal(state.control.desiredState,'STOPPED');
+  assert.equal(state.control.pendingCommandId,stopping.control.pendingCommandId);
+});
