@@ -128,3 +128,42 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
   .dashboard-pairs { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .dashboard-v3 .market-card { grid-template-columns: minmax(0, 1fr) !important; }
 }
+
+.dashboard-v3 > .compact-market { padding: clamp(14px, 2vw, 22px) !important; }
+.compact-market .section-heading { margin: 0; }
+.dashboard-v3 .compact-market .section-heading h2 { margin: 0 !important; }
+.compact-market #feedConnection { margin: 6px 0 10px; }
+.compact-market-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; align-items: start; }
+.compact-market-row { min-width: 0; border: 1px solid #293b55; border-radius: 8px; background: #0d1727; }
+.compact-market-row > summary {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.compact-market-row > summary::-webkit-details-marker { display: none; }
+.compact-market-row > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid #a9bed9;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.compact-market-row[open] > summary::after { transform: rotate(225deg); }
+.compact-market-pair { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; font-weight: 650; }
+.compact-market-pair small,.compact-market-state { color: #a9bed9; font-size: 12px; }
+.compact-market-body { border-top: 1px solid #293b55; padding: 8px 12px 0; color: #b5c9e7; font-size: 12px; }
+.compact-market-body p,.compact-market-readings { margin: 0; }
+.compact-market-readings > div { display: grid; grid-template-columns: minmax(85px,1fr) minmax(0,2fr); gap: 8px; padding: 4px 0; }
+.compact-market-readings dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.compact-market-body > a { display: inline-flex; align-items: center; min-height: 44px; color: #a5c8ff; }
+@media (max-width: 700px) {
+  .compact-market-grid { grid-template-columns: minmax(0,1fr); }
+  .compact-market .section-heading { align-items: stretch; }
+  .compact-market .tf-switch button { min-height: 44px; font-size: 12px !important; }
+}
