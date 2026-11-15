@@ -162,3 +162,20 @@ test('switching manual exit off before EA capability cancels deferred enable',as
  assert.equal((await service.nextCommand(podToken)).command,null);
  assert.equal((await service.state(userId)).settings.manualExit.enabled,false);
 });
+
+test('manual BTCUSD and both scopes wait for pair-capable EA and stale scopes are revoked',async()=>{
+ const {service,podToken}=await setup('step');
+ for(const pairScope of ['BTCUSD','XAUUSD,BTCUSD']){
+  const state=await service.saveManualExit(userId,{enabled:true,pairScope});
+  assert.equal(state.settings.manualExit.pairScope,pairScope);
+  assert.equal(state.manualExitSync.status,'WAITING_EA');
+ }
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
+  connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64),manualExitVersion:'MANUAL_PAIR_STEPLOCK_V5',manualExitCustomSupported:true,positions:[]});
+ await service.saveManualExit(userId,{enabled:true,pairScope:'BTCUSD'});
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ const {command}=await service.nextCommand(podToken);
+ assert.equal(command.payload.manualExit.pairScope,'BTCUSD');
+ assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
+});

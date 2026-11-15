@@ -131,6 +131,9 @@
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
     const manualExit={version:'MANUAL_TF2_EXIT_V2',enabled:input.manualExit?.enabled===true,timeframeMinutes:2,
       tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'};
+    const scope=input.manualExit?.pairScope;
+    if(scope!=null&&!['XAUUSD','BTCUSD','XAUUSD,BTCUSD'].includes(scope))errors['manualExit.pairScope']='Pilih XAUUSD, BTCUSD atau kedua-duanya.';
+    else if(scope&&scope!=='XAUUSD')manualExit.pairScope=scope;
     for(const key of ['tp1','tp2','tp3','sl']) {
       const raw=input.manualExit?.[key];
       if(raw==null || (typeof raw==='string' && !raw.trim()))continue;
@@ -383,8 +386,8 @@
       value: {
         ...identity.value,
         accountFingerprint,
-        manualExitVersion:['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(input.manualExitVersion) && input.manualExitCustomSupported===true ? input.manualExitVersion : input.manualExitVersion==='MANUAL_TF2_EXIT_V2' ? 'MANUAL_TF2_EXIT_V2' : null,
-        manualExitEnabled:['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(input.manualExitVersion)&&input.manualExitEnabled===true,
+        manualExitVersion:['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(input.manualExitVersion) && input.manualExitCustomSupported===true ? input.manualExitVersion : input.manualExitVersion==='MANUAL_TF2_EXIT_V2' ? 'MANUAL_TF2_EXIT_V2' : null,
+        manualExitEnabled:['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(input.manualExitVersion)&&input.manualExitEnabled===true,
         tradeMode,
         terminalTradeAllowed: input.terminalTradeAllowed === true,
         accountTradeAllowed: input.accountTradeAllowed === true,

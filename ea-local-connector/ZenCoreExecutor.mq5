@@ -1,5 +1,5 @@
 #property strict
-#property version "2.30"
+#property version "2.31"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -12,6 +12,7 @@ int lockHandle=INVALID_HANDLE;
 bool armed=false;
 bool resumePending=false;
 bool manualEnabled=false;
+string manualPairScope="XAUUSD";
 long manualSince=0;
 double manualTp1=0,manualTp2=0,manualTp3=0,manualSl=0;
 ulong processingStarted=0;
@@ -125,7 +126,7 @@ string EntrySymbol(string source){
  return "";
 }
 bool IsManual(ulong ticket){
- if(!PositionSelectByTicket(ticket) || (ulong)PositionGetInteger(POSITION_MAGIC)!=0 || PositionGetString(POSITION_SYMBOL)!=Broker("XAUUSD") || AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return false;
+ if(!PositionSelectByTicket(ticket) || (ulong)PositionGetInteger(POSITION_MAGIC)!=0 || !ManualPairSelected(ManualPair(PositionGetString(POSITION_SYMBOL)),manualPairScope) || AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return false;
  string name="manual-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
  if(!ReadFields(name))return false;
  return Get("podId")==ownerPod && Get("symbol")==PositionGetString(POSITION_SYMBOL) && Get("side")== (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL") && MathAbs(Val("entry")-PositionGetDouble(POSITION_PRICE_OPEN))<1e-8;
@@ -167,6 +168,13 @@ bool IsBtcUsdSymbol(string symbol){
  return SymbolInfoString(symbol,SYMBOL_CURRENCY_BASE)=="BTC" &&
         SymbolInfoString(symbol,SYMBOL_CURRENCY_PROFIT)=="USD";
 }
+string ManualPair(string symbol){
+ if(IsBtcUsdSymbol(symbol))return "BTCUSD";
+ if(Canonical(symbol)=="XAUUSD")return "XAUUSD";
+ return "";
+}
+bool ValidManualPairScope(string scope){return scope=="XAUUSD" || scope=="BTCUSD" || scope=="XAUUSD,BTCUSD";}
+bool ManualPairSelected(string pair,string scope){return pair!="" && (scope==pair || scope=="XAUUSD,BTCUSD");}
 bool IsBtcUsdChart(){return IsBtcUsdSymbol(_Symbol);}
 string BtcEntrySymbol(){
  if(IsBtcUsdChart() && SymbolSelect(_Symbol,true))return _Symbol;
@@ -186,7 +194,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.30")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_STEPLOCK_V4")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.31")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -625,15 +633,17 @@ void ManageLocalStepLock(){
 }
 
 bool ValidManualDistances(double t1,double t2,double t3,double sl){return MathIsValidNumber(t1)&&MathIsValidNumber(t2)&&MathIsValidNumber(t3)&&MathIsValidNumber(sl)&&t1>0&&t2>t1&&t3>t2&&sl>0;}
-bool SaveManualConfig(){return WriteAtomic("manual-config.tsv",Row("version","MANUAL_TF2_EXIT_V3")+Row("podId",ownerPod)+Row("enabled",manualEnabled?"1":"0")+Row("since",(string)manualSince)+Row("tp1",Num(manualTp1))+Row("tp2",Num(manualTp2))+Row("tp3",Num(manualTp3))+Row("sl",Num(manualSl)));}
+bool SaveManualConfig(){return WriteAtomic("manual-config.tsv",Row("version","MANUAL_TF2_EXIT_V3")+Row("podId",ownerPod)+Row("enabled",manualEnabled?"1":"0")+Row("since",(string)manualSince)+Row("pairScope",manualPairScope)+Row("tp1",Num(manualTp1))+Row("tp2",Num(manualTp2))+Row("tp3",Num(manualTp3))+Row("sl",Num(manualSl)));}
 bool ManualLease(){
  if(!ReadFields("lease.tsv"))return false;
  return Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && Get("podId")==ownerPod && Get("eaSession")==eaSession && (long)StringToInteger(Get("expiresAt"))>UtcMs();
 }
 void ManualWarning(string code,ulong ticket){static ulong lastWarning=0;ulong now=GetTickCount64();if(now-lastWarning<10000)return;lastWarning=now;Print("ZenCore ",code," ticket=",ticket);}
-bool ExcludeExistingManual(){
+bool ExcludeExistingManual(string scope,bool newlyEnabled){
  for(int i=0;i<PositionsTotal();i++){
   ulong ticket=PositionGetTicket(i);if(!PositionSelectByTicket(ticket)||PositionGetInteger(POSITION_MAGIC)!=0)continue;
+  string pair=ManualPair(PositionGetString(POSITION_SYMBOL));
+  if(!ManualPairSelected(pair,scope) || (!newlyEnabled && ManualPairSelected(pair,manualPairScope)))continue;
   if(!WriteAtomic("manual-excluded-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done","existing"))return false;
  }
  return true;
@@ -660,7 +670,7 @@ void ManageManual(){
  bool canAdopt=manualEnabled && ManualLease();
  for(int i=PositionsTotal()-1;i>=0;i--){
   ulong ticket=PositionGetTicket(i);
-  if(!PositionSelectByTicket(ticket) || PositionGetInteger(POSITION_MAGIC)!=0 || PositionGetString(POSITION_SYMBOL)!=Broker("XAUUSD"))continue;
+  if(!PositionSelectByTicket(ticket) || PositionGetInteger(POSITION_MAGIC)!=0 || !ManualPairSelected(ManualPair(PositionGetString(POSITION_SYMBOL)),manualPairScope))continue;
   string symbol=PositionGetString(POSITION_SYMBOL),side=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL";bool buy=side=="BUY";
   long identifier=PositionGetInteger(POSITION_IDENTIFIER),opened=PositionGetInteger(POSITION_TIME_MSC);
   double entry=PositionGetDouble(POSITION_PRICE_OPEN),sign=buy?1:-1;
@@ -746,6 +756,7 @@ void Process(){
  int layers=(int)StringToInteger(Get("layers")),actions=(int)StringToInteger(Get("actions"));
  long manualSourceAt=(long)Val("sourceAt");ulong manualTicket=(ulong)StringToInteger(Get("ticket"));string manualId=Get("positionId");
  bool layerPolicyValid=Get("manualMaxLayers")=="10" && Get("manualLimitAction")=="WARN_ONLY";
+ string cfgPairScope=Get("manualPairScope");if(cfgPairScope=="")cfgPairScope="XAUUSD";
  string configVersion=Get("manualVersion");if(configVersion=="")configVersion="MANUAL_TF2_EXIT_V2";
  bool configEnabled=Get("manualEnabled")=="1";double cfgTp1=Val("manualtp1"),cfgTp2=Val("manualtp2"),cfgTp3=Val("manualtp3"),cfgSl=Val("manualsl");
  string actionReason[4];string actionType[4];double actionValue[4];
@@ -766,10 +777,10 @@ void Process(){
  if(type=="MANUAL_EXIT_CONFIG"){
   // Signed by Connector; fresh lease binds even when auto entry is STOPPED.
   bool bound=ReadFields("lease.tsv") && Get("podId")==commandPod && Get("eaSession")==eaSession && Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && (long)Val("expiresAt")>UtcMs();
-  ok=bound && layerPolicyValid && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl) && (configVersion=="MANUAL_TF2_EXIT_V3" || (configVersion=="MANUAL_TF2_EXIT_V2" && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3))));
+  ok=bound && layerPolicyValid && ValidManualPairScope(cfgPairScope) && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl) && (configVersion=="MANUAL_TF2_EXIT_V3" || (configVersion=="MANUAL_TF2_EXIT_V2" && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3))));
   bool newlyEnabled=!manualEnabled || ownerPod!=commandPod;
-  if(ok&&configEnabled&&newlyEnabled)ok=ExcludeExistingManual();
-  if(ok){if(ownerPod!=commandPod)resumePending=false;ownerPod=commandPod;manualEnabled=configEnabled;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
+  if(ok&&configEnabled&&(newlyEnabled||manualPairScope!=cfgPairScope))ok=ExcludeExistingManual(cfgPairScope,newlyEnabled);
+  if(ok){if(ownerPod!=commandPod)resumePending=false;ownerPod=commandPod;manualEnabled=configEnabled;manualPairScope=cfgPairScope;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
  }
  else if(type=="MANUAL_EXIT_ACTION"){
   // Manual entry uses its own local SL milestones, never Pine close signals.
@@ -832,7 +843,7 @@ bool BindCurrentAccount(){
  if(eaSession==""){FileClose(lockHandle);lockHandle=INVALID_HANDLE;return false;}
  MapSymbols();
  if(ReadFields("state.tsv")){armed=Get("armed")=="1";enabledSymbols=Get("symbols");ownerPod=Get("ownerPod");resumePending=armed && ownerPod!="" && enabledSymbols!="";}
- if(ReadFields("manual-config.tsv") && Get("podId")==ownerPod && ((Get("version")=="MANUAL_TF2_EXIT_V2" && Val("tp1")==2 && Val("tp2")==4 && Val("tp3")==6 && Val("sl")==3) || (Get("version")=="MANUAL_TF2_EXIT_V3" && ValidManualDistances(Val("tp1"),Val("tp2"),Val("tp3"),Val("sl"))))){manualEnabled=Get("enabled")=="1";manualSince=(long)Val("since");manualTp1=Val("tp1");manualTp2=Val("tp2");manualTp3=Val("tp3");manualSl=Val("sl");}
+ if(ReadFields("manual-config.tsv") && Get("podId")==ownerPod && ((Get("version")=="MANUAL_TF2_EXIT_V2" && Val("tp1")==2 && Val("tp2")==4 && Val("tp3")==6 && Val("sl")==3) || (Get("version")=="MANUAL_TF2_EXIT_V3" && ValidManualDistances(Val("tp1"),Val("tp2"),Val("tp3"),Val("sl"))))){manualEnabled=Get("enabled")=="1";manualPairScope=ValidManualPairScope(Get("pairScope"))?Get("pairScope"):"XAUUSD";manualSince=(long)Val("since");manualTp1=Val("tp1");manualTp2=Val("tp2");manualTp3=Val("tp3");manualSl=Val("sl");}
  // A restored ARMED state cannot enter until this session receives a fresh owner lease.
  armed=false; // Wait for a fresh owner lease before restoring an earlier signed ON.
  return Heartbeat();
@@ -847,14 +858,14 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  if(!BindCurrentAccount())Print("ZenCore: WAIT_MT5_LOGIN_OR_CHANNEL. Login MT5 and use one EA per account.");
- else Print("ZenCore: EA_READY version=2.30 mode=",AccountMode());
+ else Print("ZenCore: EA_READY version=2.31 mode=",AccountMode());
  return INIT_SUCCEEDED;
 }
 void OnTick(){
  if(lockHandle!=INVALID_HANDLE && account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER)){ManageLocalStepLock();ManageManual();}
 }
 void OnTimer(){
- if(!BindCurrentAccount()){Comment("ZenCore 2.30 • menunggu login MT5 / channel tersedia");return;}
+ if(!BindCurrentAccount()){Comment("ZenCore 2.31 • menunggu login MT5 / channel tersedia");return;}
  TryResumeEntry();
  static ulong lastManagement=0,lastHeartbeat=0;
  ulong now=GetTickCount64();
@@ -864,6 +875,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
- Comment("ZenCore 2.30 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.31 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}

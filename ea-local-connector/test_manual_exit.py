@@ -17,6 +17,14 @@ class ManualExitTests(unittest.TestCase):
   self.assertEqual(result['manualVersion'],'MANUAL_TF2_EXIT_V3')
   for bad in ({'tp1':0},{'tp2':1},{'tp3':2.5},{'sl':-1},{'sl':float('inf')},{'sl':True},{'version':'MANUAL_TF2_EXIT_V2'}):
    with self.assertRaises(ValueError):self.fields('MANUAL_EXIT_CONFIG',{'manualExit':{**cfg,**bad}})
+ def test_manual_config_preserves_pair_scope_and_rejects_unknown_pairs(self):
+  cfg={'version':'MANUAL_TF2_EXIT_V2','enabled':True,'timeframeMinutes':2,'tp1':2,'tp2':4,'tp3':6,'sl':3,'maxActiveLayers':10,'limitAction':'WARN_ONLY'}
+  for scope in ('XAUUSD','BTCUSD','XAUUSD,BTCUSD'):
+   with self.subTest(scope=scope):
+    fields=self.fields('MANUAL_EXIT_CONFIG',{'manualExit':{**cfg,'pairScope':scope}})
+    self.assertEqual(fields['manualPairScope'],scope)
+  with self.assertRaises(ValueError):
+   self.fields('MANUAL_EXIT_CONFIG',{'manualExit':{**cfg,'pairScope':'EURUSD'}})
  def test_only_exact_manual_ticket_and_allowed_sop_close_actions_are_encoded(self):
   data={'symbol':'XAUUSD','side':'SELL','ticket':'555','positionId':'666','sourceAt':1791000000000,'actions':[{'type':'CLOSE_PERCENT','reason':'CLOSE_SEPARUH','percent':50}]}
   self.assertEqual(self.fields('MANUAL_EXIT_ACTION',data)['ticket'],'555')
