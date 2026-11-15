@@ -5,11 +5,12 @@
  const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
  const fmt=v=>Number.isFinite(v)?v.toFixed(2):'—';
  const clock=t=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit'}).format(t);
- function mount(host,tf){
-  let points=[],market=null,live=false,visible=80,hover=null,closed=false,loadFailed=false,loading=false;
+ function mount(host,tf,symbol='XAUUSD'){
+  let points=[],market=null,live=false,visible=80,hover=null,closed=false,loadFailed=false,request=0;
   const box=node('section',null,'zc-indicator-chart');box.setAttribute('aria-label','Chart indikator ZenCore TF'+tf);
   const top=node('div',null,'zc-chart-top'),heading=node('div'),badge=node('span','TUNGGU FEED','zc-chart-status');
-  heading.append(node('strong','ZENCORE CHART'),node('small','XAUUSD · TF'+tf+' · Data Pine'));
+  const subtitle=node('small',symbol+' · TF'+tf+' · Data Pine');
+  heading.append(node('strong','ZENCORE CHART'),subtitle);
   const controls=node('div',null,'zc-chart-controls');
   for(const [text,title,change] of [['−','Lihat lebih banyak candle',()=>{visible=Math.min(300,visible+20);}],['+','Besarkan candle',()=>{visible=Math.max(12,visible-20);}],['Reset','Reset zoom chart',()=>{visible=80;hover=null;}]]){
    const b=node('button',text);b.type='button';b.setAttribute('aria-label',title+' TF'+tf);b.onclick=()=>{change();draw();};controls.append(b);
@@ -18,7 +19,7 @@
   const legend=node('div',null,'zc-chart-legend');
   for(const [text,cls] of [['Candle Pine','candle'],['HEMA20','fast'],['HEMA40','slow'],['SOLID BUY / SELL','solid'],['Entry · SL · TP','plan']])legend.append(node('span',text,cls));
   const readout=node('div','O —  H —  L —  C —','zc-chart-ohlc'),stage=node('div',null,'zc-chart-stage'),canvas=node('canvas'),empty=node('div','Menunggu candle Pine TF'+tf+'. Tiada candle rekaan.','zc-chart-empty');
-  canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Candle XAUUSD TF'+tf+', ribbon HEMA dan paras pelan indikator');stage.append(canvas,empty);
+  canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Candle '+symbol+' TF'+tf+', ribbon HEMA dan paras pelan indikator');stage.append(canvas,empty);
   const note=node('p','Sejarah dikumpul sejak server bermula, maksimum 5 jam. Pelan indikator, bukan pengesahan order MT5.','zc-chart-note');
   box.append(top,legend,readout,stage,note);host.append(box);
   function draw(){
@@ -71,15 +72,32 @@
    readout.textContent=clock(chosen.time)+' MYT  ·  O '+fmt(chosen.open)+'  H '+fmt(chosen.high)+'  L '+fmt(chosen.low)+'  C '+fmt(chosen.close);
   }
   async function load(){
-   if(loading||closed)return;loading=true;
-   try{const r=await fetch('/api/analysis/chart?symbol=XAUUSD&tf='+tf,{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('CHART_UNAVAILABLE');const j=await r.json();if(!j.ok||j.symbol!=='XAUUSD'||String(j.timeframe)!==String(tf)||!Array.isArray(j.candles))throw Error('CHART_INVALID');points=Core.merge(points,j.candles,tf);loadFailed=false;}
-   catch(_){loadFailed=true;}finally{loading=false;draw();}
+   if(closed)return;
+   const id=++request,pair=symbol;
+   try{
+    const r=await fetch('/api/analysis/chart?symbol='+encodeURIComponent(pair)+'&tf='+tf,{credentials:'same-origin',cache:'no-store'});
+    if(!r.ok)throw Error('CHART_UNAVAILABLE');
+    const j=await r.json();
+    if(id!==request||closed)return;
+    if(!j.ok||j.symbol!==pair||String(j.timeframe)!==String(tf)||!Array.isArray(j.candles))throw Error('CHART_INVALID');
+    points=Core.merge(points,j.candles,tf);loadFailed=false;
+   }catch(_){if(id===request)loadFailed=true;}
+   finally{if(id===request)draw();}
   }
   canvas.addEventListener('pointermove',e=>{hover=e.clientX-canvas.getBoundingClientRect().left;draw();});canvas.addEventListener('pointerleave',()=>{hover=null;draw();});
   const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(draw):null;observer?.observe(stage);
   const refresh=setInterval(load,60000);load();
   window.addEventListener('pagehide',()=>{closed=true;clearInterval(refresh);observer?.disconnect();},{once:true});
-  return {update(m,isLive){market=m;live=isLive;const p=Core.point(m);if(p)points=Core.merge(points,p,tf);draw();},clear(){points=[];market=null;draw();load();},resize:draw};
+  return {
+   update(m,isLive){market=m?.symbol===symbol?m:null;live=!!market&&isLive;const p=Core.point(market);if(p)points=Core.merge(points,p,tf);draw();},
+   clear(pair=symbol){
+    symbol=pair;points=[];market=null;live=false;loadFailed=false;hover=null;
+    subtitle.textContent=symbol+' · TF'+tf+' · Data Pine';
+    canvas.setAttribute('aria-label','Candle '+symbol+' TF'+tf+', ribbon HEMA dan paras pelan indikator');
+    draw();load();
+   },
+   resize:draw
+  };
  }
  window.ZenCoreIndicatorChart={mount};
 })();

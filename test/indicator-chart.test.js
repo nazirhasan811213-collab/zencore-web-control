@@ -38,3 +38,13 @@ test('confirmed close survives newer intrabar snapshot and persists across histo
 test('legacy history without confirmed flag still accepts newer live chart OHLC',()=>{
  const old=Core.point(frame());delete old.confirmed;const next={...Core.point(frame()),confirmed:false,observedAt:old.observedAt+1,open:4101,close:4103};const merged=Core.merge([old],next,'2',now);assert.equal(merged[0].close,4103);assert.equal(merged[0].open,4101);
 });
+
+test('Gold and Bitcoin history stay separate for the same candle time in both timeframes',()=>{
+ const history=new ChartHistory();
+ for(const tf of ['2','15']){
+  history.observe(frame(tf),now);
+  history.observe({...frame(tf),symbol:'BTCUSD',open:63710,high:63800,low:63600,close:63750},now);
+  assert.equal(history.snapshot(tf,now,'XAUUSD').candles[0].close,4102);
+  assert.equal(history.snapshot(tf,now,'BTCUSD').candles[0].close,63750);
+ }
+});

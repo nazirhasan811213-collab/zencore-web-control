@@ -1968,8 +1968,8 @@ const server = http.createServer(async (req, res) => {
   if(req.method==='GET' && pathname==='/api/analysis/chart'){
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=url.searchParams.get('symbol')||'XAUUSD',tf=url.searchParams.get('tf');
-    if(symbol!=='XAUUSD'||!['2','15'].includes(tf))return sendJson(res,400,{ok:false,error:'Chart TF2/TF15 XAUUSD sahaja.'});
-    return sendJson(res,200,require('./indicator-chart-history').history.snapshot(tf));
+    if(!require('./analysis-dual-model').SYMBOLS.includes(symbol)||!['2','15'].includes(tf))return sendJson(res,400,{ok:false,error:'Pair atau timeframe carta tidak disokong.'});
+    return sendJson(res,200,require('./indicator-chart-history').history.snapshot(tf,Date.now(),symbol));
   }
 
   if(req.method==='GET' && pathname==='/api/analysis/timeframes/events'){
