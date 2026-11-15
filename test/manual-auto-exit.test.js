@@ -6,7 +6,7 @@ const at=1790000000000,userId='11111111-1111-4111-8111-111111111111';
 const cfg={version:'MANUAL_TF2_EXIT_V2',enabled:true,timeframeMinutes:2,tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:"WARN_ONLY"};
 const settings={capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],riskAcknowledged:true,manualExit:cfg};
 async function setup(capability=true, clock=()=>at){
- const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-that-is-longer-than-thirty-two-bytes',allowDemoExecution:true,allowedDemoOwnershipModes:['TRADER_OWNED_EA_LOCAL'],now:clock});
+ const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-that-is-longer-than-thirty-two-bytes',allowDemoExecution:true,allowMt5Symbols:true,allowedDemoOwnershipModes:['TRADER_OWNED_EA_LOCAL'],now:clock});
  const {podToken}=await service.connectLocalEa(userId);
  await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',manualExitVersion:capability==='step'?'MANUAL_STEPLOCK_V4':capability==='custom'?'MANUAL_TF2_EXIT_V3':capability?'MANUAL_TF2_EXIT_V2':null,manualExitCustomSupported:['custom','step'].includes(capability),positions:[]});
  return {store,service,podToken};
@@ -20,9 +20,12 @@ test('manual distances accept custom values and use defaults per blank field',()
  assert.deepEqual(Core.validateSettings({...settings,manualExit:{enabled:true,tp1:'',tp2:null,tp3:undefined,sl:' '}}).value.manualExit,cfg);
  for(const bad of [{tp1:0},{sl:-1},{sl:Infinity},{sl:'abc'},{sl:true},{tp1:4},{tp2:7},{tp3:4}])assert.equal(Core.validateSettings({...settings,manualExit:{...cfg,...bad}}).ok,false);
 });
-test('custom configuration requires both upgraded Connector and EA; legacy defaults still work',async()=>{
+test('custom configuration is saved for legacy EA and delivered to compatible EA',async()=>{
  const custom={...settings,manualExit:{...cfg,tp1:1.5,sl:4}};
- const old=await setup();await assert.rejects(old.service.saveSettings(userId,custom),e=>e.code==='MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED');
+ const old=await setup();const pending=await old.service.saveSettings(userId,custom);
+ assert.equal(pending.manualExitSync.status,'WAITING_EA');
+ assert.equal(pending.settings.manualExit.sl,4);
+ assert.equal((await old.service.nextCommand(old.podToken)).command,null);
  const fresh=await setup('custom');const state=await fresh.service.saveSettings(userId,custom);
  assert.equal(state.settings.manualExit.sl,4);assert.equal(state.control.desiredState,'STOPPED');
  const {command}=await fresh.service.nextCommand(fresh.podToken);assert.deepEqual(command.payload.manualExit,{...cfg,version:'MANUAL_TF2_EXIT_V3',tp1:1.5,sl:4});
@@ -50,9 +53,19 @@ test('saving manual exit while entry STOPPED issues only a signed exit config, n
  assert.ok(command.signature);assert.ok(command.signedEnvelope);
  assert.equal([...store.commands.values()].flat().some(c=>c.type==='SYSTEM_ON'||c.type==='PLACE_SETUP'),false);
 });
-test('old EA cannot opt into manual takeover',async()=>{
- const {service}=await setup(false);
- await assert.rejects(service.saveSettings(userId,settings),e=>e.code==='MANUAL_EXIT_EA_UPGRADE_REQUIRED');
+test('main settings save retains both trading pairs while manual exit waits for compatible heartbeat',async()=>{
+ const {service,podToken}=await setup(false);
+ const state=await service.saveSettings(userId,{...settings,symbols:['XAUUSD','BTCUSD'],manualExit:{...cfg,pairScope:'XAUUSD,BTCUSD'}});
+ assert.deepEqual(state.settings.symbols,['XAUUSD','BTCUSD']);
+ assert.equal(state.settings.manualExit.pairScope,'XAUUSD,BTCUSD');
+ assert.equal(state.manualExitSync.status,'WAITING_EA');
+ assert.equal(state.control.desiredState,'STOPPED');
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
+  connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64),manualExitVersion:'MANUAL_PAIR_STEPLOCK_V5',manualExitCustomSupported:true,positions:[]});
+ const {command}=await service.nextCommand(podToken);
+ assert.equal(command.type,'MANUAL_EXIT_CONFIG');
+ assert.equal(command.payload.manualExit.pairScope,'XAUUSD,BTCUSD');
 });
 test('manual control acknowledgement cannot enable automatic entry',async()=>{
  const {service,podToken}=await setup();await service.saveSettings(userId,settings);
