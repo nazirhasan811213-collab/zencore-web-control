@@ -13,9 +13,9 @@ function closedRows(candles,now,tf){
  }
  return [...map.values()].sort((a,b)=>a.time-b.time).slice(tf==='2'?-15:-12);
 }
-function nearbyLevels(rows,price,atr,tf){
+function nearbyLevels(rows,price,atr,tf,symbol='XAUUSD'){
  if(rows.length<3||!finite(price)||!finite(atr)||atr<=0)return {supports:[],resistances:[]};
- const cap=tf==='2'?Math.min(atr*2,3.5):atr*3,levels=[];
+ const cap=tf==='2'?symbol==='BTCUSD'?atr*2:Math.min(atr*2,3.5):atr*3,levels=[];
  for(let i=1;i<rows.length-1;i++){
   const c=rows[i];
   if(c.high>rows[i-1].high&&c.high>=rows[i+1].high)levels.push(c.high);
@@ -31,7 +31,7 @@ function nearbyLevels(rows,price,atr,tf){
 }
 function assess(m,candles,now,tf){
  const observed=m?.signalObservedAt,age=now-observed,rows=closedRows(candles,now,tf),last=rows.at(-1),period=Number(tf)*MINUTE;
- if(!m||m.symbol!=='XAUUSD'||String(m.timeframe)!==tf||!finite(observed)||age< -5000||age>90000||
+ if(!m||!['XAUUSD','BTCUSD'].includes(m.symbol)||String(m.timeframe)!==tf||!finite(observed)||age< -5000||age>90000||
    !last||now-(last.time+period)>period+60000)return {fresh:false};
  const {hema20:fast,hema40:slow,waveTrend1:wt1,waveTrend2:wt2,atr}=last;
  if(![fast,slow,wt1,wt2,atr,m.price].every(finite)||atr<=0||m.price<=0)return {fresh:false};
@@ -46,7 +46,7 @@ function assess(m,candles,now,tf){
  const opposite=sign===0||sign*(wt1-wt2)<=0;
  if(opposite)reasons.push('Momentum belum searah HEMA.');
  const prev=rows.at(-2),momentum=prev&&[prev.waveTrend1,prev.waveTrend2].every(finite)?(Math.abs(wt1-wt2)>Math.abs(prev.waveTrend1-prev.waveTrend2)?'menguat':Math.abs(wt1-wt2)<Math.abs(prev.waveTrend1-prev.waveTrend2)?'melemah':'stabil'):'belum cukup bukti';
- const levels=nearbyLevels(rows,m.price,atr,tf),limited=rows.length<3;
+ const levels=nearbyLevels(rows,m.price,atr,tf,m.symbol),limited=rows.length<3;
  const n=m.strategyNormal,p=n?.plan,late=!!(n?.solid&&p&&((n.side==='BUY'&&m.price>=p.tp1)||(n.side==='SELL'&&m.price<=p.tp1)));
  const near=sign===1?levels.resistances[0]:levels.supports[0],nearBarrier=finite(near)&&Math.abs(near-m.price)<=atr*.35;
  const slope=prev&&finite(prev.hema20)&&finite(prev.hema40)?sign*(fast-prev.hema20)+sign*(slow-prev.hema40):0;
@@ -54,10 +54,10 @@ function assess(m,candles,now,tf){
  return {fresh:true,outlook,side,sign,highRisk:reasons.length>=2,limited,reasons,aligned:!opposite,momentum,levels,atr,late,nearBarrier,closedAt:last.time+period};
 }
 const price=v=>v.toFixed(2);
-function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVALS[tf]){
+function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVALS[tf],symbol=m?.symbol||'XAUUSD'){
  const a=assess(m,candles,now,tf),end=slot+INTERVALS[tf];
  const date=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(slot));
- const lines=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`${date} • XAUUSD`,`🕙 ${clock(slot)}–${clock(end)} MYT`,a.fresh?`Data ${clock(m.signalObservedAt)} MYT • Candle tutup ${clock(a.closedAt)} MYT`:'Data belum segar / candle tutup belum cukup',''];
+ const lines=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`${date} • ${symbol}`,`🕙 ${clock(slot)}–${clock(end)} MYT`,a.fresh?`Data ${clock(m.signalObservedAt)} MYT • Candle tutup ${clock(a.closedAt)} MYT`:'Data belum segar / candle tutup belum cukup',''];
  if(!a.fresh)lines.push('🔴 DATA BELUM CUKUP / TIDAK SEGAR','ELAK ENTRY BAHARU berdasarkan report ini.','','🛡️ PANDUAN ZENCORE','Tunggu data candle tutup yang sah. Jika pegang posisi, semak SL dan sambungan MT5.');
  else{
   const avoid=a.highRisk||a.limited||a.sign===0||!a.levels.supports.length||!a.levels.resistances.length;
@@ -88,7 +88,7 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
  }
  const dashboardContext=a.fresh?require('./telegram-dashboard-context').snapshot(m,tf):null;
  lines.push(...require('./telegram-dashboard-context').lines(dashboardContext,tf));
- const compact=[`📊 ZENCORE • TF${tf} • ${tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM'}`,`XAUUSD • ${date} • ${clock(slot)}–${clock(end)} MYT`];
+ const compact=[`📊 ZENCORE • TF${tf} • ${tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM'}`,`${symbol} • ${date} • ${clock(slot)}–${clock(end)} MYT`];
  if(!a.fresh)compact.push('Data belum cukup. Tunggu data sah.','Jika pegang posisi: semak SL dan sambungan MT5.','Panduan ZenCore — Jangan entry berdasarkan laporan ini.');
  else{
   const support=a.levels.supports[0],resistance=a.levels.resistances[0],last=closedRows(candles,now,tf).at(-1);
@@ -112,19 +112,20 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
  }
 
  compact.push(...require('./telegram-dashboard-context').compactLines(dashboardContext,tf));
- return {kind:'GUIDE',symbol:'XAUUSD',timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${tf}|${slot}`,guideCompactText:compact.flatMap((line,i)=>i<2||!line?[line]:/^(📊|•|Data:|Panduan sahaja)/.test(line)?[line]:/^(Harga:|Support:|Pegang BUY:|Panduan ZenCore)/.test(line)?['','• '+line]:['• '+line]).join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
+ return {kind:'GUIDE',symbol,timeframe:tf,time:now,guideSlot:slot,guideValidUntil:end,notificationKey:`ZENCORE_GUIDE_V1|${symbol==='XAUUSD'?'':symbol+'|'}${tf}|${slot}`,guideCompactText:compact.flatMap((line,i)=>i<2||!line?[line]:/^(📊|•|Data:|Panduan sahaja)/.test(line)?[line]:/^(Harga:|Support:|Pegang BUY:|Panduan ZenCore)/.test(line)?['','• '+line]:['• '+line]).join('\n'),guideText:lines.join('\n')+'\n\nPanduan market sahaja • entry mesti ikut signal SOP yang sah.',guideFresh:a.fresh};
 }
 function createScheduler({getMarkets,history,record,now=Date.now}){
  let running=false;const done=new Set();
  async function tick(){if(running)return;running=true;try{
-  const at=now(),due=Object.keys(INTERVALS).map(tf=>({tf,slot:Math.floor(at/INTERVALS[tf])*INTERVALS[tf]})).filter(x=>at-x.slot<=120000&&!done.has(x.tf+'|'+x.slot));
+  const at=now(),due=Object.keys(INTERVALS).map(tf=>({tf,slot:Math.floor(at/INTERVALS[tf])*INTERVALS[tf]})).flatMap(x=>['XAUUSD','BTCUSD'].map(symbol=>({...x,symbol,key:symbol+'|'+x.tf+'|'+x.slot}))).filter(x=>at-x.slot<=120000&&!done.has(x.key));
   if(!due.length)return;
   let markets=[];try{markets=await getMarkets();}catch{}
-  for(const {tf,slot} of due){const rows=(markets||[]).filter(m=>m.symbol==='XAUUSD'&&String(m.timeframe)===tf).sort((a,b)=>(b.signalObservedAt||0)-(a.signalObservedAt||0));
-   const guide=buildGuide(tf,rows[0],history(tf,at),at,slot);
+  for(const {tf,slot,symbol,key} of due){const rows=(markets||[]).filter(m=>m.symbol===symbol&&String(m.timeframe)===tf).sort((a,b)=>(b.signalObservedAt||0)-(a.signalObservedAt||0));
+   if(symbol==='BTCUSD'&&!rows.length)continue;
+   const guide=buildGuide(tf,rows[0],history(tf,at,symbol),at,slot,symbol);
    // Wait through the slot grace window for valid close snapshots; do not lock in an empty report.
    if(!guide.guideFresh&&at-slot<105000)continue;
-   if(await record(guide)!==false)done.add(tf+'|'+slot);
+   if(await record(guide)!==false)done.add(key);
   }
   if(done.size>20){const keys=[...done];keys.slice(0,-10).forEach(k=>done.delete(k));}
  }finally{running=false;}}
