@@ -450,7 +450,7 @@ function createAutoTradeService(options = {}) {
         canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
-      manualExitSync:(()=>{const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
+      manualExitSync:(()=>{if(profile?.manualExit?.enabled&&!supportsManualExit(pod,profile.manualExit))return {status:'WAITING_EA',code:null};const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
         ownershipMode: pod.ownershipMode,
@@ -892,22 +892,28 @@ function createAutoTradeService(options = {}) {
     if(c?.payload?.masterResetVersion==='MASTER_RESET_FORCE_V2'||(c && ((['PENDING','DELIVERED'].includes(c.status)&&c.expiresAt>now())||(c.status==='EXECUTED'&&['MASTER_RESET_READY','MASTER_RESET_FORCE_READY'].includes(c.result?.code)))))
       throw serviceError('MASTER_RESET_PENDING','Master Reset sedang berjalan. Tunggu admin menyelesaikan reset.',409);
   }
+  function supportsManualExit(pod, config) {
+    if(!isLocalEa(pod))return false;
+    return ['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(pod.manualExitVersion) ||
+      (pod.manualExitVersion==='MANUAL_TF2_EXIT_V2' && (!config?.enabled||config.version!=='MANUAL_TF2_EXIT_V3'));
+  }
+  async function queueManualExit(userId,pod,config) {
+    const manualExit=config.enabled?config:Core.validateSettings({manualExit:{enabled:false}}).value.manualExit;
+    return issueCommand({userId,podId:pod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit}});
+  }
   async function saveManualExit(userId, input = {}) {
     await requireNoMasterReset(userId);
     if(Core.containsForbiddenCredentialKey(input))throw serviceError('CREDENTIAL_REJECTED','Credential tidak dibenarkan.',400);
     if(typeof input.enabled!=='boolean')throw serviceError('VALIDATION_ERROR','Pilih ON atau OFF Auto Exit.',400);
-    const pod=await store.getPodForUser(userId),previous=await store.getProfile(userId);
-    if(!isLocalEa(pod)||!['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(pod?.manualExitVersion))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Pasang EA yang menyokong Auto Exit manual.',409);
     const validation=Core.validateSettings({manualExit:input});
     const errors=Object.fromEntries(Object.entries(validation.errors).filter(([key])=>key.startsWith('manualExit.')));
     if(Object.keys(errors).length)throw serviceError('VALIDATION_ERROR',Object.values(errors)[0],400,errors);
     const config=validation.value.manualExit;
-    if(config.enabled&&config.version==='MANUAL_TF2_EXIT_V3'&&!['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes(pod.manualExitVersion))throw serviceError('MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED','TP/SL tersuai memerlukan EA dan Connector terkini.',409);
-    if(!previous)throw serviceError('SETTINGS_REQUIRED','Simpan konfigurasi awal dahulu.',409);
     // Preserve entry controls and presets; a manual toggle must never arm auto entry.
-    await store.saveSettings(userId,{...previous,manualExit:config});
+    await store.saveManualExit(userId,config);
     await store.appendAudit(userId,'MANUAL_EXIT_SETTINGS_SAVED',{manualExit:config});
-    await issueCommand({userId,podId:pod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:config.enabled?config:Core.validateSettings({manualExit:{enabled:false}}).value.manualExit}});
+    const pod=await store.getPodForUser(userId);
+    if(supportsManualExit(pod,config))await queueManualExit(userId,pod,config);
     return state(userId);
   }
 
@@ -1218,6 +1224,14 @@ function createAutoTradeService(options = {}) {
     }
     const profile=await store.getProfile(pod.userId);
     const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
+    const config=profile?.manualExit;
+    if(config&&accountAccessAllowed&&!supportsManualExit(pod,config)&&supportsManualExit(updated,config)&&
+       (config.enabled||updated.manualExitEnabled)){
+      try{
+        await requireNoMasterReset(pod.userId);
+        await queueManualExit(pod.userId,updated,config);
+      }catch(error){if(error.code!=='MASTER_RESET_PENDING')throw error;}
+    }
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
     if(accountAccessAllowed&&isLocalEa(updated)&&input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&typeof options.onConfirmedPositions==='function'){
       try{await options.onConfirmedPositions({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});}
@@ -1264,12 +1278,12 @@ function createAutoTradeService(options = {}) {
     }
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
-      if(queued.enabled && queued.version==='MANUAL_TF2_EXIT_V3' && !['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4'].includes((await store.getPodForUser(command.userId))?.manualExitVersion))return false;
+      if(queued.enabled && !supportsManualExit(await store.getPodForUser(command.userId),queued))return false;
       return queued.enabled===current.enabled&&(!current.enabled||['tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
-      if((await store.getPodForUser(command.userId))?.manualExitVersion==='MANUAL_STEPLOCK_V4')return false;
-      if((await store.getProfile(command.userId))?.manualExit?.enabled!==true)return false;
+      const [manualPod,profile]=await Promise.all([store.getPodForUser(command.userId),store.getProfile(command.userId)]);
+      if(manualPod?.manualExitVersion==='MANUAL_STEPLOCK_V4'||profile?.manualExit?.enabled!==true||!supportsManualExit(manualPod,profile.manualExit))return false;
       const p=command.payload||{},positions=await store.listPositions(command.userId);
       if(now()-p.sourceAt>30000||p.sourceAt>now()+5000||!positions.some(x=>x.origin==='MANUAL'&&x.ticket===p.ticket&&x.positionId===p.positionId&&x.side===p.side))return false;
       if(typeof options.getLatestMarket==='function'){
@@ -1701,7 +1715,7 @@ function createAutoTradeService(options = {}) {
         const manualManagement=rebased.rebased?Core.buildManagementCommand(market):management;
         if (!management&&!manualManagement) continue;
         const sourceAt=Number(market.signalObservedAt||market.receivedAt);
-        if(profile.manualExit?.enabled===true&&!hostedAccount&&['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion)&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
+        if(profile.manualExit?.enabled===true&&!hostedAccount&&supportsManualExit(pod,profile.manualExit)&&['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3'].includes(pod?.manualExitVersion)&&mode==='TF2_SCALPING'&&now()-sourceAt<=30000&&sourceAt<=now()+5000){
           const side=market.strategyNormal?.side;
           const actions=(manualManagement?.payload.actions||[]).filter(a=>a.type==='CLOSE_PERCENT'&&(a.reason==='CLOSE_SEPARUH'||(a.reason==='EXIT_REMAINING'&&market.positionManagement?.oppositeYellow===true)));
           for(const position of positions.filter(p=>p.origin==='MANUAL'&&p.symbol===symbol&&p.side===side&&sourceAt>=p.openedAt)){

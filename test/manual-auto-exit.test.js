@@ -133,3 +133,32 @@ test('manual step lock accepts custom presets but never dispatches Pine close in
  for(const action of ['CLOSE_50_NOW','EXIT_REMAINING','EXIT_ALL','EXIT_SL'])await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action,oppositeYellow:true}}]);
  assert.equal([...store.commands.values()].flat().filter(c=>['MANUAL_EXIT_ACTION','MANAGE_POSITION','PLACE_SETUP'].includes(c.type)).length,0);
 });
+
+test('manual checkbox saves before capability and syncs when the EA reports step lock',async()=>{
+ const {service,podToken,store}=await setup(false);
+ const saved=await service.saveManualExit(userId,{enabled:true,tp1:1.5,tp2:2.5,tp3:3.5,sl:4});
+ assert.equal(saved.manualExitSync.status,'WAITING_EA');
+ assert.equal(saved.settings.manualExit.sl,4);
+ assert.equal(saved.control.desiredState,'STOPPED');
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ const report={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
+  connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64),manualExitVersion:'MANUAL_STEPLOCK_V4',manualExitCustomSupported:true,positions:[]};
+ await service.heartbeat(podToken,report);
+ await service.heartbeat(podToken,report);
+ const {command}=await service.nextCommand(podToken);
+ assert.equal(command.type,'MANUAL_EXIT_CONFIG');
+ assert.equal(command.payload.manualExit.sl,4);
+ assert.equal([...store.commands.values()].flat().length,1);
+ await service.acknowledgeCommand(podToken,command.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
+ assert.equal((await service.state(userId)).manualExitSync.status,'EXECUTED');
+});
+
+test('switching manual exit off before EA capability cancels deferred enable',async()=>{
+ const {service,podToken}=await setup(false);
+ await service.saveManualExit(userId,{enabled:true});
+ await service.saveManualExit(userId,{enabled:false});
+ await service.heartbeat(podToken,{accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',
+  tradeMode:'DEMO',connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64),manualExitVersion:'MANUAL_STEPLOCK_V4',manualExitCustomSupported:true,positions:[]});
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ assert.equal((await service.state(userId)).settings.manualExit.enabled,false);
+});
