@@ -173,3 +173,25 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
 .compact-market-row > summary::after { grid-row: 1; grid-column: 3; }
 .compact-market-metrics { grid-column: 1 / -1; color: #a9bed9; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; margin-top: -5px; }
 .compact-market-metrics:empty { display: none; }
+
+.dashboard-setup-strength {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 8px 0;
+  padding: 6px 12px;
+  border: 1px solid #30405a;
+  border-radius: 8px;
+  background: #0c1728;
+  color: #b7c9e2;
+}
+.dashboard-setup-strength > span { font-size: 13px; font-weight: 650; }
+.dashboard-setup-strength small { margin-left: 4px; font-size: 11px; font-weight: 500; }
+.dashboard-setup-strength > strong {
+  font-size: clamp(32px, 4vw, 48px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.dashboard-setup-strength.has-score { border-color: var(--pair-accent); }
+.dashboard-setup-strength.has-score > strong { color: var(--pair-accent); }
