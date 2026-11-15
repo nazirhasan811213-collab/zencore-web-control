@@ -5,7 +5,6 @@
  const Live=window.ZenCoreDashboardLive,activity=[],activityState=new Map(),cardsBySymbol=new Map();
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:symbol==='XAUUSD'?3:2});
- const tfName=tf=>tf===2?'SCALPING':'INTRADAY';
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
  function fresh(v){return !failed&&Live.fresh(v);}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
@@ -32,6 +31,26 @@
   fields.timeframe.onchange=render;
   cardsBySymbol.set(symbol,{fields,tape:Live.createTape()});
   $('pairCards').append(card);
+ }
+ const marketRows=new Map();
+ for(const symbol of symbols)for(const timeframe of [2,15]){
+  const row=el('details',undefined,'compact-market-row'),summary=el('summary');
+  const pair=el('span',symbol,'compact-market-pair');
+  pair.append(el('small','TF'+timeframe));
+  const status=el('span',undefined,'compact-market-state');
+  summary.append(pair,status);
+  const body=el('div',undefined,'compact-market-body');
+  const message=el('p','Butiran tersedia apabila data Pine segar.');
+  const readings=el('dl',undefined,'compact-market-readings');
+  const values=['Keadaan market','Momentum','Support','Resistance','Panduan ZenCore'].map(label=>{
+   const item=el('div'),value=el('dd');
+   item.append(el('dt',label),value);readings.append(item);return value;
+  });
+  const analysis=el('a','Analisis penuh →');
+  analysis.href=link(symbol,timeframe);
+  body.append(message,readings,analysis);row.append(summary,body);
+  $('marketGrid').append(row);
+  marketRows.set(symbol+'|'+timeframe,{row,status,message,readings,values});
  }
  const dashboardCharts=new Map();
  for(const tf of [2,15]){
@@ -90,7 +109,7 @@
   }
  }
  function render(){
-  renderLive();const all=views(),visible=all.filter(v=>filter==='both'||String(v.timeframe)===filter);
+  renderLive();const all=views();
   const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'TUNGGU DATA';
   for(const [symbol,{fields}] of cardsBySymbol){
    const tf=Number(fields.timeframe.value),v=all.find(v=>v.symbol===symbol&&v.timeframe===tf);
@@ -106,18 +125,27 @@
     :assessment?.reason||'';
    fields.analysis.href=link(symbol,tf);
   }
-  const cards=[];
-  for(const symbol of symbols){const card=el('article',undefined,'market-card');const head=el('div',undefined,'market-head');head.append(el('b',symbol),el('small',symbol==='XAUUSD'?'GOLD':'BITCOIN'));card.append(head);
-   card.classList.toggle('single',visible.filter(v=>v.symbol===symbol).length===1);for(const v of visible.filter(v=>v.symbol===symbol)){const m=v.market||{},n=m.strategyNormal||{},row=el('div',undefined,'market-view'),top=el('div');top.append(el('span','TF'+v.timeframe+' · '+tfName(v.timeframe),'tf-label'));row.append(top);
-    const advisor=n.sop?.advisor||{},levels=v.nearbyLevels||{},current=fresh(v),known=value=>current&&typeof value==='string'&&value.trim()?value:'—';
-    const readings=[['Arah market',current&&['BUY','SELL'].includes(n.side)?n.side:'—'],['Keadaan market',known(m.marketStructure||advisor.trend||advisor.dashboard?.structure)],['Momentum',known(m.momentum||advisor.momentum)],['Support terdekat',format(current?(m.nearestSupport??levels.supports?.[0]):null,symbol)],['Resistance terdekat',format(current?(m.nearestResistance??levels.resistances?.[0]):null,symbol)],['Panduan ZenCore',known(m.proTip||advisor.proTip)]];
-    const list=el('dl',undefined,'market-summary');for(const [label,value] of readings){const item=el('div');item.append(el('dt',label),el('dd',value));list.append(item);}row.append(list);
-    const a=el('a','Lihat Analysis TF'+v.timeframe+' ↗');a.href=link(symbol,v.timeframe);row.append(a);card.append(row);
-   }cards.push(card);
-  }$('marketGrid').replaceChildren(...cards);
+  for(const view of all){
+   const {symbol,timeframe}=view;
+   const {row,status,message,readings,values}=marketRows.get(symbol+'|'+timeframe);
+   row.hidden=filter!=='both'&&String(timeframe)!==filter;
+   const m=view.market,n=m?.strategyNormal,advisor=n?.sop?.advisor||{},levels=view.nearbyLevels||{};
+   const current=fresh(view)&&m?.symbol===symbol;
+   const side=current&&['BUY','SELL'].includes(n?.side)?n.side:null;
+   status.textContent=side||(current?'Tunggu setup':'Tiada data segar');
+   status.className='compact-market-state '+(side==='BUY'?'buy':side==='SELL'?'sell':'');
+   message.hidden=current;
+   readings.hidden=!current;
+   if(current){
+    const data=[m.marketStructure||advisor.trend||advisor.dashboard?.structure,m.momentum||advisor.momentum,
+     format(m.nearestSupport??levels.supports?.[0],symbol),format(m.nearestResistance??levels.resistances?.[0],symbol),
+     m.proTip||advisor.proTip];
+    values.forEach((value,index)=>{value.textContent=typeof data[index]==='string'&&data[index].trim()?data[index]:'—';});
+   }
+  }
  }
  for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};
- async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Data TF2 & TF15 berasingan · Kemaskini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Data tak masuk. Tengah cuba connect balik…';}render();if(!stopped)setTimeout(poll,2000);}
+ async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Dikemas kini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Sambungan feed terganggu. Cuba menyambung semula…';}render();if(!stopped)setTimeout(poll,2000);}
  function renderAccount(a){
   const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
   set('overviewAccount',v.account);set('overviewServer',v.server);set('overviewPositions',v.count??'—');
