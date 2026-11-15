@@ -130,8 +130,12 @@
    fields.state.className='dashboard-pair-state '+tone(v);
    for(const key of ['entry','sl','tp1','tp2','tp3'])fields[key].textContent=format(plan?.[key],symbol);
    const range=assessment?.range;
-   fields.strength.textContent=assessment?.status==='AVAILABLE'
-    ?'Kekuatan setup '+assessment.overall+'%'+(range?' · Julat '+format(range.low,symbol)+'–'+format(range.high,symbol):'')
+   const scored=assessment?.status==='AVAILABLE'&&Number.isFinite(assessment.overall);
+   fields.strengthTf.textContent='TF'+tf;
+   fields.strengthScore.textContent=scored?assessment.overall+'%':'—';
+   fields.strengthPanel.classList.toggle('has-score',scored);
+   fields.strength.textContent=scored
+    ?range?'Julat '+format(range.low,symbol)+'–'+format(range.high,symbol):''
     :assessment?.reason||'';
    fields.analysis.href=link(symbol,tf);
   }
