@@ -390,6 +390,14 @@ class PostgresAutoTradeStore {
     return publicProfile(result.rows[0]);
   }
 
+  async saveManualExit(userId, config) {
+    await this.pool.query(`INSERT INTO zencore_autotrade_profiles (user_id,execution_settings)
+      VALUES ($1,jsonb_build_object('manualExit',$2::jsonb))
+      ON CONFLICT (user_id) DO UPDATE SET
+        execution_settings=jsonb_set(COALESCE(zencore_autotrade_profiles.execution_settings,'{}'::jsonb),'{manualExit}',$2::jsonb),
+        state_version=zencore_autotrade_profiles.state_version+1,updated_at=NOW()`,[userId,JSON.stringify(config)]);
+  }
+
   async saveSettings(userId, settings) {
     const result = await this.pool.query(
       `INSERT INTO zencore_autotrade_profiles
@@ -1558,6 +1566,10 @@ class MemoryAutoTradeStore {
   async init() {}
 
   async getProfile(userId) { return publicProfile(this.profiles.get(userId)); }
+
+  async saveManualExit(userId, config) {
+    await this.saveSettings(userId,{manualExit:config});
+  }
 
   async saveSettings(userId, settings) {
     const current = this.profiles.get(userId) || {

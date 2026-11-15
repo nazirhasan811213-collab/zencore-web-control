@@ -233,6 +233,7 @@
     setText('manualLayerStatus',state.connection?.online===false?'Layer aktif: data MT5 offline':`Layer aktif: ${manualCount} / 10${manualCount>=10?' • HAD DICAPAI — berhenti tambah entry':''}${manualCount>10?' • layer tambahan tetap dilindungi':''}`);
     setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.settings?.manualExit?.enabled?(state.pod?.manualExitEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN'):(state.pod?.manualExitEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal'));
     const sync=state.manualExitSync;
+    if(sync?.status==='WAITING_EA')setText('manualExitStatus','TETAPAN DISIMPAN • MENUNGGU EA SERASI');
     if(sync&&['PENDING','DELIVERED'].includes(sync.status))setText('manualExitStatus','TETAPAN MENUNGGU PENGESAHAN EA');
     if(sync&&['REJECTED','FAILED','EXPIRED'].includes(sync.status))setText('manualExitStatus','TETAPAN GAGAL: '+(sync.code||sync.status));
     if(state.connection?.online!==false&&state.settings?.manualExit?.enabled&&state.pod?.manualExitEnabled&&state.pod?.manualExitVersion!=='MANUAL_STEPLOCK_V4')setText('manualExitStatus','EA LAMA • KEMAS KINI EA 2.26 UNTUK STEP LOCK MANUAL');
@@ -682,7 +683,9 @@
       for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=state.settings.manualExit[k];
       checkbox.checked=state.settings.manualExit.enabled;
       render(state);
-      setText('manualExitSaveStatus','Tetapan tersimpan. Tunggu pengesahan EA. TP/SL baharu untuk posisi baharu.');
+      setText('manualExitSaveStatus',state.manualExitSync?.status==='WAITING_EA'
+        ?'Tetapan tersimpan. Sambungkan EA dan Connector yang menyokong Auto Exit manual.'
+        :'Tetapan tersimpan. Tunggu pengesahan EA. TP/SL baharu untuk posisi baharu.');
     } catch(error) {
       checkbox.checked=currentState?.settings?.manualExit?.enabled===true;
       setText('manualExitError',error.message);
