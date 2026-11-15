@@ -167,3 +167,9 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
   .compact-market .section-heading { align-items: stretch; }
   .compact-market .tf-switch button { min-height: 44px; font-size: 12px !important; }
 }
+
+.dashboard-chart-pair { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.dashboard-chart-pair select { min-height: 44px; padding: 6px 10px; font-size: 13px; }
+.compact-market-row > summary::after { grid-row: 1; grid-column: 3; }
+.compact-market-metrics { grid-column: 1 / -1; color: #a9bed9; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; margin-top: -5px; }
+.compact-market-metrics:empty { display: none; }

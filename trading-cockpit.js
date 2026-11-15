@@ -38,11 +38,12 @@
   const pair=el('span',symbol,'compact-market-pair');
   pair.append(el('small','TF'+timeframe));
   const status=el('span',undefined,'compact-market-state');
-  summary.append(pair,status);
+  const metrics=el('span',undefined,'compact-market-metrics');
+  summary.append(pair,status,metrics);
   const body=el('div',undefined,'compact-market-body');
   const message=el('p','Butiran tersedia apabila data Pine segar.');
   const readings=el('dl',undefined,'compact-market-readings');
-  const values=['Keadaan market','Momentum','Support','Resistance','Panduan ZenCore'].map(label=>{
+  const values=['Keadaan market','Panduan ZenCore'].map(label=>{
    const item=el('div'),value=el('dd');
    item.append(el('dt',label),value);readings.append(item);return value;
   });
@@ -50,17 +51,26 @@
   analysis.href=link(symbol,timeframe);
   body.append(message,readings,analysis);row.append(summary,body);
   $('marketGrid').append(row);
-  marketRows.set(symbol+'|'+timeframe,{row,status,message,readings,values});
+  marketRows.set(symbol+'|'+timeframe,{row,status,metrics,message,readings,values});
  }
  const dashboardCharts=new Map();
- for(const tf of [2,15]){
-  const host=$('dashboardChart'+tf);if(host)dashboardCharts.set(tf,window.ZenCoreIndicatorChart?.mount(host,tf));
+ let chartTf=2;
+ function selectChart(){
+  const symbol=$('chartPair').value;
+  for(const pair of symbols)for(const tf of [2,15]){
+   const host=$(pair==='XAUUSD'?'dashboardChart'+tf:'dashboardBitcoinChart'+tf);
+   const key=pair+'|'+tf;
+   host.hidden=pair!==symbol||tf!==chartTf;
+   if(pair===symbol&&!dashboardCharts.has(key))dashboardCharts.set(key,window.ZenCoreIndicatorChart?.mount(host,tf,pair));
+  }
+  renderLive();
+  dashboardCharts.get(symbol+'|'+chartTf)?.resize();
  }
+ $('chartPair').onchange=selectChart;
  for(const button of document.querySelectorAll('[data-chart-tf]'))button.onclick=()=>{
-  const tf=Number(button.dataset.chartTf);
+  chartTf=Number(button.dataset.chartTf);
   for(const choice of document.querySelectorAll('[data-chart-tf]'))choice.setAttribute('aria-pressed',String(choice===button));
-  for(const frame of [2,15])$('dashboardChart'+frame).hidden=frame!==tf;
-  dashboardCharts.get(tf)?.resize();
+  selectChart();
  };
  function renderLive(){
   const now=Date.now();
@@ -76,13 +86,13 @@
    fields.delta.className=delta>0?'buy':delta<0?'sell':'';
    fields.source.textContent=last?'Pine TF'+last.timeframe+' · '+new Date(last.at).toLocaleTimeString('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour12:false})+' MYT':'Menunggu data Pine';
   }
-  for(const tf of [2,15]){
-   const latest=quotesFor('XAUUSD').filter(v=>v.timeframe===tf).sort((a,b)=>Number(b.market.signalObservedAt||b.market.receivedAt)-Number(a.market.signalObservedAt||a.market.receivedAt))[0];
-   dashboardCharts.get(tf)?.update(latest?.market||null,!!latest&&Live.fresh(latest));
-  }
-  const gold=views().filter(v=>v.symbol==='XAUUSD');
-  document.dispatchEvent(new CustomEvent('zencore:dashboard',{detail:{views:gold,failed}}));
-  $('liveTfSummary').replaceChildren(...gold.map(v=>el('span','TF'+v.timeframe+' · '+state(v),tone(v))));
+  const chartSymbol=$('chartPair').value;
+  const latest=quotesFor(chartSymbol).filter(v=>Number(v.timeframe)===chartTf).sort((a,b)=>Number(b.market.signalObservedAt||b.market.receivedAt)-Number(a.market.signalObservedAt||a.market.receivedAt))[0];
+  dashboardCharts.get(chartSymbol+'|'+chartTf)?.update(latest?.market||null,!!latest&&Live.fresh(latest));
+  const all=views();
+  document.dispatchEvent(new CustomEvent('zencore:dashboard',{detail:{views:all.filter(v=>v.symbol==='XAUUSD'),failed}}));
+  $('liveTfSummary').replaceChildren(...all.filter(v=>v.symbol===chartSymbol).map(v=>el('span',chartSymbol+' · TF'+v.timeframe+' · '+state(v),tone(v))));
+
  }
  function trackActivity(){
   let changed=false;
@@ -127,7 +137,7 @@
   }
   for(const view of all){
    const {symbol,timeframe}=view;
-   const {row,status,message,readings,values}=marketRows.get(symbol+'|'+timeframe);
+   const {row,status,metrics,message,readings,values}=marketRows.get(symbol+'|'+timeframe);
    row.hidden=filter!=='both'&&String(timeframe)!==filter;
    const m=view.market,n=m?.strategyNormal,advisor=n?.sop?.advisor||{},levels=view.nearbyLevels||{};
    const current=fresh(view)&&m?.symbol===symbol;
@@ -136,10 +146,13 @@
    status.className='compact-market-state '+(side==='BUY'?'buy':side==='SELL'?'sell':'');
    message.hidden=current;
    readings.hidden=!current;
+   const momentum=m?.momentum||advisor.momentum;
+   const support=format(m?.nearestSupport??levels.supports?.[0],symbol);
+   const resistance=format(m?.nearestResistance??levels.resistances?.[0],symbol);
+   const facts=[typeof momentum==='string'&&momentum.trim()?momentum:null,support!=='—'?'Support '+support:null,resistance!=='—'?'Resistance '+resistance:null].filter(Boolean);
+   metrics.textContent=current?facts.join(' · '):'';
    if(current){
-    const data=[m.marketStructure||advisor.trend||advisor.dashboard?.structure,m.momentum||advisor.momentum,
-     format(m.nearestSupport??levels.supports?.[0],symbol),format(m.nearestResistance??levels.resistances?.[0],symbol),
-     m.proTip||advisor.proTip];
+    const data=[m.marketStructure||advisor.trend||advisor.dashboard?.structure,m.proTip||advisor.proTip];
     values.forEach((value,index)=>{value.textContent=typeof data[index]==='string'&&data[index].trim()?data[index]:'—';});
    }
   }
@@ -160,6 +173,6 @@
  }
  api('/auth/me').then(j=>{$('welcomeName').textContent=j.user?.displayName||'Trader';}).catch(()=>{});
  $('logoutButton').onclick=async()=>{$('logoutButton').disabled=true;try{await fetch('/auth/logout',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});}finally{location.replace('/login');}};
- render();startLiveStream();poll();connections();const clockTimer=setInterval(renderLive,1000);window.addEventListener('pagehide',()=>{stopped=true;streams.forEach(stream=>stream.close());clearInterval(clockTimer);});
+ selectChart();render();startLiveStream();poll();connections();const clockTimer=setInterval(renderLive,1000);window.addEventListener('pagehide',()=>{stopped=true;streams.forEach(stream=>stream.close());clearInterval(clockTimer);});
 })();
 

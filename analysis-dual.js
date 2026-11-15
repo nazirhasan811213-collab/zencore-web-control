@@ -2,7 +2,8 @@
  'use strict';
  const root=document.getElementById('dualViews'),pair=document.getElementById('pairSelector'),connection=document.getElementById('dualConnection');
  let selected='both',generation=0,controller=null,timer=null,payload=null,failed=false,stream=null,streamLive=false,lastStreamAt=0;
- const cards=new Map();
+ const cards=new Map(),params=new URLSearchParams(location.search);
+ if([...pair.options].some(option=>option.value===params.get('pair')))pair.value=params.get('pair');
  const label=v=>({WAITING:'TUNGGU DATA',WAIT:'TUNGGU',WAIT_DATA:'TUNGGU DATA',STALE:'DATA LAMA',DISCONNECTED:'TERPUTUS',WATCH:'MONITOR DULU',PASS:'LULUS',ABOVE:'DI ATAS',BELOW:'DI BAWAH',INTRABAR:'DALAM CANDLE',BAR_CLOSE:'CANDLE DAH CLOSE'}[v]||v);
  function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
  function metric(label,value){const n=el('div',undefined,'metric');n.append(el('small',label),el('b',value));return n;}
@@ -10,10 +11,10 @@
  const price=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(pair.value==='GBPUSD'?5:3):'—';
  for(const tf of [2,15]){
   const card=el('article',undefined,'tf-card');card.dataset.timeframe=String(tf);
-  const header=el('header'),title=el('div');title.append(el('span','XAUUSD / HEMA '+(tf===15?'15 · MTF 15/30/45':String(tf)),'eyebrow'),el('h2','TF'+tf+' • '+(tf===15?'Intraday':'Scalping')));
+  const header=el('header'),title=el('div');title.append(el('span',pair.value+' / HEMA '+(tf===15?'15 · MTF 15/30/45':String(tf)),'eyebrow'),el('h2','TF'+tf+' • '+(tf===15?'Intraday':'Scalping')));
   const badge=el('span','WAITING','feed-pill');header.append(title,badge);
   const content=el('div'),nativeHost=el('div'),actions=el('div',undefined,'zc-chart-actions'),chart=el('div',undefined,'zc-tv-reference');
-  const nativeChart=window.ZenCoreIndicatorChart?.mount(nativeHost,tf);
+  const nativeChart=window.ZenCoreIndicatorChart?.mount(nativeHost,tf,pair.value);
   const chartButton=el('button','Tutup chart ZenCore TF'+tf),referenceButton=el('button','Harga TradingView (rujukan)');chartButton.type=referenceButton.type='button';
   chartButton.setAttribute('aria-pressed','true');referenceButton.setAttribute('aria-pressed','false');
   chartButton.onclick=()=>{nativeHost.hidden=!nativeHost.hidden;chartButton.textContent=(nativeHost.hidden?'Buka':'Tutup')+' chart ZenCore TF'+tf;chartButton.setAttribute('aria-pressed',String(!nativeHost.hidden));nativeChart?.resize();};
@@ -23,7 +24,7 @@
  }
  function render(){
   for(const tf of [2,15]){
-   const c=cards.get(tf);c.card.hidden=selected!=='both'&&selected!==String(tf);
+   const c=cards.get(tf);c.card.querySelector('.eyebrow').textContent=pair.value+' / HEMA '+(tf===15?'15 · MTF 15/30/45':String(tf));c.card.hidden=selected!=='both'&&selected!==String(tf);
    const view=payload?.views?.find(v=>v.timeframe===tf),m=view?.market,n=m?.strategyNormal||{},s=n.sop||{};
    const age=m?.receivedAt?Math.max(0,Date.now()-m.receivedAt):null;
    const sourceAge=m?.signalObservedAt?Math.max(0,Date.now()-m.signalObservedAt):age;
@@ -90,8 +91,8 @@
  const recoveryTimer=setInterval(recover,15000);
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume();});
  window.addEventListener('online',resume);
- pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values()){c.chart.replaceChildren();c.nativeChart?.clear();}connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
- const params=new URLSearchParams(location.search);if(['XAUUSD'].includes(params.get('pair')))pair.value=params.get('pair');if(['2','15'].includes(params.get('tf'))){selected=params.get('tf');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));}
+ pair.onchange=()=>{generation++;stream?.close();streamLive=false;clearTimeout(timer);controller?.abort();controller=null;payload=null;failed=false;for(const c of cards.values()){c.chart.replaceChildren();c.nativeChart?.clear(pair.value);}connection.textContent='Menyambung '+pair.value+'…';render();startStream();poll();};
+ if(['2','15'].includes(params.get('tf'))){selected=params.get('tf');document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));}
  render();startStream();poll();setInterval(render,1000);
  window.addEventListener('pagehide',()=>{generation++;clearTimeout(timer);clearInterval(recoveryTimer);controller?.abort();stream?.close();});
 })();
