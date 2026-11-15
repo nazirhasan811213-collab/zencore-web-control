@@ -929,8 +929,6 @@ function createAutoTradeService(options = {}) {
         input.symbols.some(symbol => options.allowMt5Symbols ? !Core.validTradeSymbol(String(symbol).trim().toUpperCase()) : !allowedDemoSymbols.includes(Core.normaliseSymbol(symbol))))) {
       throw serviceError('DEMO_SYMBOL_NOT_VALIDATED', 'Pilih pair daripada skop broker yang disahkan.', 400);
     }
-    const manualPod=localEa ? await store.getPodForUser(userId) : null;
-    if(input.manualExit?.enabled===true && (!localEa || !['MANUAL_TF2_EXIT_V2','MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(manualPod?.manualExitVersion)))throw serviceError('MANUAL_EXIT_EA_UPGRADE_REQUIRED','Auto Exit perlu Connector dan EA yang menyokong exit manual.',409);
     const validation = Core.validateSettings({
       ...input,
       manualExit:input.manualExit ?? previous?.manualExit,
@@ -939,7 +937,6 @@ function createAutoTradeService(options = {}) {
       symbols: localEa ? input.symbols : allowedDemoSymbols
     });
     if (!validation.ok) throw serviceError('VALIDATION_ERROR', 'Semak konfigurasi Auto Trade.', 400, validation.errors);
-    if(validation.value.manualExit.enabled && validation.value.manualExit.version==='MANUAL_TF2_EXIT_V3' && !['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(manualPod?.manualExitVersion))throw serviceError('MANUAL_EXIT_CUSTOM_UPGRADE_REQUIRED','TP/SL tersuai perlu Connector 2.1.10 / EA 2.17 atau VPS Manager 1.0.2.',409);
     if (input.riskAcknowledged !== true) {
       throw serviceError('RISK_ACK_REQUIRED', 'Pengesahan risiko diperlukan.', 400, {
         riskAcknowledged: 'Tandakan pengesahan risiko untuk menyimpan.'
@@ -970,11 +967,8 @@ function createAutoTradeService(options = {}) {
         payload: { mode: pod.tradeMode, strategy: 'NORMAL_3M_SOP_V32', exitSchema: '32.3-EXIT-STEPLOCK', settings: validation.value } });
       await store.setControl(userId, { desiredState: 'ON', effectiveState: 'ARMING', pendingCommandId: issued.command.id, lastError: null });
     }
-    if(supportsManualExit(manualPod,validation.value.manualExit)) {
-      // OFF must remain deliverable to legacy installations even with saved custom presets.
-      const config=validation.value.manualExit.enabled ? validation.value.manualExit : Core.validateSettings({manualExit:{enabled:false}}).value.manualExit;
-      await issueCommand({userId,podId:manualPod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit:config},ttlMs:30000});
-    }
+    const manualPod=localEa?await store.getPodForUser(userId):null;
+    if(supportsManualExit(manualPod,validation.value.manualExit))await queueManualExit(userId,manualPod,validation.value.manualExit);
     return state(userId);
   }
 

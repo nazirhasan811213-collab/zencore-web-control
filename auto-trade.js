@@ -677,7 +677,9 @@
       settingsDirty = false;
       settingsHydrated = false;
       render(state);
-      toast('Konfigurasi Auto Trade disimpan.');
+      toast(state.manualExitSync?.status==='WAITING_EA'
+        ?'Konfigurasi disimpan. Auto Exit manual menunggu EA serasi.'
+        :'Konfigurasi Auto Trade disimpan.');
     } catch (error) {
       setText('settingsError', error.message);
     } finally {
