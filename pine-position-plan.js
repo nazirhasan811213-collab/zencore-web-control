@@ -38,7 +38,8 @@ function management(market,positions,command,at){
  const fillAnchored=own.some(x=>x.fillRiskVersion==='MT5_FILL_PLAN_V1');
  const source=market.positionManagement||{},freshExit=own.every(x=>Number.isFinite(x.openedAt)&&observed>=x.openedAt);
  const chartClose=freshExit&&(market.nativeChartExitAll===true&&market.feedChannel==='EXECUTION'||market.setupKey===s.setupKey&&(['CLOSE_50_NOW','EXIT_ALL','EXIT_REMAINING'].includes(source.action)||!fillAnchored&&source.action==='EXIT_SL'));
- const pm={action:chartClose?'EXIT_ALL':'HOLD',slMoveTriggered:false,entryAnchor:ANCHOR,entryCommandId:command.id,reason:chartClose?'Chart Close → CLOSE ALL setup aktif':'Exit ikut pelan '+(s.cycleKind==='FOLLOWUP'?'RE-ENTRY':'ENTRY')};
+ const confirmedChartClose=chartClose&&market.feedChannel==='EXECUTION'&&market.confirmed===true&&(market.nativeChartExitAll===true||source.confirmedChartClose===true);
+ const pm={confirmedChartClose,action:chartClose?'EXIT_ALL':'HOLD',slMoveTriggered:false,entryAnchor:ANCHOR,entryCommandId:command.id,reason:chartClose?'Chart Close → CLOSE ALL setup aktif':'Exit ikut pelan '+(s.cycleKind==='FOLLOWUP'?'RE-ENTRY':'ENTRY')};
  if(!chartClose&&!fillAnchored){
   const sign=p.side==='BUY'?1:-1,quotes=own.map(x=>x.currentPrice);
   if(quotes.some(x=>!Number.isFinite(x)||x<=0))return null;

@@ -18,3 +18,19 @@ test('native close targets executed TF strategy after newer SOLID; no virtual or
   a.equal(forActiveSetup(m,{...latest,status:'FAILED'},p,mode,now),m);
  }
 });
+
+test('confirmed opposite yellow binds to the executed side even after the chart changes setup',()=>{
+ const now=Date.now(),time=now-120000,mode='TF2_SCALPING';
+ const market={symbol:'BTCUSD',timeframe:'2',time,confirmed:true,feedChannel:'EXECUTION',signalObservedAt:now,
+  setupKey:'chart-new',strategyNormal:{side:'SELL'},setupMeta:{entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',
+   yellowExit:{version:'BJ_OPPOSITE_YELLOW_V1',barTime:time,confirmed:true,fast:101,slow:100,close:99}}};
+ const latest={status:'EXECUTED',payload:{analysisSnapshot:{entryPolicyVersion:'PINE_3TRIGGERS_3OF4_CHOP50_V3',
+  executionTimeframe:'2',setupKey:'broker-active',side:'BUY',analysisSopVersion:'NORMAL_20261001_TF2_RIBBON_V1'}}};
+ const positions=[{symbol:'BTCUSD',strategyMode:mode,origin:'ZENCORE'}];
+ const close=forActiveSetup(market,latest,positions,mode,now);
+ a.equal(close.setupKey,'broker-active');
+ a.equal(close.positionManagement.action,'EXIT_ALL');
+ a.equal(close.positionManagement.confirmedChartClose,true);
+ a.equal(forActiveSetup({...market,confirmed:false},latest,positions,mode,now).setupKey,'chart-new');
+ a.equal(forActiveSetup({...market,time:time-120000},latest,positions,mode,now).setupKey,'chart-new');
+});

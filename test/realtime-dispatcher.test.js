@@ -81,3 +81,15 @@ test('dashboard contradicting forecast revokes an in-flight event even with stal
   strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,forecast:'NEUTRAL',marketPower:45}}});
  release();await first;assert.equal(allowed,false);
 });
+
+test('a confirmed native close survives a newer HOLD while dispatch is busy',async()=>{
+ let release;const gate=new Promise(r=>release=r),batches=[];
+ const d=createRealtimeDispatcher({dispatch:async batch=>{batches.push(batch);if(batches.length===1)await gate;},fetchMarkets:async()=>[]});
+ const first=d.onMarket(ready('15'));
+ const close={...ready(),feedChannel:'EXECUTION',confirmed:true,nativeChartExitAll:true,signalObservedAt:Date.now(),setupKey:'close-setup'};
+ d.onMarket(close);
+ d.onMarket({...close,nativeChartExitAll:false,signalObservedAt:close.signalObservedAt+1,positionManagement:{action:'HOLD'}});
+ release();await first;
+ assert.ok(batches[1].includes(close));
+ assert.equal(d.getLatestMarket('XAUUSD','2').nativeChartExitAll,false);
+});

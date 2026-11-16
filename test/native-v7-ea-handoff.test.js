@@ -84,8 +84,9 @@ for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['
   const observe={...market,entryEvent:false,receivedAt:f.now,signalObservedAt:f.now,
    positionManagement:{action:'HOLD'}};
   assert.equal((await svc.dispatchMarkets([observe])).queued,0,'A pullback warning must not generate a close command');
-  const close={...observe,nativeChartExitAll:true};
+  const close={...observe,nativeChartExitAll:true,confirmed:true};
   assert.equal((await svc.dispatchMarkets([close])).queued,1);
+  f.now+=31000; // A delayed Connector can still deliver the confirmed close to the same setup.
   const exit=(await svc.nextCommand(token)).command;
   assert.equal(exit.type,'MANAGE_POSITION');
   assert.equal(exit.payload.analysisSnapshot.entryCommandId,command.id);
