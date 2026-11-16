@@ -1265,8 +1265,14 @@ function createAutoTradeService(options = {}) {
       const plan=require('./pine-position-plan'),active=await plan.resolve(store,command.userId,command.podId,positions,p.symbol,p.strategyMode);
       if(positions.some(x=>x.symbol===p.symbol&&x.strategyMode===p.strategyMode&&x.fillRiskVersion==='MT5_FILL_PLAN_V1')&&
         (p.actions||[]).some(a=>a.type!=='CLOSE_PERCENT'||a.reason==='EXIT_SL'))return false;
-      return !!active&&active.id===s.entryCommandId&&active.payload.analysisSnapshot.setupKey===s.setupKey&&
-        active.payload.analysisSnapshot.analysisSopVersion===s.analysisSopVersion&&now()-s.sourceReceivedAt<=30000&&s.sourceReceivedAt<=now()+5000;
+      const confirmedClose=s.confirmedChartClose===true&&p.actions?.length===1&&
+        p.actions[0].type==='CLOSE_PERCENT'&&p.actions[0].percent===100&&p.actions[0].reason==='EXIT_ALL';
+      const sourceAge=now()-s.sourceReceivedAt;
+      const current=!!active&&active.id===s.entryCommandId&&active.payload.analysisSnapshot.setupKey===s.setupKey&&
+        active.payload.analysisSnapshot.analysisSopVersion===s.analysisSopVersion;
+      if(!current)diagnostic.reason='EXIT_SETUP_NO_LONGER_ACTIVE';
+      else if(!Number.isFinite(sourceAge)||sourceAge< -5000||(!confirmedClose&&sourceAge>30000))diagnostic.reason='EXIT_SOURCE_EXPIRED';
+      return current&&!diagnostic.reason;
     }
     if(command.type==='MANAGE_POSITION'&&typeof store.latestSetupForMode==='function'){
       const p=command.payload||{},latest=await store.latestSetupForMode(command.userId,p.symbol,p.strategyMode||'TF2_SCALPING');
