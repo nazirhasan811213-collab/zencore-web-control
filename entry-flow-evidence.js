@@ -1,7 +1,7 @@
 'use strict';
 // Private runtime diagnostics: expose execution facts, never account identity or credentials.
-const TYPES=new Set(['ENTRY_BLOCKED','SETUP_QUEUED','ENTRY_DELIVERED','ENTRY_REVOKED','COMMAND_ACKNOWLEDGED','MT5_POSITION_OBSERVED','STRATEGY_CYCLE_RESET']);
-const FIELDS=['commandId','commandType','timeframe','reason','status','code','lifecycleState','layers','closedAt','source','sopCompletedAt','entryAuthorizedAt','commandQueuedAt','commandDeliveredAt','mt5AcknowledgedAt','queueToDeliveryMs','queueToAckMs'];
+const TYPES=new Set(['ENTRY_BLOCKED','SETUP_QUEUED','ENTRY_DELIVERED','ENTRY_REVOKED','COMMAND_ACKNOWLEDGED','MT5_POSITION_OBSERVED','STRATEGY_CYCLE_RESET','POSITION_MANAGEMENT_QUEUED']);
+const FIELDS=['commandId','commandType','symbol','timeframe','reason','status','code','lifecycleState','layers','closedAt','source','sopCompletedAt','entryAuthorizedAt','commandQueuedAt','commandDeliveredAt','mt5AcknowledgedAt','queueToDeliveryMs','queueToAckMs'];
 function entryFlowEvidence(events){
  return (Array.isArray(events)?events:[]).filter(e=>TYPES.has(e?.type)).slice(0,20).map(e=>{
   const out={type:e.type,at:e.createdAt};

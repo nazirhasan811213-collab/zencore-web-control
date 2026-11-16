@@ -76,6 +76,28 @@ for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['
  for(const k of ['entry','sl','tp1','tp2','tp3'])assert.equal(Number(fields[k]),command.payload[k]);
  for(const k of ['account','server','tradeMode','podId','eaSession']){assert.equal(fields[k],identity[k]);assert.equal(lease[k],identity[k]);}
  assert.equal(lease.desiredState,'ON');assert.ok(Number(fields.expiresAt)<=command.expiresAt);
+ if(scenario==='BTCUSD'){
+  await svc.acknowledgeCommand(token,command.id,{status:'EXECUTED',code:'SETUP_OPENED'});
+  await store.replacePositions(id,[{ticket:'1234',positionId:'1234',origin:'ZENCORE',symbol,side,
+   strategyMode:fields.strategyMode,setupId:command.id.slice(0,20),fillRiskVersion:'MT5_FILL_PLAN_V1',
+   entry:command.payload.entry,openedAt:f.now-1000,volume:.02}],f.now);
+  const observe={...market,entryEvent:false,receivedAt:f.now,signalObservedAt:f.now,
+   positionManagement:{action:'HOLD'}};
+  assert.equal((await svc.dispatchMarkets([observe])).queued,0,'A pullback warning must not generate a close command');
+  const close={...observe,nativeChartExitAll:true};
+  assert.equal((await svc.dispatchMarkets([close])).queued,1);
+  const exit=(await svc.nextCommand(token)).command;
+  assert.equal(exit.type,'MANAGE_POSITION');
+  assert.equal(exit.payload.analysisSnapshot.entryCommandId,command.id);
+  assert.deepEqual(exit.payload.actions,[{type:'CLOSE_PERCENT',percent:100,reason:'EXIT_ALL'}]);
+  const routed=spawnSync('python3',['-c',python],{input:JSON.stringify({identity,key:svc.commandSigningKeyForPod(podId),command:exit,now:f.now}),encoding:'utf8'});
+  assert.equal(routed.status,0,routed.stderr);
+  const {fields:closeFields}=JSON.parse(routed.stdout);
+  assert.equal(closeFields.symbol,'BTCUSD');
+  assert.equal(closeFields.a0reason,'EXIT_ALL');
+  assert.equal(Number(closeFields.a0value),100);
+ }
+
 });
 
 for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf} ${side} becomes a single Telegram entry from the Pine execution feed`,async()=>{
