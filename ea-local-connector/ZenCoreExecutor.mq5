@@ -271,6 +271,12 @@ long DirectEntryChart(string source){
  }
  return selected;
 }
+// A split worker may consume only its own direct orders.
+int SplitEntryRoute(int role,bool worker,bool direct,string source,bool btcAttached){
+ if(role==CHART_BTCUSD)return worker && direct && source=="BTCUSD"?1:0;
+ if(role==CHART_XAUUSD && direct && source!="XAUUSD")return source=="BTCUSD" && btcAttached?0:-1;
+ return 1;
+}
 // The BTC terminal owns this registration while its dedicated chart is attached.
 string SplitBtcSymbol(){
  int file=FileOpen(channel+"\\split-btc.tsv",FILE_READ|FILE_TXT|FILE_ANSI|FILE_SHARE_READ|FILE_COMMON,0,CP_UTF8);
@@ -880,12 +886,6 @@ string MasterResetForce(string pod){
  if(!done || PositionsTotal()!=0 || OrdersTotal()!=0)return "MASTER_RESET_CLOSE_FAILED";
  string reset=MasterResetIdle();
  return reset=="MASTER_RESET_READY"?"MASTER_RESET_FORCE_READY":reset;
-}
-// A split worker may consume only its own direct orders.
-int SplitEntryRoute(int role,bool worker,bool direct,string source,bool btcAttached){
- if(role==CHART_BTCUSD)return worker && direct && source=="BTCUSD"?1:0;
- if(role==CHART_XAUUSD && direct && source!="XAUUSD")return source=="BTCUSD" && btcAttached?0:-1;
- return 1;
 }
 void Process(bool chartWorker){
  if(!FileIsExist(channel+"\\command.tsv",FILE_COMMON))return;

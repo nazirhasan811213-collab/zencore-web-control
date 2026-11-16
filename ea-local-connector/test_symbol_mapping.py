@@ -56,7 +56,6 @@ int main(){
   source=pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
   role=source[source.index('string ChartRoleKey('):source.index('void RegisterEntryChart()')]
   route=source[source.index('long DirectEntryChart('):source.index('// The BTC terminal owns this registration')]
-  route+=source[source.index('int SplitEntryRoute('):source.index('void Process(bool chartWorker)')]
   harness=r'''
 #include <string>
 #include <map>
