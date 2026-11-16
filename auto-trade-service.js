@@ -1421,8 +1421,8 @@ function createAutoTradeService(options = {}) {
     }
     await store.appendAudit(pod.userId, 'COMMAND_ACKNOWLEDGED', {
       commandId: command.id, commandType: command.type, status, code: result.code, message: result.message,
-      ...(command.type==='PLACE_SETUP'?{timeframe:command.payload?.analysisSnapshot?.executionTimeframe,
-        lifecycleState:status==='EXECUTED'?'MT5_ACKNOWLEDGED':'EA_REJECTED',
+      symbol:command.payload?.symbol,timeframe:command.payload?.analysisSnapshot?.executionTimeframe,
+      ...(command.type==='PLACE_SETUP'?{lifecycleState:status==='EXECUTED'?'MT5_ACKNOWLEDGED':'EA_REJECTED',
         sopCompletedAt:command.payload?.analysisSnapshot?.qualifiedAt||command.payload?.analysisSnapshot?.confirmationEvidence?.qualifiedAt,
         commandQueuedAt:command.createdAt,commandDeliveredAt:command.deliveredAt,
         mt5AcknowledgedAt:now(),queueToAckMs:Math.max(0,now()-command.createdAt)}:{})
@@ -1550,7 +1550,7 @@ function createAutoTradeService(options = {}) {
           diagnosticProfile:crypto.createHash('sha256').update(profile.userId).digest('hex').slice(0,12),
           enabledSymbols: profile.symbols,
           brokerSymbols: Object.keys(specs || {}),
-          pairs: allowedDemoSymbols.flatMap(symbol => {
+          pairs: [...new Set([...allowedDemoSymbols,...profile.symbols])].flatMap(symbol => {
             const scoped = markets.filter(item => Core.normaliseSymbol(item?.symbol) === symbol&&(!options.scalpingTimeframe||[options.scalpingTimeframe,'15'].includes(String(item.timeframe))));
             return (scoped.length ? scoped : [null]).map(market => {
             const normal = market?.strategyNormal || {}, sop = normal.sop || {};
@@ -1629,7 +1629,10 @@ function createAutoTradeService(options = {}) {
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(['2','3'].includes(options.scalpingTimeframe)&&(![options.scalpingTimeframe,'15'].includes(String(market.timeframe))||String(market.timeframe)==='2'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF2_RIBBON_V1'))continue;
         if (!direct&&(!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market))) continue;
-        if(direct && !pairAllowed(profile,pod.id,symbol))continue;
+        if(direct && !pairAllowed(profile,pod.id,symbol)){
+          if(profile.symbols.includes(symbol))await reportEntryBlock(profile,market,'EA_PAIR_CAPABILITY_UNAVAILABLE');
+          continue;
+        }
         if (!allowedDemoSymbols.includes(symbol) && !(options.allowMt5Symbols && direct))continue;
         if(!direct&&!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
         const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
@@ -1745,6 +1748,8 @@ function createAutoTradeService(options = {}) {
           await store.appendAudit(profile.userId, 'POSITION_MANAGEMENT_QUEUED', {
             commandId: issued.command.id,
             symbol,
+            timeframe:String(market.timeframe||''),
+            reason:management.payload.reason,
             actions: management.payload.actions.map(action => action.type)
           });
         }
