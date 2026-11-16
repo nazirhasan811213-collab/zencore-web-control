@@ -1,0 +1,20 @@
+ZENCORE EA 2.37 | XAUUSD DAN BTCUSD PADA DUA TERMINAL
+
+Guna dua pemasangan MT5 berasingan di PC/VPS dan pengguna Windows yang sama.
+Login akaun, server dan jenis akaun MT5 yang sama pada kedua-dua terminal.
+Gunakan satu Connector 2.1.36 atau satu slot VPS Manager 1.1.21 yang dipautkan kepada terminal XAUUSD.
+
+1. Di setiap terminal, buka MT5 > File > Open Data Folder > MQL5 > Experts.
+2. Salin fail EX5 daripada pakej pair ke folder Experts terminal yang sepadan.
+3. Refresh Navigator dan keluarkan ZenCoreExecutor versi lama dari carta kedua-dua terminal.
+4. Attach ZenCoreExecutor_XAUUSD pada carta XAUUSD di terminal pertama.
+   Attach ZenCoreExecutor_BTCUSD pada carta BTCUSD di terminal kedua.
+5. Hidupkan Algo Trading pada kedua-dua terminal.
+6. Di terminal XAUUSD, semak EA_READY version=2.37 dalam Experts.
+   Di terminal BTCUSD, semak SPLIT_BTC_WORKER_REGISTERED.
+7. Di Connector, semak pautan akaun sedia ada. Di ZenCore Auto Trade,
+   pilih XAUUSD + BTCUSD dan isi lot/layer bagi setiap pair dan timeframe.
+
+Connector menggunakan saluran akaun yang sama. Terminal XAUUSD urus pautan,
+kawalan dan exit akaun. Terminal BTCUSD jalankan arahan entry BTCUSD pada
+carta broker sendiri. Kekalkan kedua-dua terminal berjalan.

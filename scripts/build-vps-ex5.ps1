@@ -20,15 +20,19 @@ try {
     if (-not (Test-Path "$include\Include\Trade\Trade.mqh")) { throw 'MT5 standard library missing' }
     $work = Join-Path $env:RUNNER_TEMP 'ZenCore-EA-Compile'
     New-Item -ItemType Directory -Force $work,dist | Out-Null
-    $src = Join-Path $work 'ZenCoreExecutor.mq5'
-    $log = Join-Path $work 'compile.log'
-    Copy-Item ea-local-connector/ZenCoreExecutor.mq5 $src
-    $build = Start-Process $editor -ArgumentList '/portable',"/compile:`"$src`"","/include:`"$include`"","/log:`"$log`"" -PassThru
-    if (-not $build.WaitForExit(90000)) { $build.Kill(); throw 'EA compile timed out' }
-    if (Test-Path $log) { Get-Content $log }
-    $compiled = Join-Path $work 'ZenCoreExecutor.ex5'
-    if (-not (Test-Path $compiled) -or -not (Test-Path $log) -or (Get-Content $log -Raw) -notmatch 'Result:\s*0 errors') { throw 'EA compilation did not succeed' }
-    Copy-Item $compiled dist/ZenCoreExecutor.ex5
+    Copy-Item ea-local-connector/ZenCoreExecutor*.mq5 $work
+    foreach ($name in 'ZenCoreExecutor', 'ZenCoreExecutor_XAUUSD', 'ZenCoreExecutor_BTCUSD') {
+        $src = Join-Path $work "$name.mq5"
+        $log = Join-Path $work "$name.log"
+        $compiled = Join-Path $work "$name.ex5"
+        $build = Start-Process $editor -ArgumentList '/portable',"/compile:`"$src`"","/include:`"$include`"","/log:`"$log`"" -PassThru
+        if (-not $build.WaitForExit(90000)) { $build.Kill(); throw "$name compile timed out" }
+        if (Test-Path $log) { Get-Content $log }
+        if (-not (Test-Path $compiled) -or -not (Test-Path $log) -or (Get-Content $log -Raw) -notmatch 'Result:\s*0 errors') {
+            throw "$name compilation did not succeed"
+        }
+        Copy-Item $compiled dist/
+    }
 } finally {
     if (-not $terminal.HasExited) { Stop-Process -Id $terminal.Id -ErrorAction SilentlyContinue }
 }

@@ -55,7 +55,7 @@ int main(){
   if not compiler:self.skipTest('Native compiler unavailable')
   source=pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
   role=source[source.index('string ChartRoleKey('):source.index('void RegisterEntryChart()')]
-  route=source[source.index('long DirectEntryChart('):source.index('string RegisteredChartSymbol(')]
+  route=source[source.index('long DirectEntryChart('):source.index('// The BTC terminal owns this registration')]
   harness=r'''
 #include <string>
 #include <map>
@@ -83,6 +83,14 @@ int main(){
  assert(ChartRoleFromName("BTCUSDT")==CHART_AUTO);
  assert(ChartRoleFromName("XAUJPY")==CHART_AUTO);
  assert(DirectEntryChart("XAUUSD")==10);
+ assert(SplitEntryRoute(CHART_XAUUSD,false,true,"XAUUSD",true)==1);
+ assert(SplitEntryRoute(CHART_XAUUSD,false,true,"BTCUSD",true)==0);
+ assert(SplitEntryRoute(CHART_XAUUSD,false,true,"BTCUSD",false)==-1);
+ assert(SplitEntryRoute(CHART_XAUUSD,false,true,"EURUSD",true)==-1);
+ assert(SplitEntryRoute(CHART_BTCUSD,true,true,"BTCUSD",false)==1);
+ assert(SplitEntryRoute(CHART_BTCUSD,true,true,"XAUUSD",false)==0);
+ assert(SplitEntryRoute(CHART_BTCUSD,true,false,"BTCUSD",false)==0);
+ assert(SplitEntryRoute(CHART_BTCUSD,false,true,"BTCUSD",false)==0);
  assert(DirectEntryChart("BTCUSD")==20);
  localChart=30;registeredRole=CHART_BTCUSD;
  assert(DirectEntryChart("BTCUSD")==20);

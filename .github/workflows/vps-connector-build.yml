@@ -57,3 +57,19 @@ jobs:
             dist/VPS-Manager-Preview.png
           if-no-files-found: error
           retention-days: 30
+      - name: Upload dedicated XAUUSD EA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZenCore-EA-XAUUSD-2.37
+          path: |
+            dist/ZenCoreExecutor_XAUUSD.ex5
+            ea-local-connector/PANDUAN_DUA_TERMINAL.txt
+          if-no-files-found: error
+      - name: Upload dedicated BTCUSD EA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZenCore-EA-BTCUSD-2.37
+          path: |
+            dist/ZenCoreExecutor_BTCUSD.ex5
+            ea-local-connector/PANDUAN_DUA_TERMINAL.txt
+          if-no-files-found: error
