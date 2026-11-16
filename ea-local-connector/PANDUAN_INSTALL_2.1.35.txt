@@ -1,9 +1,9 @@
-ZENCORE CONNECTOR 2.1.34 / EA 2.34
+ZENCORE CONNECTOR 2.1.35 / EA 2.35
 
 1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
-2. Jalankan ZenCoreSetup-2.1.34.exe dan buka ZenCore Connector.
+2. Jalankan ZenCoreSetup-2.1.35.exe dan buka ZenCore Connector.
 3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
-4. Tekan Pasang / kemas kini EA 2.34. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.34 dan ENTRY_CHART_READY dalam Experts.
+4. Tekan Pasang / kemas kini EA 2.35. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.35 dan ENTRY_CHART_READY dalam Experts.
 5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
 
 Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
@@ -19,10 +19,12 @@ Auto Exit manual: OFF menghentikan pengurusan EA; SL/TP broker sedia ada kekal. 
 
 Pine Direct menggunakan simbol carta MT5 tempat EA dipasang. EA menunggu harga Bid/Ask sehingga 4 saat.
 
-ENTRY MANUAL AUTO EXIT: TP1 -> SL entry; TP2 -> SL TP1; TP3 -> SL TP2; 2.00 melepasi TP3 -> SL TP3. TP broker dikosongkan pada posisi diambil alih. Tiada exit daripada signal Pine untuk mod manual ini.
+ENTRY MANUAL AUTO EXIT: TP1 -> SL entry; TP2 -> SL TP1; TP3 -> SL TP2; 2.00 (XAUUSD) atau 1× ATR (BTCUSD) melepasi TP3 -> SL TP3. TP broker dikosongkan pada posisi diambil alih. Tiada exit daripada signal Pine untuk mod manual ini.
 
 Pemulihan rangkaian: Connector cuba semula selepas gangguan sementara.
 
 Pilih XAUUSD, BTCUSD atau kedua-duanya dalam Auto Trade. Untuk kedua-dua pair, pasang EA pada dua carta dalam terminal MT5 yang sama. Satu Connector bagi terminal itu. Buat alert Pine berasingan bagi setiap pair dan timeframe yang digunakan.
 
 Inputs EA: pada carta Bitcoin pilih EntryChartRole = CHART_BTCUSD. Pada carta Gold pilih CHART_XAUUSD. EA membuka order pada simbol carta tersebut.
+
+BTCUSD manual: SL dan TP1/2/3 gunakan ATR(8) M2 daripada candle MT5 terakhir yang tutup sebelum entry. Jarak SL/TP1/TP2/TP3 ialah 1/1/2/3× ATR.

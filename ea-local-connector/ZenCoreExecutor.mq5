@@ -1,5 +1,5 @@
 #property strict
-#property version "2.34"
+#property version "2.35"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -22,6 +22,8 @@ bool manualEnabled=false;
 string manualPairScope="XAUUSD";
 long manualSince=0;
 double manualTp1=0,manualTp2=0,manualTp3=0,manualSl=0;
+struct ManualAtrSource{string symbol;int handle;};
+ManualAtrSource manualAtrSources[];
 ulong processingStarted=0;
 string enabledSymbols="";
 string lastEntryCode="ENTRY_REJECTED";
@@ -260,8 +262,8 @@ string RegisteredChartSymbol(string source){
  return chart>=0?ChartSymbol(chart):"";
 }
 string ManualPair(string symbol){
- if(IsBtcUsdSymbol(symbol))return "BTCUSD";
- if(Canonical(symbol)=="XAUUSD")return "XAUUSD";
+ if(symbol==RegisteredChartSymbol("BTCUSD") || IsBtcUsdSymbol(symbol))return "BTCUSD";
+ if(symbol==RegisteredChartSymbol("XAUUSD") || Canonical(symbol)=="XAUUSD")return "XAUUSD";
  return "";
 }
 bool ValidManualPairScope(string scope){return scope=="XAUUSD" || scope=="BTCUSD" || scope=="XAUUSD,BTCUSD";}
@@ -272,7 +274,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.34")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.35")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -728,9 +730,9 @@ int ManualLayerCount(){
  int count=0;for(int i=0;i<PositionsTotal();i++){ulong ticket=PositionGetTicket(i);if(IsManual(ticket))count++;}return count;
 }
 // Pure manual step-lock rules: target distances are anchored to each MT5 fill.
-int ManualReachedStage(bool buy,double quote,double t1,double t2,double t3){
+int ManualReachedStage(bool buy,double quote,double t1,double t2,double t3,double extension=2.0){
  double sign=buy?1.0:-1.0;
- if(sign*(quote-t3)>=2.0-1e-8)return 4;
+ if(sign*(quote-t3)>=extension-1e-8)return 4;
  if(sign*(quote-t3)>=-1e-8)return 3;
  if(sign*(quote-t2)>=-1e-8)return 2;
  if(sign*(quote-t1)>=-1e-8)return 1;
@@ -739,24 +741,58 @@ int ManualReachedStage(bool buy,double quote,double t1,double t2,double t3){
 double ManualStageStop(int stage,double entry,double initial,double t1,double t2,double t3){
  return stage>=4?t3:stage>=3?t2:stage>=2?t1:stage>=1?entry:initial;
 }
+void ManualBtcDistances(double step,double &sl,double &tp1,double &tp2,double &tp3){
+ sl=step;tp1=step;tp2=2.0*step;tp3=3.0*step;
+}
 // End pure manual step-lock rules.
+int ManualAtrHandle(string symbol){
+ int count=ArraySize(manualAtrSources);
+ for(int i=0;i<count;i++)if(manualAtrSources[i].symbol==symbol)return manualAtrSources[i].handle;
+ int handle=iATR(symbol,PERIOD_M2,8);
+ if(handle==INVALID_HANDLE)return INVALID_HANDLE;
+ if(ArrayResize(manualAtrSources,count+1)!=count+1){IndicatorRelease(handle);return INVALID_HANDLE;}
+ manualAtrSources[count].symbol=symbol;manualAtrSources[count].handle=handle;
+ return handle;
+}
+double ManualBtcStep(string symbol,long opened){
+ int handle=ManualAtrHandle(symbol);
+ if(handle==INVALID_HANDLE)return 0;
+ int fillBar=iBarShift(symbol,PERIOD_M2,(datetime)(opened/1000),false);
+ double atr[1],tickSize=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+ // The bar before the fill candle is the last completed M2 candle at entry.
+ if(fillBar<0 || tickSize<=0 || CopyBuffer(handle,0,fillBar+1,1,atr)!=1 ||
+    !MathIsValidNumber(atr[0]) || atr[0]==EMPTY_VALUE || atr[0]<=0)return 0;
+ return MathMax(tickSize,Price(symbol,atr[0]));
+}
 void ManageManual(){
  if(!manualEnabled || !Permissions() || AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)return;
  if(Broker("XAUUSD")=="")MapSymbols();
  bool canAdopt=manualEnabled && ManualLease();
  for(int i=PositionsTotal()-1;i>=0;i--){
   ulong ticket=PositionGetTicket(i);
-  if(!PositionSelectByTicket(ticket) || PositionGetInteger(POSITION_MAGIC)!=0 || !ManualPairSelected(ManualPair(PositionGetString(POSITION_SYMBOL)),manualPairScope))continue;
-  string symbol=PositionGetString(POSITION_SYMBOL),side=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL";bool buy=side=="BUY";
+  if(!PositionSelectByTicket(ticket) || PositionGetInteger(POSITION_MAGIC)!=0)continue;
+  string symbol=PositionGetString(POSITION_SYMBOL),pair=ManualPair(symbol);
+  if(!ManualPairSelected(pair,manualPairScope))continue;
+  string side=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL";bool buy=side=="BUY";
   long identifier=PositionGetInteger(POSITION_IDENTIFIER),opened=PositionGetInteger(POSITION_TIME_MSC);
   double entry=PositionGetDouble(POSITION_PRICE_OPEN),sign=buy?1:-1;
   string name="manual-"+(string)identifier+".tsv";
   if(!FileIsExist(channel+"\\"+name,FILE_COMMON)){
    if(!canAdopt || opened<=manualSince || FileIsExist(channel+"\\manual-excluded-"+(string)identifier+".done",FILE_COMMON))continue;
-   if(!WriteAtomic(name,Row("podId",ownerPod)+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("adoptedAt",(string)UtcMs())+Row("tp1",Num(Price(symbol,entry+sign*manualTp1)))+Row("tp2",Num(Price(symbol,entry+sign*manualTp2)))+Row("tp3",Num(Price(symbol,entry+sign*manualTp3)))+Row("sl",Num(Price(symbol,entry-sign*manualSl)))))continue;
+   double slDistance=manualSl,tp1Distance=manualTp1,tp2Distance=manualTp2,tp3Distance=manualTp3,extension=2.0;
+   if(pair=="BTCUSD"){
+    extension=ManualBtcStep(symbol,opened);
+    if(extension<=0){ManualWarning("MANUAL_BTC_ATR_NOT_READY",ticket);continue;}
+    ManualBtcDistances(extension,slDistance,tp1Distance,tp2Distance,tp3Distance);
+   }
+   if(!WriteAtomic(name,Row("podId",ownerPod)+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+
+      Row("adoptedAt",(string)UtcMs())+Row("tp1",Num(Price(symbol,entry+sign*tp1Distance)))+
+      Row("tp2",Num(Price(symbol,entry+sign*tp2Distance)))+Row("tp3",Num(Price(symbol,entry+sign*tp3Distance)))+
+      Row("sl",Num(Price(symbol,entry-sign*slDistance)))+Row("lockExtension",Num(extension))))continue;
   }
   if(!IsManual(ticket))continue;
-  double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),initial=Val("sl");
+  double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),initial=Val("sl"),extension=Val("lockExtension");
+  if(extension<=0)extension=2.0; // Existing managed tickets keep their stored targets.
   MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
   double quote=buy?tick.bid:tick.ask;
   if(!MathIsValidNumber(quote)||quote<=0||initial<=0||t1<=0||t2<=0||t3<=0)continue;
@@ -764,7 +800,7 @@ void ManageManual(){
   // Persist maximum touched stage; do not forget TP1 after a quick pullback.
   string stageName="manual-stage-"+(string)identifier+".tsv";int stage=0;
   if(ReadFields(stageName))stage=(int)Val("stage");
-  int reached=ManualReachedStage(buy,quote,t1,t2,t3);
+  int reached=ManualReachedStage(buy,quote,t1,t2,t3,extension);
   if(reached>stage){stage=reached;if(!WriteAtomic(stageName,Row("stage",(string)stage)))continue;}
   double target=ManualStageStop(stage,entry,initial,t1,t2,t3);
   // If price returns through a latched lock, close this ticket only.
@@ -962,7 +998,7 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  RegisterEntryChart();
- if(BindCurrentAccount())Print("ZenCore: EA_READY version=2.34 mode=",AccountMode());
+ if(BindCurrentAccount())Print("ZenCore: EA_READY version=2.35 mode=",AccountMode());
  else if(registeredRole!=CHART_AUTO)Print("ZenCore: ENTRY_CHART_SECONDARY symbol=",_Symbol,". Guna Connector yang sama.");
  return INIT_SUCCEEDED;
 }
@@ -974,9 +1010,9 @@ void OnTimer(){
  if(!BindCurrentAccount()){
   if(registeredRole!=CHART_AUTO && channel!=""){
    ProcessMailbox(true);
-   Comment("ZenCore 2.34 • Carta entry ",registeredRole==CHART_BTCUSD?"BTCUSD":"XAUUSD");
-  }else if(registeredRole==CHART_AUTO)Comment("ZenCore 2.34 • Pilih EntryChartRole dalam Inputs EA");
-  else Comment("ZenCore 2.34 • Menunggu akaun MT5");
+   Comment("ZenCore 2.35 • Carta entry ",registeredRole==CHART_BTCUSD?"BTCUSD":"XAUUSD");
+  }else if(registeredRole==CHART_AUTO)Comment("ZenCore 2.35 • Pilih EntryChartRole dalam Inputs EA");
+  else Comment("ZenCore 2.35 • Menunggu akaun MT5");
   return;
  }
  TryResumeEntry();
@@ -988,6 +1024,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
- Comment("ZenCore 2.34 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.35 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
-void OnDeinit(const int reason){EventKillTimer();if(registeredRole!=CHART_AUTO)GlobalVariableDel(ChartRoleKey(ChartID()));if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
+void OnDeinit(const int reason){EventKillTimer();for(int i=0;i<ArraySize(manualAtrSources);i++)IndicatorRelease(manualAtrSources[i].handle);if(registeredRole!=CHART_AUTO)GlobalVariableDel(ChartRoleKey(ChartID()));if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
