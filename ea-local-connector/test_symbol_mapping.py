@@ -87,6 +87,7 @@ int main(){
  assert(SplitEntryRoute(CHART_XAUUSD,false,true,"XAUUSD",true)==1);
  assert(SplitEntryRoute(CHART_XAUUSD,false,true,"BTCUSD",true)==0);
  assert(SplitEntryRoute(CHART_XAUUSD,false,true,"BTCUSD",false)==-1);
+ assert(SplitEntryRoute(CHART_XAUUSD,false,true,"EURUSD",true)==-1);
  assert(SplitEntryRoute(CHART_BTCUSD,true,true,"BTCUSD",false)==1);
  assert(SplitEntryRoute(CHART_BTCUSD,true,true,"XAUUSD",false)==0);
  assert(SplitEntryRoute(CHART_BTCUSD,true,false,"BTCUSD",false)==0);

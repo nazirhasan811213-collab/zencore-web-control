@@ -321,6 +321,7 @@ bool Heartbeat(){
  }
  string btcSymbol=RegisteredChartSymbol("BTCUSD");
  if(btcSymbol!=""){
+  if(ZENCORE_SPLIT_ROLE==CHART_XAUUSD)SymbolSelect(btcSymbol,true);
   string p="s"+(string)count;
   text+=Row(p+"symbol","BTCUSD")+Row(p+"tickSize",Num(SymbolInfoDouble(btcSymbol,SYMBOL_TRADE_TICK_SIZE)))+
    Row(p+"tickValue",Num(SymbolInfoDouble(btcSymbol,SYMBOL_TRADE_TICK_VALUE)))+
@@ -883,7 +884,7 @@ string MasterResetForce(string pod){
 // A split worker may consume only its own direct orders.
 int SplitEntryRoute(int role,bool worker,bool direct,string source,bool btcAttached){
  if(role==CHART_BTCUSD)return worker && direct && source=="BTCUSD"?1:0;
- if(role==CHART_XAUUSD && direct && source=="BTCUSD")return btcAttached?0:-1;
+ if(role==CHART_XAUUSD && direct && source!="XAUUSD")return source=="BTCUSD" && btcAttached?0:-1;
  return 1;
 }
 void Process(bool chartWorker){
