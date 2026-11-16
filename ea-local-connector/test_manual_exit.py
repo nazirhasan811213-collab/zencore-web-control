@@ -35,7 +35,7 @@ class ManualExitTests(unittest.TestCase):
   self.assertIn('void OnTradeTransaction(',source);self.assertIn('TRADE_TRANSACTION_DEAL_ADD){ManageManual();Heartbeat();}',source)
   self.assertIn('manual-excluded-',source);self.assertIn('ACCOUNT_MARGIN_MODE_RETAIL_HEDGING',source)
   self.assertIn('code="MANUAL_EXIT_STEPLOCK_ONLY"',source)
-  self.assertIn('entry+sign*manualTp1',source);self.assertIn('entry-sign*manualSl',source)
+  self.assertIn('entry+sign*tp1Distance',source);self.assertIn('entry-sign*slDistance',source)
   self.assertIn('manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0)',source)
   self.assertNotIn('manualLayers>=10)Close',source)
   manual=source[source.index('void ManageManual()'):source.index('void OnTradeTransaction')]

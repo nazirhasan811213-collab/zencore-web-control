@@ -24,6 +24,13 @@ int main(){
   assert(ManualReachedStage(buy,t3+sign*2,t1,t2,t3)==4);
   assert(ManualStageStop(4,entry,initial,t1,t2,t3)==t3);
   assert(ManualReachedStage(buy,t3+sign*20,t1,t2,t3)==4);
+  double btcSl,btcTp1,btcTp2,btcTp3;
+  ManualBtcDistances(125,btcSl,btcTp1,btcTp2,btcTp3);
+  assert(btcSl==125&&btcTp1==125&&btcTp2==250&&btcTp3==375);
+  double btcEntry=65000,level1=btcEntry+sign*btcTp1,level2=btcEntry+sign*btcTp2,level3=btcEntry+sign*btcTp3;
+  assert(ManualReachedStage(buy,level3+sign*124.99,level1,level2,level3,125)==3);
+  assert(ManualReachedStage(buy,level3+sign*125,level1,level2,level3,125)==4);
+  assert(ManualStageStop(4,btcEntry,btcEntry-sign*btcSl,level1,level2,level3)==level3);
   // A persisted stage-4 lock remains TP3 after price retreats below TP2.
   assert(ManualReachedStage(buy,t1,t1,t2,t3)==1);
   assert(ManualStageStop(4,entry,initial,t1,t2,t3)==t3);
@@ -38,6 +45,9 @@ int main(){
   source=pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
   manual=source.split('void ManageManual(){')[1].split('void OnTradeTransaction')[0]
   self.assertIn('trade.PositionModify(ticket,target,0)',manual)
+  self.assertIn('iATR(symbol,PERIOD_M2,8)',source)
+  self.assertIn('CopyBuffer(handle,0,fillBar+1,1,atr)',source)
+  self.assertIn('Row("lockExtension",Num(extension))',manual)
   self.assertIn('if(reached>stage){stage=reached;',manual)
   self.assertIn('if(!manualEnabled || !Permissions()',manual)
   self.assertNotIn('quote>=t3:quote<=t3',manual)
