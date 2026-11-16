@@ -60,7 +60,10 @@ int main(){
 #include <string>
 #include <map>
 #include <cassert>
+#include <algorithm>
 using string=std::string;
+void StringToUpper(string &s){std::transform(s.begin(),s.end(),s.begin(),::toupper);}
+int StringFind(string s,string part){auto n=s.find(part);return n==string::npos?-1:int(n);}
 enum{CHART_AUTO,CHART_XAUUSD,CHART_BTCUSD};
 long primaryChart=10,localChart=10;
 int registeredRole=CHART_XAUUSD;
@@ -74,6 +77,11 @@ double GlobalVariableGet(string key){return charts.at(std::stol(key.substr(key.r
   role=role.replace('(string)chart','std::to_string(chart)')
   main=r'''
 int main(){
+ assert(ChartRoleFromName("XAUUSD.")==CHART_XAUUSD);
+ assert(ChartRoleFromName("BTCUSD")==CHART_BTCUSD);
+ assert(ChartRoleFromName("btcusd.m")==CHART_BTCUSD);
+ assert(ChartRoleFromName("BTCUSDT")==CHART_AUTO);
+ assert(ChartRoleFromName("XAUJPY")==CHART_AUTO);
  assert(DirectEntryChart("XAUUSD")==10);
  assert(DirectEntryChart("BTCUSD")==20);
  localChart=30;registeredRole=CHART_BTCUSD;

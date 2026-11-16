@@ -1,5 +1,5 @@
 ZENCORE VPS MANAGER 1.1.5
-VPS Manager 1.1.18 / Connector 2.1.33 / EA 2.33
+VPS Manager 1.1.19 / Connector 2.1.34 / EA 2.34
 Status Auto Trade dikawal dari ZenCore web.
 
 ALIRAN ADMIN
