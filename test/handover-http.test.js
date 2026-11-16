@@ -12,5 +12,13 @@ test('HTTP cannot bypass pending handover while manager pairing and onboarding r
   a.equal((await req('/onboarding')).status,200);a.equal((await req('/auth/me')).status,200);a.equal((await req('/api/auto-trade/ea-connect','POST',{})).status,201);
   a.equal((await req('/api/admin/vps/resolve','POST',{loginId:'ZCuser 11'})).status,403);
   for(const action of ['reset-account','master-reset','setup/ea-connect']){const denied=await req('/api/admin/clients/'+body.user.id+'/'+action,'POST',{confirmation:'RESET'});a.equal(denied.status,403);}
+  const target='/api/admin/clients/'+body.user.id+'/setup/manual-exit';
+  a.equal((await req(target,'PUT',{enabled:true})).status,403);
+  const admin=await fetch(base+'/auth/login',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({email:'admin@handover.test',password:'HandoverTest2026!'})});
+  a.equal(admin.status,200);
+  const adminCookie=admin.headers.get('set-cookie').split(';')[0];
+  const response=await fetch(base+target,{method:'PUT',headers:{Cookie:adminCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({enabled:true})});
+  a.equal(response.status,503);
+  a.match((await response.json()).error,/Servis serahan belum tersedia/);
  }finally{await new Promise(r=>{child.once('exit',r);child.kill('SIGTERM');setTimeout(()=>{child.kill('SIGKILL');r();},1000).unref();});fs.rmSync(dir,{recursive:true,force:true});}
 });
