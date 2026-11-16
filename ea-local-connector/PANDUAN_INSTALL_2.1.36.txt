@@ -1,17 +1,18 @@
-ZENCORE CONNECTOR 2.1.35 / EA 2.35
+ZENCORE CONNECTOR 2.1.36 / EA 2.36
 
 1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
-2. Jalankan ZenCoreSetup-2.1.35.exe dan buka ZenCore Connector.
+2. Jalankan ZenCoreSetup-2.1.36.exe dan buka ZenCore Connector.
 3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
-4. Tekan Pasang / kemas kini EA 2.35. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.35 dan ENTRY_CHART_READY dalam Experts.
+4. Tekan Pasang / kemas kini EA 2.36. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.36 dan ENTRY_CHART_READY dalam Experts.
 5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
 
 Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
-Beza mutlak harga Ask/ Bid dengan entry pelan Pine >= USD4: sekat entry.
+BTCUSD: tiada had beza harga Pine dengan harga MT5 sebelum order atau selepas fill.
+Pair lain: beza mutlak harga Ask/Bid dengan entry pelan Pine >= USD4 menyekat entry.
 SL dan setiap TP bermula daripada harga fill sebenar setiap posisi, dengan jarak pelan Pine.
 Setiap event hanya sekali; arahan pendua tidak membuka order baharu.
 EA menghantar satu order bagi setiap layer. Akaun netting menggabungkan fill setup yang sama.
-Jika fill broker melepasi had, EA cuba tutup posisi dan melaporkan kejadian.
+Bagi pair dengan had harga Pine, jika fill broker melepasi had, EA cuba tutup posisi dan melaporkan kejadian.
 
 Pakej ini tidak mengandungi password atau pautan akaun pengguna.
 

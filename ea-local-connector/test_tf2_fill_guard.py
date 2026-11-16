@@ -11,13 +11,17 @@ class FillGuard(unittest.TestCase):
   main=r'''
 int main(){
  for(double sign:{-1.0,1.0}){
-  assert(PineEntryGapAllowed(4000+sign*3.99,4000));
-  assert(!PineEntryGapAllowed(4000+sign*4,4000));
-  assert(!PineEntryGapAllowed(4000+sign*4.01,4000));
+  assert(PineEntryGapAllowed("XAUUSD",4000+sign*3.99,4000));
+  assert(!PineEntryGapAllowed("XAUUSD",4000+sign*4,4000));
+  assert(!PineEntryGapAllowed("XAUUSD",4000+sign*4.01,4000));
+  assert(PineEntryGapAllowed("BTCUSD",65000+sign*500,65000));
+  assert(!PineEntryGapAllowed("US500.CASH",4000+sign*4.01,4000));
  }
- assert(PineEntryGapAllowed(4000,4000));
- assert(!PineEntryGapAllowed(NAN,4000));
- assert(!PineEntryGapAllowed(4000,0));
+ assert(PineEntryGapAllowed("XAUUSD",4000,4000));
+ assert(!PineEntryGapAllowed("XAUUSD",NAN,4000));
+ assert(!PineEntryGapAllowed("XAUUSD",4000,0));
+ assert(!PineEntryGapAllowed("BTCUSD",NAN,65000));
+ assert(!PineEntryGapAllowed("BTCUSD",65000,0));
  assert(!Tf2EntryPriceAllowed(true,4016.00,4015.86));
  assert(!Tf2EntryPriceAllowed(false,4014.00,4014.14));
  assert(!Tf2EntryPriceAllowed(true,4015.86,4015.86));
@@ -49,8 +53,11 @@ int main(){
  assert(!Tf2EntryPriceAllowed(true,NAN,101));
 }
 '''
+  entry=source.split('bool Entry(')[1].split('// Persistent per-setup policy.')[0]
+  self.assertIn('!PineEntryGapAllowed(c,quote,entry)',entry)
+  self.assertIn('!PineEntryGapAllowed(c,dealPrice,entry)',entry)
   with tempfile.TemporaryDirectory() as tmp:
    p=pathlib.Path(tmp);cpp=p/'guard.cpp';out=p/'guard'
-   cpp.write_text('#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathCeil std::ceil\n#define MathFloor std::floor\n#define MathIsValidNumber std::isfinite\n#define MathAbs std::abs\n'+rules+main)
+   cpp.write_text('#include <string>\nusing string=std::string;\n#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathCeil std::ceil\n#define MathFloor std::floor\n#define MathIsValidNumber std::isfinite\n#define MathAbs std::abs\n'+rules+main)
    subprocess.run([compiler,'-std=c++17',str(cpp),'-o',str(out)],check=True,capture_output=True)
    subprocess.run([str(out)],check=True,capture_output=True)

@@ -1,5 +1,5 @@
 #property strict
-#property version "2.35"
+#property version "2.36"
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -274,7 +274,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.35")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion","2.36")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -404,8 +404,9 @@ bool Tf2EntryRiskAllowed(bool buy,double fill,double sl,double maximumRisk){
  double risk=buy?fill-sl:sl-fill;
  return fill>0 && sl>0 && maximumRisk>0 && maximumRisk<=4.0 && risk>0 && risk<=maximumRisk+1e-8;
 }
-bool PineEntryGapAllowed(double quote,double pineEntry){
- return MathIsValidNumber(quote) && MathIsValidNumber(pineEntry) && quote>0 && pineEntry>0 && MathAbs(quote-pineEntry)<4.0-1e-8;
+bool PineEntryGapAllowed(string signalSymbol,double quote,double pineEntry){
+ return MathIsValidNumber(quote) && MathIsValidNumber(pineEntry) && quote>0 && pineEntry>0 &&
+        (signalSymbol=="BTCUSD" || MathAbs(quote-pineEntry)<4.0-1e-8);
 }
 double ExecutionTarget(double fill,double planEntry,double target){return fill+(target-planEntry);}
 // End pure TF2 entry price rules.
@@ -489,7 +490,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    }
    if(fillPlan){
     double quote=buy?tick.ask:tick.bid;
-    if(directEntry && !PineEntryGapAllowed(quote,entry))return RejectEntry(i>0?"PARTIAL_PINE_ENTRY_GAP_4USD":"PINE_ENTRY_GAP_4USD");
+    if(directEntry && !PineEntryGapAllowed(c,quote,entry))return RejectEntry(i>0?"PARTIAL_PINE_ENTRY_GAP_4USD":"PINE_ENTRY_GAP_4USD");
     if(!directEntry && guardedTf2 && !Tf2EntryPriceAllowed(buy,quote,tp1))return RejectEntry(i>0?"TF2_PARTIAL_ENTRY_PAST_TP1":"TF2_ENTRY_PAST_TP1");
     sl=Price(symbol,ExecutionStop(buy,quote,stopDistance,entryTickSize));
     double quoteRisk=buy?quote-sl:sl-quote;
@@ -542,7 +543,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    bool addingNetLayer=netting && netPositionId!=0;
    if(addingNetLayer && MathAbs(PositionGetDouble(POSITION_VOLUME)-netVolume-filledVolume)>1e-8)
     return RejectEntry("NETTING_POSITION_CONFLICT");
-   if(directEntry && !PineEntryGapAllowed(dealPrice,entry)){
+   if(directEntry && !PineEntryGapAllowed(c,dealPrice,entry)){
     if(!CloseTicket(filledTicket,filledVolume))Print("ZenCore FILL_GAP_CLOSE_PENDING ticket=",filledTicket);
     return RejectEntry("FILL_PINE_ENTRY_GAP_4USD");
    }
@@ -998,7 +999,7 @@ int OnInit(){
  trade.SetExpertMagicNumber(MAGIC);trade.SetDeviationInPoints(30);trade.SetAsyncMode(false);
  if(!EventSetMillisecondTimer(250)){Print("ZenCore: INIT_TIMER_FAILED error=",GetLastError());return INIT_FAILED;}
  RegisterEntryChart();
- if(BindCurrentAccount())Print("ZenCore: EA_READY version=2.35 mode=",AccountMode());
+ if(BindCurrentAccount())Print("ZenCore: EA_READY version=2.36 mode=",AccountMode());
  else if(registeredRole!=CHART_AUTO)Print("ZenCore: ENTRY_CHART_SECONDARY symbol=",_Symbol,". Guna Connector yang sama.");
  return INIT_SUCCEEDED;
 }
@@ -1010,9 +1011,9 @@ void OnTimer(){
  if(!BindCurrentAccount()){
   if(registeredRole!=CHART_AUTO && channel!=""){
    ProcessMailbox(true);
-   Comment("ZenCore 2.35 • Carta entry ",registeredRole==CHART_BTCUSD?"BTCUSD":"XAUUSD");
-  }else if(registeredRole==CHART_AUTO)Comment("ZenCore 2.35 • Pilih EntryChartRole dalam Inputs EA");
-  else Comment("ZenCore 2.35 • Menunggu akaun MT5");
+   Comment("ZenCore 2.36 • Carta entry ",registeredRole==CHART_BTCUSD?"BTCUSD":"XAUUSD");
+  }else if(registeredRole==CHART_AUTO)Comment("ZenCore 2.36 • Pilih EntryChartRole dalam Inputs EA");
+  else Comment("ZenCore 2.36 • Menunggu akaun MT5");
   return;
  }
  TryResumeEntry();
@@ -1024,6 +1025,6 @@ void OnTimer(){
  if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
- Comment("ZenCore 2.35 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
+ Comment("ZenCore 2.36 • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();for(int i=0;i<ArraySize(manualAtrSources);i++)IndicatorRelease(manualAtrSources[i].handle);if(registeredRole!=CHART_AUTO)GlobalVariableDel(ChartRoleKey(ChartID()));if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
