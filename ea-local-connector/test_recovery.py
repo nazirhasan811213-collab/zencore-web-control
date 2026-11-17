@@ -1,7 +1,7 @@
-import io,json,tempfile,unittest,urllib.error
+import io,json,socket,ssl,tempfile,unittest,urllib.error
 from pathlib import Path
 from unittest.mock import patch
-from connector import Runner,Api
+from connector import Runner,Api,ConnectionRequestError,reconnect_delay
 from protocol import read_fields,atomic_write,encode_fields
 from test_protocol import IDENTITY,NOW,local_heartbeat
 
@@ -31,9 +31,24 @@ class RecoveryTests(unittest.TestCase):
    runner.connection_health('NETWORK_UNAVAILABLE')
    self.assertEqual(json.loads(file.read_text())['code'],'NETWORK_UNAVAILABLE')
  def test_network_errors_are_safe_and_actionable(self):
-  api=Api()
-  with patch.object(api.opener,'open',side_effect=urllib.error.URLError('sensitive detail')):
-   with self.assertRaisesRegex(RuntimeError,'^NETWORK_UNAVAILABLE$'):api.request('/api/execution/heartbeat',token='secret')
+  with tempfile.TemporaryDirectory() as folder:
+   runner=Runner({'channel':folder},lambda _:None)
+   for path,reason,cause,stage in (
+    ('/api/execution/heartbeat',socket.gaierror('private'),'DNS','CLOUD_HEARTBEAT'),
+    ('/api/execution/commands/next?wait=1',ssl.SSLError('private'),'TLS','COMMAND_FETCH'),
+    ('/api/execution/commands/example/ack',TimeoutError('private'),'TIMEOUT','COMMAND_ACK'),
+    ('/api/execution/commands/example/ack',ConnectionResetError('private'),'CONNECTION_INTERRUPTED','COMMAND_ACK'),
+   ):
+    with self.subTest(stage=stage,cause=cause):
+     with patch.object(runner.api.opener,'open',side_effect=urllib.error.URLError(reason)) as request:
+      with self.assertRaisesRegex(ConnectionRequestError,'^NETWORK_UNAVAILABLE$') as caught:
+       runner.api.request(path,token='secret')
+      self.assertEqual(request.call_args.kwargs['timeout'],4)
+     runner.connection_health('NETWORK_UNAVAILABLE',caught.exception)
+     raw=(Path(folder)/'connector-health.json').read_text()
+     self.assertNotIn('private',raw);self.assertNotIn('secret',raw)
+     health=json.loads(raw)
+     self.assertEqual((health['stage'],health['networkCause']),(stage,cause))
  def test_heartbeat_times_out_early_and_gateway_codes_survive_json_error_bodies(self):
   api=Api()
   for status in (408, 429, 500, 502, 503, 504):
@@ -64,9 +79,13 @@ class RecoveryTests(unittest.TestCase):
     if len(waits)==5:runner.stop.set()
    with patch.object(runner,'cycle',side_effect=RuntimeError('HTTP_503')),patch.object(runner.stop,'wait',side_effect=wait):runner.run()
    self.assertEqual(len(waits),5)
-   for delay,cap in zip(waits,[2,4,8,10,10]):self.assertTrue(.8*cap<=delay<=cap)
+   for delay,cap in zip(waits,[1,2,2,2,2]):self.assertTrue(.8*cap<=delay<=cap)
    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
    self.assertEqual(json.loads((Path(folder)/'connector-health.json').read_text())['consecutiveFailures'],5)
+
+ def test_rate_limited_connector_retains_longer_backoff(self):
+  with patch('connector.random.uniform',return_value=1):
+   self.assertEqual([reconnect_delay(n,'HTTP_429') for n in range(1,6)],[2,4,8,10,10])
 
  def test_revoked_token_stops_runner_and_releases_account(self):
   with tempfile.TemporaryDirectory() as folder:
