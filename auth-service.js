@@ -1,4 +1,5 @@
 const Access=require('./account-access');
+const { OWNER_EMAIL, systemRole } = require('./system-owner');
 const { whatsappNumber, promotionLinks } = require('./promotion-links');
 const {
   normalizeEmail,
@@ -30,6 +31,7 @@ function safeUser(user) {
     email: user.email,
     loginId: user.login_id?'ZCuser '+require('./managed-vps-accounts').number(user.login_id):require('./managed-vps-accounts').loginId(user.email),
     role: user.role || ROLE_CLIENT,
+    systemRole: systemRole(user),
     status: user.status==='active'&&Access.expired(user)?'expired':user.status,
     ...Access.fields(user),
     createdAt: user.createdAt || user.created_at,
@@ -160,6 +162,48 @@ function createAuthService(options = {}) {
     if (raw && !phone) throw authError('VALIDATION_ERROR', 'Masukkan nombor WhatsApp yang sah, contoh 0123456789 atau +60123456789.', 400);
     await store.setPromotionPhone(current.code, phone);
     return publicPromotion(current.code);
+  }
+
+  function assertOwner(user) {
+    if (systemRole(user) !== 'owner') throw authError('FORBIDDEN', 'System Owner sahaja.', 403);
+  }
+
+  async function systemAdmins(user) {
+    assertOwner(user);
+    return store.listSystemAdmins();
+  }
+
+  async function systemAdminActivity(user, before) {
+    assertOwner(user);
+    if (before !== null && !/^[1-9][0-9]{0,17}$/.test(before)) {
+      throw authError('INVALID_CURSOR', 'Halaman aktiviti tidak sah.');
+    }
+    const events = await store.listSystemAdminActivity(before);
+    return { events: events.slice(0, 50), nextBefore: events.length > 50 ? events[49].id : null };
+  }
+
+  async function changeSystemAdmin(user, input, id = null) {
+    assertOwner(user);
+    if (typeof input?.ownerPassword !== 'string' || input.ownerPassword.length > 128 ||
+        !await reauthenticate(user.id, input.ownerPassword)) {
+      throw authError('OWNER_REAUTH_REQUIRED', 'Sahkan dengan kata laluan System Owner.', 401);
+    }
+    if (id !== null) {
+      const admin = await store.changeSystemAdmin(user, { id });
+      if (!admin) throw authError('ADMIN_NOT_FOUND', 'System Admin aktif tidak dijumpai.', 404);
+      return admin;
+    }
+
+    const email = normalizeEmail(input.email);
+    const displayName = normalizeDisplayName(input.displayName);
+    const password = String(input.password || '');
+    if (!validateEmail(email) || email === OWNER_EMAIL || displayName.length < 2 ||
+        displayName.length > 60 || validateNewPassword(password)) {
+      throw authError('INVALID_ADMIN', 'Semak nama, e-mel dan kata laluan System Admin.');
+    }
+    const admin = await store.changeSystemAdmin(user, { email, displayName, passwordHash: await hashPassword(password) });
+    if (!admin) throw authError('ADMIN_EMAIL_IN_USE', 'E-mel ini sudah digunakan. Gunakan e-mel khas System Admin.', 409);
+    return admin;
   }
 
   async function adminOverview(user) {
@@ -541,6 +585,10 @@ function createAuthService(options = {}) {
     }
 
     await store.markLogin(userRow.id);
+    if (systemRole(userRow) === 'system_admin') {
+      const auditId = await store.beginAdminActivity(userRow, 'auth/login');
+      await store.finishAdminActivity(auditId, 200);
+    }
     const session = await issueSession(userRow.id);
     return { user: safeUser(userRow), ...session };
   }
@@ -580,6 +628,9 @@ function createAuthService(options = {}) {
     publicPromotion,
     promotionForUser,
     updatePromotionPhone,
+    systemAdmins,
+    systemAdminActivity,
+    changeSystemAdmin,
     adminOverview,
     adminClients,
     adminRegistrations,

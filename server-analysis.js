@@ -40,8 +40,7 @@ const ALLOW_ORIGINLESS_AUTH = /^(?:1|true|yes|on)$/i.test(String(process.env.ZEN
 const REGISTRATION_ENABLED = !/^(?:0|false|no|off)$/i.test(String(process.env.ZENCORE_REGISTRATION_ENABLED || 'true'));
 const DEFAULT_IB_CODE = String(process.env.ZENCORE_DEFAULT_IB_CODE || 'nazir').trim().toLowerCase();
 const IB_REGISTRY_JSON = String(process.env.ZENCORE_IB_REGISTRY_JSON || '').trim();
-const ADMIN_EMAILS = String(process.env.ZENCORE_ADMIN_EMAILS || '')
-  .split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
+const { systemRole, adminActivityPath } = require('./system-owner');
 const PUBLIC_VIEWER_ENABLED = /^(?:1|true|yes|on)$/i.test(
   String(process.env.ZENCORE_PUBLIC_VIEWER_ENABLED || '')
 );
@@ -121,10 +120,6 @@ if (AUTH_ENABLED) {
     });
     if (!authState.ready) {
     await store.init();
-    if (ADMIN_EMAILS.length && typeof store.promoteAdminsByEmail === 'function') {
-      const promoted = await store.promoteAdminsByEmail(ADMIN_EMAILS);
-      if (promoted) console.log(`ZenCore RBAC promoted ${promoted} configured admin account(s).`);
-    }
     if (IB_REGISTRY_JSON && typeof store.createIbReferrer === 'function') {
       let ibRegistry;
       try {
@@ -596,6 +591,39 @@ async function effectiveRegistrationSetting() {
 async function handleManagementApi(req, res, pathname, session) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
   try {
+    if (pathname.startsWith('/api/admin/') && systemRole(session.user) === 'system_admin' &&
+        ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const { action, target } = adminActivityPath(pathname);
+      const auditId = await authState.store.beginAdminActivity(session.user, action, target);
+      res.once('finish', () => {
+        authState.store.finishAdminActivity(auditId, res.statusCode)
+          .catch(() => console.error('ZenCore admin activity result not recorded', auditId));
+      });
+    }
+    if (pathname.startsWith('/api/admin/owner/')) {
+      res.setHeader('Cache-Control', 'no-store');
+      if (systemRole(session.user) !== 'owner') return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'System Owner sahaja.' });
+      if (req.method === 'GET' && pathname === '/api/admin/owner/admins') {
+        return sendJson(res, 200, { ok: true, admins: await authState.service.systemAdmins(session.user) });
+      }
+      if (req.method === 'GET' && pathname === '/api/admin/owner/activity') {
+        const before = new URL(req.url, 'http://localhost').searchParams.get('before');
+        return sendJson(res, 200, { ok: true, ...await authState.service.systemAdminActivity(session.user, before) });
+      }
+      const revoke = /^\/api\/admin\/owner\/admins\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/revoke$/i.exec(pathname);
+      if (req.method === 'POST' && (pathname === '/api/admin/owner/admins' || revoke)) {
+        if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
+        const body = await parseApiJson(req, res);
+        if (body === null) return;
+        const key = attemptKey(req, '/api/admin/owner/reauth', session.user.id);
+        const limit = consumeAttempt(key);
+        if (!limit.allowed) return sendJson(res, 429, { ok: false, error: 'Terlalu banyak cubaan. Cuba semula sebentar lagi.' }, { 'Retry-After': String(limit.retryAfter) });
+        const admin = await authState.service.changeSystemAdmin(session.user, body, revoke?.[1] ?? null);
+        authAttempts.delete(key);
+        return sendJson(res, revoke ? 200 : 201, { ok: true, admin });
+      }
+      return sendJson(res, 404, { ok: false, error: 'Laluan System Owner tidak dijumpai.' });
+    }
     const promotionMatch = pathname.match(/^\/api\/(admin|ib)\/promotion(?:\/([a-z0-9_-]{1,48}))?$/i);
     if (promotionMatch) {
       if (session.user.role !== promotionMatch[1]) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
@@ -1724,6 +1752,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname === '/auth.css') return sendAuthAsset(res, 'auth.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/management.css') return sendAuthAsset(res, 'management.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/system-owner.css') return sendAuthAsset(res, 'system-owner.css', 'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/system-owner-panel.js') return sendAuthAsset(res, 'system-owner-panel.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/management.js') return sendAuthAsset(res, 'management.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/detail.js') return sendAuthAsset(res, 'detail.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
@@ -1847,6 +1877,13 @@ const server = http.createServer(async (req, res) => {
 
   if (SITE_MODE !== 'precision-entry' && req.method === 'GET') {
     return sendAsset(res, 'retired.html', 'text/html; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin/owner') {
+    const session = await requireSession(req, res, '/login');
+    if (!session) return;
+    if (systemRole(session.user) !== 'owner') return redirect(res, '/app');
+    return sendAuthAsset(res, 'system-owner.html', 'text/html; charset=utf-8');
   }
 
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/admin') {

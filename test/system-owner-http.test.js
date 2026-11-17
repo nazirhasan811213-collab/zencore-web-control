@@ -1,0 +1,114 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { spawn } = require('node:child_process');
+const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const path = require('node:path');
+const { OWNER_EMAIL } = require('../system-owner');
+
+test('owner alone manages admin access and sees recorded admin activity', { timeout: 20000 }, async () => {
+  const root = path.resolve(__dirname, '..');
+  const dir = mkdtempSync(path.join(tmpdir(), 'zc-owner-'));
+  const preload = path.join(dir, 'seed.cjs');
+  const base = 'http://127.0.0.1:18951';
+  const ownerPassword = 'OwnerPassword2026!';
+  const adminPassword = 'AdminPassword2026!';
+  const clientEmail = 'member@owner.test';
+  const adminEmail = 'operator@owner.test';
+  writeFileSync(preload, `
+    const {MemoryAuthStore}=require(${JSON.stringify(path.join(root, 'auth-store'))});
+    const {hashPassword}=require(${JSON.stringify(path.join(root, 'auth-core'))});
+    MemoryAuthStore.prototype.init=async function(){
+      for(const account of [
+        {email:${JSON.stringify(OWNER_EMAIL)},role:'admin'},
+        {email:${JSON.stringify(clientEmail)},role:'client'}
+      ]) await this.createUser({...account,displayName:'Seed Account',passwordHash:await hashPassword(${JSON.stringify(ownerPassword)})});
+    };
+  `);
+  const child = spawn(process.execPath, ['-r', preload, '-r', './compat-v17.js', 'server-analysis.js'], {
+    cwd: root,
+    env: { ...process.env, PORT: '18951', NODE_ENV: 'test', DATABASE_URL: '',
+      SITE_MODE: 'precision-entry', ZENCORE_AUTH_ENABLED: 'true',
+      ZENCORE_AUTH_MEMORY: 'true', ZENCORE_INSECURE_COOKIE: 'true',
+      ZENCORE_PUBLIC_VIEWER_ENABLED: 'false', ZENCORE_AUTOTRADE_ENABLED: 'false',
+      ZENCORE_ADMIN_EMAILS: clientEmail },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let output = '';
+  child.stdout.on('data', data => { output += data; });
+  child.stderr.on('data', data => { output += data; });
+  const request = (route, { cookie, data, origin = base, method = data ? 'POST' : 'GET' } = {}) => fetch(base + route, {
+    method, redirect: 'manual', headers: {
+      ...(cookie ? { Cookie: cookie } : {}),
+      ...(data ? { Origin: origin, 'Content-Type': 'application/json' } : {})
+    },
+    ...(data ? { body: JSON.stringify(data) } : {})
+  });
+  const login = (email, password) => request('/auth/login', { data: { email, password } });
+  async function validLogin(email, password, wantRole) {
+    const response = await login(email, password);
+    const result = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(result));
+    assert.equal(result.user.systemRole, wantRole);
+    return response.headers.get('set-cookie').split(';')[0];
+  }
+
+  try {
+    for (let i = 0; !output.includes('Auth ready') && i < 100; i++) {
+      if (child.exitCode !== null) throw new Error(output);
+      try {
+        if ((await request('/auth/me')).status === 401) break;
+      } catch (_) {}
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    const admins = '/api/admin/owner/admins';
+    const activity = '/api/admin/owner/activity';
+    const grant = { displayName: 'Operator', email: adminEmail, password: adminPassword, ownerPassword };
+
+    assert.equal((await request(admins)).status, 401);
+    const owner = await validLogin(OWNER_EMAIL, ownerPassword, 'owner');
+    const client = await validLogin(clientEmail, ownerPassword, null);
+    assert.equal((await request(admins, { cookie: client })).status, 403);
+    assert.equal((await request('/admin/owner', { cookie: owner })).status, 200);
+    assert.equal((await request(admins, { cookie: owner, data: grant, origin: 'https://untrusted.test' })).status, 403);
+    assert.equal((await request(admins, { cookie: owner, data: { ...grant, ownerPassword: 'wrong' } })).status, 401);
+    assert.equal((await request(admins, { cookie: owner, data: { ...grant, email: OWNER_EMAIL } })).status, 400);
+    assert.equal((await request(admins, { cookie: owner, data: { ...grant, email: clientEmail } })).status, 409);
+    const created = await request(admins, { cookie: owner, data: grant });
+    assert.equal(created.status, 201);
+    const adminId = (await created.json()).admin.id;
+    const admin = await validLogin(adminEmail, adminPassword, 'system_admin');
+    assert.equal((await request('/admin/owner', { cookie: admin })).status, 302);
+    assert.equal((await request(activity, { cookie: admin })).status, 403);
+    assert.equal((await request(admins, { cookie: admin, data: grant })).status, 403);
+    const ownerId = (await (await request('/auth/me', { cookie: owner })).json()).user.id;
+    const revokeOwner = admins + '/' + ownerId + '/revoke';
+    assert.equal((await request(revokeOwner, { cookie: admin, data: { ownerPassword } })).status, 403);
+    assert.equal((await request(revokeOwner, { cookie: owner, data: { ownerPassword } })).status, 404);
+    assert.equal((await request('/api/admin/system/registration', {
+      cookie: admin, method: 'PATCH', data: { enabled: false, password: 'NeverLogThis' }
+    })).status, 200);
+    const remove = admins + '/' + adminId + '/revoke';
+    assert.equal((await request(remove, { cookie: owner, data: { ownerPassword } })).status, 200);
+    assert.equal((await request('/auth/me', { cookie: admin })).status, 401);
+    assert.equal((await login(adminEmail, adminPassword)).status, 401);
+    const restored = { ...grant, password: 'ReplacementPassword2026!' };
+    assert.equal((await request(admins, { cookie: owner, data: restored })).status, 201);
+    assert.equal((await request('/auth/me', { cookie: admin })).status, 401);
+    await validLogin(adminEmail, restored.password, 'system_admin');
+    const audit = await request(activity, { cookie: owner });
+    assert.equal(audit.status, 200);
+    const raw = await audit.text();
+    assert.ok(![ownerPassword, adminPassword, 'NeverLogThis'].some(password => raw.includes(password)));
+    const { events } = JSON.parse(raw);
+    assert.ok(events.some(event => event.action === 'system/registration' && event.actorEmail === adminEmail && event.status === 200));
+    assert.ok(events.some(event => event.action === 'auth/login' && event.actorEmail === adminEmail));
+    assert.ok(events.some(event => event.action === 'admin/revoke' && event.target === adminEmail));
+    assert.equal((await request(activity + '?before=invalid', { cookie: owner })).status, 400);
+  } finally {
+    child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

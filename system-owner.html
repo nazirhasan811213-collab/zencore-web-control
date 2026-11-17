@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>System Owner | ZenCore</title>
+  <link rel="stylesheet" href="/admin-registrations.css?v=20261014.1">
+  <link rel="stylesheet" href="/system-owner.css">
+</head>
+<body>
+  <main class="registration-admin">
+    <header>
+      <h1>System Owner</h1>
+      <a href="/admin">Kembali ke Panel Admin</a>
+    </header>
+    <section class="registration-card owner-card" aria-labelledby="give-access">
+      <h2 id="give-access">Beri akses System Admin</h2>
+      <p>Gunakan e-mel khas admin. Untuk aktifkan semula admin yang telah dibuang, gunakan e-mel admin itu dan kata laluan baharu.</p>
+      <form id="grant" method="post" class="owner-form">
+        <label>Nama admin<input name="displayName" required minlength="2" maxlength="60" autocomplete="off"></label>
+        <label>E-mel admin<input name="email" required type="email" maxlength="254" autocomplete="off"></label>
+        <label>Kata laluan admin<input name="password" required type="password" minlength="10" maxlength="128" autocomplete="new-password"></label>
+        <label>Kata laluan System Owner<input name="ownerPassword" required type="password" maxlength="128" autocomplete="current-password"></label>
+        <button class="registration-approve" type="submit">Beri akses</button>
+        <p id="grant-status" role="status"></p>
+      </form>
+    </section>
+    <section class="registration-card owner-card" aria-labelledby="list-title">
+      <h2 id="list-title">System Admin</h2>
+      <p id="admin-status" role="status">Memuatkan senarai…</p>
+      <ul id="admins" class="owner-list"></ul>
+    </section>
+    <section class="registration-card owner-card" aria-labelledby="audit-title">
+      <div class="owner-row">
+        <h2 id="audit-title">Aktiviti admin</h2>
+        <button id="refresh" type="button">Muat semula</button>
+      </div>
+      <p id="audit-status" role="status">Memuatkan aktiviti…</p>
+      <ol id="activity" class="owner-list"></ol>
+      <button id="older" type="button" hidden>Aktiviti terdahulu</button>
+    </section>
+  </main>
+  <dialog id="revoke-dialog">
+    <form id="revoke" method="post" class="owner-dialog-form">
+      <h2>Buang akses System Admin</h2>
+      <p id="revoke-target"></p>
+      <p>Akaun admin ini akan dinyahaktifkan dan semua sesinya akan ditamatkan.</p>
+      <label>Kata laluan System Owner<input name="ownerPassword" required type="password" maxlength="128" autocomplete="current-password"></label>
+      <p id="revoke-status" role="status"></p>
+      <div class="review-actions">
+        <button id="cancel-revoke" type="button">Batal</button>
+        <button class="registration-reject" type="submit">Buang akses</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/system-owner-panel.js" defer></script>
+</body>
+</html>
