@@ -450,10 +450,10 @@ bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdR
  double sign=buy?1.0:-1.0;
  double sampleTicks=MathMax(1.0,MathCeil(fill*0.000001/tick));
  double sample=Price(symbol,fill+sign*tick*sampleTicks),sampleProfit=0;
- if(sample<=0 || !OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,symbol,volume,fill,sample,sampleProfit) ||
+ if(sample<=0 || sample==fill || !OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,symbol,volume,fill,sample,sampleProfit) ||
     !MathIsValidNumber(sampleProfit) || sampleProfit<=0)return false;
  double usdPerTick=sampleProfit/(MathAbs(sample-fill)/tick)/usdRate;
- if(!MathIsValidNumber(usdPerTick) || usdPerTick<=0 || sample==fill)return false;
+ if(!MathIsValidNumber(usdPerTick) || usdPerTick<=0)return false;
  double levels[3]={1.50,2.50,3.50};
  for(int i=0;i<3;i++){
   double rawTicks=(fill+sign*tick*levels[i]/usdPerTick)/tick;
