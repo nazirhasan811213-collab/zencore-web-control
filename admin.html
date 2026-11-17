@@ -37,12 +37,12 @@
         <a href="/auto-trade"><span>↯</span>Auto Trade</a>
         <a href="/results"><span>▤</span>Reports</a>
         <a href="/admin/system"><span>⚙</span>Settings</a>
+        <a id="systemOwnerLink" href="/admin/owner" hidden><span>◈</span>System Owner</a>
       </nav>
 
       <div class="zc-admin-badge">
         <span>ADMIN ACCESS</span>
-        <b>♛ SUPER ADMIN</b>
-        <small>Full system control</small>
+        <b data-system-role>SYSTEM ADMIN</b>
       </div>
 
       <div class="zc-sidebar-quote">
@@ -66,7 +66,7 @@
             <b id="accountName">Nazir</b>
             <small id="accountEmail">Admin</small>
           </div>
-          <span class="zc-super-badge">♛ SUPER ADMIN <i>● Online</i></span>
+          <span class="zc-super-badge" data-system-role>SYSTEM ADMIN</span>
           <button id="logoutButton" class="mg-ghost" type="button">Logout</button>
         </div>
       </header>
@@ -270,7 +270,7 @@
     </main>
   </div>
 
-  <script src="/management.js?v=20261109.managed40" defer></script>
+  <script src="/management.js?v=20261118.owner" defer></script>
 <script src="/workspace-shell.js?v=20261007.monitor1" defer></script>
 </body>
 </html>

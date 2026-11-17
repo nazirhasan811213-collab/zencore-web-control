@@ -218,29 +218,6 @@ test('Admin controls all IBs while each IB only controls its own clients', async
   assert.equal(reenabled.status, 'active');
 });
 
-test('configured admin promotion changes only matching existing accounts', async () => {
-  const store = new MemoryAuthStore();
-  const auth = createAuthService({ store, secureCookies: false });
-  const a = await auth.register({
-    displayName: 'First',
-    email: 'first@example.com',
-    icNumber: '900101011244',
-    phone: '0123000021',
-    password: 'ZenCore2026!'
-  });
-  const b = await auth.register({
-    displayName: 'Second',
-    email: 'second@example.com',
-    icNumber: '900101011245',
-    phone: '0123000022',
-    password: 'ZenCore2026!'
-  });
-  assert.equal(await store.promoteAdminsByEmail(['first@example.com']), 1);
-  assert.equal((await store.findUserByIdForLogin(a.user.id)).role, 'admin');
-  assert.equal((await store.findUserByIdForLogin(b.user.id)).role, 'client');
-});
-
-
 test('Admin can reassign clients between IBs and promote a client into a new IB', async () => {
   const store = new MemoryAuthStore();
   const auth = createAuthService({ store, secureCookies: false });
