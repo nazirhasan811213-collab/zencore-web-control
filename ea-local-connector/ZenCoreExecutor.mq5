@@ -1,8 +1,8 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.36"
- #property version "2.36"
+ #define ZENCORE_RELEASE "2.38"
+ #property version "2.38"
 #else
  #define ZENCORE_RELEASE "2.37"
  #property version "2.37"
@@ -427,6 +427,44 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  return ok;
 }
 bool RejectEntry(string code){lastEntryCode=code;return false;}
+// OrderCalcProfit is denominated in the account currency.
+double BtcUsdInAccountCurrency(){
+ string currency=AccountInfoString(ACCOUNT_CURRENCY);
+ if(currency=="USD")return 1.0;
+ for(int i=0;i<SymbolsTotal(false);i++){
+  string forex=SymbolName(i,false);
+  string base=SymbolInfoString(forex,SYMBOL_CURRENCY_BASE),quote=SymbolInfoString(forex,SYMBOL_CURRENCY_PROFIT);
+  bool direct=base=="USD" && quote==currency;
+  if(!direct && !(base==currency && quote=="USD"))continue;
+  if(!SymbolSelect(forex,true))continue;
+  MqlTick tick;
+  if(!SymbolInfoTick(forex,tick) || tick.bid<=0 || tick.ask<=0)continue;
+  return direct?tick.bid:1.0/tick.ask;
+ }
+ return 0;
+}
+// Calculate price milestones for gross floating USD profit on the filled position.
+bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdRate,double &tp1,double &tp2,double &tp3){
+ double tick=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+ if(fill<=0 || volume<=0 || usdRate<=0 || tick<=0)return false;
+ double sign=buy?1.0:-1.0;
+ double sampleTicks=MathMax(1.0,MathCeil(fill*0.000001/tick));
+ double sample=Price(symbol,fill+sign*tick*sampleTicks),sampleProfit=0;
+ if(sample<=0 || sample==fill || !OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,symbol,volume,fill,sample,sampleProfit) ||
+    !MathIsValidNumber(sampleProfit) || sampleProfit<=0)return false;
+ double usdPerTick=sampleProfit/(MathAbs(sample-fill)/tick)/usdRate;
+ if(!MathIsValidNumber(usdPerTick) || usdPerTick<=0)return false;
+ double levels[3]={1.50,2.50,3.50};
+ for(int i=0;i<3;i++){
+  double rawTicks=(fill+sign*tick*levels[i]/usdPerTick)/tick;
+  double target=Price(symbol,(buy?MathCeil(rawTicks-1e-8):MathFloor(rawTicks+1e-8))*tick);
+  if(!MathIsValidNumber(target) || target<=0 || sign*(target-fill)<=0)return false;
+  if(i==0)tp1=target;
+  if(i==1)tp2=target;
+  if(i==2)tp3=target;
+ }
+ return true;
+}
 // Pure price rules: also exercised by the offline native regression harness.
 bool Tf2EntryPriceAllowed(bool buy,double quote,double tp1){
  return quote>0 && tp1>0 && (buy?quote<tp1:quote>tp1);
@@ -486,6 +524,11 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  bool guardedTf2=strategyMode=="TF2_SCALPING" && executionTf=="2" && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
  bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
  bool fillPlan=directEntry || guardedTf2 || fillTf15;
+ bool btcCash=ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
+ double usdRate=btcCash?BtcUsdInAccountCurrency():0;
+ if(btcCash && usdRate<=0)return RejectEntry("BTC_CASH_TARGET_UNAVAILABLE");
+ if(btcCash)exitLockVersion="BTC_TF2_CASH_STEPLOCK_V1";
+
  const double guardRisk=4.0;
  double stopDistance=directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
  double entryTickSize=fillPlan?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
@@ -534,6 +577,11 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     if(sl<=0 || quoteRisk<=0 || quoteRisk>stopDistance+1e-8)return RejectEntry("EXECUTION_SL_INVALID");
    }
    // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
+   if(btcCash){
+    double previewTp1,previewTp2,previewTp3;
+    if(!BtcCashTargets(symbol,buy,buy?tick.ask:tick.bid,lot,usdRate,previewTp1,previewTp2,previewTp3))
+     return RejectEntry(i>0?"SETUP_PARTIAL":"BTC_CASH_TARGET_UNAVAILABLE");
+   }
    double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
    if(netting){
     bool hasPosition=PositionSelect(symbol);
@@ -585,10 +633,18 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     return RejectEntry("FILL_PINE_ENTRY_GAP_4USD");
    }
    double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
-   double t1=Price(symbol,ExecutionTarget(fill,entry,tp1)),t2=Price(symbol,ExecutionTarget(fill,entry,tp2)),t3=Price(symbol,ExecutionTarget(fill,entry,tp3));
+   double t1=0,t2=0,t3=0;
+   bool targetsReady=true;
+   if(btcCash)targetsReady=BtcCashTargets(symbol,buy,fill,PositionGetDouble(POSITION_VOLUME),usdRate,t1,t2,t3);
+   else{
+    t1=Price(symbol,ExecutionTarget(fill,entry,tp1));
+    t2=Price(symbol,ExecutionTarget(fill,entry,tp2));
+    t3=Price(symbol,ExecutionTarget(fill,entry,tp3));
+    targetsReady=buy?fill<t1 && t1<t2 && t2<t3:t3>0 && fill>t1 && t1>t2 && t2>t3;
+   }
    double fillRisk=buy?fill-safeSl:safeSl-fill;
-   bool protectedFill=(!guardedTf2 || directEntry || Tf2EntryPriceAllowed(buy,fill,tp1)) && safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8 &&
-     (buy?fill<t1 && t1<t2 && t2<t3:t3>0 && fill>t1 && t1>t2 && t2>t3);
+   bool protectedFill=targetsReady && (!guardedTf2 || directEntry || Tf2EntryPriceAllowed(buy,fill,tp1)) &&
+     safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8;
    // Keep the previous plan on disk until the new broker stop is confirmed.
    bool stopChanged=false;
    if(protectedFill && MathAbs(safeSl-currentSl)>1e-8){
@@ -703,7 +759,10 @@ void ManageLocalStepLock(){
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
-  if(t1<=0 || !(buy?t1<t2 && t2<t3:t1>t2 && t2>t3))continue;
+  bool cashTargets=Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
+  bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
+                   (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
+  if(t1<=0 || !ordered)continue;
   MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
   double quote=buy?tick.bid:tick.ask,target=0;
   if((pineLock || tf15Be) && planEntry>0)entry=planEntry;

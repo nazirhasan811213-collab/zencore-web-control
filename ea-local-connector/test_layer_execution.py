@@ -12,7 +12,7 @@ class LayerExecution(unittest.TestCase):
         if not compiler:
             self.skipTest('g++ unavailable')
         source = pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
-        start = source.index('bool Tf2EntryPriceAllowed')
+        start = source.index('double BtcUsdInAccountCurrency()')
         end = source.index('\n}', source.index('\n return true;', source.index('bool Entry(', start))) + 2
         entry = source[start:end].replace('(string)identifier', 'std::to_string(identifier)').replace('(string)TimeCurrent()', 'std::to_string(TimeCurrent())')
         mock = r'''
@@ -29,7 +29,9 @@ using uint = unsigned int;
 #define MathCeil std::ceil
 #define MathFloor std::floor
 #define MathMin std::min
-enum {ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
+#define MathMax std::max
+#define ZENCORE_SPLIT_ROLE 0
+enum {ACCOUNT_CURRENCY, SYMBOL_CURRENCY_BASE, SYMBOL_CURRENCY_PROFIT, ORDER_TYPE_BUY, ORDER_TYPE_SELL, ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
       POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_VOLUME,
       SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_STOPS_LEVEL, SYMBOL_POINT,
@@ -91,6 +93,16 @@ long SymbolInfoInteger(string,int){return 0;}
 double Price(string,double p){return std::round(p*100)/100;}
 struct MqlTick{double bid,ask;};
 bool SymbolInfoTick(string,MqlTick &q){if(missingQuotes-->0)return false;q={4000+quoteOffset,4000.10+quoteOffset};return true;}
+string acctCurrency="USD";
+string AccountInfoString(int){return acctCurrency;}
+int SymbolsTotal(bool){return 1;}
+string SymbolName(int,bool){return "USDEUR";}
+string SymbolInfoString(string,int kind){return kind==SYMBOL_CURRENCY_BASE?"USD":"EUR";}
+bool SymbolSelect(string,bool){return true;}
+bool OrderCalcProfit(int type,string,double volume,double open,double close,double &profit){
+ profit=(type==ORDER_TYPE_BUY?1:-1)*(close-open)*volume*100;
+ return true;
+}
 bool BrokerDone(){return true;}
 long TimeCurrent(){return 1;}
 string Num(double n){return std::to_string(n);}
@@ -200,6 +212,27 @@ int main(){
  assert(!Run(true,12)&&sends==0&&lastEntryCode=="QUOTE_NOT_READY");
  assert(now-quoteWaitStarted==4000);
  assert(brokerSymbols[0]==_Symbol);
+ enabledSymbols="XAUUSD,BTCUSD";_Symbol="BTCUSD.pro";missingQuotes=0;brokerDelay=0;
+ for(bool merged:{false,true})for(bool buy:{false,true}){
+  netting=merged;positions.clear();calls=0;sends=0;
+  int sign=buy?1:-1;
+  assert(Entry("BTCUSD",_Symbol,buy?"BUY":"SELL",.01,2,4000,
+    4000-sign*2,4000+sign,4000+sign*2,4000+sign*3,"btc",false,
+    "TF2_SCALPING",false,0,"MT5_FILL_STEPLOCK","2",true));
+  assert(lastRisk.find("exitLockVersion=BTC_TF2_CASH_STEPLOCK_V1")!=string::npos);
+  const auto &position=positions.back();
+  double p1,p2,p3;
+  assert(BtcCashTargets(_Symbol,buy,position.entry,position.volume,1,p1,p2,p3));
+  double targets[3]={p1,p2,p3},thresholds[3]={1.5,2.5,3.5};
+  for(int i=0;i<3;i++){
+   double profit;
+   assert(OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,position.volume,position.entry,targets[i],profit));
+   assert(profit>=thresholds[i]-1e-8 && profit<=thresholds[i]+.01*position.volume*100+1e-8);
+   assert(lastRisk.find("tp"+std::to_string(i+1)+"="+Num(targets[i]))!=string::npos);
+  }
+ }
+ acctCurrency="GBP";assert(BtcUsdInAccountCurrency()==0);
+ acctCurrency="EUR";assert(BtcUsdInAccountCurrency()>0);
 }
 '''
         with tempfile.TemporaryDirectory() as folder:
