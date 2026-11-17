@@ -313,6 +313,7 @@ class Runner:
     def __init__(self,config,status,on_unpaired=None,background_lease=True):
         self.config=config; self.status=status; self.on_unpaired=on_unpaired; self.api=Api(); self.stop=threading.Event()
         self.lease_lock=threading.RLock();self.background_lease=background_lease
+        self.health_lock=threading.Lock()
         self.lease_retry_at=0;self.lease_failure_count=0;self.lease_error=None
         self.lease_request_error=None
         self.next_link_check=0
@@ -348,9 +349,10 @@ class Runner:
         if isinstance(error, ConnectionRequestError):
             stage = error.stage
             if error.cause: details['networkCause'] = error.cause
-        try:
-            atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count),**details}))
-        except OSError:pass
+        with self.health_lock:
+            try:
+                atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count),**details}))
+            except OSError:pass
         return code
     def cycle(self):
         if self.lease_error in ('INVALID_POD_TOKEN','TRANSPORT_REPLACED'):raise RuntimeError(self.lease_error)
