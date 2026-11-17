@@ -1,13 +1,13 @@
-ZENCORE CONNECTOR 2.1.39 / EA 2.39
+ZENCORE CONNECTOR 2.1.40 / EA 2.40
 
 1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
-2. Jalankan ZenCoreSetup-2.1.39.exe dan buka ZenCore Connector.
+2. Jalankan ZenCoreSetup-2.1.40.exe dan buka ZenCore Connector.
 3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
-4. Tekan Pasang / kemas kini EA 2.39. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.39 dan ENTRY_CHART_READY dalam Experts.
+4. Tekan Pasang / kemas kini EA 2.40. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.40 dan ENTRY_CHART_READY dalam Experts.
 5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
 
 Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
-BTCUSD Auto Entry TF2: TP1, TP2 dan TP3 mewakili untung terapung kasar USD1.50, USD2.50 dan USD3.50 untuk setiap posisi MT5. EA mengira paras harga menggunakan fill, volume sebenar dan spesifikasi broker. StepLock ikut candle M2 tutup: untung melebihi USD1.50 -> SL ke TP1; TP2 -> SL ke TP1; TP3 -> SL ke TP2; untung melebihi USD6.50 -> SL ke TP3.
+BTCUSD Auto Entry TF2: TP1, TP2 dan TP3 mewakili untung terapung kasar USD1.50, USD2.50 dan USD3.50 untuk setiap posisi MT5. EA mengira paras harga menggunakan fill, volume sebenar dan spesifikasi broker. StepLock ikut candle M2 tutup: untung melebihi USD1.50 -> SL ke harga fill MT5 (breakeven); TP2 -> SL ke TP1; TP3 -> SL ke TP2; untung melebihi USD6.50 -> SL ke TP3.
 BTCUSD: tiada had beza harga Pine dengan harga MT5 sebelum order atau selepas fill.
 Pair lain: beza mutlak harga Ask/Bid dengan entry pelan Pine >= USD4 menyekat entry.
 SL dan setiap TP bermula daripada harga fill sebenar setiap posisi, dengan jarak pelan Pine.

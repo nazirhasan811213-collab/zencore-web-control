@@ -109,7 +109,11 @@ int main(){
   };
   nextCashBar(1.4);assert(oldSl==100-sign);
   nextCashBar(1.5);assert(oldSl==100-sign);
-  nextCashBar(1.6);assert(oldSl==100+1.5*sign);
+  nextCashBar(1.6);assert(oldSl==100);
+  // A stronger stop inherited from EA 2.39 may not be loosened.
+  oldSl=100+1.5*sign;
+  nextCashBar(1.7);assert(oldSl==100+1.5*sign);
+  oldSl=100;
   nextCashBar(2.5);assert(oldSl==100+1.5*sign);
   nextCashBar(3.5);assert(oldSl==100+2.5*sign);
   nextCashBar(6.50);assert(oldSl==100+2.5*sign);

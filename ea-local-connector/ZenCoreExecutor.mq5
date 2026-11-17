@@ -1,8 +1,8 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.39"
- #property version "2.39"
+ #define ZENCORE_RELEASE "2.40"
+ #property version "2.40"
 #else
  #define ZENCORE_RELEASE "2.37"
  #property version "2.37"
@@ -814,7 +814,7 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if(candleLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=btcCandleLock?t1:pineLock?entry+(buy?1.50:-1.50):entry;
+  if(candleLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
   if(pineLock && target>0){
    // A Pine reference reached TP1 before this account filled. Never convert
    // that reference lock into a loss-making stop or a forced market close.
