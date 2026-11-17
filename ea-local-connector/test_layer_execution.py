@@ -31,7 +31,7 @@ using uint = unsigned int;
 #define MathMin std::min
 #define MathMax std::max
 #define ZENCORE_SPLIT_ROLE 0
-enum {ACCOUNT_CURRENCY, SYMBOL_CURRENCY_BASE, SYMBOL_CURRENCY_PROFIT, ORDER_TYPE_BUY, ORDER_TYPE_SELL, ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
+enum {SYMBOL_TRADE_CALC_MODE, SYMBOL_TRADE_CONTRACT_SIZE, SYMBOL_CALC_MODE_CFD, SYMBOL_CALC_MODE_CFDINDEX, SYMBOL_CALC_MODE_CFDLEVERAGE, SYMBOL_CALC_MODE_FOREX, SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE, ACCOUNT_CURRENCY, SYMBOL_CURRENCY_BASE, SYMBOL_CURRENCY_PROFIT, ORDER_TYPE_BUY, ORDER_TYPE_SELL, ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
       POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_VOLUME,
       SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_STOPS_LEVEL, SYMBOL_POINT,
@@ -88,8 +88,11 @@ bool IsOwn(ulong ticket){
  auto m=positions.at(selected).magic;
  return m==MAGIC||m==MAGIC15;
 }
-double SymbolInfoDouble(string,int){return .01;}
-long SymbolInfoInteger(string,int){return 0;}
+long calcMode=SYMBOL_CALC_MODE_CFD;
+bool rejectProfitProbe=false,roundProfitProbe=false;
+int profitCalls=0;
+double SymbolInfoDouble(string,int kind){return kind==SYMBOL_TRADE_CONTRACT_SIZE?100:.01;}
+long SymbolInfoInteger(string,int kind){return kind==SYMBOL_TRADE_CALC_MODE?calcMode:0;}
 double Price(string,double p){return std::round(p*100)/100;}
 struct MqlTick{double bid,ask;};
 bool SymbolInfoTick(string,MqlTick &q){if(missingQuotes-->0)return false;q={4000+quoteOffset,4000.10+quoteOffset};return true;}
@@ -97,10 +100,14 @@ string acctCurrency="USD";
 string AccountInfoString(int){return acctCurrency;}
 int SymbolsTotal(bool){return 1;}
 string SymbolName(int,bool){return "USDEUR";}
-string SymbolInfoString(string,int kind){return kind==SYMBOL_CURRENCY_BASE?"USD":"EUR";}
+string SymbolInfoString(string symbol,int kind){return symbol=="USDEUR"?(kind==SYMBOL_CURRENCY_BASE?"USD":"EUR"):(kind==SYMBOL_CURRENCY_BASE?"BTC":"USD");}
 bool SymbolSelect(string,bool){return true;}
 bool OrderCalcProfit(int type,string,double volume,double open,double close,double &profit){
+ profitCalls++;
+ if(rejectProfitProbe)return false;
  profit=(type==ORDER_TYPE_BUY?1:-1)*(close-open)*volume*100;
+ if(acctCurrency=="USC")profit*=100;
+ if(roundProfitProbe)profit=std::round(profit*100)/100;
  return true;
 }
 bool BrokerDone(){return true;}
@@ -112,7 +119,7 @@ bool HistoryDealSelect(ulong){return true;}
 long HistoryDealGetInteger(ulong,int){return positions.back().id;}
 double HistoryDealGetDouble(ulong,int){return lastDeal;}
 bool CloseTicket(ulong ticket,double volume){positions.at(ticket-1).volume-=volume;return true;}
-void Print(string,ulong){}
+template<class... Args> void Print(Args...){}
 struct Trade{
  ulong magic=0;
  double volume=0;
@@ -222,7 +229,7 @@ int main(){
   assert(lastRisk.find("exitLockVersion=BTC_TF2_CASH_STEPLOCK_V2")!=string::npos);
   const auto &position=positions.back();
   double p1,p2,p3,lock;
-  assert(BtcCashTargets(_Symbol,buy,position.entry,position.volume,1,p1,p2,p3,lock));
+  assert(BtcCashTargets(_Symbol,buy,position.entry,position.volume,p1,p2,p3,lock));
   double lockProfit;
   assert(OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,position.volume,position.entry,lock,lockProfit));
   assert(lockProfit>6.50+1e-8 && lockProfit<=6.50+.01*position.volume*100+1e-8);
@@ -237,6 +244,17 @@ int main(){
  }
  acctCurrency="GBP";assert(BtcUsdInAccountCurrency()==0);
  acctCurrency="EUR";assert(BtcUsdInAccountCurrency()>0);
+ double a,b,c,d;
+ acctCurrency="GBP";rejectProfitProbe=true;profitCalls=0;
+ assert(BtcCashTargets(_Symbol,true,4000,.01,a,b,c,d));
+ assert(a==4001.5 && d==4006.51 && profitCalls==0); // USD CFD calculates directly even without an account FX pair.
+ calcMode=1000;assert(!BtcCashTargets(_Symbol,true,4000,.01,a,b,c,d));
+ acctCurrency="USC";assert(BtcUsdInAccountCurrency()==100);
+ rejectProfitProbe=false;assert(BtcCashTargets(_Symbol,false,4000,.01,a,b,c,d));
+ assert(a==3998.5 && d==3993.49);
+ acctCurrency="USD";roundProfitProbe=true;profitCalls=0;
+ assert(BtcCashTargets(_Symbol,true,4000,.0001,a,b,c,d));
+ assert(profitCalls>1 && a==4150 && d==4650.01);
 }
 '''
         with tempfile.TemporaryDirectory() as folder:
