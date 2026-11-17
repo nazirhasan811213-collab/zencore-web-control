@@ -219,10 +219,14 @@ int main(){
   assert(Entry("BTCUSD",_Symbol,buy?"BUY":"SELL",.01,2,4000,
     4000-sign*2,4000+sign,4000+sign*2,4000+sign*3,"btc",false,
     "TF2_SCALPING",false,0,"MT5_FILL_STEPLOCK","2",true));
-  assert(lastRisk.find("exitLockVersion=BTC_TF2_CASH_STEPLOCK_V1")!=string::npos);
+  assert(lastRisk.find("exitLockVersion=BTC_TF2_CASH_STEPLOCK_V2")!=string::npos);
   const auto &position=positions.back();
-  double p1,p2,p3;
-  assert(BtcCashTargets(_Symbol,buy,position.entry,position.volume,1,p1,p2,p3));
+  double p1,p2,p3,lock;
+  assert(BtcCashTargets(_Symbol,buy,position.entry,position.volume,1,p1,p2,p3,lock));
+  double lockProfit;
+  assert(OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,position.volume,position.entry,lock,lockProfit));
+  assert(lockProfit>6.50+1e-8 && lockProfit<=6.50+.01*position.volume*100+1e-8);
+  assert(lastRisk.find("tp3LockTrigger="+Num(lock))!=string::npos);
   double targets[3]={p1,p2,p3},thresholds[3]={1.5,2.5,3.5};
   for(int i=0;i<3;i++){
    double profit;

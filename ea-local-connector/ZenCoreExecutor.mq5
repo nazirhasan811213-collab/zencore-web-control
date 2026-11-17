@@ -1,8 +1,8 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.38"
- #property version "2.38"
+ #define ZENCORE_RELEASE "2.39"
+ #property version "2.39"
 #else
  #define ZENCORE_RELEASE "2.37"
  #property version "2.37"
@@ -444,7 +444,7 @@ double BtcUsdInAccountCurrency(){
  return 0;
 }
 // Calculate price milestones for gross floating USD profit on the filled position.
-bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdRate,double &tp1,double &tp2,double &tp3){
+bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdRate,double &tp1,double &tp2,double &tp3,double &tp3Lock){
  double tick=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
  if(fill<=0 || volume<=0 || usdRate<=0 || tick<=0)return false;
  double sign=buy?1.0:-1.0;
@@ -454,14 +454,18 @@ bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdR
     !MathIsValidNumber(sampleProfit) || sampleProfit<=0)return false;
  double usdPerTick=sampleProfit/(MathAbs(sample-fill)/tick)/usdRate;
  if(!MathIsValidNumber(usdPerTick) || usdPerTick<=0)return false;
- double levels[3]={1.50,2.50,3.50};
- for(int i=0;i<3;i++){
+ double levels[4]={1.50,2.50,3.50,6.50};
+ for(int i=0;i<4;i++){
   double rawTicks=(fill+sign*tick*levels[i]/usdPerTick)/tick;
-  double target=Price(symbol,(buy?MathCeil(rawTicks-1e-8):MathFloor(rawTicks+1e-8))*tick);
+  // The final stage requires strictly more than USD6.50, including on a tick-aligned threshold.
+  double rounded=buy?MathCeil(rawTicks-1e-8):MathFloor(rawTicks+1e-8);
+  if(i==3)rounded=buy?MathFloor(rawTicks+1e-8)+1:MathCeil(rawTicks-1e-8)-1;
+  double target=Price(symbol,rounded*tick);
   if(!MathIsValidNumber(target) || target<=0 || sign*(target-fill)<=0)return false;
   if(i==0)tp1=target;
   if(i==1)tp2=target;
   if(i==2)tp3=target;
+  if(i==3)tp3Lock=target;
  }
  return true;
 }
@@ -527,7 +531,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  bool btcCash=ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
  double usdRate=btcCash?BtcUsdInAccountCurrency():0;
  if(btcCash && usdRate<=0)return RejectEntry("BTC_CASH_TARGET_UNAVAILABLE");
- if(btcCash)exitLockVersion="BTC_TF2_CASH_STEPLOCK_V1";
+ if(btcCash)exitLockVersion="BTC_TF2_CASH_STEPLOCK_V2";
 
  const double guardRisk=4.0;
  double stopDistance=directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
@@ -578,8 +582,8 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    }
    // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
    if(btcCash){
-    double previewTp1,previewTp2,previewTp3;
-    if(!BtcCashTargets(symbol,buy,buy?tick.ask:tick.bid,lot,usdRate,previewTp1,previewTp2,previewTp3))
+    double previewTp1,previewTp2,previewTp3,previewLock;
+    if(!BtcCashTargets(symbol,buy,buy?tick.ask:tick.bid,lot,usdRate,previewTp1,previewTp2,previewTp3,previewLock))
      return RejectEntry(i>0?"SETUP_PARTIAL":"BTC_CASH_TARGET_UNAVAILABLE");
    }
    double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
@@ -633,9 +637,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     return RejectEntry("FILL_PINE_ENTRY_GAP_4USD");
    }
    double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
-   double t1=0,t2=0,t3=0;
+   double t1=0,t2=0,t3=0,lockTrigger=0;
    bool targetsReady=true;
-   if(btcCash)targetsReady=BtcCashTargets(symbol,buy,fill,PositionGetDouble(POSITION_VOLUME),usdRate,t1,t2,t3);
+   if(btcCash)targetsReady=BtcCashTargets(symbol,buy,fill,PositionGetDouble(POSITION_VOLUME),usdRate,t1,t2,t3,lockTrigger);
    else{
     t1=Price(symbol,ExecutionTarget(fill,entry,tp1));
     t2=Price(symbol,ExecutionTarget(fill,entry,tp2));
@@ -651,7 +655,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
-   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3)));
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcCash?Row("tp3LockTrigger",Num(lockTrigger)):""));
    if(!protectedFill){
     if(addingNetLayer && stopChanged && !(trade.PositionModify(filledTicket,currentSl,0) && BrokerDone()))
      Print("ZenCore PRIOR_STOP_RESTORE_PENDING ticket=",filledTicket);
@@ -739,12 +743,30 @@ bool ProtectionAttemptAllowed(ulong ticket){
  return true;
 }
 // Only a completed broker M2 candle after this position opened can raise a stage.
-double ClosedTf2Quote(string symbol,long openedAt){
+double ClosedTf2Quote(string symbol,long openedAt,bool useExecutableSide=false,bool buy=true){
  MqlRates closedBars[];
  if(CopyRates(symbol,PERIOD_M2,1,1,closedBars)!=1)return 0;
  long closedAt=(long)closedBars[0].time+120;
  if(closedAt>TimeCurrent() || closedAt<=openedAt || closedBars[0].close<=0)return 0;
- return closedBars[0].close;
+ if(!useExecutableSide)return closedBars[0].close;
+ // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the M2 candle for BTC.
+ static string cachedSymbol="";
+ static long cachedClose=0;
+ static ulong retryAt=0;
+ static MqlTick lastTick;
+ ulong now=GetTickCount64();
+ if(cachedSymbol!=symbol || cachedClose!=closedAt){
+  cachedSymbol=symbol;cachedClose=closedAt;retryAt=0;
+  lastTick.bid=0;lastTick.ask=0;
+ }
+ if(lastTick.bid>0 && lastTick.ask>0)return buy?lastTick.bid:lastTick.ask;
+ if(now<retryAt)return 0;
+ retryAt=now+1000;
+ MqlTick quotes[];
+ int count=CopyTicksRange(symbol,quotes,COPY_TICKS_INFO,(ulong)closedBars[0].time*1000,(ulong)closedAt*1000-1);
+ if(count<=0)return 0;
+ lastTick=quotes[count-1];
+ return buy?lastTick.bid:lastTick.ask;
 }
 void ManageLocalStepLock(){
  if(!Permissions())return;
@@ -759,7 +781,10 @@ void ManageLocalStepLock(){
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
-  bool cashTargets=Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
+  bool btcCandleLock=Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V2";
+  bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
+  double lockTrigger=Val("tp3LockTrigger");
+  bool candleLock=pineLock || btcCandleLock;
   bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
                    (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
   if(t1<=0 || !ordered)continue;
@@ -769,11 +794,15 @@ void ManageLocalStepLock(){
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
-  double decisionQuote=pineLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME)):quote;
+  double decisionQuote=candleLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
    if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;
+  }
+  if(btcCandleLock && decisionQuote>0){
+   if(lockTrigger>0 && (buy?decisionQuote>=lockTrigger:decisionQuote<=lockTrigger))observed=4;
+   else if(observed==1 && decisionQuote==t1)observed=0;
   }
   if(observed>stage){stage=observed;if(!WriteAtomic(stageFile,Row("symbol",symbol)+Row("side",buy?"BUY":"SELL")+Row("stage",(string)stage)))continue;}
   if(fillAnchor && stage>=1){
@@ -785,7 +814,7 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if(pineLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
+  if(candleLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=btcCandleLock?t1:pineLock?entry+(buy?1.50:-1.50):entry;
   if(pineLock && target>0){
    // A Pine reference reached TP1 before this account filled. Never convert
    // that reference lock into a loss-making stop or a forced market close.
@@ -799,7 +828,7 @@ void ManageLocalStepLock(){
   if(!ProtectionAttemptAllowed(ticket))continue;
   // The level was already observed. If broker freeze/delay prevented installing
   // it and price crossed back through it, close this owned position only.
-  bool lockBreached=pineLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
+  bool lockBreached=candleLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
   if(lockBreached){if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore LOCK_EXIT_PENDING retcode=",trade.ResultRetcode());continue;}
   double distance=MathMax(SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL),SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL))*SymbolInfoDouble(symbol,SYMBOL_POINT);
   if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)continue;

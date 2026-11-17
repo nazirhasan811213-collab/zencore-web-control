@@ -1,5 +1,5 @@
-ZENCORE VPS MANAGER 1.1.22
-VPS Manager 1.1.22 / Connector 2.1.38 / EA 2.38
+ZENCORE VPS MANAGER 1.1.23
+VPS Manager 1.1.23 / Connector 2.1.39 / EA 2.39
 Status Auto Trade dikawal dari ZenCore web.
 BTCUSD: tiada had beza harga Pine dengan harga MT5 sebelum order atau selepas fill.
 
