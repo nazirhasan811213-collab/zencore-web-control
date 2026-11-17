@@ -1,8 +1,8 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.40"
- #property version "2.40"
+ #define ZENCORE_RELEASE "2.41"
+ #property version "2.41"
 #else
  #define ZENCORE_RELEASE "2.37"
  #property version "2.37"
@@ -431,6 +431,7 @@ bool RejectEntry(string code){lastEntryCode=code;return false;}
 double BtcUsdInAccountCurrency(){
  string currency=AccountInfoString(ACCOUNT_CURRENCY);
  if(currency=="USD")return 1.0;
+ if(currency=="USC" || currency=="USCent")return 100.0;
  for(int i=0;i<SymbolsTotal(false);i++){
   string forex=SymbolName(i,false);
   string base=SymbolInfoString(forex,SYMBOL_CURRENCY_BASE),quote=SymbolInfoString(forex,SYMBOL_CURRENCY_PROFIT);
@@ -443,17 +444,39 @@ double BtcUsdInAccountCurrency(){
  }
  return 0;
 }
+double BtcUsdPerTick(string symbol,bool buy,double fill,double volume,double tick){
+ long mode=SymbolInfoInteger(symbol,SYMBOL_TRADE_CALC_MODE);
+ bool linear=mode==SYMBOL_CALC_MODE_CFD || mode==SYMBOL_CALC_MODE_CFDINDEX ||
+             mode==SYMBOL_CALC_MODE_CFDLEVERAGE || mode==SYMBOL_CALC_MODE_FOREX ||
+             mode==SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE;
+ string profitCurrency=SymbolInfoString(symbol,SYMBOL_CURRENCY_PROFIT);
+ if(linear && profitCurrency=="USD"){
+  double contractSize=SymbolInfoDouble(symbol,SYMBOL_TRADE_CONTRACT_SIZE);
+  if(MathIsValidNumber(contractSize) && contractSize>0)return tick*contractSize*volume;
+ }
+ double usdRate=BtcUsdInAccountCurrency();
+ if(usdRate<=0 || !MathIsValidNumber(usdRate)){
+  Print("ZenCore: BTC cash target: USD conversion unavailable; currency=",AccountInfoString(ACCOUNT_CURRENCY)," symbol=",symbol);
+  return 0;
+ }
+ double distance=MathMax(tick,fill*0.0001),sign=buy?1.0:-1.0;
+ // Some broker/account combinations round a small probe to zero.
+ for(int i=0;i<3;i++,distance*=10){
+  double sample=Price(symbol,fill+sign*MathMin(distance,fill*0.5)),profit=0;
+  if(sample<=0 || sample==fill)continue;
+  if(OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,symbol,volume,fill,sample,profit) &&
+     MathIsValidNumber(profit) && profit>0)return profit*tick/MathAbs(sample-fill)/usdRate;
+ }
+ Print("ZenCore: BTC cash target: broker profit calculation unavailable; symbol=",symbol," volume=",volume," calcMode=",mode);
+ return 0;
+}
 // Calculate price milestones for gross floating USD profit on the filled position.
-bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdRate,double &tp1,double &tp2,double &tp3,double &tp3Lock){
+bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double &tp1,double &tp2,double &tp3,double &tp3Lock){
  double tick=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
- if(fill<=0 || volume<=0 || usdRate<=0 || tick<=0)return false;
- double sign=buy?1.0:-1.0;
- double sampleTicks=MathMax(1.0,MathCeil(fill*0.000001/tick));
- double sample=Price(symbol,fill+sign*tick*sampleTicks),sampleProfit=0;
- if(sample<=0 || sample==fill || !OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,symbol,volume,fill,sample,sampleProfit) ||
-    !MathIsValidNumber(sampleProfit) || sampleProfit<=0)return false;
- double usdPerTick=sampleProfit/(MathAbs(sample-fill)/tick)/usdRate;
+ if(fill<=0 || volume<=0 || tick<=0)return false;
+ double usdPerTick=BtcUsdPerTick(symbol,buy,fill,volume,tick);
  if(!MathIsValidNumber(usdPerTick) || usdPerTick<=0)return false;
+ double sign=buy?1.0:-1.0;
  double levels[4]={1.50,2.50,3.50,6.50};
  for(int i=0;i<4;i++){
   double rawTicks=(fill+sign*tick*levels[i]/usdPerTick)/tick;
@@ -461,7 +484,10 @@ bool BtcCashTargets(string symbol,bool buy,double fill,double volume,double usdR
   double rounded=buy?MathCeil(rawTicks-1e-8):MathFloor(rawTicks+1e-8);
   if(i==3)rounded=buy?MathFloor(rawTicks+1e-8)+1:MathCeil(rawTicks-1e-8)-1;
   double target=Price(symbol,rounded*tick);
-  if(!MathIsValidNumber(target) || target<=0 || sign*(target-fill)<=0)return false;
+  if(!MathIsValidNumber(target) || target<=0 || sign*(target-fill)<=0){
+   Print("ZenCore: BTC cash target: invalid target price; symbol=",symbol," volume=",volume," profitTargetUsd=",levels[i]);
+   return false;
+  }
   if(i==0)tp1=target;
   if(i==1)tp2=target;
   if(i==2)tp3=target;
@@ -529,8 +555,6 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
  bool fillPlan=directEntry || guardedTf2 || fillTf15;
  bool btcCash=ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
- double usdRate=btcCash?BtcUsdInAccountCurrency():0;
- if(btcCash && usdRate<=0)return RejectEntry("BTC_CASH_TARGET_UNAVAILABLE");
  if(btcCash)exitLockVersion="BTC_TF2_CASH_STEPLOCK_V2";
 
  const double guardRisk=4.0;
@@ -583,7 +607,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
    if(btcCash){
     double previewTp1,previewTp2,previewTp3,previewLock;
-    if(!BtcCashTargets(symbol,buy,buy?tick.ask:tick.bid,lot,usdRate,previewTp1,previewTp2,previewTp3,previewLock))
+    if(!BtcCashTargets(symbol,buy,buy?tick.ask:tick.bid,lot,previewTp1,previewTp2,previewTp3,previewLock))
      return RejectEntry(i>0?"SETUP_PARTIAL":"BTC_CASH_TARGET_UNAVAILABLE");
    }
    double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
@@ -639,7 +663,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
    double t1=0,t2=0,t3=0,lockTrigger=0;
    bool targetsReady=true;
-   if(btcCash)targetsReady=BtcCashTargets(symbol,buy,fill,PositionGetDouble(POSITION_VOLUME),usdRate,t1,t2,t3,lockTrigger);
+   if(btcCash)targetsReady=BtcCashTargets(symbol,buy,fill,PositionGetDouble(POSITION_VOLUME),t1,t2,t3,lockTrigger);
    else{
     t1=Price(symbol,ExecutionTarget(fill,entry,tp1));
     t2=Price(symbol,ExecutionTarget(fill,entry,tp2));
