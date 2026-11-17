@@ -12,7 +12,7 @@ class LayerExecution(unittest.TestCase):
         if not compiler:
             self.skipTest('g++ unavailable')
         source = pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
-        start = source.index('double BtcUsdInAccountCurrency()')
+        start = source.index('const double BTC_TF2_PIP=')
         end = source.index('\n}', source.index('\n return true;', source.index('bool Entry(', start))) + 2
         entry = source[start:end].replace('(string)identifier', 'std::to_string(identifier)').replace('(string)TimeCurrent()', 'std::to_string(TimeCurrent())')
         mock = r'''
@@ -31,7 +31,7 @@ using uint = unsigned int;
 #define MathMin std::min
 #define MathMax std::max
 #define ZENCORE_SPLIT_ROLE 0
-enum {SYMBOL_TRADE_CALC_MODE, SYMBOL_TRADE_CONTRACT_SIZE, SYMBOL_CALC_MODE_CFD, SYMBOL_CALC_MODE_CFDINDEX, SYMBOL_CALC_MODE_CFDLEVERAGE, SYMBOL_CALC_MODE_FOREX, SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE, ACCOUNT_CURRENCY, SYMBOL_CURRENCY_BASE, SYMBOL_CURRENCY_PROFIT, ORDER_TYPE_BUY, ORDER_TYPE_SELL, ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
+enum {ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
       POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_VOLUME,
       SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_STOPS_LEVEL, SYMBOL_POINT,
@@ -88,28 +88,11 @@ bool IsOwn(ulong ticket){
  auto m=positions.at(selected).magic;
  return m==MAGIC||m==MAGIC15;
 }
-long calcMode=SYMBOL_CALC_MODE_CFD;
-bool rejectProfitProbe=false,roundProfitProbe=false;
-int profitCalls=0;
-double SymbolInfoDouble(string,int kind){return kind==SYMBOL_TRADE_CONTRACT_SIZE?100:.01;}
-long SymbolInfoInteger(string,int kind){return kind==SYMBOL_TRADE_CALC_MODE?calcMode:0;}
+double SymbolInfoDouble(string,int){return .01;}
+long SymbolInfoInteger(string,int){return 0;}
 double Price(string,double p){return std::round(p*100)/100;}
 struct MqlTick{double bid,ask;};
 bool SymbolInfoTick(string,MqlTick &q){if(missingQuotes-->0)return false;q={4000+quoteOffset,4000.10+quoteOffset};return true;}
-string acctCurrency="USD";
-string AccountInfoString(int){return acctCurrency;}
-int SymbolsTotal(bool){return 1;}
-string SymbolName(int,bool){return "USDEUR";}
-string SymbolInfoString(string symbol,int kind){return symbol=="USDEUR"?(kind==SYMBOL_CURRENCY_BASE?"USD":"EUR"):(kind==SYMBOL_CURRENCY_BASE?"BTC":"USD");}
-bool SymbolSelect(string,bool){return true;}
-bool OrderCalcProfit(int type,string,double volume,double open,double close,double &profit){
- profitCalls++;
- if(rejectProfitProbe)return false;
- profit=(type==ORDER_TYPE_BUY?1:-1)*(close-open)*volume*100;
- if(acctCurrency=="USC")profit*=100;
- if(roundProfitProbe)profit=std::round(profit*100)/100;
- return true;
-}
 bool BrokerDone(){return true;}
 long TimeCurrent(){return 1;}
 string Num(double n){return std::to_string(n);}
@@ -226,35 +209,24 @@ int main(){
   assert(Entry("BTCUSD",_Symbol,buy?"BUY":"SELL",.01,2,4000,
     4000-sign*2,4000+sign,4000+sign*2,4000+sign*3,"btc",false,
     "TF2_SCALPING",false,0,"MT5_FILL_STEPLOCK","2",true));
-  assert(lastRisk.find("exitLockVersion=BTC_TF2_CASH_STEPLOCK_V2")!=string::npos);
+  assert(lastRisk.find("exitLockVersion=BTC_TF2_PIP_STEPLOCK_V1")!=string::npos);
   const auto &position=positions.back();
   double p1,p2,p3,lock;
-  assert(BtcCashTargets(_Symbol,buy,position.entry,position.volume,p1,p2,p3,lock));
-  double lockProfit;
-  assert(OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,position.volume,position.entry,lock,lockProfit));
-  assert(lockProfit>6.50+1e-8 && lockProfit<=6.50+.01*position.volume*100+1e-8);
+  assert(BtcPipTargets(_Symbol,buy,position.entry,p1,p2,p3,lock));
+  assert(std::abs(position.sl-(position.entry-300*sign))<=.0100001);
+  assert(std::abs(lock-position.entry-sign*700)>0 && std::abs(lock-position.entry-sign*700)<=.0100001);
   assert(lastRisk.find("tp3LockTrigger="+Num(lock))!=string::npos);
-  double targets[3]={p1,p2,p3},thresholds[3]={1.5,2.5,3.5};
+  double targets[3]={p1,p2,p3},distances[3]={150,250,400};
   for(int i=0;i<3;i++){
-   double profit;
-   assert(OrderCalcProfit(buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,position.volume,position.entry,targets[i],profit));
-   assert(profit>=thresholds[i]-1e-8 && profit<=thresholds[i]+.01*position.volume*100+1e-8);
+   assert(std::abs(sign*(targets[i]-position.entry)-distances[i])<=.005001);
    assert(lastRisk.find("tp"+std::to_string(i+1)+"="+Num(targets[i]))!=string::npos);
   }
  }
- acctCurrency="GBP";assert(BtcUsdInAccountCurrency()==0);
- acctCurrency="EUR";assert(BtcUsdInAccountCurrency()>0);
  double a,b,c,d;
- acctCurrency="GBP";rejectProfitProbe=true;profitCalls=0;
- assert(BtcCashTargets(_Symbol,true,4000,.01,a,b,c,d));
- assert(a==4001.5 && d==4006.51 && profitCalls==0); // USD CFD calculates directly even without an account FX pair.
- calcMode=1000;assert(!BtcCashTargets(_Symbol,true,4000,.01,a,b,c,d));
- acctCurrency="USC";assert(BtcUsdInAccountCurrency()==100);
- rejectProfitProbe=false;assert(BtcCashTargets(_Symbol,false,4000,.01,a,b,c,d));
- assert(a==3998.5 && d==3993.49);
- acctCurrency="USD";roundProfitProbe=true;profitCalls=0;
- assert(BtcCashTargets(_Symbol,true,4000,.0001,a,b,c,d));
- assert(profitCalls>1 && a==4150 && d==4650.01);
+ assert(BtcPipTargets(_Symbol,true,64000,a,b,c,d));
+ assert(a==64150 && b==64250 && c==64400 && d==64700.01);
+ assert(BtcPipTargets(_Symbol,false,64000,a,b,c,d));
+ assert(a==63850 && b==63750 && c==63600 && d==63299.99);
 }
 '''
         with tempfile.TemporaryDirectory() as folder:

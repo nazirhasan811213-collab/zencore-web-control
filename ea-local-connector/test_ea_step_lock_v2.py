@@ -99,8 +99,9 @@ int main(){
   quote=100+sign*1.4;clockMs+=1000;ManageLocalStepLock();assert(!closed); // intrabar pullback cannot force close
   closedQuote=quote;clockMs+=1000;ManageLocalStepLock();assert(closed);failModify=false; // confirmed breach can close
 
+  for(const string version:{"BTC_TF2_CASH_STEPLOCK_V2","BTC_TF2_PIP_STEPLOCK_V1"}){
   files.clear();protectionTickets.clear();protectionTryAt.clear();closed=false;oldSl=100-sign;
-  files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("exitLockVersion","BTC_TF2_CASH_STEPLOCK_V2")+Row("tp1",std::to_string(100+1.5*sign))+Row("tp2",std::to_string(100+2.5*sign))+Row("tp3",std::to_string(100+3.5*sign))+Row("tp3LockTrigger",std::to_string(100+6.51*sign));
+  files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("exitLockVersion",version)+Row("tp1",std::to_string(100+1.5*sign))+Row("tp2",std::to_string(100+2.5*sign))+Row("tp3",std::to_string(100+3.5*sign))+Row("tp3LockTrigger",std::to_string(100+6.51*sign));
   auto nextCashBar=[&](double gross){
    closedTime+=120;clockMs+=1000;closedQuote=100+sign*7;
    // The executable side of this close can differ from the chart price.
@@ -118,6 +119,7 @@ int main(){
   nextCashBar(3.5);assert(oldSl==100+2.5*sign);
   nextCashBar(6.50);assert(oldSl==100+2.5*sign);
   nextCashBar(6.51);assert(oldSl==100+3.5*sign);
+  }
 
  }
 }
