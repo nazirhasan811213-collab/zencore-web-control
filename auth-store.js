@@ -329,14 +329,15 @@ class PostgresAuthStore {
       if (!owner.rowCount) throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
       let result;
       if (input.passwordHash) {
+        if (input.email === OWNER_EMAIL) throw require('./auth-service').authError('FORBIDDEN', 'Akses owner dilindungi.', 403);
         result = await client.query(
           `INSERT INTO zencore_users(id,display_name,email,password_hash,role,status)
-           SELECT $1,$2,$3,$4,'admin','active' WHERE LOWER($3)<>$5
+           VALUES ($1,$2,$3,$4,'admin','active')
            ON CONFLICT (email) DO UPDATE SET display_name=EXCLUDED.display_name,
              password_hash=EXCLUDED.password_hash,status='active'
            WHERE zencore_users.role='admin' AND zencore_users.status='disabled'
            RETURNING *`,
-          [crypto.randomUUID(), input.displayName, input.email, input.passwordHash, OWNER_EMAIL]
+          [crypto.randomUUID(), input.displayName, input.email, input.passwordHash]
         );
       } else {
         result = await client.query(

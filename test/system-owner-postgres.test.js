@@ -30,8 +30,9 @@ test('Postgres preserves admin revocation and audit across store initialization'
     const requests = await Promise.allSettled([
       auth.changeSystemAdmin(owner, input), auth.changeSystemAdmin(owner, input)
     ]);
-    const granted = requests.find(result => result.status === 'fulfilled').value;
-    assert.equal(requests.filter(result => result.status === 'fulfilled').length, 1);
+    const fulfilled = requests.filter(result => result.status === 'fulfilled');
+    assert.equal(fulfilled.length, 1, requests.map(result => result.reason?.stack).filter(Boolean).join('\n'));
+    const granted = fulfilled[0].value;
     assert.equal(requests.find(result => result.status === 'rejected').reason.code, 'ADMIN_EMAIL_IN_USE');
     const login = await auth.login({ email, password });
     const session = { headers: { cookie: auth.createCookie(login.token) } };
