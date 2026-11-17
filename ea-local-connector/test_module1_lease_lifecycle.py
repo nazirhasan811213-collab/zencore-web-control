@@ -6,11 +6,11 @@ from protocol import atomic_write,encode_fields,read_fields
 from test_protocol import IDENTITY,local_heartbeat
 
 class ModuleOneLeaseTests(unittest.TestCase):
- def test_100_slots_spread_reconnects_without_extending_ten_second_cap(self):
+ def test_100_slots_spread_reconnects_within_two_second_cap(self):
   factors=[.8+i*.002 for i in range(100)]
-  with patch('connector.random.uniform',side_effect=factors):delays=[reconnect_delay(10) for _ in range(100)]
+  with patch('connector.random.uniform',side_effect=factors):delays=[reconnect_delay(10,'NETWORK_UNAVAILABLE') for _ in range(100)]
   self.assertEqual(len(set(delays)),100)
-  self.assertTrue(all(8<=delay<=10 for delay in delays))
+  self.assertTrue(all(1.6<=delay<=2 for delay in delays))
  def test_repeated_outages_recover_without_changing_saved_user_settings(self):
   with tempfile.TemporaryDirectory() as folder:
    runner=self.make_runner(folder);saved=dict(runner.config)
