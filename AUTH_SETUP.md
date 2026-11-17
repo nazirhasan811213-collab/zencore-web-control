@@ -110,19 +110,13 @@ Keep codes lowercase and use only letters, numbers, `_` or `-`.
 
 ## Role hierarchy
 
-ZenCore now uses three account roles:
+The existing active administrator at `nazirhasan811213@gmail.com` is the System Owner. The owner retains the operational admin permissions and can use `/admin/owner` to grant or revoke System Admin access and view administrative activity. The authentication API exposes this distinction as `systemRole` while the operational `role` remains `admin` for compatibility.
 
-- `admin`: global control across all IBs and all clients.
-- `ib`: access only to clients permanently assigned to that IB.
-- `client`: personal ZenCore account; trading/analysis APIs continue to use the signed-in user's own user ID.
+- System Admin accounts manage system operations, IBs and clients.
+- IB accounts manage clients assigned to that IB.
+- Client accounts use their own trading and analysis settings. Viewer accounts have read-only access where supported.
 
-Configured admins are promoted from existing user accounts at startup using:
-
-```text
-ZENCORE_ADMIN_EMAILS=admin@example.com
-```
-
-Multiple admin e-mails can be comma-separated. Public client registration never creates an admin or IB role.
+The owner uses a dedicated e-mail for each new admin. Revocation disables the admin account and terminates its sessions. The owner can restore access with a new password. Existing admin accounts are retained. The server no longer uses `ZENCORE_ADMIN_EMAILS` to grant access at startup. An environment entry cannot restore a revoked admin.
 
 Role landing pages:
 

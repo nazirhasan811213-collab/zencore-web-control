@@ -1,0 +1,15 @@
+.owner-card { margin-top: 16px; }
+.owner-form { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.owner-form button { justify-self: start; }
+.owner-form input { width: 100%; min-width: 0; }
+.owner-form p, .owner-dialog-form h2 { margin: 0; }
+.owner-list { padding: 0; list-style: none; }
+.owner-list li { border-top: 1px solid #294354; padding: 12px 0; overflow-wrap: anywhere; }
+.owner-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.owner-row button { flex-shrink: 0; }
+.owner-detail { display: block; margin-top: 4px; color: #a5bace; font-size: .875rem; }
+.owner-dialog-form { display: grid; gap: 8px; }
+@media (max-width: 560px) {
+  .owner-form { grid-template-columns: 1fr; }
+  .owner-list .owner-row { flex-wrap: wrap; }
+}

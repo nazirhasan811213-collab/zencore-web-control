@@ -1,4 +1,5 @@
 const Access=require('./account-access');
+const { OWNER_EMAIL } = require('./system-owner');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const { guardPool } = require('./database-recovery');
@@ -222,6 +223,16 @@ class PostgresAuthStore {
       CREATE INDEX IF NOT EXISTS zencore_sessions_expires_at_idx
         ON zencore_sessions(expires_at);
 
+      CREATE TABLE IF NOT EXISTS zencore_system_admin_activity (
+        id BIGSERIAL PRIMARY KEY,
+        actor_id UUID NOT NULL,
+        actor_email TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target TEXT,
+        status INTEGER,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS zencore_system_settings (
         setting_key VARCHAR(64) PRIMARY KEY,
         setting_value JSONB NOT NULL,
@@ -277,18 +288,78 @@ class PostgresAuthStore {
     };
   }
 
-  async promoteAdminsByEmail(emails = []) {
-    const normalized = [...new Set(emails.map(value => String(value || '').trim().toLowerCase()).filter(Boolean))];
-    if (!normalized.length) return 0;
+  async listSystemAdmins() {
     const result = await this.pool.query(
-      `UPDATE zencore_users
-       SET role = 'admin'
-       WHERE LOWER(email) = ANY($1::text[])
-         AND role <> 'admin' AND status = 'active'
-       RETURNING id`,
-      [normalized]
+      "SELECT id, display_name, email, role, status, last_login_at, created_at FROM zencore_users WHERE role='admin' AND LOWER(email)<>$1 ORDER BY email",
+      [OWNER_EMAIL]
     );
-    return result.rowCount;
+    return result.rows.map(publicUser);
+  }
+
+  async beginAdminActivity(actor, action, target = null) {
+    const result = await this.pool.query(
+      'INSERT INTO zencore_system_admin_activity(actor_id,actor_email,action,target) VALUES($1,$2,$3,$4) RETURNING id',
+      [actor.id, actor.email, action, target]
+    );
+    return result.rows[0].id;
+  }
+
+  async finishAdminActivity(id, status) {
+    await this.pool.query('UPDATE zencore_system_admin_activity SET status=$2 WHERE id=$1', [id, status]);
+  }
+
+  async listSystemAdminActivity(before = null) {
+    const result = await this.pool.query(
+      `SELECT id, actor_email AS "actorEmail", action, target, status, created_at AS "createdAt"
+       FROM zencore_system_admin_activity WHERE ($1::bigint IS NULL OR id<$1)
+       ORDER BY id DESC LIMIT 51`, [before]
+    );
+    return result.rows;
+  }
+
+  async changeSystemAdmin(actor, input) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Check against the current authenticated account, inside the role-change transaction.
+      const owner = await client.query(
+        "SELECT id FROM zencore_users WHERE id=$1 AND LOWER(email)=$2 AND role='admin' AND status='active' FOR SHARE",
+        [actor.id, OWNER_EMAIL]
+      );
+      if (!owner.rowCount) throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
+      let result;
+      if (input.passwordHash) {
+        result = await client.query(
+          `INSERT INTO zencore_users(id,display_name,email,password_hash,role,status)
+           SELECT $1,$2,$3,$4,'admin','active' WHERE LOWER($3)<>$5
+           ON CONFLICT (email) DO UPDATE SET display_name=EXCLUDED.display_name,
+             password_hash=EXCLUDED.password_hash,status='active'
+           WHERE zencore_users.role='admin' AND zencore_users.status='disabled'
+           RETURNING *`,
+          [crypto.randomUUID(), input.displayName, input.email, input.passwordHash, OWNER_EMAIL]
+        );
+      } else {
+        result = await client.query(
+          "UPDATE zencore_users SET status='disabled' WHERE id=$1 AND LOWER(email)<>$2 AND role='admin' AND status='active' RETURNING *",
+          [input.id, OWNER_EMAIL]
+        );
+      }
+      const row = result.rows[0];
+      if (row) {
+        await client.query('DELETE FROM zencore_sessions WHERE user_id=$1', [row.id]);
+        await client.query(
+          'INSERT INTO zencore_system_admin_activity(actor_id,actor_email,action,target,status) VALUES($1,$2,$3,$4,200)',
+          [actor.id, actor.email, input.passwordHash ? 'admin/grant' : 'admin/revoke', row.email]
+        );
+      }
+      await client.query('COMMIT');
+      return publicUser(row);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async setUserRole(userId, role) {
@@ -1007,6 +1078,7 @@ class MemoryAuthStore {
     this.usersById = new Map();
     this.usersByIc = new Map();
     this.sessions = new Map();
+    this.systemAdminActivity = [];
     this.referrersByCode = new Map();
     this.referrersByCode.set(DEFAULT_IB_CODE, {
       id: DEFAULT_IB_ID,
@@ -1040,16 +1112,49 @@ class MemoryAuthStore {
     };
   }
 
-  async promoteAdminsByEmail(emails = []) {
-    const normalized = new Set(emails.map(value => String(value || '').trim().toLowerCase()).filter(Boolean));
-    let changed = 0;
-    for (const row of this.usersById.values()) {
-      if (normalized.has(String(row.email || '').toLowerCase()) && row.role !== 'admin' && row.status === 'active') {
-        row.role = 'admin';Access.roleChanged(row,'client');
-        changed += 1;
+  async listSystemAdmins() {
+    return [...this.usersById.values()].filter(row => row.role === 'admin' && row.email.toLowerCase() !== OWNER_EMAIL)
+      .sort((a, b) => a.email.localeCompare(b.email)).map(publicUser);
+  }
+
+  async beginAdminActivity(actor, action, target = null) {
+    const id = this.systemAdminActivity.length + 1;
+    this.systemAdminActivity.push({ id: String(id), actorEmail: actor.email, action, target, status: null, createdAt: new Date() });
+    return id;
+  }
+
+  async finishAdminActivity(id, status) {
+    this.systemAdminActivity[id - 1].status = status;
+  }
+
+  async listSystemAdminActivity(before = null) {
+    return this.systemAdminActivity.slice(0, before ? Number(before) - 1 : undefined).reverse().slice(0, 51);
+  }
+
+  async changeSystemAdmin(actor, input) {
+    const owner = this.usersById.get(actor.id);
+    if (require('./system-owner').systemRole(owner) !== 'owner') throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
+    let row = input.passwordHash ? this.usersByEmail.get(input.email) : this.usersById.get(input.id);
+    if (input.email === OWNER_EMAIL || row?.email.toLowerCase() === OWNER_EMAIL) return null;
+    if (input.passwordHash) {
+      if (row && (row.role !== 'admin' || row.status !== 'disabled')) return null;
+      if (!row) {
+        const created = await this.createUser({ ...input, role: 'admin' });
+        row = this.usersById.get(created.id);
       }
+      row.status = 'active';
+      row.display_name = input.displayName;
+      row.password_hash = input.passwordHash;
+    } else {
+      if (row?.role !== 'admin' || row.status !== 'active') return null;
+      row.status = 'disabled';
     }
-    return changed;
+    for (const [token, session] of this.sessions) {
+      if (session.userId === row.id) this.sessions.delete(token);
+    }
+    const auditId = await this.beginAdminActivity(actor, input.passwordHash ? 'admin/grant' : 'admin/revoke', row.email);
+    await this.finishAdminActivity(auditId, 200);
+    return publicUser(row);
   }
 
   async setUserRole(userId, role) {

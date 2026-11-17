@@ -14,8 +14,6 @@ services:
         fromDatabase:
           name: zencore-staging-db
           property: connectionString
-      - key: ZENCORE_ADMIN_EMAILS
-        value: nazirhasan811213@gmail.com
       - key: ZENCORE_REGISTRATION_ENABLED
         value: "false"
 databases:

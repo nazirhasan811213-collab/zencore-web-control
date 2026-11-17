@@ -81,6 +81,17 @@
     }
     if (byId('accountName')) byId('accountName').textContent = currentUser.displayName || role.toUpperCase();
     if (byId('accountEmail')) byId('accountEmail').textContent = currentUser.email || '';
+    if (role === 'admin') {
+      const owner = currentUser.systemRole === 'owner';
+      const link = byId('systemOwnerLink');
+      if (link) {
+        link.hidden = !owner;
+        link.style.display = owner ? '' : 'none';
+      }
+      document.querySelectorAll('[data-system-role]').forEach(element => {
+        element.textContent = owner ? 'SYSTEM OWNER' : 'SYSTEM ADMIN';
+      });
+    }
   }
 
   function adminClientName(client) {
