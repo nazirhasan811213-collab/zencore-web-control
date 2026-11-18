@@ -15,6 +15,7 @@ test('owner alone manages admin access and sees recorded admin activity', { time
   const base = 'http://127.0.0.1:18951';
   const ownerPassword = 'OwnerPassword2026!';
   const adminPassword = 'AdminPassword2026!';
+  const clientPassword = 'ExistingClientPassword2026!';
   const clientEmail = 'member@owner.test';
   const adminEmail = 'operator@owner.test';
   writeFileSync(preload, `
@@ -24,7 +25,7 @@ test('owner alone manages admin access and sees recorded admin activity', { time
       for(const account of [
         {email:${JSON.stringify(OWNER_EMAIL)},role:'admin'},
         {email:${JSON.stringify(clientEmail)},role:'client'}
-      ]) await this.createUser({...account,displayName:'Seed Account',passwordHash:await hashPassword(${JSON.stringify(ownerPassword)})});
+      ]) await this.createUser({...account,displayName:'Seed Account',passwordHash:await hashPassword(account.role==='admin'?${JSON.stringify(ownerPassword)}:${JSON.stringify(clientPassword)})});
     };
   `);
   const child = spawn(process.execPath, ['-r', preload, '-r', './compat-v17.js', 'server-analysis.js'], {
@@ -69,7 +70,7 @@ test('owner alone manages admin access and sees recorded admin activity', { time
 
     assert.equal((await request(admins)).status, 401);
     const owner = await validLogin(OWNER_EMAIL, ownerPassword, 'owner');
-    const client = await validLogin(clientEmail, ownerPassword, null);
+    const client = await validLogin(clientEmail, clientPassword, null);
     assert.equal((await request(admins, { cookie: client })).status, 403);
     assert.equal((await request('/admin/owner', { cookie: owner })).status, 200);
     assert.equal((await request(admins, { cookie: owner, data: grant, origin: 'https://untrusted.test' })).status, 403);
@@ -122,7 +123,7 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     assert.equal((await change('owner', 'client')).status, 400);
     assert.equal((await change('viewer', 'client')).status, 200);
     assert.equal((await request('/auth/me', { cookie: client })).status, 401);
-    const viewer = await validLogin(clientEmail, ownerPassword, null);
+    const viewer = await validLogin(clientEmail, clientPassword, null);
     assert.equal((await request('/app', { cookie: viewer })).status, 200);
     assert.equal((await request('/api/admin/overview', { cookie: viewer })).status, 403);
     assert.equal((await request('/api/ib/overview', { cookie: viewer })).status, 403);
@@ -134,15 +135,15 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     const demo = await request('/api/auto-trade/state', { cookie: viewer });
     assert.equal((await demo.json()).viewerMode, true);
     assert.equal((await change('admin', 'client', { password: 'AnotherPassword2026!' })).status, 409);
-    assert.equal((await change('admin', 'viewer')).status, 400);
+    assert.equal((await change('admin', 'viewer', { ownerPassword: clientPassword })).status, 401);
     assert.equal((await change('ib', 'viewer', { ibCode: 'test-role-ib' })).status, 200);
-    const ib = await validLogin(clientEmail, ownerPassword, null);
+    const ib = await validLogin(clientEmail, clientPassword, null);
     assert.equal((await request('/api/ib/overview', { cookie: ib })).status, 200);
     assert.equal((await change('client', 'ib')).status, 200);
     assert.equal((await request('/api/ib/overview', { cookie: ib })).status, 401);
-    assert.equal((await change('admin', 'client', { password: 'AnotherPassword2026!' })).status, 200);
+    assert.equal((await change('admin', 'client')).status, 200);
     assert.equal((await login(clientEmail, ownerPassword)).status, 401);
-    const promoted = await validLogin(clientEmail, 'AnotherPassword2026!', 'system_admin');
+    const promoted = await validLogin(clientEmail, clientPassword, 'system_admin');
     assert.equal((await request('/api/admin/overview', { cookie: promoted })).status, 200);
     assert.equal((await request(accounts, { cookie: promoted })).status, 403);
     const auditAfter = await (await request(activity, { cookie: owner })).json();

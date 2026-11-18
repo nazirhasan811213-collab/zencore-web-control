@@ -213,14 +213,7 @@ function createAuthService(options = {}) {
     if (role === ROLE_IB && ibCode && !/^[a-z0-9][a-z0-9_-]{1,47}$/.test(ibCode)) {
       throw authError('INVALID_IB', 'Kod IB mesti 2–48 aksara dan hanya menggunakan huruf, nombor, sempang atau garis bawah.');
     }
-    let passwordHash = null;
-    if (role === ROLE_ADMIN && expectedRole !== ROLE_ADMIN) {
-      const password = typeof input.password === 'string' ? input.password : '';
-      const passwordError = validateNewPassword(password);
-      if (passwordError) throw authError('INVALID_PASSWORD', passwordError);
-      passwordHash = await hashPassword(password);
-    }
-    return store.changeAccountRole(user, id, { role, expectedRole, ibCode, defaultIbCode, reservedEmail, passwordHash });
+    return store.changeAccountRole(user, id, { role, expectedRole, ibCode, defaultIbCode, reservedEmail });
   }
 
   async function changeSystemAdmin(user, input, id = null) {

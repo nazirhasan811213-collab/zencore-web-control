@@ -30,8 +30,8 @@
       </div>
     </section>
     <section class="registration-card owner-card" aria-labelledby="give-access">
-      <h2 id="give-access">Beri akses System Admin</h2>
-      <p>Gunakan e-mel khas admin. Untuk aktifkan semula admin yang telah dibuang, gunakan e-mel admin itu dan kata laluan baharu.</p>
+      <h2 id="give-access">Cipta akaun System Admin</h2>
+      <p>Untuk akaun yang sudah wujud, gunakan Peranan akaun di atas. Borang ini untuk mencipta akaun admin atau menetapkan kata laluan baharu bagi akaun admin yang dinyahaktifkan.</p>
       <form id="grant" method="post" class="owner-form">
         <label>Nama admin<input name="displayName" required minlength="2" maxlength="60" autocomplete="off"></label>
         <label>E-mel admin<input name="email" required type="email" maxlength="254" autocomplete="off"></label>
@@ -82,8 +82,8 @@
         </select>
       </label>
       <label id="owner-ib-code" hidden>Kod IB<input name="ibCode" minlength="2" maxlength="48" autocomplete="off"></label>
-      <label id="owner-admin-password" hidden>Kata laluan baharu admin<input name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password"></label>
       <label>Kata laluan System Owner<input name="ownerPassword" required type="password" maxlength="128" autocomplete="current-password"></label>
+      <p>Pengesahan menggunakan kata laluan System Owner. Akaun yang dipilih kekal menggunakan kata laluan masing-masing.</p>
       <p id="role-description"></p>
       <p id="change-role-status" role="status"></p>
       <div class="review-actions">
@@ -92,6 +92,6 @@
       </div>
     </form>
   </dialog>
-  <script src="/system-owner-panel.js?v=2" defer></script>
+  <script src="/system-owner-panel.js?v=3" defer></script>
 </body>
 </html>

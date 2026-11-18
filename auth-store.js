@@ -303,7 +303,7 @@ class PostgresAuthStore {
   }
 
   async changeAccountRole(actor, id, input) {
-    const { role, expectedRole, reservedEmail, passwordHash, ibCode } = input;
+    const { role, expectedRole, reservedEmail, ibCode } = input;
     const db = await this.pool.connect();
     try {
       await db.query('BEGIN');
@@ -325,7 +325,7 @@ class PostgresAuthStore {
         } else if (ib && (role === 'ib' || user.role === 'ib')) {
           await db.query('UPDATE zencore_ib_referrers SET active=$2 WHERE user_id=$1', [id, role === 'ib' && user.status === 'active']);
         }
-        await db.query('UPDATE zencore_users SET role=$2,password_hash=COALESCE($3,password_hash) WHERE id=$1', [id, role, passwordHash]);
+        await db.query('UPDATE zencore_users SET role=$2 WHERE id=$1', [id, role]);
         await db.query('DELETE FROM zencore_sessions WHERE user_id=$1', [id]);
         await db.query(`INSERT INTO zencore_system_admin_activity (actor_id,actor_email,action,target,status)
                         VALUES ($1,$2,$3,$4,200)`, [owner.id, owner.email, `roles/${user.role}/${role}`, user.email]);
@@ -1191,7 +1191,7 @@ class MemoryAuthStore {
   }
 
   async changeAccountRole(actor, id, input) {
-    const { role, expectedRole, reservedEmail, passwordHash, ibCode } = input;
+    const { role, expectedRole, reservedEmail, ibCode } = input;
     const owner = this.usersById.get(actor.id);
     if (systemRole(owner) !== 'owner') throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
     const user = this.usersById.get(id);
@@ -1211,7 +1211,6 @@ class MemoryAuthStore {
       ib.active = role === 'ib' && user.status === 'active';
     }
     user.role = role;
-    if (passwordHash) user.password_hash = passwordHash;
     Access.roleChanged(user, oldRole);
     for (const [token, session] of this.sessions) if (session.userId === id) this.sessions.delete(token);
     const auditId = await this.beginAdminActivity(owner, `roles/${oldRole}/${role}`, user.email);

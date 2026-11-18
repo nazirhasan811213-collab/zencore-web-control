@@ -74,15 +74,9 @@
   function updateRoleFields() {
     const role = roleForm.elements.role.value;
     const needsIbCode = role === 'ib' && !selectedAccount.ibCode;
-    const needsPassword = role === 'admin' && selectedAccount.role !== 'admin';
-    for (const [label, input, needed] of [
-      ['owner-ib-code', 'ibCode', needsIbCode],
-      ['owner-admin-password', 'password', needsPassword]
-    ]) {
-      byId(label).hidden = !needed;
-      roleForm.elements[input].disabled = !needed;
-      roleForm.elements[input].required = needed;
-    }
+    byId('owner-ib-code').hidden = !needsIbCode;
+    roleForm.elements.ibCode.disabled = !needsIbCode;
+    roleForm.elements.ibCode.required = needsIbCode;
     byId('role-description').textContent = role === 'viewer'
       ? 'Akses paparan sahaja. Selesaikan posisi dan nyahpaut MT5 sebelum menukar peranan.'
       : role === 'ib' && selectedAccount.ibCode ? 'Kod IB sedia ada: ' + selectedAccount.ibCode : '';
