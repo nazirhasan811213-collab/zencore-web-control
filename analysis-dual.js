@@ -36,7 +36,7 @@
    const open=new Set([...c.content.querySelectorAll('details[open]')].map(d=>d.dataset.section));
    const nodes=[el('div',live?(n.state==='READY'?'SOP LENGKAP '+n.side:label(n.state||'WAIT')+' • '+(n.side||'WAIT')):'TUNGGU DATA TF'+tf,'signal'+(live&&n.state==='READY'?' ready '+(n.side==='SELL'?'sell':'buy'):'')),el('p',live?n.reason||'':m?'Ini data terakhir sahaja. Signal tak aktif sampai data fresh masuk.':'Feed TF'+tf+' belum diterima untuk '+pair.value+'.')];
    if(view?.guide){const guide=el('section',undefined,'zc-market-guide');guide.append(el('h3',tf===2?'Panduan ZenCore · 30 minit seterusnya':'Panduan ZenCore · 1 jam seterusnya'));const text=el('p',view.guide.guideText);text.style.whiteSpace='pre-line';guide.append(text);nodes.push(guide);}
-   const metrics=el('div',undefined,'metrics primary-metrics');metrics.append(metric(live?'HARGA XAUUSD':'HARGA TERAKHIR',price(m?.price)),metric('FORECAST • 10 CANDLE',s.forecast||'—'),metric('POWER MARKET',s.marketPower==null?'—':s.marketPower+'%'),metric('SOP HIJAU',s.sopGreen==null?'—':s.sopGreen+'/5'),metric(tf===2?'SOLID CHART TERAKHIR':'SOLID SETUP',tf===2&&s.chartSignal?.present?'SOLID '+s.chartSignal.side:n.solid==null?'—':n.solid?'AKTIF':'BELUM'));nodes.push(metrics);
+   const metrics=el('div',undefined,'metrics primary-metrics');metrics.append(metric(live?'HARGA '+pair.value:'HARGA TERAKHIR',price(m?.price)),metric('BIAS PINE',s.forecast||'—'),metric('POWER MARKET',s.marketPower==null?'—':s.marketPower+'/100'),metric('SOP HIJAU',s.sopGreen==null?'—':s.sopGreen+'/5'),metric(tf===2?'SOLID CHART TERAKHIR':'SOLID SETUP',tf===2&&s.chartSignal?.present?'SOLID '+s.chartSignal.side:n.solid==null?'—':n.solid?'AKTIF':'BELUM'));nodes.push(metrics);
    if(n.lifecycleState){const stages=el('div',undefined,'metrics');stages.append(metric('STATUS SETUP',stageNames[n.lifecycleState]||n.lifecycleState),metric('SOLID → SOP',s.qualifiedAt&&s.triggerAt?((s.qualifiedAt-s.triggerAt)/1000).toFixed(1)+'s':'BELUM LENGKAP'),metric('STATUS ORDER','SEMAK AKTIVITI AUTO TRADE'));nodes.push(stages);}
    if(tf===2&&s.chartSignal?.present){const signal=s.chartSignal;nodes.push(el('p','SOLID '+signal.side+' pada chart · '+new Date(signal.triggeredAt).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT · '+(live&&signal.current?(signal.held?'SOLID dipegang hingga ribbon bertentangan / CLOSE ALL':'signal baru diterima'):'rekod signal terakhir')+'. Status order: '+(live&&n.state==='READY'?'LAYAK':(signal.held&&signal.current?'TUNGGU SOP LENGKAP':'BELUM LAYAK / TUNGGU SIGNAL BARU'))+'.','chart-solid-note'));}
    if(n.entrySopVersion==='NORMAL_20261001_TF2_SOLID_80PCT_V12'){const q=el('div',undefined,'metrics');q.append(metric('KELENGKAPAN SOP',s.passed+'/6 · '+Number(s.scorePercent).toFixed(2)+'%'),metric('HEMA40 WAJIB',s.hema40?'LULUS':'BATAL'),metric('MTF SCORE',s.mtfScore??'—'));nodes.push(q,el('p','80% ialah kelengkapan SOP, bukan win rate. Tiada tunggu candle berikutnya.'));}
@@ -45,6 +45,31 @@
    if(s.hemaShape)nodes.push(el('div','Bentuk HEMA: '+s.hemaShape.state+(live&&s.hemaShape.pass?' • LULUS':''),'hema-shape'+(live&&s.hemaShape.pass?' pass':'')));
    nodes.push(el('h3',(live?'Plan trade':'Plan terakhir')+' • '+(n.side||'WAIT')+(!live&&m?' • DATA LAMA':'')));
    const levels=el('div',undefined,'levels');for(const [k,name] of [['entry','ENTRY'],['sl','SL'],['tp1','TP1'],['tp2','TP2'],['tp3','TP3']])levels.append(metric(name,price(n.plan?.[k])));nodes.push(levels);
+   const assessment=view?.assessment;
+   if(assessment?.status==='AVAILABLE'){
+    const geometry=assessment.geometry;
+    const quality=el('div',undefined,'levels');
+    quality.append(metric('SKOR TEKNIKAL',assessment.overall+'/100'));
+    if(geometry){
+     for(const [key, label] of [['tp1','TP1'],['tp2','TP2'],['tp3','TP3']]){
+      const ratio=geometry.rewardToRisk[key];
+      quality.append(metric(label+' · GANJARAN / RISIKO',ratio.toFixed(2)+'R'));
+     }
+    }
+    const entryQuality=m?.setupMeta?.entryQuality;
+    if(tf===2&&typeof entryQuality?.score==='number'&&typeof entryQuality?.minimum==='number'){
+     quality.append(metric('SKOR ENTRY PINE',entryQuality.score+'/100 · Min '+entryQuality.minimum));
+    }
+    nodes.push(quality);
+    if(geometry?.stagedExit){
+     const stage=geometry.stagedExit;
+     nodes.push(el('p','Pelan exit sebelum kos · TP1 '+stage.realisedAtTp1R.toFixed(2)+'R · TP1 + TP2 '+stage.realisedAtTp2R.toFixed(2)+'R · jika baki turun ke TP1 '+stage.totalIfRunnerStopsAtTp1R.toFixed(2)+'R'));
+    }
+    if(geometry?.directionalObstacle!=null){
+     nodes.push(el('p','Halangan harga terdekat: '+price(geometry.directionalObstacle)+
+      (assessment.warnings.includes('Struktur terdekat berada sebelum TP1')?' · sebelum TP1':'')));
+    }
+   }
    function disclosure(key,title,content){const d=el('details',undefined,'inspection');d.dataset.section=key;d.open=open.has(key);d.append(el('summary',title),content);return d;}
    const gates=el('div');if(!s.gates?.length)gates.append(el('p','Tunggu data checklist masuk dulu.'));else for(const g of s.gates){const row=el('div',undefined,'gate');row.append(el('span',g.label),el('b',(live?(g.pass?'✓ ':'○ '):'DATA LAMA • ')+(g.detail||(g.pass?'LULUS':'TUNGGU')),live&&g.pass?'pass':'fail'));gates.append(row);}
    nodes.push(disclosure('sop','Checklist SOP · '+(live&&s.gates?.length?s.gates.filter(g=>g.pass).length+'/'+s.gates.length+' lulus':'menunggu data'),gates));

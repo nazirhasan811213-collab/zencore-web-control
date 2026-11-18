@@ -106,6 +106,11 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf}
  const {entrySopAllowed,entryFresh,telegramMessage}=require('../analysis-telegram');
  const {f,ingest}=fixture(tf,side);
  f.row[0]='BTCUSD';
+ if(tf==='2'){
+  const sign=side==='BUY'?1:-1,entry=f.row[22];
+  Object.assign(f.row,{23:entry-sign*300,24:entry-sign*300,25:entry+sign*150,26:entry+sign*250,27:entry+sign*400});
+  f.row[66].riskPlanVersion='BTC_TF2_PIP_STEPLOCK_V1';
+ }
  Object.assign(f.row[66],{entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',
   nativeSolid:{version:'NATIVE_SOLID_LABEL_V1',barTime:f.row[1]-Number(tf)*60000,pulse:false,basis:4100,rsi:50}});
  const market=ingest();assert.ok(market);
@@ -117,6 +122,10 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf}
  const entries=alerts.events.filter(e=>e.kind==='ENTRY');
  assert.equal(entries.length,1);
  assert.ok(entrySopAllowed(entries[0]));assert.ok(entryFresh(entries[0],market.receivedAt));
+ if(tf==='2'){
+  const p=entries[0].telegramPlan;
+  assert.deepEqual(['sl','tp1','tp2','tp3'].map(key=>Math.abs(p[key]-p.entry)),[300,150,250,400]);
+ }
  assert.match(telegramMessage(entries[0]),new RegExp('BTCUSD • '+side));
  for(const k of ['entry','sl','tp1','tp2','tp3'])assert.equal(entries[0].telegramPlan[k],market.strategyNormal.plan[k]);
 });

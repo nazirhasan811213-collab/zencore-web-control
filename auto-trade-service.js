@@ -1573,6 +1573,11 @@ function createAutoTradeService(options = {}) {
               entryPolicyVersion:sop.entryPolicyVersion||null,scriptRevision:market?.setupMeta?.scriptRevision||null,entryDeliveryVersion:market?.entryDeliveryVersion||null,
               entrySetupChecks:market?require('./entry-setup-diagnostic').inspect(market,profile,now()).checks:null,
               feedChannel: market?.feedChannel || null,
+              entryQuality: market?.setupMeta?.entryQuality ? {
+                score: Number.isInteger(market.setupMeta.entryQuality.score) ? market.setupMeta.entryQuality.score : null,
+                minimum: Number.isInteger(market.setupMeta.entryQuality.minimum) ? market.setupMeta.entryQuality.minimum : null,
+                passed: market.setupMeta.entryQuality.passed === true
+              } : null,
               setupSolid: normal.solid === true,
               solidStateReason: market?.setupMeta?.solidStateReason || null,
               triggerAt: sop.triggerAt ?? null, qualifiedAt: sop.qualifiedAt ?? null,

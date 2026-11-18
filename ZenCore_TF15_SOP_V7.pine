@@ -737,7 +737,7 @@ else if global_trend < 0 and wt1 < wt2 and not is_sideways_chop
 else if is_sideways_chop
     forecast_direction := "CHOPPY 🛑"
 
-string power_txt = forecast_direction + " (" + str.tostring(market_power) + "%)"
+string power_txt = forecast_direction + " (" + str.tostring(market_power) + "/100)"
 color power_col = color.gray
 color power_bg = color.new(color.gray, 85)
 
@@ -806,8 +806,8 @@ if dashOn
         table.cell(dash_main, 0, 9, "⚔️ TRADE EXECUTION", text_color = color.white, bgcolor = exec_bg, text_size=dashSize)
         table.cell(dash_main, 0, 10, "Action Bias:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
         table.cell(dash_main, 1, 10, global_trend > 0 ? "LONG 🟢" : global_trend < 0 ? "SHORT 🔴" : "WAIT 〰️", text_color = color.white, text_halign=text.align_left, text_size=dashSize)
-        table.cell(dash_main, 2, 10, "Setup Prob:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
-        table.cell(dash_main, 3, 10, str.tostring(success_prob, "#") + "%", text_color = color.from_gradient(success_prob, 20, 85, color.red, color.green), text_halign=text.align_left, text_size=dashSize)
+        table.cell(dash_main, 2, 10, "Skor setup:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
+        table.cell(dash_main, 3, 10, str.tostring(success_prob, "#") + "/100", text_color = color.from_gradient(success_prob, 20, 85, color.red, color.green), text_halign=text.align_left, text_size=dashSize)
 
         table.cell(dash_main, 0, 11, "Entry Price:", text_color = color.gray, text_halign=text.align_right, text_size=dashSize)
         table.cell(dash_main, 1, 11, entry_zone_str, text_color = color.yellow, text_halign=text.align_left, text_size=dashSize)

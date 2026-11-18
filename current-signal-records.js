@@ -4,12 +4,12 @@ const Retention=require('./record-retention');
 const validTime=t=>Number.isFinite(t)&&t>0;
 function idFor(e){return crypto.createHash('sha256').update(JSON.stringify([e.symbol,String(e.timeframe),e.setupKey||e.notificationKey||null])).digest('hex');}
 function applyEvent(rows,e){
- if(e.telegramDuplicate||e.symbol!=='XAUUSD'||!['2','15'].includes(String(e.timeframe))||!validTime(e.time))return [];
+ if(e.telegramDuplicate||!['XAUUSD','BTCUSD'].includes(e.symbol)||!['2','15'].includes(String(e.timeframe))||!validTime(e.time))return [];
  const tf=String(e.timeframe),id=idFor(e),changed=[];
  if(e.kind==='ENTRY'){
   const p=e.telegramPlan,sign=e.side==='BUY'?1:e.side==='SELL'?-1:0;
   if(!sign||!e.setupKey&&!e.notificationKey||!p||!['entry','sl','tp1','tp2','tp3'].every(k=>Number.isFinite(p[k])&&p[k]>0)||sign*(p.entry-p.sl)<=0||sign*(p.tp1-p.entry)<=0||sign*(p.tp2-p.tp1)<=0||sign*(p.tp3-p.tp2)<=0||rows.has(id))return [];
-  for(const old of rows.values())if(old.state==='OPEN'&&old.timeframe===tf&&old.openedAt<=e.time){
+  for(const old of rows.values())if(old.state==='OPEN'&&old.symbol===e.symbol&&old.timeframe===tf&&old.openedAt<=e.time){
    old.state='CLOSED';old.outcome='SUPERSEDED';old.resolvedAt=e.time;old.reason='Pelan diganti signal baharu; hasil exit tidak disahkan';changed.push(old);
   }
   const row={id,symbol:e.symbol,timeframe:tf,setupKey:e.setupKey||null,mode:'NORMAL',side:e.side,entryType:e.telegramSop?.cycleKind==='FOLLOWUP'?'REENTRY':e.entryType||'SOLID_ENTRY',
@@ -19,7 +19,7 @@ function applyEvent(rows,e){
   rows.set(id,row);changed.push(row);return changed;
  }
  let row=rows.get(id);
- if(!row&&e.kind==='CLOSE'&&!e.setupKey){const open=[...rows.values()].filter(r=>r.timeframe===tf&&r.state==='OPEN');if(open.length===1)row=open[0];}
+ if(!row&&e.kind==='CLOSE'&&!e.setupKey){const open=[...rows.values()].filter(r=>r.symbol===e.symbol&&r.timeframe===tf&&r.state==='OPEN');if(open.length===1)row=open[0];}
  if(!row||row.state!=='OPEN'||e.time<row.lastEventAt)return [];
  if(e.kind==='TP_HIT'&&[1,2,3].includes(e.targetNumber)){
   const sign=row.side==='BUY'?1:-1;
@@ -66,14 +66,14 @@ class CurrentSignalRecords{
  async read(){
   const retention=Retention.metadata(this.now());
   const records=(await this.pool.query('SELECT data FROM zencore_current_signal_records WHERE opened_at >= $1 ORDER BY opened_at DESC LIMIT 500',[retention.cutoffAt])).rows.map(r=>r.data);
-  const totals=(await this.pool.query(`SELECT timeframe,COUNT(*)::int AS sample,
+  const totals=(await this.pool.query(`SELECT symbol,timeframe,COUNT(*)::int AS sample,
    COUNT(*) FILTER(WHERE state='OPEN')::int AS open,COUNT(*) FILTER(WHERE state='CLOSED')::int AS resolved,
    COUNT(*) FILTER(WHERE data->>'hitTp1'='true')::int AS tp1,
    COUNT(*) FILTER(WHERE data->>'hitTp2'='true')::int AS tp2,
    COUNT(*) FILTER(WHERE data->>'hitTp3'='true')::int AS tp3,
    COUNT(*) FILTER(WHERE data->>'hitSl'='true' OR data->>'outcome'='SL')::int AS sl,
    COUNT(*) FILTER(WHERE data->>'hitSl' IN ('true','false') OR data->>'outcome'='SL')::int AS sl_observed
-   FROM zencore_current_signal_records WHERE opened_at >= $1 GROUP BY timeframe ORDER BY timeframe`,[retention.cutoffAt])).rows;
+   FROM zencore_current_signal_records WHERE opened_at >= $1 GROUP BY symbol,timeframe ORDER BY symbol,timeframe`,[retention.cutoffAt])).rows;
   return {ok:true,strengthEvaluation:require('./setup-strength').evaluate(records),retention,source:'PERSISTED_ANALYSIS_EVENTS_NOT_BROKER_PL',records,totals,lastSync:this.lastSync,lastError:this.error,syncPending:this.lastSync===null,
    note:'TP ialah harga sasaran yang diperhatikan. CLOSE_SIGNAL dan SUPERSEDED tidak mengesahkan hasil untung/rugi. Sejarah dipulihkan hanya daripada event yang masih disimpan.'};
  }

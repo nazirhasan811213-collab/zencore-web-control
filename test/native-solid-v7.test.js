@@ -63,3 +63,16 @@ for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial
  const follow={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,cycleKind:'FOLLOWUP'}}};a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,cycleKind:'FOLLOWUP'}}},follow,f.now).reason,'TF2_HOLD_CANDLE_DIRECTION');
  a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,entryAuthorizedAt:f.now-61000}}},m,f.now).reason,'ENTRY_EVENT_EXPIRED');
 });
+
+test('optional TF2 structure entry gates initial and follow-up qualification using the same TP1 as the plan',()=>{
+ const source=fs.readFileSync(`${__dirname}/../ZenCore_TF2_SOP_V7.pine`,'utf8');
+ a.match(source,/zc_structure_entry = input.bool\(false,/);
+ a.match(source,/bool zc_new_entry_pass = not zc_structure_entry or \(zc_structure_candle_pass and not zc_tp1_blocked and zc_quality_pass\)/);
+ a.match(source,/bool zc_hold_qualify = [^\n]*barstate.isconfirmed[^\n]*and zc_new_entry_pass/);
+ a.match(source,/bool zc_followup = [^\n]*and zc_new_entry_pass/);
+ a.match(source,/zc_seq_tp1 := zc_draft_tp1/);
+ const obstacle=source.split('f_zc_directional_obstacle(bool isBuy, float entry) =>')[1].split('\nfloat zc_obstacle')[0];
+ a.match(obstacle,/for i = 2 to 14/);
+ a.match(obstacle,/high\[i-1\]/);
+ a.match(obstacle,/low\[i-1\]/);
+});

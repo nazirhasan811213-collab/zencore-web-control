@@ -31,3 +31,13 @@ test('TP rates use all retained entries and SL remains unknown without complete 
  payload.totals[0].sl=0;result=Results.fromStoredRecords(payload);a.equal(result.summary.slRate,0);
  const empty=Results.fromStoredRecords({records:[],totals:[]});a.equal(empty.summary.slRate,null);a.equal(empty.summary.tp2Rate,null);
 });
+
+test('BTC and XAU signal records coexist; an unkeyed BTC close cannot close XAU',()=>{
+ const rows=new Map(),gold=event(),btc=event({symbol:'BTCUSD'});
+ applyEvent(rows,gold);applyEvent(rows,btc);
+ a.equal(rows.get(idFor(gold)).state,'OPEN');
+ a.equal(rows.get(idFor(btc)).state,'OPEN');
+ applyEvent(rows,event({symbol:'BTCUSD',kind:'CLOSE',setupKey:null,percent:100,time:1200}));
+ a.equal(rows.get(idFor(btc)).state,'CLOSED');
+ a.equal(rows.get(idFor(gold)).state,'OPEN');
+});
