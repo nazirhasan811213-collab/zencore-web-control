@@ -78,7 +78,7 @@
     roleForm.elements.ibCode.disabled = !needsIbCode;
     roleForm.elements.ibCode.required = needsIbCode;
     byId('role-description').textContent = role === 'viewer'
-      ? 'Akses paparan sahaja. Selesaikan posisi dan nyahpaut MT5 sebelum menukar peranan.'
+      ? 'Akses paparan sahaja. Posisi sedia ada terus diurus, dan Auto Trade tidak buka posisi baharu.'
       : role === 'ib' && selectedAccount.ibCode ? 'Kod IB sedia ada: ' + selectedAccount.ibCode : '';
     roleForm.querySelector('[type=submit]').disabled = role === selectedAccount.role;
   }

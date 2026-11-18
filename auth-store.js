@@ -1,6 +1,6 @@
 const Access=require('./account-access');
 const { OWNER_EMAIL, systemRole } = require('./system-owner');
-const { ROLES, assertEditableAccount, assertTradingStopped, assertIbCode } = require('./owner-account-roles');
+const { ROLES, assertEditableAccount, assertIbCode } = require('./owner-account-roles');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const { guardPool } = require('./database-recovery');
@@ -316,7 +316,6 @@ class PostgresAuthStore {
         throw require('./auth-service').authError('FORBIDDEN', 'Akaun demo umum dilindungi.', 403);
       }
       if (user.role !== role) {
-        await assertTradingStopped(db, id, role);
         const ib = (await db.query('SELECT code FROM zencore_ib_referrers WHERE user_id=$1 FOR UPDATE', [id])).rows[0];
         assertIbCode(input, ib?.code);
         if (role === 'ib' && !ib) {

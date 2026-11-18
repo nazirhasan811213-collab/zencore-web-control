@@ -1130,7 +1130,7 @@ class PostgresAutoTradeStore {
   async findPodByTokenHash(tokenHash) {
     const result = await this.pool.query(
       `SELECT pod.* FROM zencore_mt5_secure_pods pod JOIN zencore_users u ON u.id=pod.user_id
-       WHERE pod.token_hash=$1 AND pod.revoked_at IS NULL AND u.role<>'viewer' LIMIT 1`, [tokenHash]
+       WHERE pod.token_hash=$1 AND pod.revoked_at IS NULL LIMIT 1`, [tokenHash]
     );
     return publicPod(result.rows[0], true);
   }

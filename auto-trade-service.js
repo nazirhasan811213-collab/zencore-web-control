@@ -163,7 +163,6 @@ function createAutoTradeService(options = {}) {
     return typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null;
   }
   async function requireHostedTransport(userId) {
-    if (options.viewerAccount && await options.viewerAccount(userId)) throw serviceError('VIEW_ONLY', 'Paparan sahaja.', 403);
     if (isLocalEa(await store.getPodForUser(userId))) {
       throw serviceError('TRANSPORT_REPLACED', 'Akaun ini menggunakan EA tempatan.', 409);
     }
@@ -795,10 +794,11 @@ function createAutoTradeService(options = {}) {
         error: lastError || 'CONNECTION_FAILED'
       });
     }
+    const entryAccessAllowed = !options.entryAccessAllowed || await options.entryAccessAllowed(updated.userId);
     return {
       ok: true,
       connectionState: status,
-      desiredState: (await store.getProfile(updated.userId))?.desiredState || 'STOPPED',
+      desiredState: entryAccessAllowed ? ((await store.getProfile(updated.userId))?.desiredState || 'STOPPED') : 'STOPPED',
       executionEnabled: false,
       serverTime: seenAt
     };

@@ -2,10 +2,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { PostgresAuthStore } = require('../auth-store');
 const { createAuthService } = require('../auth-service');
+const { PostgresAutoTradeStore } = require('../auto-trade-store');
+const { createAutoTradeService, tokenHash } = require('../auto-trade-service');
+const { canTrade } = require('../account-handover');
 const { hashPassword } = require('../auth-core');
 const { OWNER_EMAIL } = require('../system-owner');
 const url = process.env.ZENCORE_ALERT_TEST_DATABASE_URL;
@@ -16,6 +19,9 @@ test('Postgres preserves admin revocation and audit across store initialization'
   const store = new PostgresAuthStore(url);
   await store.pool.end();
   store.pool = new Pool({ connectionString: url, options: '-c search_path=' + schema });
+  const tradeStore = new PostgresAutoTradeStore(url);
+  await tradeStore.close();
+  tradeStore.pool = store.pool;
   try {
     await db.query('CREATE SCHEMA ' + schema);
     await store.init();
@@ -47,14 +53,29 @@ test('Postgres preserves admin revocation and audit across store initialization'
 
     const member = await store.createUser({ displayName: 'Client', email: 'member@owner.test', passwordHash: await hashPassword(password) });
     const previous = await auth.login({ email: member.email, password });
-    await store.pool.query('CREATE TABLE zencore_mt5_secure_pods (user_id UUID, revoked_at TIMESTAMPTZ)');
-    await store.pool.query('INSERT INTO zencore_mt5_secure_pods (user_id) VALUES ($1)', [member.id]);
+    await tradeStore.init();
+    const token = 'zcpod_' + randomBytes(32).toString('base64url');
+    const pod = await tradeStore.provisionPod({ id: randomUUID(), userId: member.id,
+      label: 'Test MT5', tokenHash: tokenHash(token) });
+    await tradeStore.setControl(member.id, { desiredState: 'ON', effectiveState: 'ON' });
+    const trading = createAutoTradeService({ store: tradeStore, commandSigningKey: randomBytes(32).toString('hex'),
+      allowDemoExecution: true, entryAccessAllowed: async userId => canTrade(await store.findUserByIdForLogin(userId)) });
+    const heartbeat = {
+      accountMask: '****1234', serverMask: '****Demo', brokerMask: '****Test', tradeMode: 'DEMO',
+      terminalTradeAllowed: true, accountTradeAllowed: true, expertTradeAllowed: true, demoExecutionUnlocked: true,
+      positions: [{ ticket: '1001', symbol: 'XAUUSD', side: 'BUY', volume: 0.02,
+        entry: 2500, currentPrice: 2510, initialSl: 2495, activeSl: 2500 }]
+    };
+    await trading.heartbeat(token, heartbeat);
     const change = (role, expectedRole, fields = {}) => auth.changeAccountRole(owner, member.id, {
       role, expectedRole, ownerPassword, ...fields
     });
-    await assert.rejects(() => change('viewer', 'client'), { code: 'TRADING_ACTIVE' });
-    await store.pool.query('UPDATE zencore_mt5_secure_pods SET revoked_at=NOW()');
     await change('viewer', 'client');
+    assert.equal((await tradeStore.listPositions(member.id))[0].ticket, '1001');
+    assert.equal((await trading.authenticatePod(token)).id, pod.id);
+    assert.equal((await tradeStore.getProfile(member.id)).desiredState, 'ON');
+    assert.equal((await trading.heartbeat(token, heartbeat)).desiredState, 'STOPPED');
+    assert.equal((await tradeStore.listPositions(member.id))[0].ticket, '1001');
     assert.equal(await auth.sessionFromRequest({ headers: { cookie: auth.createCookie(previous.token) } }), null);
     const listed = await auth.listRoleAccounts(owner, { search: 'member' });
     assert.equal(listed.accounts[0].role, 'viewer');
