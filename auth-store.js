@@ -1,5 +1,6 @@
 const Access=require('./account-access');
-const { OWNER_EMAIL } = require('./system-owner');
+const { OWNER_EMAIL, systemRole } = require('./system-owner');
+const { ROLES, assertEditableAccount, assertTradingStopped, assertIbCode } = require('./owner-account-roles');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const { guardPool } = require('./database-recovery');
@@ -7,7 +8,7 @@ const { guardPool } = require('./database-recovery');
 const DEFAULT_IB_CODE = 'nazir';
 const DEFAULT_IB_NAME = 'Nazir (Admin)';
 const DEFAULT_IB_ID = '00000000-0000-4000-8000-000000000001';
-const USER_ROLES = Object.freeze(['admin', 'ib', 'client', 'viewer']);
+const USER_ROLES = Object.freeze(ROLES);
 
 function publicUser(row) {
   if (!row) return null;
@@ -288,6 +289,58 @@ class PostgresAuthStore {
     };
   }
 
+  async listRoleAccounts({ search, offset, limit, reservedEmail }) {
+    const result = await this.pool.query(
+      `SELECT u.id, u.display_name, u.email, u.role, u.status, u.access_expires_at,
+              u.handover_state, ib.code AS ib_code
+       FROM zencore_users u LEFT JOIN zencore_ib_referrers ib ON ib.user_id=u.id
+       WHERE LOWER(u.email)<>ALL($1::text[]) AND u.status IN ('active','disabled')
+         AND (strpos(LOWER(u.email), $2)>0 OR strpos(LOWER(u.display_name), $2)>0)
+       ORDER BY LOWER(u.display_name),u.id LIMIT $3 OFFSET $4`,
+      [[OWNER_EMAIL, reservedEmail], search, limit, offset]
+    );
+    return result.rows.map(publicUser);
+  }
+
+  async changeAccountRole(actor, id, input) {
+    const { role, expectedRole, reservedEmail, passwordHash, ibCode } = input;
+    const db = await this.pool.connect();
+    try {
+      await db.query('BEGIN');
+      // Keep one lock order for role changes and owner admin access changes.
+      const owner = (await db.query('SELECT id,email,role,status FROM zencore_users WHERE id=$1 FOR SHARE', [actor.id])).rows[0];
+      if (systemRole(owner) !== 'owner') throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
+      const user = (await db.query('SELECT * FROM zencore_users WHERE id=$1 FOR UPDATE', [id])).rows[0];
+      assertEditableAccount(user, expectedRole);
+      if (reservedEmail && user.email.toLowerCase() === reservedEmail) {
+        throw require('./auth-service').authError('FORBIDDEN', 'Akaun demo umum dilindungi.', 403);
+      }
+      if (user.role !== role) {
+        await assertTradingStopped(db, id, role);
+        const ib = (await db.query('SELECT code FROM zencore_ib_referrers WHERE user_id=$1 FOR UPDATE', [id])).rows[0];
+        assertIbCode(input, ib?.code);
+        if (role === 'ib' && !ib) {
+          await db.query(`INSERT INTO zencore_ib_referrers (id,code,display_name,user_id,active)
+                          VALUES ($1,$2,$3,$4,$5)`, [crypto.randomUUID(), ibCode, user.display_name, id, user.status === 'active']);
+        } else if (ib && (role === 'ib' || user.role === 'ib')) {
+          await db.query('UPDATE zencore_ib_referrers SET active=$2 WHERE user_id=$1', [id, role === 'ib' && user.status === 'active']);
+        }
+        await db.query('UPDATE zencore_users SET role=$2,password_hash=COALESCE($3,password_hash) WHERE id=$1', [id, role, passwordHash]);
+        await db.query('DELETE FROM zencore_sessions WHERE user_id=$1', [id]);
+        await db.query(`INSERT INTO zencore_system_admin_activity (actor_id,actor_email,action,target,status)
+                        VALUES ($1,$2,$3,$4,200)`, [owner.id, owner.email, `roles/${user.role}/${role}`, user.email]);
+      }
+      await db.query('COMMIT');
+      return { changed: user.role !== role, role };
+    } catch (error) {
+      await db.query('ROLLBACK');
+      if (error.code === '23505') throw require('./auth-service').authError('IB_CODE_EXISTS', 'Kod IB ini sudah digunakan.', 409);
+      throw error;
+    } finally {
+      db.release();
+    }
+  }
+
   async listSystemAdmins() {
     const result = await this.pool.query(
       "SELECT id, display_name, email, role, status, last_login_at, created_at FROM zencore_users WHERE role='admin' AND LOWER(email)<>$1 ORDER BY email",
@@ -533,6 +586,14 @@ class PostgresAuthStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const account = (await client.query(
+        'SELECT u.role FROM zencore_ib_referrers ref JOIN zencore_users u ON u.id=ref.user_id WHERE ref.id=$1 FOR UPDATE OF u',
+        [referrerId]
+      )).rows[0];
+      if (active && account && account.role !== 'ib') {
+        await client.query('ROLLBACK');
+        return null;
+      }
       const result = await client.query(
         `UPDATE zencore_ib_referrers
          SET active = $2
@@ -1029,12 +1090,20 @@ class PostgresAuthStore {
     );
   }
 
-  async createSession({ userId, tokenHash, expiresAt }) {
-    await this.pool.query(
-      `INSERT INTO zencore_sessions (id, user_id, token_hash, expires_at)
-       VALUES ($1, $2, $3, $4)`,
-      [crypto.randomUUID(), userId, tokenHash, expiresAt]
-    );
+  async createSession({ userId, tokenHash, expiresAt, expectedRole, expectedPasswordHash }) {
+    if (expectedRole) {
+      const result = await this.pool.query(
+        `WITH account AS (
+           SELECT id FROM zencore_users WHERE id=$2 AND role=$5 AND password_hash=$6 AND status='active' FOR SHARE
+         ) INSERT INTO zencore_sessions (id,user_id,token_hash,expires_at)
+         SELECT $1::uuid,id,$3::char(64),$4::timestamptz FROM account`,
+        [crypto.randomUUID(), userId, tokenHash, expiresAt, expectedRole, expectedPasswordHash]
+      );
+      return result.rowCount === 1;
+    }
+    await this.pool.query('INSERT INTO zencore_sessions (id,user_id,token_hash,expires_at) VALUES ($1,$2,$3,$4)',
+      [crypto.randomUUID(), userId, tokenHash, expiresAt]);
+    return true;
   }
 
   async findSession(tokenHash) {
@@ -1111,6 +1180,43 @@ class MemoryAuthStore {
       registrationEnabled: this.registrationEnabled,
       updatedAt: this.registrationUpdatedAt
     };
+  }
+
+  async listRoleAccounts({ search, offset, limit, reservedEmail }) {
+    const rows = [...this.usersById.values()].filter(user => ![OWNER_EMAIL, reservedEmail].includes(user.email.toLowerCase()) &&
+      ['active', 'disabled'].includes(user.status) && [user.email, user.display_name].some(value => value.toLowerCase().includes(search)));
+    return rows.sort((a, b) => a.display_name.toLowerCase().localeCompare(b.display_name.toLowerCase()) || a.id.localeCompare(b.id))
+      .slice(offset, offset + limit).map(user => ({ ...publicUser(user),
+        ibCode: [...this.referrersByCode.values()].find(ref => ref.user_id === user.id)?.code || null }));
+  }
+
+  async changeAccountRole(actor, id, input) {
+    const { role, expectedRole, reservedEmail, passwordHash, ibCode } = input;
+    const owner = this.usersById.get(actor.id);
+    if (systemRole(owner) !== 'owner') throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
+    const user = this.usersById.get(id);
+    assertEditableAccount(user, expectedRole);
+    if (reservedEmail && user.email.toLowerCase() === reservedEmail) {
+      throw require('./auth-service').authError('FORBIDDEN', 'Akaun demo umum dilindungi.', 403);
+    }
+    const oldRole = user.role;
+    if (role === oldRole) return { changed: false, role };
+    const ib = [...this.referrersByCode.values()].find(ref => ref.user_id === id);
+    assertIbCode(input, ib?.code);
+    if (role === 'ib' && !ib) {
+      if (this.referrersByCode.has(ibCode)) throw require('./auth-service').authError('IB_CODE_EXISTS', 'Kod IB ini sudah digunakan.', 409);
+      this.referrersByCode.set(ibCode, { id: crypto.randomUUID(), code: ibCode,
+        display_name: user.display_name, user_id: id, active: user.status === 'active', created_at: new Date() });
+    } else if (ib && (role === 'ib' || oldRole === 'ib')) {
+      ib.active = role === 'ib' && user.status === 'active';
+    }
+    user.role = role;
+    if (passwordHash) user.password_hash = passwordHash;
+    Access.roleChanged(user, oldRole);
+    for (const [token, session] of this.sessions) if (session.userId === id) this.sessions.delete(token);
+    const auditId = await this.beginAdminActivity(owner, `roles/${oldRole}/${role}`, user.email);
+    await this.finishAdminActivity(auditId, 200);
+    return { changed: true, role };
   }
 
   async listSystemAdmins() {
@@ -1299,6 +1405,7 @@ class MemoryAuthStore {
   async setIbActive(referrerId, active) {
     const referrer = [...this.referrersByCode.values()].find(item => item.id === referrerId);
     if (!referrer || referrer.code === DEFAULT_IB_CODE) return null;
+    if (active && referrer.user_id && this.usersById.get(referrer.user_id)?.role !== 'ib') return null;
     referrer.active = active === true;
     if (referrer.user_id) {
       const user = this.usersById.get(referrer.user_id);
@@ -1576,7 +1683,9 @@ class MemoryAuthStore {
     if (user) user.last_login_at = new Date();
   }
 
-  async createSession({ userId, tokenHash, expiresAt }) {
+  async createSession({ userId, tokenHash, expiresAt, expectedRole, expectedPasswordHash }) {
+    const user = this.usersById.get(userId);
+    if (expectedRole && (!user || user.role !== expectedRole || user.password_hash !== expectedPasswordHash || user.status !== 'active')) return false;
     this.sessions.set(tokenHash, {
       sessionId: crypto.randomUUID(),
       userId,

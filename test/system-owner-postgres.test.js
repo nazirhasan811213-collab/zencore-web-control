@@ -44,6 +44,27 @@ test('Postgres preserves admin revocation and audit across store initialization'
     assert.deepEqual(events.map(event => event.action), ['admin/revoke', 'auth/login', 'admin/grant']);
     assert.deepEqual(events.map(event => event.status), [200, 200, 200]);
     await assert.rejects(() => auth.changeSystemAdmin(owner, { ownerPassword }, owner.id), { code: 'ADMIN_NOT_FOUND' });
+
+    const member = await store.createUser({ displayName: 'Client', email: 'member@owner.test', passwordHash: await hashPassword(password) });
+    const previous = await auth.login({ email: member.email, password });
+    await store.pool.query('CREATE TABLE zencore_mt5_secure_pods (user_id UUID, revoked_at TIMESTAMPTZ)');
+    await store.pool.query('INSERT INTO zencore_mt5_secure_pods (user_id) VALUES ($1)', [member.id]);
+    const change = (role, expectedRole, fields = {}) => auth.changeAccountRole(owner, member.id, {
+      role, expectedRole, ownerPassword, ...fields
+    });
+    await assert.rejects(() => change('viewer', 'client'), { code: 'TRADING_ACTIVE' });
+    await store.pool.query('UPDATE zencore_mt5_secure_pods SET revoked_at=NOW()');
+    await change('viewer', 'client');
+    assert.equal(await auth.sessionFromRequest({ headers: { cookie: auth.createCookie(previous.token) } }), null);
+    const listed = await auth.listRoleAccounts(owner, { search: 'member' });
+    assert.equal(listed.accounts[0].role, 'viewer');
+    await change('ib', 'viewer', { ibCode: 'role-test' });
+    const promotion = await store.ibOverview(member.id);
+    assert.equal(promotion.referrer.code, 'role-test');
+    await change('client', 'ib');
+    assert.equal(await store.setIbActive(promotion.referrer.id, true), null);
+    await change('ib', 'client');
+    assert.equal((await store.ibOverview(member.id)).referrer.active, true);
   } finally {
     await store.close();
     await db.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE');

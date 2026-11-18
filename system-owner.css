@@ -13,3 +13,7 @@
   .owner-form { grid-template-columns: 1fr; }
   .owner-list .owner-row { flex-wrap: wrap; }
 }
+.owner-search { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.owner-search label { flex: 1 1 240px; }
+.owner-search input { width: 100%; min-width: 0; }
+.owner-dialog-form [hidden] { display: none; }

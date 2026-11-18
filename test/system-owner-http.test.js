@@ -107,6 +107,46 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     assert.ok(events.some(event => event.action === 'auth/login' && event.actorEmail === adminEmail));
     assert.ok(events.some(event => event.action === 'admin/revoke' && event.target === adminEmail));
     assert.equal((await request(activity + '?before=invalid', { cookie: owner })).status, 400);
+
+    const accounts = '/api/admin/owner/accounts';
+    assert.equal((await request(accounts, { cookie: admin })).status, 401);
+    assert.equal((await request(accounts, { cookie: client })).status, 403);
+    const page = await request(accounts + '?search=member', { cookie: owner });
+    const { accounts: matches } = await page.json();
+    assert.deepEqual(matches.map(account => account.email), [clientEmail]);
+    const endpoint = accounts + '/' + matches[0].id + '/role';
+    const change = (role, expectedRole, fields = {}) => request(endpoint, {
+      cookie: owner, data: { role, expectedRole, ownerPassword, ...fields }
+    });
+    assert.equal((await request(endpoint, { cookie: client, data: { role: 'admin' } })).status, 403);
+    assert.equal((await change('owner', 'client')).status, 400);
+    assert.equal((await change('viewer', 'client')).status, 200);
+    assert.equal((await request('/auth/me', { cookie: client })).status, 401);
+    const viewer = await validLogin(clientEmail, ownerPassword, null);
+    assert.equal((await request('/app', { cookie: viewer })).status, 200);
+    assert.equal((await request('/api/admin/overview', { cookie: viewer })).status, 403);
+    assert.equal((await request('/api/ib/overview', { cookie: viewer })).status, 403);
+    for (const path of ['/api/account/profile', '/api/auto-trade/turn-on', '/api/analysis-ai', '/api/analysis-alerts/settings']) {
+      const blocked = await request(path, { cookie: viewer, data: {} });
+      assert.equal(blocked.status, 403);
+      assert.equal((await blocked.json()).code, 'VIEW_ONLY');
+    }
+    const demo = await request('/api/auto-trade/state', { cookie: viewer });
+    assert.equal((await demo.json()).viewerMode, true);
+    assert.equal((await change('admin', 'client', { password: 'AnotherPassword2026!' })).status, 409);
+    assert.equal((await change('admin', 'viewer')).status, 400);
+    assert.equal((await change('ib', 'viewer', { ibCode: 'test-role-ib' })).status, 200);
+    const ib = await validLogin(clientEmail, ownerPassword, null);
+    assert.equal((await request('/api/ib/overview', { cookie: ib })).status, 200);
+    assert.equal((await change('client', 'ib')).status, 200);
+    assert.equal((await request('/api/ib/overview', { cookie: ib })).status, 401);
+    assert.equal((await change('admin', 'client', { password: 'AnotherPassword2026!' })).status, 200);
+    assert.equal((await login(clientEmail, ownerPassword)).status, 401);
+    const promoted = await validLogin(clientEmail, 'AnotherPassword2026!', 'system_admin');
+    assert.equal((await request('/api/admin/overview', { cookie: promoted })).status, 200);
+    assert.equal((await request(accounts, { cookie: promoted })).status, 403);
+    const auditAfter = await (await request(activity, { cookie: owner })).json();
+    assert.ok(auditAfter.events.some(event => event.action === 'roles/client/viewer' && event.target === clientEmail));
   } finally {
     child.kill();
     rmSync(dir, { recursive: true, force: true });

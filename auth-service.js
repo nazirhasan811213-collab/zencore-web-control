@@ -1,3 +1,4 @@
+const { ROLES } = require('./owner-account-roles');
 const Access=require('./account-access');
 const { OWNER_EMAIL, systemRole } = require('./system-owner');
 const { whatsappNumber, promotionLinks } = require('./promotion-links');
@@ -59,14 +60,19 @@ function createAuthService(options = {}) {
   const maxAgeSeconds = Math.floor(sessionTtlMs / 1000);
   const defaultIbCode = String(options.defaultIbCode || DEFAULT_IB_CODE).trim().toLowerCase();
 
-  async function issueSession(userId) {
+  const reservedEmail = normalizeEmail(options.publicViewerEmail);
+
+  async function issueSession(user) {
     const token = generateSessionToken();
     const expiresAt = new Date(Date.now() + sessionTtlMs);
-    await store.createSession({
-      userId,
+    const created = await store.createSession({
+      userId: user.id,
       tokenHash: hashSessionToken(token),
-      expiresAt
+      expiresAt,
+      expectedRole: user.role,
+      expectedPasswordHash: user.password_hash
     });
+    if (created === false) throw authError('INVALID_CREDENTIALS', 'Cuba log masuk semula.', 401);
     return { token, expiresAt };
   }
 
@@ -182,12 +188,43 @@ function createAuthService(options = {}) {
     return { events: events.slice(0, 50), nextBefore: events.length > 50 ? events[49].id : null };
   }
 
-  async function changeSystemAdmin(user, input, id = null) {
+  async function reauthenticateOwner(user, input) {
     assertOwner(user);
     if (typeof input?.ownerPassword !== 'string' || input.ownerPassword.length > 128 ||
         !await reauthenticate(user.id, input.ownerPassword)) {
       throw authError('OWNER_REAUTH_REQUIRED', 'Sahkan dengan kata laluan System Owner.', 401);
     }
+  }
+
+  async function listRoleAccounts(user, query) {
+    assertOwner(user);
+    const search = String(query.search || '').trim().toLowerCase().slice(0, 254);
+    const offset = Math.min(1000000, Math.max(0, Math.trunc(Number(query.offset) || 0)));
+    const accounts = await store.listRoleAccounts({ search, offset, limit: 51, reservedEmail });
+    return { accounts: accounts.slice(0, 50), nextOffset: accounts.length > 50 ? offset + 50 : null };
+  }
+
+  async function changeAccountRole(user, id, input) {
+    await reauthenticateOwner(user, input);
+    if (id === user.id) throw authError('FORBIDDEN', 'Peranan System Owner dilindungi.', 403);
+    const { role, expectedRole } = input;
+    if (!ROLES.includes(role) || !ROLES.includes(expectedRole)) throw authError('INVALID_ROLE', 'Peranan akaun tidak sah.');
+    const ibCode = String(input.ibCode || '').trim().toLowerCase();
+    if (role === ROLE_IB && ibCode && !/^[a-z0-9][a-z0-9_-]{1,47}$/.test(ibCode)) {
+      throw authError('INVALID_IB', 'Kod IB mesti 2–48 aksara dan hanya menggunakan huruf, nombor, sempang atau garis bawah.');
+    }
+    let passwordHash = null;
+    if (role === ROLE_ADMIN && expectedRole !== ROLE_ADMIN) {
+      const password = typeof input.password === 'string' ? input.password : '';
+      const passwordError = validateNewPassword(password);
+      if (passwordError) throw authError('INVALID_PASSWORD', passwordError);
+      passwordHash = await hashPassword(password);
+    }
+    return store.changeAccountRole(user, id, { role, expectedRole, ibCode, defaultIbCode, reservedEmail, passwordHash });
+  }
+
+  async function changeSystemAdmin(user, input, id = null) {
+    await reauthenticateOwner(user, input);
     if (id !== null) {
       const admin = await store.changeSystemAdmin(user, { id });
       if (!admin) throw authError('ADMIN_NOT_FOUND', 'System Admin aktif tidak dijumpai.', 404);
@@ -571,7 +608,8 @@ function createAuthService(options = {}) {
       throw authError('INVALID_CREDENTIALS', 'E-mel atau password tidak betul.', 401);
     }
 
-    const userRow = await require('./managed-vps-accounts').findUser(store,input.email);
+    const currentUser = await require('./managed-vps-accounts').findUser(store,input.email);
+    const userRow = currentUser && { ...currentUser };
     // Spend comparable work for unknown accounts so the response does not reveal
     // whether an e-mail exists through an obvious timing difference.
     const valid = userRow
@@ -589,7 +627,7 @@ function createAuthService(options = {}) {
       const auditId = await store.beginAdminActivity(userRow, 'auth/login');
       await store.finishAdminActivity(auditId, 200);
     }
-    const session = await issueSession(userRow.id);
+    const session = await issueSession(userRow);
     return { user: safeUser(userRow), ...session };
   }
 
@@ -628,6 +666,8 @@ function createAuthService(options = {}) {
     publicPromotion,
     promotionForUser,
     updatePromotionPhone,
+    listRoleAccounts,
+    changeAccountRole,
     systemAdmins,
     systemAdminActivity,
     changeSystemAdmin,
