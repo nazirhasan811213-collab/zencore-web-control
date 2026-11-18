@@ -11,7 +11,7 @@ test('PostgreSQL atomically binds concurrent account identities and rejects rota
   await admin.query(`CREATE SCHEMA ${schema}`);
   store=new PostgresAutoTradeStore(url);await store.pool.end();
   store.pool=new Pool({connectionString:url,options:`-c search_path=${schema}`});
-  await store.pool.query('CREATE TABLE zencore_users(id UUID PRIMARY KEY)');
+  await store.pool.query('CREATE TABLE zencore_users(id UUID PRIMARY KEY,role text NOT NULL DEFAULT \'client\')');
   await store.init();
   const user=crypto.randomUUID(),podId=crypto.randomUUID();
   await store.pool.query('INSERT INTO zencore_users VALUES($1)',[user]);

@@ -7,7 +7,7 @@ function resetReceipt(row){
  return {ok:true,completed:true,state:'ADMIN_SETUP',generation:row.generation,brokerCloseConfirmed:confirmed,reconnectAfterSeconds:30,defaultPassword:'zc123',message:confirmed?'Master Reset selesai. Penutupan broker disahkan. ID asal kekal; password awal zc123.':'Reset AKAUN SISTEM selesai. Token dan pautan lama dibatalkan; ID asal kekal, password zc123. POSISI/PENDING ORDER BROKER BELUM DISAHKAN TUTUP. Tunggu 30 saat sebelum pautan baharu.'};
 }
 const state=u=>u?.handoverState??u?.handover_state??'LIVE';
-const canTrade=u=>!!u&&((u.role&&u.role!=='client')||state(u)==='LIVE');
+const canTrade=u=>!!u&&u.role!=='viewer'&&((u.role&&u.role!=='client')||state(u)==='LIVE');
 function allowedPath(path,stage){return ['/auth/me','/auth/logout','/onboarding','/api/account/handover'].includes(path)||(stage==='ADMIN_SETUP'&&path==='/api/auto-trade/ea-connect');}
 function admin(actor){if(actor?.role!=='admin'||actor.status!=='active')throw fail('Admin aktif sahaja.',403);}
 class AccountHandover{

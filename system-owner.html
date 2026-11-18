@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>System Owner | ZenCore</title>
   <link rel="stylesheet" href="/admin-registrations.css?v=20261014.1">
-  <link rel="stylesheet" href="/system-owner.css">
+  <link rel="stylesheet" href="/system-owner.css?v=2">
 </head>
 <body>
   <main class="registration-admin">
@@ -14,6 +14,21 @@
       <h1>System Owner</h1>
       <a href="/admin">Kembali ke Panel Admin</a>
     </header>
+    <section class="registration-card owner-card" aria-labelledby="roles-title">
+      <h2 id="roles-title">Peranan akaun</h2>
+      <form id="account-search" role="search" class="owner-search">
+        <label>Cari client atau akaun
+          <input name="search" type="search" maxlength="254" placeholder="Nama atau e-mel">
+        </label>
+        <button type="submit">Cari</button>
+      </form>
+      <p id="role-list-status" role="status">Memuatkan senarai…</p>
+      <ul id="role-accounts" class="owner-list"></ul>
+      <div class="owner-row">
+        <button id="role-prev" type="button" hidden>Sebelumnya</button>
+        <button id="role-next" type="button" hidden>Seterusnya</button>
+      </div>
+    </section>
     <section class="registration-card owner-card" aria-labelledby="give-access">
       <h2 id="give-access">Beri akses System Admin</h2>
       <p>Gunakan e-mel khas admin. Untuk aktifkan semula admin yang telah dibuang, gunakan e-mel admin itu dan kata laluan baharu.</p>
@@ -54,6 +69,29 @@
       </div>
     </form>
   </dialog>
-  <script src="/system-owner-panel.js" defer></script>
+  <dialog id="role-dialog" aria-labelledby="role-title">
+    <form id="change-role" method="post" class="owner-dialog-form">
+      <h2 id="role-title">Tukar peranan</h2>
+      <p id="role-target"></p>
+      <label>Peranan
+        <select name="role">
+          <option value="admin">System Admin</option>
+          <option value="ib">IB</option>
+          <option value="client">Client</option>
+          <option value="viewer">View Public</option>
+        </select>
+      </label>
+      <label id="owner-ib-code" hidden>Kod IB<input name="ibCode" minlength="2" maxlength="48" autocomplete="off"></label>
+      <label id="owner-admin-password" hidden>Kata laluan baharu admin<input name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password"></label>
+      <label>Kata laluan System Owner<input name="ownerPassword" required type="password" maxlength="128" autocomplete="current-password"></label>
+      <p id="role-description"></p>
+      <p id="change-role-status" role="status"></p>
+      <div class="review-actions">
+        <button id="cancel-role" type="button">Batal</button>
+        <button class="registration-approve" type="submit">Simpan peranan</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/system-owner-panel.js?v=2" defer></script>
 </body>
 </html>

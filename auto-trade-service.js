@@ -163,6 +163,7 @@ function createAutoTradeService(options = {}) {
     return typeof store.getHostedAccount === 'function' ? store.getHostedAccount(userId) : null;
   }
   async function requireHostedTransport(userId) {
+    if (options.viewerAccount && await options.viewerAccount(userId)) throw serviceError('VIEW_ONLY', 'Paparan sahaja.', 403);
     if (isLocalEa(await store.getPodForUser(userId))) {
       throw serviceError('TRANSPORT_REPLACED', 'Akaun ini menggunakan EA tempatan.', 409);
     }
@@ -859,7 +860,7 @@ function createAutoTradeService(options = {}) {
     }
     const requestedOwnershipMode = ownershipMode(input.ownershipMode, '');
     const pairing = await store.consumePairingSession(tokenHash(pairingCode), now());
-    if (!pairing) throw serviceError('INVALID_PAIRING_CODE', 'Kod pairing tidak sah atau telah tamat.', 401);
+    if (!pairing || (options.viewerAccount && await options.viewerAccount(pairing.userId))) throw serviceError('INVALID_PAIRING_CODE', 'Kod pairing tidak sah atau telah tamat.', 401);
     if (pairing.ownershipMode !== requestedOwnershipMode) {
       throw serviceError(
         'PAIRING_HOST_MISMATCH',

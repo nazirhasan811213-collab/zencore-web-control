@@ -169,7 +169,8 @@ if (AUTH_ENABLED) {
       store,
       secureCookies: !INSECURE_COOKIE,
       sessionTtlMs: Number(process.env.ZENCORE_SESSION_TTL_MS) || undefined,
-      defaultIbCode: DEFAULT_IB_CODE
+      defaultIbCode: DEFAULT_IB_CODE,
+      publicViewerEmail: PUBLIC_VIEWER_EMAIL
     });
     analysisAlerts = new AnalysisAlerts({reentryAllowed:(user,event)=>autoTradeState.service?.reentrySignalAllowed(user,event)??false,pool:store.pool, token:process.env.ZENCORE_TELEGRAM_BOT_TOKEN || '', botName:process.env.ZENCORE_TELEGRAM_BOT_USERNAME || ''});
     try { await analysisAlerts.init(); } catch (_) { console.error('Analysis alert storage unavailable'); }
@@ -266,6 +267,7 @@ if (AUTH_ENABLED) {
         store: autoStore,
         scalpingTimeframe: '2',
         onConfirmedPositions: snapshot=>positionTelegram?.observe(snapshot),
+        viewerAccount:async userId=>(await authState.store.findUserByIdForLogin(userId))?.role==='viewer',
         entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u);},
         commandSigningKey: COMMAND_SIGNING_KEY,
         allowDemoExecution: AUTOTRADE_EXECUTION_ENABLED,
@@ -474,6 +476,10 @@ async function requireSession(req, res, redirectTo = null) {
       return null;
     }
     if(session.user.role==='client'&&session.user.handoverState!=='LIVE'&&!require('./account-handover').allowedPath(new URL(req.url,'http://localhost').pathname,session.user.handoverState)){if(redirectTo)redirect(res,'/onboarding');else sendJson(res,403,{ok:false,code:'ACCOUNT_HANDOVER_REQUIRED',error:'Lengkapkan serahan admin dan profil dahulu.',handoverState:session.user.handoverState});return null;}
+    if (session.user.role === 'viewer' && !['GET', 'HEAD'].includes(req.method)) {
+      sendJson(res, 403, { ok: false, code: 'VIEW_ONLY', error: 'Akaun View Public untuk paparan sahaja.' });
+      return null;
+    }
     // End authenticated streams when the client's access period ends as well.
     const deadline=session.user.role==='client'?new Date(session.user.accessExpiresAt).getTime():NaN;
     if(Number.isFinite(deadline)&&deadline>Date.now()){
@@ -610,14 +616,26 @@ async function handleManagementApi(req, res, pathname, session) {
         const before = new URL(req.url, 'http://localhost').searchParams.get('before');
         return sendJson(res, 200, { ok: true, ...await authState.service.systemAdminActivity(session.user, before) });
       }
+      if (req.method === 'GET' && pathname === '/api/admin/owner/accounts') {
+        const query = new URL(req.url, 'http://localhost').searchParams;
+        return sendJson(res, 200, { ok: true, ...await authState.service.listRoleAccounts(session.user, {
+          search: query.get('search'), offset: query.get('offset')
+        }) });
+      }
+      const roleUpdate = /^\/api\/admin\/owner\/accounts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/role$/i.exec(pathname);
       const revoke = /^\/api\/admin\/owner\/admins\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/revoke$/i.exec(pathname);
-      if (req.method === 'POST' && (pathname === '/api/admin/owner/admins' || revoke)) {
+      if (req.method === 'POST' && (pathname === '/api/admin/owner/admins' || revoke || roleUpdate)) {
         if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
         const body = await parseApiJson(req, res);
         if (body === null) return;
         const key = attemptKey(req, '/api/admin/owner/reauth', session.user.id);
         const limit = consumeAttempt(key);
         if (!limit.allowed) return sendJson(res, 429, { ok: false, error: 'Terlalu banyak cubaan. Cuba semula sebentar lagi.' }, { 'Retry-After': String(limit.retryAfter) });
+        if (roleUpdate) {
+          const result = await authState.service.changeAccountRole(session.user, roleUpdate[1], body);
+          authAttempts.delete(key);
+          return sendJson(res, 200, { ok: true, ...result });
+        }
         const admin = await authState.service.changeSystemAdmin(session.user, body, revoke?.[1] ?? null);
         authAttempts.delete(key);
         return sendJson(res, revoke ? 200 : 201, { ok: true, admin });
@@ -1513,7 +1531,7 @@ async function handlePodProvisioning(req, res) {
   }
   try {
     const user = await authState.store.findUserByIdForLogin(userId);
-    if (!require('./account-access').allowed(user)) {
+    if (!require('./account-access').allowed(user) || user.role === 'viewer') {
       return sendJson(res, 404, { ok: false, error: 'Akaun ZenCore tidak dijumpai.' });
     }
     const result = await autoTradeState.service.provisionDemoPod(userId, body.label);
@@ -2069,13 +2087,6 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && !publicProxy) {
     const session = await requireSession(req, res);
     if (!session) return;
-    if (session.user.role === 'viewer' && !['GET', 'HEAD'].includes(req.method)) {
-      return sendJson(res, 403, {
-        ok: false,
-        code: 'VIEW_ONLY',
-        error: 'Public demo ialah paparan view-only.'
-      });
-    }
   }
 
   return proxy(req, res);

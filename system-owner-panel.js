@@ -16,6 +16,14 @@
   const dialog = byId('revoke-dialog');
   let revokeId = null;
   let nextBefore = null;
+  const roleDialog = byId('role-dialog');
+  const roleForm = byId('change-role');
+  const roleLabels = { admin: 'System Admin', ib: 'IB', client: 'Client', viewer: 'View Public' };
+  let selectedAccount = null;
+  let accountSearch = '';
+  let accountOffset = 0;
+  let accountNext = null;
+  let accountRequest = 0;
 
   async function request(path, data) {
     const response = await fetch(endpoint + path, data ? {
@@ -63,6 +71,66 @@
     byId('admins').replaceChildren(...rows);
   }
 
+  function updateRoleFields() {
+    const role = roleForm.elements.role.value;
+    const needsIbCode = role === 'ib' && !selectedAccount.ibCode;
+    const needsPassword = role === 'admin' && selectedAccount.role !== 'admin';
+    for (const [label, input, needed] of [
+      ['owner-ib-code', 'ibCode', needsIbCode],
+      ['owner-admin-password', 'password', needsPassword]
+    ]) {
+      byId(label).hidden = !needed;
+      roleForm.elements[input].disabled = !needed;
+      roleForm.elements[input].required = needed;
+    }
+    byId('role-description').textContent = role === 'viewer'
+      ? 'Akses paparan sahaja. Selesaikan posisi dan nyahpaut MT5 sebelum menukar peranan.'
+      : role === 'ib' && selectedAccount.ibCode ? 'Kod IB sedia ada: ' + selectedAccount.ibCode : '';
+    roleForm.querySelector('[type=submit]').disabled = role === selectedAccount.role;
+  }
+
+  function openRoleDialog(account) {
+    roleForm.reset();
+    selectedAccount = account;
+    roleForm.elements.role.value = account.role;
+    byId('role-target').textContent = account.displayName + ' · ' + account.email;
+    byId('change-role-status').textContent = '';
+    updateRoleFields();
+    roleDialog.showModal();
+  }
+
+  async function loadRoleAccounts(notice = '') {
+    const sequence = ++accountRequest;
+    const status = byId('role-list-status');
+    status.textContent = 'Memuatkan senarai…';
+    const params = new URLSearchParams({ search: accountSearch, offset: String(accountOffset) });
+    try {
+      const { accounts, nextOffset } = await request('/accounts?' + params);
+      if (sequence !== accountRequest) return;
+      accountNext = nextOffset;
+      const rows = accounts.map(account => {
+        const row = document.createElement('li');
+        row.className = 'owner-row';
+        const label = document.createElement('div');
+        label.textContent = account.displayName;
+        detail(label, account.email);
+        detail(label, roleLabels[account.role] + ' · ' + ({ active: 'Aktif', disabled: 'Dinyahaktifkan', expired: 'Akses tamat' }[account.status] || account.status));
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = 'Tukar peranan';
+        button.addEventListener('click', () => openRoleDialog(account));
+        row.append(label, button);
+        return row;
+      });
+      byId('role-accounts').replaceChildren(...rows);
+      byId('role-prev').hidden = accountOffset === 0;
+      byId('role-next').hidden = accountNext === null;
+      status.textContent = notice || (rows.length ? '' : 'Tiada akaun dijumpai.');
+    } catch (error) {
+      if (sequence === accountRequest) status.textContent = error.message;
+    }
+  }
+
   async function loadActivity(older = false) {
     const before = older ? nextBefore : null;
     const { events, nextBefore: cursor } = await request('/activity' + (before ? '?before=' + encodeURIComponent(before) : ''));
@@ -70,7 +138,11 @@
     if (!older) list.replaceChildren();
     for (const event of events) {
       const row = document.createElement('li');
-      row.textContent = (actionLabels[event.action] || event.action) + ' · ' + event.actorEmail;
+      const transition = event.action.split('/');
+      const action = transition[0] === 'roles'
+        ? 'Peranan ditukar daripada ' + roleLabels[transition[1]] + ' kepada ' + roleLabels[transition[2]]
+        : actionLabels[event.action] || event.action;
+      row.textContent = action + ' · ' + event.actorEmail;
       const status = event.status == null ? 'Keputusan belum direkod' : event.status < 400 ? 'Berjaya' : 'Gagal';
       detail(row, formatDate(event.createdAt) + ' Waktu Malaysia · ' + status + (event.target ? ' · ' + event.target : ''));
       list.append(row);
@@ -93,6 +165,7 @@
         await request(path(), Object.fromEntries(new FormData(form)));
         form.reset();
         complete();
+        if (id !== 'change-role') loadRoleAccounts();
         loadAdmins().catch(error => { byId('admin-status').textContent = error.message; });
         refreshActivity();
       } catch (error) {
@@ -122,6 +195,30 @@
     dialog.close();
     byId('grant-status').textContent = 'Akses admin dibuang.';
   });
+  submit('change-role', 'change-role-status', () => '/accounts/' + encodeURIComponent(selectedAccount.id) + '/role', () => {
+    roleDialog.close();
+    loadRoleAccounts('Peranan akaun dikemas kini.');
+  });
+  roleForm.elements.role.addEventListener('change', updateRoleFields);
+  roleForm.addEventListener('formdata', event => event.formData.set('expectedRole', selectedAccount.role));
+  roleDialog.addEventListener('close', () => roleForm.reset());
+  byId('cancel-role').addEventListener('click', () => roleDialog.close());
+  byId('account-search').addEventListener('submit', event => {
+    event.preventDefault();
+    accountSearch = event.currentTarget.elements.search.value.trim();
+    accountOffset = 0;
+    loadRoleAccounts();
+  });
+  byId('role-prev').addEventListener('click', () => {
+    accountOffset = Math.max(0, accountOffset - 50);
+    loadRoleAccounts();
+  });
+  byId('role-next').addEventListener('click', () => {
+    if (accountNext === null) return;
+    accountOffset = accountNext;
+    loadRoleAccounts();
+  });
+  loadRoleAccounts();
   byId('cancel-revoke').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => byId('revoke').reset());
   byId('refresh').addEventListener('click', () => refreshActivity());
