@@ -1684,15 +1684,15 @@ if zc_hold_qualify
     zc_seq_tp2 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp2-zc_seq_entry),2.5)
     zc_seq_tp3 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,4.236) : zc_seq_entry+planSign*zc_seq_risk*rrTP3
     zc_seq_tp3 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp3-zc_seq_entry),3.5)
+    if zc_btc
+        zc_seq_tp1 := zc_seq_entry+planSign*btcTp1Distance
+        zc_seq_tp2 := zc_seq_entry+planSign*btcTp2Distance
+        zc_seq_tp3 := zc_seq_entry+planSign*btcTp3Distance
 // Chart labels are candidates, not MT5 execution confirmations. Repaint the
 // current realtime bar after rollback, then persist one label per candidate.
 if zc24_feed and zc_cycle_kind == "FOLLOWUP" and zc_plan_bar == bar_index and not na(zc_seq_completed) and (na(zc_chart_candidate) or zc_chart_candidate != zc_seq_completed)
     f_addMgmtLabel(bar_index, zc_seq_entry, "CALON RE-ENTRY " + zc_seq_side, zc24_buy ? label.style_label_up : label.style_label_down, color.new(color.blue,10), color.white, size.small)
     zc_chart_candidate := zc_seq_completed
-    if zc_btc
-        zc_seq_tp1 := zc_seq_entry+planSign*btcTp1Distance
-        zc_seq_tp2 := zc_seq_entry+planSign*btcTp2Distance
-        zc_seq_tp3 := zc_seq_entry+planSign*btcTp3Distance
 // Execution event expires 60 seconds after qualification; source SOLID has no time expiry.
 // SOP #1 is the native chart SOLID event. Qualification is a separate gate.
 bool zc24_solid = zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
