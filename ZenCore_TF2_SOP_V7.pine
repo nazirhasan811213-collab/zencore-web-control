@@ -1,13 +1,15 @@
 //@version=6
-indicator('ZenCore TF2 Trend Solid Entry V7.3 - Opposite Yellow Exit', dynamic_requests=true, max_bars_back=650, overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=200)
+indicator('ZenCore TF2 Trend Solid Entry V7.4 - Quality Re-entry', dynamic_requests=true, max_bars_back=650, overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=200)
 
 // Native calculations below are the ONLY source of chart and webhook values.
 zc24_group = "ZenCore TF2 Web Feed"
 zc24_feed = input.bool(true, "Aktifkan web feed (SOLID V7)", group=zc24_group)
-zc_structure_entry = input.bool(false, "Entry baharu: SOLID + ruang TP1", group=zc24_group)
+zc_structure_entry = input.bool(true, "Semak ruang ke TP1", group=zc24_group)
 zc_min_entry_score = input.int(50, "Skor minimum entry TF2 /100", minval=0, maxval=100, group=zc24_group)
-zn_pullback = input.float(0.10, "Re-entry: pullback minimum / ATR", minval=0.01, step=0.05, group=zc24_group)
+zn_pullback = input.float(0.25, "Re-entry: pullback minimum / ATR", minval=0.01, step=0.05, group=zc24_group)
 zn_sideways = input.float(0.75, "Re-entry: julat 2 candle mendatar / ATR", minval=0.10, step=0.05, group=zc24_group)
+zn_max_wait = input.int(3, "Re-entry: maksimum candle selepas rehat", minval=1, maxval=10, group=zc24_group)
+zn_max_extension = input.float(1.5, "Re-entry: jarak maksimum dari ribbon / ATR", minval=0.25, step=0.25, group=zc24_group)
 zn_show_link = input.bool(true, "Papar garis dari SOLID ke entry", group=zc24_group)
 zc24_channel = input.string("Unified", "Feed channel", options=["Unified", "Dashboard", "Execution"], group=zc24_group)
 zc24_secret = input.string("", "Webhook secret", group=zc24_group, display=display.none)
@@ -52,7 +54,8 @@ varip int zn_event_rest_at = na
 varip int zn_event_reset_at = na
 varip string zn_event_rest_kind = "NONE"
 varip string zc_cycle_kind = "INITIAL"
-// Repeat candidates only after the previous chart cycle closes.
+// One re-entry per source, after the previous chart cycle closes.
+varip bool zc_followup_used = false
 // The server independently requires a confirmed MT5 close for each account.
 varip int zc_virtual_closed_at = na
 varip int zc_source_setup_at = na
@@ -1501,6 +1504,7 @@ string zc_seq_key = str.tostring(zc_pulse_setup) + "|" + (zc_pulse_buy ? "BUY" :
 bool zc_pulse_direction_pass = zc_pulse_buy ? is_hema_bull : is_hema_bear
 bool zc_hold_new_source = zc_seq_pulse and zc_pulse_direction_pass and not array.includes(zc80_seen, zc_seq_key)
 if zc_hold_new_source
+    zc_followup_used := false
     array.push(zc80_seen, zc_seq_key)
     if array.size(zc80_seen) > 500
         array.shift(zc80_seen)
@@ -1605,7 +1609,7 @@ f_zc_quality_mtf(string tf) =>
 
 f_zc_unit(float value) => math.max(0.0,math.min(1.0,value))
 
-int zc_quality_mtf = zc_structure_entry and zc24_tf2 ? f_zc_quality_mtf("3")+f_zc_quality_mtf("5")+f_zc_quality_mtf("10") : na
+int zc_quality_mtf = zc24_tf2 ? f_zc_quality_mtf("3")+f_zc_quality_mtf("5")+f_zc_quality_mtf("10") : na
 float zc_quality_trend = 25*((zc_draft_sign*(he1-he2)>0?0.6:0)+(zc_draft_sign*(ema9-ema20)>0?0.2:0)+(zc_draft_sign*(ema20-ema50)>0?0.2:0))
 bool zc_quality_rsi_extreme = zc24_buy ? rsi_val>70 : rsi_val<30
 float zc_quality_momentum = zc_draft_sign*(wt1-wt2)<=0 ? 0 : 25*(zc_quality_rsi_extreme?0.25:zc_draft_sign*(rsi_val-50)>=0?1:0.5)
@@ -1615,8 +1619,8 @@ float zc_quality_volume = 10*f_zc_unit(rvol/1.2)
 bool zc_quality_data = zc_seq_side!="" and not na(he1) and not na(he2) and not na(ema9) and not na(ema20) and not na(ema50) and not na(wt1) and not na(wt2) and rsi_val>=0 and rsi_val<=100 and chop_val>=0 and chop_val<=100 and rvol>=0 and not na(zc_quality_mtf)
 float zc_quality_total = math.round(zc_quality_trend,2)+math.round(zc_quality_momentum,2)+math.round(zc_quality_candle,2)+math.round(zc_quality_regime,2)+math.round(zc_quality_volume,2)
 int zc_quality_score = zc_quality_data ? int(math.round(zc_draft_sign*zc_quality_mtf<=-2 or chop_val>=60 ? math.min(zc_quality_total,55) : zc_quality_total)) : na
-bool zc_quality_pass = not na(zc_quality_score) and zc_quality_score>=zc_min_entry_score
-bool zc_new_entry_pass = not zc_structure_entry or (zc_structure_candle_pass and not zc_tp1_blocked and zc_quality_pass)
+bool zc_quality_pass = not na(zc_quality_score) and zc_quality_score>=zc_min_entry_score and chop_val<60 and zc_draft_sign*zc_quality_mtf>=-1
+bool zc_new_entry_pass = zc_entry_candle_pass and zc_quality_pass and (not zc_structure_entry or not zc_tp1_blocked)
 bool draft_ribbon = zc24_buy ? he1 > he2 : he1 < he2
 bool zn_wt = zc24_buy ? wt1>wt2 : wt1<wt2
 bool zn_hema = zc24_buy ? he1>he2 : he1<he2
@@ -1670,38 +1674,68 @@ if false and barstate.isconfirmed and zs_event != ""
     string zs_label = zs_chop ? (zs_atr > 4.5 ? "SEKAT ATR >4.5 + 2 ARAH" : "SEKAT ATR <1.5 + 2 ARAH") : "SEKATAN LEPAS - IKUT SOP"
     label.new(bar_index,high,zs_label,style=label.style_label_down,color=zs_chop ? color.orange : color.teal,textcolor=color.white,size=size.tiny)
 
-// V6 re-entry candidate. Pine cannot confirm broker/MT5 flat.
-// Server MUST validate a fresh post-MT5-flat pause before authorizing an order.
+// A pause belongs to this source and this completed virtual exit only.
+// Broker-flat validation belongs to server/EA; Pine cannot establish it.
 var int zn_reset_at = na
 var int zn_rest_at = na
+var int zn_rest_bar = na
+var float zn_pause_high = na
+var float zn_pause_low = na
 var float zn_best = na
 var bool zn_rest = false
 var string zn_rest_kind = "NONE"
 if zc80_new_solid
     zn_reset_at := na
     zn_rest_at := na
+    zn_rest_bar := na
+    zn_pause_high := na
+    zn_pause_low := na
     zn_best := na
     zn_rest := false
     zn_rest_kind := "NONE"
-if barstate.isconfirmed and not xc_active and not na(zc_virtual_closed_at) and zc_hold_active
+if barstate.isconfirmed and not zc80_new_solid and not xc_active and not na(zc_virtual_closed_at) and zc_hold_active
     if na(zn_reset_at) or zn_reset_at != zc_virtual_closed_at
         zn_reset_at := zc_virtual_closed_at
         zn_rest_at := na
+        zn_rest_bar := na
+        zn_pause_high := na
+        zn_pause_low := na
         zn_best := na
         zn_rest := false
         zn_rest_kind := "NONE"
+    // Discard a stale pause. A later candidate needs a genuinely new pause.
+    if zn_rest and not na(zn_rest_bar) and bar_index-zn_rest_bar>zn_max_wait
+        zn_rest := false
+        zn_rest_at := na
+        zn_rest_bar := na
+        zn_pause_high := na
+        zn_pause_low := na
+        zn_best := (zc24_buy ? 1.0 : -1.0)*close
+        zn_rest_kind := "NONE"
     if time_close > zn_reset_at
         float signedClose = (zc24_buy ? 1.0 : -1.0)*close
-        bool pullbackNow = not na(zn_best) and zn_best-signedClose >= atr*zn_pullback
+        bool pullbackNow = time_close[1]>zn_reset_at and not na(zn_best) and zn_best-signedClose >= atr*zn_pullback
         bool sidewaysNow = time_close[1]>zn_reset_at and math.max(high,high[1])-math.min(low,low[1])<=atr*zn_sideways
         if not zn_rest and (pullbackNow or sidewaysNow)
             zn_rest := true
             zn_rest_at := time_close
+            zn_rest_bar := bar_index
+            zn_pause_high := math.max(high,high[1])
+            zn_pause_low := math.min(low,low[1])
             zn_rest_kind := pullbackNow ? "PULLBACK" : "SIDEWAYS"
         zn_best := na(zn_best) ? signedClose : math.max(zn_best,signedClose)
-bool zn_break = zc24_buy ? close>open and close>high[1] : close<open and close<low[1]
-bool zn_resume = zn_rest and not na(zn_rest_at) and time_close>zn_rest_at and zn_break
-bool zc_followup = zs_pass and barstate.isconfirmed and zc_hold_active and not na(zc_seq_completed) and not xc_active and not na(zc_virtual_closed_at) and zn_entry and zn_resume and zc_new_entry_pass
+// Break the whole pause, not just the immediately preceding tiny candle.
+bool zn_break = zc24_buy ? close>open and not na(zn_pause_high) and close>zn_pause_high : close<open and not na(zn_pause_low) and close<zn_pause_low
+bool zn_resume = zn_rest and not na(zn_rest_at) and not na(zn_rest_bar) and time_close>zn_rest_at and bar_index-zn_rest_bar<=zn_max_wait and zn_break
+// Heuristic defaults are configurable and require forward/out-of-sample validation.
+float zn_body = math.abs(close-open)
+float zn_range = high-low
+float zn_close_location = zn_range>0 ? (zc24_buy ? close-low : high-close)/zn_range : 0.0
+bool zn_reentry_candle = zc_entry_candle_pass and zn_range>0 and zn_body/zn_range>=0.35 and zn_close_location>=0.65
+bool zn_not_chasing = atr>0 and zn_body<=atr*zn_max_extension and (zc24_buy ? close-math.max(he1,he2)<=atr*zn_max_extension : math.min(he1,he2)-close<=atr*zn_max_extension)
+bool zn_trend_resume = zn_hema and (zc24_buy ? he1>he1[1] and wt1>=wt1[1] : he1<he1[1] and wt1<=wt1[1])
+bool zn_reentry_pass = not zc_followup_used and zn_resume and zn_reentry_candle and zn_not_chasing and zn_trend_resume and zc_new_entry_pass and zc_dashboard_entry_pass
+bool zc_followup = zs_pass and barstate.isconfirmed and zc_hold_active and not na(zc_seq_completed) and not xc_active and zc_old_exit_done and draft_plan_ok and not na(zc_virtual_closed_at) and zn_entry and zn_reentry_pass
 if zc_followup
     zc_parent_qualified := zc_seq_completed
     zc_seq_completed := na
@@ -1709,8 +1743,10 @@ if zc_followup
     zc_cycle_kind := "FOLLOWUP"
     zc80_eligible := false
 var int zc_chart_candidate = na
-bool zc_hold_qualify = zs_pass and barstate.isconfirmed and not xc_active and zc_old_exit_done and draft_plan_ok and zc_hold_active and na(zc_seq_completed) and zc24_tf2 and zn_entry and zc_dashboard_entry_pass and zc_new_entry_pass
+bool zc_hold_qualify = zs_pass and barstate.isconfirmed and not xc_active and zc_old_exit_done and draft_plan_ok and zc_hold_active and na(zc_seq_completed) and zc24_tf2 and zn_entry and zc_dashboard_entry_pass and zc_new_entry_pass and (zc_cycle_kind != "FOLLOWUP" or zn_reentry_pass)
 if zc_hold_qualify
+    if zc_cycle_kind == "FOLLOWUP"
+        zc_followup_used := true
     zn_event_rest_at := zc_cycle_kind == "FOLLOWUP" ? zn_rest_at : na
     zn_event_reset_at := zc_cycle_kind == "FOLLOWUP" ? zn_reset_at : na
     zn_event_rest_kind := zc_cycle_kind == "FOLLOWUP" ? zn_rest_kind : "NONE"
@@ -1735,10 +1771,13 @@ if zc_hold_qualify
 if zc24_feed and zc_cycle_kind == "FOLLOWUP" and zc_plan_bar == bar_index and not na(zc_seq_completed) and (na(zc_chart_candidate) or zc_chart_candidate != zc_seq_completed)
     f_addMgmtLabel(bar_index, zc_seq_entry, "CALON RE-ENTRY " + zc_seq_side, zc24_buy ? label.style_label_up : label.style_label_down, color.new(color.blue,10), color.white, size.small)
     zc_chart_candidate := zc_seq_completed
+if barstate.isconfirmed and zn_rest and not xc_active and not zc_hold_qualify and not na(zn_rest_at) and time_close>zn_rest_at
+    zn_pause_high := math.max(zn_pause_high,high)
+    zn_pause_low := math.min(zn_pause_low,low)
 // Execution event expires 60 seconds after qualification; source SOLID has no time expiry.
 // SOP #1 is the native chart SOLID event. Qualification is a separate gate.
 bool zc24_solid = zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
-bool zc24_ready = zs_pass and zc24_solid and zc80_eligible and zn_entry and zc_dashboard_entry_pass
+bool zc24_ready = zs_pass and zc24_solid and zc80_eligible and zn_entry and zc_dashboard_entry_pass and zc_new_entry_pass
 // Execution plan is independent. Never overwrite curr_* native chart state.
 if zc_hold_qualify
     xc_half_event_sent := false
@@ -1784,7 +1823,7 @@ if barstate.isconfirmed and xc_active and not zc_hold_qualify
 
 // Execution exits do not independently terminate the entry SOLID.
 zc24_solid := zc_hold_active and zc_seq_side != "" and not na(zc_seq_trigger)
-zc24_ready := zs_pass and zc24_solid and zc80_eligible and zn_entry and zc_dashboard_entry_pass
+zc24_ready := zs_pass and zc24_solid and zc80_eligible and zn_entry and zc_dashboard_entry_pass and zc_new_entry_pass
 bool zc24_completed = not na(xc_setup) and not xc_active
 bool zc24_half_armed = xc_half
 int zc24_half_bar = xc_half_bar
@@ -1840,7 +1879,9 @@ plot(not na(zc_seq_completed) ? draft_sl : na, "SOP SL", display=display.data_wi
 
 string zc_display_side = zc_pending_key != "" ? zc_pending_side : zc_seq_side
 int zc_display_at = zc_pending_key != "" ? zc_pending_at : zc_seq_trigger
-var table zc24_table = table.new(position.top_left,2,13,bgcolor=color.new(#091720,5),border_width=1)
+string zc_quality_reason = not zc24_solid ? "TUNGGU SOLID" : not zn_wt ? "WT MELAWAN" : not zn_hema or not zc_movement_pass ? "TREND BELUM SEARAH" : not zc24_price_past ? "HARGA BELUM LEPAS SOLID" : not zc_entry_candle_pass ? "CANDLE LAWAN / NEUTRAL" : na(zc_quality_score) ? "TUNGGU DATA" : zc_quality_score<zc_min_entry_score ? "SKOR RENDAH" : chop_val>=60 ? "MARKET CHOPPY" : zc_draft_sign*zc_quality_mtf < -1 ? "MTF MELAWAN" : zc_structure_entry and zc_tp1_blocked ? "RUANG TP1 SEMPIT" : "KUALITI LULUS"
+string zn_reentry_status = zc_followup_used ? "1/1 SUDAH DIGUNA" : xc_active ? "TUNGGU POSISI TUTUP" : not zn_rest ? "TUNGGU PULLBACK BAHARU" : not zn_resume ? "TUNGGU PECAH JULAT" : not zn_reentry_candle ? "CANDLE / WICK LEMAH" : not zn_not_chasing ? "JAUH DARI RIBBON" : not zn_trend_resume ? "MOMENTUM BELUM SAMBUNG" : not zc_new_entry_pass or not zc_dashboard_entry_pass ? zc_quality_reason : "CALON RE-ENTRY LULUS"
+var table zc24_table = table.new(position.top_left,2,15,bgcolor=color.new(#091720,5),border_width=1)
 if barstate.islast
     table.cell(zc24_table,0,0,"SOP TF2 V7.3",text_color=color.aqua)
     table.cell(zc24_table,1,0,zc_structure_entry?"SOLID + TP1":"SOLID V7",text_color=color.orange)
@@ -1867,9 +1908,13 @@ if barstate.islast
     string zc_structure_status = not zc_structure_entry ? "OFF" : not zc24_solid ? "TUNGGU SOLID" : not zc_structure_candle_pass ? "CANDLE LAWAN / DOJI" : zc_tp1_blocked ? "HALANGAN " + str.tostring(zc_obstacle,format.mintick) : na(zc_obstacle) ? "TIADA PIVOT" : "LEPAS " + str.tostring(zc_obstacle,format.mintick)
     table.cell(zc24_table,0,11,"Ruang ke TP1",text_color=color.white)
     table.cell(zc24_table,1,11,zc_structure_status,text_color=zc_structure_entry and zc24_solid and not zc_new_entry_pass?color.orange:color.white)
-    string zc_quality_status = not zc_structure_entry ? "OFF" : na(zc_quality_score) ? "TUNGGU DATA" : str.tostring(zc_quality_score) + "/100 · MIN " + str.tostring(zc_min_entry_score)
+    string zc_quality_status = na(zc_quality_score) ? "TUNGGU DATA" : str.tostring(zc_quality_score) + "/100 · MIN " + str.tostring(zc_min_entry_score)
     table.cell(zc24_table,0,12,"Kualiti entry",text_color=color.white)
-    table.cell(zc24_table,1,12,zc_quality_status,text_color=zc_structure_entry and zc_quality_pass?color.lime:color.white)
+    table.cell(zc24_table,1,12,zc_quality_status,text_color=zc_quality_pass?color.lime:color.white)
+    table.cell(zc24_table,0,13,"Sebab entry",text_color=color.white)
+    table.cell(zc24_table,1,13,zc_quality_reason,text_color=zc_new_entry_pass?color.lime:color.orange)
+    table.cell(zc24_table,0,14,"Re-entry",text_color=color.white)
+    table.cell(zc24_table,1,14,zn_reentry_status,text_color=color.white)
 
 // Both panels read the current entry source instead of the older native position.
 if show_sop and barstate.islast and not na(sop_table)
@@ -1953,8 +1998,8 @@ string zn_reentry_proof = "{\"version\":\"CLOSED_PAUSE_RESUME_V2\",\"parentQuali
 bool zn_held_qualification = zc_hold_qualify and zc_cycle_kind == "INITIAL" and not zc_seq_pulse
 string zn_solid_evidence = "{\"version\":\"NATIVE_SOLID_LABEL_V1\",\"barTime\":"+f_int(time)+",\"basis\":"+f_num(basis)+",\"rsi\":"+f_num(rsi_val)+",\"pulse\":"+f_bool(zc_seq_pulse or zn_held_qualification)+",\"sourcePulse\":"+f_bool(zc_seq_pulse)+",\"heldQualification\":"+f_bool(zn_held_qualification)+"}"
 string zn_yellow_evidence = "{\"version\":\"BJ_OPPOSITE_YELLOW_V1\",\"barTime\":"+f_int(time)+",\"fast\":"+f_num(v2_anT3Average)+",\"slow\":"+f_num(v2_nT3Average)+",\"close\":"+f_num(close)+",\"confirmed\":"+f_bool(barstate.isconfirmed)+"}"
-string zc_entry_quality_json = zc_structure_entry ? "{\"score\":"+f_num(zc_quality_score)+",\"minimum\":"+f_num(zc_min_entry_score)+",\"confirmedMtf\":"+f_num(zc_quality_mtf)+",\"obstacle\":"+f_num(zc_obstacle)+",\"passed\":"+f_bool(zc_new_entry_pass)+"}" : "null"
-string zc24_meta_json = "{\"entryQuality\":"+zc_entry_quality_json+",\"yellowExit\":"+zn_yellow_evidence+",\"nativeSolid\":"+zn_solid_evidence+",\"entryCandleVersion\":\"TF2_NATIVE_CANDLE_DIRECTION_V1\",\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-NATIVE-SOLID-V7.3\",\"entryPolicyVersion\":\"PINE_NATIVE_SOLID_ENTRY_V7\",\"riskPlanVersion\":"+f_quote(zc_btc ? "BTC_TF2_PIP_STEPLOCK_V1" : "TF2_PINE_ATR8_SL4_TP150_250_350_CAPS_V3")+",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"lifecycleVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zn_reentry_proof+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc_entry_quality_json = "{\"score\":"+f_num(zc_quality_score)+",\"minimum\":"+f_num(zc_min_entry_score)+",\"confirmedMtf\":"+f_num(zc_quality_mtf)+",\"obstacle\":"+f_num(zc_obstacle)+",\"passed\":"+f_bool(zc_new_entry_pass)+"}"
+string zc24_meta_json = "{\"entryQuality\":"+zc_entry_quality_json+",\"yellowExit\":"+zn_yellow_evidence+",\"nativeSolid\":"+zn_solid_evidence+",\"entryCandleVersion\":\"TF2_NATIVE_CANDLE_DIRECTION_V1\",\"decisionTimingVersion\":\"TF2_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF2_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF2-NATIVE-SOLID-V7.4\",\"entryPolicyVersion\":\"PINE_NATIVE_SOLID_ENTRY_V7\",\"riskPlanVersion\":"+f_quote(zc_btc ? "BTC_TF2_PIP_STEPLOCK_V1" : "TF2_PINE_ATR8_SL4_TP150_250_350_CAPS_V3")+",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"lifecycleVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zn_reentry_proof+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote(zc24_signal_symbol))

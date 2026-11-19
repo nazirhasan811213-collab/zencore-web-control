@@ -32,7 +32,7 @@ for(const direction of [1,-1]){
   const state={zc_hold_active:true,zc_source_setup_at:1000,zc_seq_trigger:2000,zc_seq_pulse:false};
   assert.equal(gate('zn_initial_solid',state),true);
   Object.assign(state,{zs_pass:true,barstate:{isconfirmed:true},xc_active:false,zc_old_exit_done:true,
-   draft_plan_ok:true,zc_seq_completed:null,zc24_tf2:true,zn_entry:true,zc_dashboard_entry_pass:true,zc_new_entry_pass:true});
+   draft_plan_ok:true,zc_seq_completed:null,zc24_tf2:true,zn_entry:true,zc_dashboard_entry_pass:true,zc_new_entry_pass:true,zc_cycle_kind:'INITIAL',zn_reentry_pass:true});
   assert.equal(gate('zc_hold_qualify',state),true);
   for(const change of [{xc_active:true},{zc_old_exit_done:false},{zc_dashboard_entry_pass:false},{zc_new_entry_pass:false},{zc_seq_completed:3000}]){
    assert.equal(gate('zc_hold_qualify',{...state,...change}),false);

@@ -54,12 +54,12 @@ for(const tf of ['2','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke 
 });
 test('TF2 follows confirmed trend reversals while TF15 keeps its own lifecycle',()=>{
  const tf2=fs.readFileSync(__dirname+'/../ZenCore_TF2_SOP_V7.pine','utf8');
- a.match(tf2,/TF2-NATIVE-SOLID-V7.3/);
+ a.match(tf2,/TF2-NATIVE-SOLID-V7.4/);
  a.match(tf2,/bool zc_held_colour_end = barstate.isconfirmed and zc_hold_active/);
  a.match(tf2,/bool zc_trend_solid = [^\n]*barstate.isconfirmed/);
  const tf15=fs.readFileSync(__dirname+'/../ZenCore_TF15_SOP_V7.pine','utf8');
  a.match(tf15,/bool zc_held_colour_end = false/);
- a.match(tf15,/TF15-NATIVE-SOLID-V7.1/);
+ a.match(tf15,/TF15-NATIVE-SOLID-V7.4/);
 });
 
 for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{
@@ -69,12 +69,12 @@ for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial
  a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,entryAuthorizedAt:f.now-61000}}},m,f.now).reason,'ENTRY_EVENT_EXPIRED');
 });
 
-test('optional TF2 structure entry gates initial and follow-up qualification using the same TP1 as the plan',()=>{
+test('TF2 quality is mandatory while obstacle checking remains configurable, using the plan TP1',()=>{
  const source=fs.readFileSync(`${__dirname}/../ZenCore_TF2_SOP_V7.pine`,'utf8');
- a.match(source,/zc_structure_entry = input.bool\(false,/);
- a.match(source,/bool zc_new_entry_pass = not zc_structure_entry or \(zc_structure_candle_pass and not zc_tp1_blocked and zc_quality_pass\)/);
+ a.match(source,/zc_structure_entry = input.bool\(true,/);
+ a.match(source,/bool zc_new_entry_pass = zc_entry_candle_pass and zc_quality_pass and \(not zc_structure_entry or not zc_tp1_blocked\)/);
  a.match(source,/bool zc_hold_qualify = [^\n]*barstate.isconfirmed[^\n]*and zc_new_entry_pass/);
- a.match(source,/bool zc_followup = [^\n]*and zc_new_entry_pass/);
+ a.match(source,/bool zc_followup = [^\n]*and zn_reentry_pass/);
  a.match(source,/zc_seq_tp1 := zc_draft_tp1/);
  const obstacle=source.split('f_zc_directional_obstacle(bool isBuy, float entry) =>')[1].split('\nfloat zc_obstacle')[0];
  a.match(obstacle,/for i = 2 to 14/);
