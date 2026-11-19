@@ -6,7 +6,7 @@ test('split-feed waiting and dashboard updates do not generate false blocked ent
  await svc.connectLocalEa('report-user');
  await store.saveSettings('report-user',{capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],strategyMode:'TF2_SCALPING'});
  await store.setControl('report-user',{desiredState:'ON',effectiveState:'ON'});
- const m={symbol:'XAUUSD',timeframe:'2',setupKey:'hold',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',entryEvent:false,strategyNormal:{solid:true,lifecycleState:'EVENT_EXPIRED'}};
+ const m={symbol:'XAUUSD',timeframe:'1',setupKey:'hold',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',entryEvent:false,strategyNormal:{solid:true,lifecycleState:'EVENT_EXPIRED'}};
  await svc.dispatchMarkets([m]);
  await svc.dispatchMarkets([{...m,feedChannel:'DASHBOARD',entryEvent:true}]);
  a.equal((await store.listAudit('report-user',100)).filter(x=>x.type==='ENTRY_BLOCKED').length,0);

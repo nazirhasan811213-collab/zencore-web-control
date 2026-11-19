@@ -21,7 +21,7 @@ function matching(g,positions){return (positions||[]).filter(p=>Number.isFinite(
 function message(g,positions,at,key){
  const volume=positions.reduce((n,p)=>n+p.volume,0),entry=positions.reduce((n,p)=>n+p.entry*p.volume,0)/volume;
  const price=n=>Number.isFinite(n)&&n>0?n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3}):'Belum dilaporkan';
- const lines=['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | POSISI SUDAH DIBUKA'+(g.reentry?' • RE-ENTRY':''),'──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`${positions.length===1?'Entry MT5':'Entry purata MT5'}: ${price(entry)}`,`Posisi disahkan: ${positions.length} • ${Number(volume.toFixed(3))} lot`];
+ const lines=['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | POSISI SUDAH DIBUKA'+(g.reentry?' • RE-ENTRY':''),'──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF1'}${g.manual?' • MANUAL':''}`,'',`${positions.length===1?'Entry MT5':'Entry purata MT5'}: ${price(entry)}`,`Posisi disahkan: ${positions.length} • ${Number(volume.toFixed(3))} lot`];
  if(g.directionMismatch)lines.push('⚠️ Arah posisi berbeza daripada pelan. Semak MT5 segera.');
  if(g.expected>positions.length)lines.push(`Pelan: ${g.expected} layer • setakat pengesahan ini`);
  const values=positions.map(p=>p.activeSl);
@@ -32,7 +32,7 @@ function message(g,positions,at,key){
 }
 function closeMessage(g,at,key){
  const ps=g.positions||[],volume=ps.reduce((n,p)=>n+p.volume,0);
- return ['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | SETUP SUDAH DITUTUP','──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF2'}${g.manual?' • MANUAL':''}`,'',`Posisi dipantau: ${ps.length} • ${Number(volume.toFixed(3))} lot`,'','✅ Semua posisi setup ini sudah tiada di MT5.','• Disemak melalui dua laporan MT5 berturut-turut.','• Harga exit & untung/rugi: semak History MT5.','• Sebab penutupan belum dilaporkan.','• Tunggu signal baharu yang lulus SOP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
+ return ['━━━━━━━━━━━━━━━━━━','🔔 ZENCORE | SETUP SUDAH DITUTUP','──────────────────',`XAUUSD • ${g.side} • ${g.mode==='TF15_INTRA'?'TF15':'TF1'}${g.manual?' • MANUAL':''}`,'',`Posisi dipantau: ${ps.length} • ${Number(volume.toFixed(3))} lot`,'','✅ Semua posisi setup ini sudah tiada di MT5.','• Disemak melalui dua laporan MT5 berturut-turut.','• Harga exit & untung/rugi: semak History MT5.','• Sebab penutupan belum dilaporkan.','• Tunggu signal baharu yang lulus SOP.',`🕒 ${new Date(at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',hour12:false})} MYT • ZP-${key.slice(0,8).toUpperCase()}`,'━━━━━━━━━━━━━━━━━━'].join('\n');
 }
 class PositionTelegram{
  constructor({pool,store,alerts,now=Date.now,log=console}){Object.assign(this,{pool,store,alerts,now,log});this.busy=false;this.flow={};}

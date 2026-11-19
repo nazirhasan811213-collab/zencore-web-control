@@ -6,13 +6,13 @@ const S=require('../tf2-ribbon-scalping'),Hub=require('../tf2-ribbon-market-hub'
 function fixture(side='BUY'){
  const now=Date.now()+ ++seq,sign=side==='BUY'?1:-1,row=Array(67).fill(null),t=now-180000;
  Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*3,24:4100-sign*3,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
- row[65]={version:'HEMA2_LIVE_V1',tf2:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
+ row[65]={version:'HEMA1_LIVE_V1',tf1:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
  row[66]={entryRuleVersion:S.RULE,exitLockVersion:S.POLICY.exitLockVersion,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:10,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['3','5','10']}}};
- return {row,now,batch:{feedVersion:'TF2_REALTIME_V1',timeframe:'2',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
+ return {row,now,batch:{feedVersion:'TF1_REALTIME_V1',timeframe:'1',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
 }
 
  for(const side of ['BUY','SELL']){
- test('TF2 '+side+' SOLID-only feed -> server -> signed setup; legacy still supported',()=>{
+ test('TF1 '+side+' SOLID-only feed -> server -> signed setup; legacy still supported',()=>{
   const f=fixture(side);f.row[66].entryPolicyVersion=S.SOLID_POLICY;
   f.row[16]=99;f.row[66].dashboardAi.mtfScore=0;delete f.row[66].dashboardAi.dashboard;
   const m=Hub.ingest(f.batch,f.now)[0];a.equal(m.strategyNormal.state,'READY');
@@ -37,7 +37,7 @@ function fixture(side='BUY'){
   }
   a.equal(S.confirmations(side,{...s,forecast:'CHOPPY'}).passed,3);
   a.equal(S.confirmations(side,{...s,forecast:'CHOPPY',sopGreen:3}).pass,false);
-  a.equal(S.confirmations(side,{...s,['hema2']:undefined}).pass,true);
+  a.equal(S.confirmations(side,{...s,['hema1']:undefined}).pass,true);
   a.equal(S.confirmations(side,{...s,advisor:{momentum:'Neutral'}}).pass,true);
   const dash={...m,feedChannel:'DASHBOARD'};a.equal(C.createEntryDecision(dash,f.now),null);
   a.equal(S.entryDecision(m,f.now+61000),null);

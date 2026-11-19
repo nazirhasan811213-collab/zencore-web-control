@@ -7,7 +7,7 @@ const hb={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',trad
 async function setup(){
  const source={side:'BUY',entry:100,sl:99,tp1:101,tp2:102,tp3:103};
  let latest=readyMarket({at:clock,plan:source});latest.setupKey='one';latest.entryEvent=true;
- latest.strategyNormal.entrySopVersion='NORMAL_20261001_TF2_TP1_HEMAGAP_V5';latest.strategyNormal.sop.atrReference=1;for(const key of ['hema2','hema3'])Object.assign(latest.strategyNormal.sop[key],{fast:102,slow:101});
+ latest.strategyNormal.entrySopVersion='NORMAL_20261001_TF1_TP1_HEMAGAP_V5';latest.strategyNormal.sop.atrReference=1;for(const key of ['hema1','hema3'])Object.assign(latest.strategyNormal.sop[key],{fast:102,slow:101});
  const anchor=()=>latest.strategyNormal.plan={...levelsAtFill(source,latest.price),entryAnchor:'LIVE_SIGNAL_PRICE_V1',sourceChartPlan:source};anchor();
  const store=new MemoryAutoTradeStore(),service=createAutoTradeService({store,commandSigningKey:'test-signing-key-more-than-32-characters',allowDemoExecution:true,allowedDemoSymbols:['XAUUSD'],now:()=>clock,getLatestMarket:()=>latest});
  const c=await service.connectLocalEa(user);await service.heartbeat(c.podToken,hb);

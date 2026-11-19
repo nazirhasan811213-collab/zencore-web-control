@@ -7,7 +7,7 @@ function inspect(market={},profile={},at=Date.now()){
  const mode=tf==='15'?'TF15_INTRA':'TF2_SCALPING';
  const validation=Core.validateSettings(profile);
  const effective=Core.effectiveSettings({...validation.value,strategyMode:mode},market.symbol);
- const adapter=tf==='15'?require('./tf15-intraday'):tf==='2'?require('./tf2-ribbon-scalping'):null;
+ const adapter=tf==='15'?require('./tf15-intraday'):tf==='1'?require('./tf2-ribbon-scalping'):null;
  const fresh=(t,max)=>Number.isFinite(t)&&at-t>=-5000&&at-t<=max;
  const checks={settingsValid:validation.ok,settingsErrorFields:Object.keys(validation.errors),
   modeSelected:validation.value.strategyMode==='BOTH'||validation.value.strategyMode===mode,

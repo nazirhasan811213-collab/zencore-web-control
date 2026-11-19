@@ -3,31 +3,31 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {evaluateEntrySop,normalEntrySop}=require('../normal-entry-sop');
 const Contract=require('../analysis-execution-contract'),Core=require('../auto-trade-core');
 const {entrySopAllowed,telegramMessage,messageQuality}=require('../analysis-telegram');
-const base={timeframe:'2',normal3Side:'BUY',normal3Entry:100,normal3Close:100.1,normal3Atr:1,
+const base={timeframe:'1',normal3Side:'BUY',normal3Entry:100,normal3Close:100.1,normal3Atr:1,
  normal3Solid:true,normal3PricePastEntry:true,normal3Forecast:'NEUTRAL',normal3MarketPower:51,normal5Position:'ABOVE',
- hemaConfirmation:{version:'HEMA23_LIVE_V1',tf2:{fast:102,slow:101},tf3:{fast:102,slow:101},tf15:{fast:102,slow:101},tf30:{fast:102,slow:101}},
+ hemaConfirmation:{version:'HEMA13_LIVE_V1',tf1:{fast:102,slow:101},tf3:{fast:102,slow:101},tf15:{fast:102,slow:101},tf30:{fast:102,slow:101}},
  normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Sop5:false};
-test('TF2 uses one directional HEMA gate and TF15 uses two, without slope or close gates',()=>{
- for(const tf of ['2','15']){
-  const d={...base,timeframe:tf,chopIndex:90,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1'}};
-  const x=evaluateEntrySop(d,tf);assert.equal(x.standardReady,true);assert.equal(x.gates.length,tf==='2'?5:6);
+test('TF1 uses one directional HEMA gate and TF15 uses two, without slope or close gates',()=>{
+ for(const tf of ['1','15']){
+  const d={...base,timeframe:tf,chopIndex:90,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1'}};
+  const x=evaluateEntrySop(d,tf);assert.equal(x.standardReady,true);assert.equal(x.gates.length,tf==='1'?5:6);
   for(const edit of [{normal3Solid:false},{normal3PricePastEntry:false},{normal3Sop4:false},{normal3MarketPower:50},{normal3Atr:0},{timeframe:'3'}])
    assert.equal(evaluateEntrySop({...d,...edit},tf).standardReady,false,JSON.stringify(edit));
  }
- assert.equal(evaluateEntrySop({...base,normal5Position:'INSIDE'},'2').standardReady,true);
+ assert.equal(evaluateEntrySop({...base,normal5Position:'INSIDE'},'1').standardReady,true);
  assert.equal(evaluateEntrySop({...base,timeframe:'15',normal5Position:'INSIDE',hemaConfirmation:{...base.hemaConfirmation,version:'HEMA1530_V1'}},'15').standardReady,true);
 });
 test('all checklist combinations retain the original minimum four, in both timeframes',()=>{
- for(const tf of ['2','15'])for(let mask=0;mask<32;mask++){
-  const d={...base,timeframe:tf,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1'}};let count=0;
+ for(const tf of ['1','15'])for(let mask=0;mask<32;mask++){
+  const d={...base,timeframe:tf,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1'}};let count=0;
   for(let i=1;i<=5;i++){d['normal3Sop'+i]=!!(mask&(1<<(i-1)));count+=+d['normal3Sop'+i];}
   assert.equal(evaluateEntrySop(d,tf).standardReady,count>=4);
  }
 });
 test('original strict forecast boundaries are restored on BUY and SELL',()=>{
- for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
+ for(const tf of ['1','15'])for(const side of ['BUY','SELL']){
   const ribbon=side==='BUY'?{fast:102,slow:101}:{fast:98,slow:99};
-  const d={...base,timeframe:tf,normal3Side:side,normal5Position:side==='BUY'?'ABOVE':'BELOW',hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1',['tf'+tf]:ribbon,['tf'+(tf==='15'?'30':'3')]:ribbon}};
+  const d={...base,timeframe:tf,normal3Side:side,normal5Position:side==='BUY'?'ABOVE':'BELOW',hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1',['tf'+tf]:ribbon,['tf'+(tf==='15'?'30':'3')]:ribbon}};
   const cases=side==='BUY'?[['NEUTRAL',51,true],['BULLISH',51,true],['NEUTRAL',50,false],['BEARISH',70,false]]:
    [['NEUTRAL',49,true],['NEUTRAL',45,true],['NEUTRAL',50,false],['BEARISH',51,true],['BEARISH',50,false],['BULLISH',70,false]];
   for(const [forecast,power,want] of cases)assert.equal(evaluateEntrySop({...d,normal3Forecast:forecast,normal3MarketPower:power},tf).standardReady,want);
@@ -43,8 +43,8 @@ test('TF15 decoder, analysis, execution and Telegram share original SOP and corr
  assert.equal(market.strategyNormal.state,'READY');assert.equal(market.strategyNormal.plan.sourceTimeframe,'15');
  assert.equal(Contract.createEntryDecision(market).snapshot.analysisSopVersion,'NORMAL_20261001_TF15_SEQ_ATR40_V4');
  const settings={capitalUsd:1000,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],strategyMode:'BOTH',strategyExitPolicies:{TF2_SCALPING:{version:'TF2_TIGHT_SL_3C_V1'}}};
- for(const tf of ['2','15']){
-  const x=evaluateEntrySop({...base,timeframe:tf,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1'}},tf);
+ for(const tf of ['1','15']){
+  const x=evaluateEntrySop({...base,timeframe:tf,hemaConfirmation:{...base.hemaConfirmation,version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1'}},tf);
   const m={...market,timeframe:tf,strategyNormal:{...market.strategyNormal,tf:tf+'m',entrySopVersion:x.version,sop:{...market.strategyNormal.sop,gates:x.gates,...Object.fromEntries(Object.entries(x).filter(([k])=>k.startsWith('hema')))}}};
   const cmd=Core.buildSetupCommand(m,settings,{tickSize:.01,tickValue:1},at);
   assert.ok(cmd);assert.equal(cmd.payload.exitPolicy,null);assert.equal(cmd.payload.sl,99);

@@ -131,7 +131,7 @@ class AnalysisAlerts {
     const safetySignal=require('./tf2-entry-safety').signal(m);
     if(safetySignal)await this.recordGuide(safetySignal);
     if(!['XAUUSD','BTCUSD','GBPUSD','GBPJPY'].includes(m.symbol))return;
-    const stateKey=m.symbol+'|'+String(m.timeframe||m.strategyNormal?.tf||'2').replace(/m$/, '');
+    const stateKey=m.symbol+'|'+String(m.timeframe||m.strategyNormal?.tf||'1').replace(/m$/, '');
     const next=signals(m);if(!this.ready||!next)return;
     const notificationEvents=prev=>{const base=prepareTelegram(prev,next,transitions(prev,next)).map(e=>e.kind==='ENTRY'?{
       ...e,setupAssessment:require('./setup-strength').assess(m,Date.now(),require('./indicator-chart-history').history.snapshot(String(m.timeframe),m.signalObservedAt||Date.now(),m.symbol).candles),telegramSop:{pineReading:{rsi:m.rsi??null,momentum:typeof m.momentum==='string'?m.momentum:null,hemaFast:m.hemaFast??m.hema20??null,hemaSlow:m.hemaSlow??m.hema40??null},version:m.strategyNormal.entrySopVersion,tf:m.strategyNormal.tf,solid:m.strategyNormal.solid,
@@ -139,7 +139,7 @@ class AnalysisAlerts {
         solidHoldActive:m.strategyNormal.sop?.solidHoldActive,solidClosedAt:m.strategyNormal.sop?.solidClosedAt,riskAtrReference:m.strategyNormal.sop?.riskAtrReference,signalObservedAt:m.signalObservedAt,
         chopIndex:m.strategyNormal.sop?.chopIndex,sourceEntry:m.strategyNormal.sop?.sourceEntry,price:m.strategyNormal.sop?.price,triggerAt:m.strategyNormal.sop?.triggerAt,qualifiedAt:m.strategyNormal.sop?.qualifiedAt,
         entryAnchor:m.strategyNormal.plan?.entryAnchor,atrReference:m.strategyNormal.sop?.atrReference,eaEntryCompatible:m.strategyNormal.sop?.eaEntryCompatible,pullback:m.strategyNormal.sop?.pullback,green:m.strategyNormal.sop?.sopGreen,forecast:m.strategyNormal.sop?.forecast,power:m.strategyNormal.sop?.marketPower,
-        m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema2:m.strategyNormal.sop?.hema2,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},
+        m5Position:m.strategyNormal.sop?.m5Position,m5Pass:m.strategyNormal.sop?.m5Pass,hema1:m.strategyNormal.sop?.hema1,hema3:m.strategyNormal.sop?.hema3,hema15:m.strategyNormal.sop?.hema15,hema45:m.strategyNormal.sop?.hema45,hema30:m.strategyNormal.sop?.hema30,gates:m.strategyNormal.sop?.gates},
       telegramMarket:{pineDirect:m.symbol==='BTCUSD'&&!!require('./pine-direct-entry').decision(m),confirmed:m.confirmed,entryAuthorizedAt:m.entryAuthorizedAt,signalObservedAt:m.signalObservedAt,sourceBarTime:m.sourceBarTime,price:m.price,timeframe:m.timeframe,feedMode:m.feedMode},telegramQuality:messageQuality(m),telegramPlan:Object.fromEntries(['entry','sl','tp1','tp2','tp3'].map(k=>[k,m.strategyNormal.plan[k]]))
     }:e);const updates=progress(prev,next,m,base);return [...base.filter(e=>e.kind!=='CLOSE'),...updates,...base.filter(e=>e.kind==='CLOSE')].map(e=>({...e,notificationKey:notificationKey(e,prev)}));};
     if(!this.pool){
@@ -187,7 +187,7 @@ class AnalysisAlerts {
   async recordGuide(event){
     if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ANALYSIS_SIGNALS_PAUSED||''))return false;
     if(!this.ready)return false;
-    if(event.kind!=='GUIDE'||!['XAUUSD','BTCUSD'].includes(event.symbol)||!['2','15'].includes(event.timeframe)||!event.notificationKey||typeof event.guideText!=='string')throw new Error('Invalid scheduled guide');
+    if(event.kind!=='GUIDE'||!['XAUUSD','BTCUSD'].includes(event.symbol)||!['1','15'].includes(event.timeframe)||!event.notificationKey||typeof event.guideText!=='string')throw new Error('Invalid scheduled guide');
     if(!this.pool){
       if(this.notificationKeys.has(event.notificationKey))return true;
       this.notificationKeys.add(event.notificationKey);this.events.push({...event,id:++this.sequence});this.events=this.events.slice(-500);return true;
@@ -208,8 +208,8 @@ class AnalysisAlerts {
     if(queued&&this.token)this.deliver().catch(()=>console.error('Scheduled guide delivery unavailable'));
     return true;
   }
-  async activePlan(symbol,timeframe=2) {
-    if(![2,3,15].includes(timeframe))throw fail('Timeframe tidak sah.');
+  async activePlan(symbol,timeframe=1) {
+    if(![1,3,15].includes(timeframe))throw fail('Timeframe tidak sah.');
     if (!/^[A-Z0-9._-]{2,20}$/.test(symbol)) throw fail('Pair tidak sah.');
     const state=this.pool?(await this.pool.query('SELECT data FROM zencore_alert_states WHERE symbol=$1',[symbol+'|'+timeframe])).rows[0]?.data:this.states.get(symbol+'|'+timeframe);
     if (state?.activePlan) return state.activePlan;
@@ -218,7 +218,7 @@ class AnalysisAlerts {
     const rows=this.pool?(await this.pool.query(
       "SELECT data FROM zencore_analysis_alerts WHERE data->>'symbol'=$1 AND data->>'kind'='ENTRY' ORDER BY id DESC LIMIT 20",[symbol])).rows.map(r=>r.data):
       this.events.filter(e=>e.symbol===symbol&&e.kind==='ENTRY').reverse();
-    const entry=rows.find(e=>Number(e.timeframe||2)===timeframe&&e.telegramPlan&&e.side===state.telegramPosition.side&&!e.telegramDuplicate);
+    const entry=rows.find(e=>Number(e.timeframe||1)===timeframe&&e.telegramPlan&&e.side===state.telegramPosition.side&&!e.telegramDuplicate);
     return entry?{side:entry.side,entryType:entry.entryType,openedAt:entry.time,plan:entry.telegramPlan}:null;
   }
   async feed(after) {
@@ -256,7 +256,7 @@ class AnalysisAlerts {
             // Claim one signal for this account's confirmed broker-close cycle.
             // Pine retries/new candidates cannot consume another slot until a
             // later executed setup has itself been confirmed fully closed.
-            if(e.kind==='ENTRY'&&['2','15'].includes(e.timeframe)&&e.telegramSop?.cycleKind==='FOLLOWUP'&&(['TF2_BROKER_CLOSE_CYCLES_V1'].includes(e.telegramSop?.reentryPolicyVersion)||e.telegramSop?.lifecycleVersion==='CLOSED_PAUSE_RESUME_V2')){
+            if(e.kind==='ENTRY'&&['1','15'].includes(e.timeframe)&&e.telegramSop?.cycleKind==='FOLLOWUP'&&(['TF1_BROKER_CLOSE_CYCLES_V1'].includes(e.telegramSop?.reentryPolicyVersion)||e.telegramSop?.lifecycleVersion==='CLOSED_PAUSE_RESUME_V2')){
               const cycle=this.reentryAllowed&&await this.reentryAllowed(row.user_id,e);
               if(!cycle?.allowed||!cycle.cycleKey){await this.pool.query('UPDATE zencore_telegram_deliveries SET status=$2 WHERE id=$1',[row.id,'skipped']);continue;}
               stableKey=notificationKey({...e,brokerCycle:cycle.cycleKey});

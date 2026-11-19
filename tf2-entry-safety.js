@@ -1,5 +1,5 @@
 'use strict';
-const VERSION='TF2_ATR_REVERSALS_V2';
+const VERSION='TF1_ATR_REVERSALS_V2';
 const price=n=>Number.isFinite(n)?n.toFixed(2):'—';
 function create(){return {bars:[],last:0,ready:false,blocked:false,atr:null,flips:0,reason:null,event:null};}
 function step(previous,bar){
@@ -23,13 +23,13 @@ function allowed(e,side,time){
 }
 function message(e){
  if(!['CHOP_BLOCK','CHOP_RELEASE'].includes(e?.event))return null;
- return [e.event==='CHOP_BLOCK'?'⛔ TF2 — SEKAT ENTRY':'✅ TF2 — SEKATAN DILEPASKAN','XAUUSD · Candle sudah tutup',
+ return [e.event==='CHOP_BLOCK'?'⛔ TF1 — SEKAT ENTRY':'✅ TF1 — SEKATAN DILEPASKAN','XAUUSD · Candle sudah tutup',
  'ATR8: '+price(e.atr)+' · Pertukaran arah: '+e.flips+'/6 candle',
  e.event==='CHOP_BLOCK'?(e.atr>4.5?'ATR tinggi + candle bertukar arah. Market sangat volatile, mudah libas. Entry disekat.':'ATR rendah + candle bertukar arah. Market terlalu perlahan dan berulang-alik, mudah libas. Entry disekat.'):'Syarat sekatan tidak lagi dipenuhi.',
  'Panduan ZenCore — '+(e.event==='CHOP_BLOCK'?'Tunggu. Jangan buka BUY / SELL atau re-entry.':'Entry kembali ikut SOP asal dan signal baharu yang sah. Ini bukan arahan entry.')].join('\n');
 }
 function signal(m,now=Date.now()){
- const e=m?.setupMeta?.entrySafety;if(m?.symbol!=='XAUUSD'||String(m.timeframe)!=='2'||m.feedChannel!=='EXECUTION'||m.confirmed!==true||e?.version!==VERSION||e.barTime!==(m.sourceBarTime??m.time)||!require('./tf2-bar-close').confirmed(m)||now-m.signalObservedAt>60000||now-m.signalObservedAt< -5000)return null;
- const text=message(e);return text?{kind:'GUIDE',symbol:'XAUUSD',timeframe:'2',time:m.signalObservedAt,guideText:text,guideValidUntil:m.signalObservedAt+60000,notificationKey:[VERSION,e.barTime,e.event].join('|')}:null;
+ const e=m?.setupMeta?.entrySafety;if(m?.symbol!=='XAUUSD'||String(m.timeframe)!=='1'||m.feedChannel!=='EXECUTION'||m.confirmed!==true||e?.version!==VERSION||e.barTime!==(m.sourceBarTime??m.time)||!require('./tf2-bar-close').confirmed(m)||now-m.signalObservedAt>60000||now-m.signalObservedAt< -5000)return null;
+ const text=message(e);return text?{kind:'GUIDE',symbol:'XAUUSD',timeframe:'1',time:m.signalObservedAt,guideText:text,guideValidUntil:m.signalObservedAt+60000,notificationKey:[VERSION,e.barTime,e.event].join('|')}:null;
 }
 module.exports={VERSION,create,step,evidence,allowed,message,signal};

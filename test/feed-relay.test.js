@@ -2,13 +2,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');
 const {createFeedRelay,signature,DESTINATION,MAX_AGE}=require('../feed-relay');
 const secret='test-relay-key-only-not-a-production-secret-12345';
-const body=(at=Date.now(),tf='2')=>JSON.stringify({timeframe:tf,feedVersion:`TF${tf}_REALTIME_V1`,emittedAt:at,markets:[['XAUUSD',at,4100]]});
+const body=(at=Date.now(),tf='1')=>JSON.stringify({timeframe:tf,feedVersion:`TF${tf}_REALTIME_V1`,emittedAt:at,markets:[['XAUUSD',at,4100]]});
 const headers=(text,at=Date.now(),id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')=>({'x-zencore-relay-at':String(at),'x-zencore-relay-id':id,'x-zencore-relay-signature':signature(secret,at,id,text)});
 const quiet={log(){}};
 test('receiver preserves source identity and timeframe; rejects forged, replayed, stale or unsanitized feeds',()=>{
  let at=1792000000000;const r=createFeedRelay({receive:true,secret,now:()=>at});
- for(const tf of ['2','15']){
-  const text=body(at,tf),h=headers(text,at,tf==='2'?'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+ for(const tf of ['1','15']){
+  const text=body(at,tf),h=headers(text,at,tf==='1'?'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   assert.equal(r.accept(text,h).body,text);r.applied(at,200);
   assert.throws(()=>r.accept(text,h),/RELAY_REPLAY/);
  }
@@ -37,7 +37,7 @@ test('real HTTP relay delivers both TFs unchanged, uses keep-alive and measures 
   const receipt=receiver.accept(text,req.headers);received.push(receipt.body);receiver.applied(receipt.sourceAt,200);res.end('{"ok":true}');
  });});
  const relay=createFeedRelay({target,secret,transport:http,allowTestTarget:true,log:quiet});t.after(()=>relay.close());
- for(const tf of ['2','15']){const text=body(Date.now()-100,tf);assert.equal(relay.send(text),true);await until(()=>relay.status().delivered===received.length&&received.length===(tf==='2'?1:2));assert.equal(received.at(-1),text);}
+ for(const tf of ['1','15']){const text=body(Date.now()-100,tf);assert.equal(relay.send(text),true);await until(()=>relay.status().delivered===received.length&&received.length===(tf==='1'?1:2));assert.equal(received.at(-1),text);}
  assert.equal(ports[0],ports[1]);assert.equal(receiver.status().received,2);assert(relay.status().lastSourceAgeMs>=100);assert.equal(relay.status().inFlight,0);
 });
 test('a stalled target never holds original processing; work is bounded and times out without replay',async t=>{

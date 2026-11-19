@@ -6,7 +6,7 @@ test('real PG recovers saved events, atomically checkpoints, survives restart an
  const schema='records_'+crypto.randomBytes(8).toString('hex'),db=new Pool({connectionString:url});let pool;
  try{await db.query(`CREATE SCHEMA ${schema}`);pool=new Pool({connectionString:url,options:`-c search_path=${schema}`});
   await pool.query('CREATE TABLE zencore_analysis_alerts(id BIGSERIAL PRIMARY KEY,data JSONB NOT NULL)');
-  const entry={kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',setupKey:'A',side:'BUY',time:t,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106},setupAssessment:{version:require('../setup-strength').VERSION,status:'AVAILABLE',overall:78,asOf:t,targets:{tp1:78,tp2:62,tp3:45}}};
+  const entry={kind:'ENTRY',symbol:'XAUUSD',timeframe:'1',setupKey:'A',side:'BUY',time:t,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106},setupAssessment:{version:require('../setup-strength').VERSION,status:'AVAILABLE',overall:78,asOf:t,targets:{tp1:78,tp2:62,tp3:45}}};
   const insert=e=>pool.query('INSERT INTO zencore_analysis_alerts(data) VALUES($1)',[e]);
   await insert(entry);await insert({...entry,time:t+100,telegramDuplicate:true});await insert({...entry,kind:'TP_HIT',targetNumber:1,currentPrice:102,time:t+200});
   const one=new CurrentSignalRecords({pool,now:()=>t+10000}),two=new CurrentSignalRecords({pool,now:()=>t+10000});await one.init();await two.init();await Promise.all([one.sync(),two.sync()]);

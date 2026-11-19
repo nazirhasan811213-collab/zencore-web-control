@@ -17,7 +17,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
   await page.goto('http://localhost/auto-trade');await page.waitForFunction(()=>document.getElementById('manualSl')?.value==='4');
   for(const [id,value] of Object.entries({manualTp1:'1.5',manualTp2:'2.5',manualTp3:'3.5',manualSl:'4'})){a.equal(await page.locator('#'+id).inputValue(),value);a.equal(await page.locator('#'+id).getAttribute('readonly'),null);}
   await page.locator('#manualTp1').fill('');await page.locator('#manualTp2').fill('');await page.locator('#manualTp3').fill('');await page.locator('#manualSl').fill('5');await page.locator('#riskAcknowledged').check();await page.locator('#saveSettingsButton').click();
-  await page.waitForFunction(()=>document.getElementById('manualTp1').value==='2');a.equal(posted.manualExit.tp1,'');a.deepEqual([saved.tp1,saved.tp2,saved.tp3,saved.sl],[2,4,6,5]);
+  await page.waitForFunction(()=>document.getElementById('manualTp1').value==='1');a.equal(posted.manualExit.tp1,'');a.deepEqual([saved.tp1,saved.tp2,saved.tp3,saved.sl],[2,4,6,5]);
   await page.reload();await page.waitForFunction(()=>document.getElementById('manualSl').value==='5');
   await page.locator('#manualSl').fill('');await page.locator('#saveSettingsButton').click();await page.waitForFunction(()=>document.getElementById('manualSl').value==='3');a.equal(saved.version,'MANUAL_TF2_EXIT_V2');
   await page.locator('#manualTp1').fill('7');await page.locator('#saveSettingsButton').click();await page.getByText('TP manual mesti mengikut turutan TP1 < TP2 < TP3.',{exact:true}).waitFor();a.equal(saved.tp1,2);

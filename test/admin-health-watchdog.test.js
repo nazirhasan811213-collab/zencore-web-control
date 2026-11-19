@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {AnalysisAlerts}=require('../analysis-alert-service');
 const {createHealthWatchdog}=require('../admin-health-watchdog');
-const incident={id:'feed2',severity:'error',component:'TradingView TF2',message:'Feed luput'};
+const incident={id:'feed1',severity:'error',component:'TradingView TF1',message:'Feed luput'};
 test('health notifications require verified opt-in and preserve trade preferences; incident dedup and recovery persist',async()=>{
  const sent=[],s=new AnalysisAlerts({token:'test',fetchFn:async(_,options)=>{sent.push(JSON.parse(options.body));return {ok:true,json:async()=>({ok:true})};}});
  await assert.rejects(s.healthSettings('admin',{enabled:true}),/Sahkan/);
@@ -34,8 +34,8 @@ test('watchdog debounces transitions, isolates recipients and runs without an op
  const watchdog=createHealthWatchdog({ready:()=>true,alerts:()=>service,monitor:{snapshot:async()=>{reads++;return {observedAt:Date.now(),alerts};}}});
  const original=console.error;console.error=()=>{};
  try{
-  await watchdog.tick();assert.equal(sent.length,0);await watchdog.tick();assert.deepEqual(sent.at(-1),['feed2']);
-  alerts=[];await watchdog.tick();assert.deepEqual(sent.at(-1),['feed2']);await watchdog.tick();assert.deepEqual(sent.at(-1),[]);
+  await watchdog.tick();assert.equal(sent.length,0);await watchdog.tick();assert.deepEqual(sent.at(-1),['feed1']);
+  alerts=[];await watchdog.tick();assert.deepEqual(sent.at(-1),['feed1']);await watchdog.tick();assert.deepEqual(sent.at(-1),[]);
   const before=reads;await Promise.all([watchdog.tick(),watchdog.tick()]);assert.equal(reads,before+1);
  }finally{console.error=original;watchdog.stop();}
 });

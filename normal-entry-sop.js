@@ -23,7 +23,7 @@ function hemaMode(r={},side){
   return {mode,state:mode,pass:['BUY','SELL'].includes(side)&&mode===side};
 }
 
-// Width uses one shared price-volatility reference (ATR TF2), independent of chart zoom.
+// Width uses one shared price-volatility reference (ATR TF1), independent of chart zoom.
 function hemaWidthMode(r={},side,atrReference){
  const x=hemaMode(r,side),fast=num(r.fast),slow=num(r.slow),atr=num(atrReference);
  const gap=fast!==null&&slow!==null?Math.abs(fast-slow):null;
@@ -33,44 +33,44 @@ function hemaWidthMode(r={},side,atrReference){
 }
 
 // Verified production snapshot: 284b98d, 2026-10-01 21:43 MYT.
-// TF2 requires HEMA2 only (13 Oct); TF15 retains HEMA15/30. No close/slope gate.
-// TF2 and TF15 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
-function evaluateEntrySop(d={},timeframe='2'){
-  if(String(timeframe)==='2'&&require('./tf2-current-solid-sop').isCurrentSolidTf2(d))return require('./tf2-current-solid-sop').evaluateCurrentSolidTf2(d);
+// TF1 requires HEMA1 only (13 Oct); TF15 retains HEMA15/30. No close/slope gate.
+// TF1 and TF15 price-vs-HEMA5 gate removed on 5 October; five-item checklist remains intact.
+function evaluateEntrySop(d={},timeframe='1'){
+  if(String(timeframe)==='1'&&require('./tf2-current-solid-sop').isCurrentSolidTf1(d))return require('./tf2-current-solid-sop').evaluateCurrentSolidTf1(d);
   const atrPullback=d.normal3SetupPolicy==='SEQUENTIAL_ATR40_V1';
-  const sequential=atrPullback||String(timeframe)==='2'&&d.normal3SetupPolicy==='TF2_SEQUENTIAL_V1';
+  const sequential=atrPullback||String(timeframe)==='1'&&d.normal3SetupPolicy==='TF1_SEQUENTIAL_V1';
   const entryExpired=d.normal3EntryExpired===true;
   const solid=!entryExpired&&(sequential?d.normal3SetupArmed===true:d.normal3Solid===true);
-  const revisedTf2=String(timeframe)==='2'&&(d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1';
-  const version=revisedTf2?(atrPullback?'NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5':sequential?'NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5':'NORMAL_20261001_TF2_TP1_HEMAGAP_V5'):(atrPullback?`NORMAL_20261001_TF${timeframe}_SEQ_ATR40_V4`:sequential?'NORMAL_20261001_TF2_SEQ_V3':`NORMAL_20261001_TF${timeframe}_V2`);
+  const revisedTf1=String(timeframe)==='1'&&(d.setupMeta||d.tf1SetupMeta)?.entryRuleVersion==='TF1_3GREEN_TP1_HEMAGAP_V1';
+  const version=revisedTf1?(atrPullback?'NORMAL_20261001_TF1_SEQ_ATR40_TP1_HEMAGAP_V5':sequential?'NORMAL_20261001_TF1_SEQ_TP1_HEMAGAP_V5':'NORMAL_20261001_TF1_TP1_HEMAGAP_V5'):(atrPullback?`NORMAL_20261001_TF${timeframe}_SEQ_ATR40_V4`:sequential?'NORMAL_20261001_TF1_SEQ_V3':`NORMAL_20261001_TF${timeframe}_V2`);
   const side=upper(d.normal3Side);
   const entry=num(d.normal3Entry),close=num(d.normal3Close),atr=num(d.normal3Atr);
   const flags=[1,2,3,4,5].map(i=>d['normal3Sop'+i]===true);
   const green=flags.filter(Boolean).length;
   const forecast=upper(d.normal3Forecast),power=num(d.normal3MarketPower);
   const forecastFor=direction=>power!==null&&(direction==='BUY'
-    ? (forecast==='NEUTRAL'&&power>50||forecast==='BULLISH'&&power>(revisedTf2?40:50))
-    : direction==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>(revisedTf2?40:50)));
+    ? (forecast==='NEUTRAL'&&power>50||forecast==='BULLISH'&&power>(revisedTf1?40:50))
+    : direction==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>(revisedTf1?40:50)));
   const forecastPass=forecastFor(side);
   const cross=d.normal3PriceCrossEntry===true;
   const pricePast=sequential&&entry!==null&&close!==null?(side==='BUY'?close>entry:side==='SELL'&&close<entry):d.normal3PricePastEntry===true;
   const m5Position=upper(d.normal5Position);
   const m5Pass=side==='BUY'?m5Position==='ABOVE':side==='SELL'&&m5Position==='BELOW';
   const higherTf=String(timeframe)==='15'?'30':'3';
-  const currentHema=d.hemaConfirmation?.version===(String(timeframe)==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1')?d.hemaConfirmation:null;
-  const ownHema=revisedTf2?hemaWidthMode(currentHema?.tf2,side,atr):hemaMode(currentHema?.['tf'+timeframe],side);
-  const higherHema=revisedTf2?hemaWidthMode(currentHema?.tf3,side,atr):hemaMode(currentHema?.['tf'+higherTf],side);
-  const minimumGreen=revisedTf2?3:4;
+  const currentHema=d.hemaConfirmation?.version===(String(timeframe)==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1')?d.hemaConfirmation:null;
+  const ownHema=revisedTf1?hemaWidthMode(currentHema?.tf1,side,atr):hemaMode(currentHema?.['tf'+timeframe],side);
+  const higherHema=revisedTf1?hemaWidthMode(currentHema?.tf3,side,atr):hemaMode(currentHema?.['tf'+higherTf],side);
+  const minimumGreen=revisedTf1?3:4;
   const entryLimit=num(d.tp1);
   const sign=side==='BUY'?1:side==='SELL'?-1:0;
-  const entryWindowPass=!revisedTf2||entryLimit===null||close!==null&&sign*(entryLimit-close)>0;
+  const entryWindowPass=!revisedTf1||entryLimit===null||close!==null&&sign*(entryLimit-close)>0;
   const gates=[
     {key:'solid',label:entryExpired?'TP1 dah disentuh — tunggu SOLID baharu':sequential?'SOLID setup dipegang':'Solid Entry Signal',pass:solid},
-    {key:'entry',label:revisedTf2?'Harga lepas Entry, sebelum TP1':'Price Lepas Entry Line',pass:pricePast&&entryWindowPass},
+    {key:'entry',label:revisedTf1?'Harga lepas Entry, sebelum TP1':'Price Lepas Entry Line',pass:pricePast&&entryWindowPass},
     {key:'sop',label:`SOP Dashboard ≥${minimumGreen}/5 Green`,pass:green>=minimumGreen,detail:`${green}/5`},
     {key:'forecast',label:'Forecast mengikut arah',pass:forecastPass,detail:`${forecast||'WAIT'} ${power===null?'—':power+'%'}`},
-    {key:'hema'+timeframe,label:'HEMA TF'+timeframe+(revisedTf2?' searah, ribbon tidak nipis':' searah entry'),pass:ownHema.pass,detail:ownHema.state},
-    ...(String(timeframe)==='15'?[{key:'hema'+higherTf,label:'HEMA TF'+higherTf+(revisedTf2?' searah, ribbon tidak nipis':' searah entry'),pass:higherHema.pass,detail:higherHema.state}]:[])
+    {key:'hema'+timeframe,label:'HEMA TF'+timeframe+(revisedTf1?' searah, ribbon tidak nipis':' searah entry'),pass:ownHema.pass,detail:ownHema.state},
+    ...(String(timeframe)==='15'?[{key:'hema'+higherTf,label:'HEMA TF'+higherTf+(revisedTf1?' searah, ribbon tidak nipis':' searah entry'),pass:higherHema.pass,detail:higherHema.state}]:[])
   ];
   if(atrPullback)gates.splice(1,0,{key:'pullback',label:'Candle besar: pullback 40%',pass:d.pullback?.pass===true,detail:d.pullback?.state||'WAIT_ATR'});
   // Friday 25 Sep Normal entry has no separate re-entry route.
@@ -80,5 +80,5 @@ function evaluateEntrySop(d={},timeframe='2'){
     standardReady,reentryType,reentrySide,reentryGates,reentryReady};
 }
 
-function normalEntrySop(d={}){return evaluateEntrySop(d,'2');}
+function normalEntrySop(d={}){return evaluateEntrySop(d,'1');}
 module.exports={normalEntrySop,evaluateEntrySop,hemaStrength,hemaMode,hemaWidthMode};

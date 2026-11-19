@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),a=require('node:assert/strict'),{applyEvent,idFor}=require('../current-signal-records'),Results=require('../results-core');
-const event=(edit={})=>({kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',setupKey:'A',side:'BUY',time:1000,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106},...edit});
+const event=(edit={})=>({kind:'ENTRY',symbol:'XAUUSD',timeframe:'1',setupKey:'A',side:'BUY',time:1000,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106},...edit});
 test('records exact entry, observed TP and close without inventing profit',()=>{
  const rows=new Map(),entry=event();a.equal(applyEvent(rows,entry).length,1);a.equal(applyEvent(rows,{...entry,time:1100}).length,0);
  a.equal(applyEvent(rows,event({kind:'TP_HIT',targetNumber:1,currentPrice:101,time:1200})).length,0);
@@ -18,12 +18,12 @@ test('TFs, superseded source, invalid/duplicate events and orphan exits remain d
 });
 test('persisted summary uses full database counts, TF remains in filters and CSV',()=>{
  const r=event(),rows=new Map();applyEvent(rows,r);applyEvent(rows,event({kind:'TP_HIT',targetNumber:1,currentPrice:102,time:1200}));
- const data={records:[...rows.values()],totals:[{timeframe:'2',sample:50,resolved:40,open:10,tp1:30,tp2:10,tp3:3}],lastSync:2000};
- const result=Results.fromStoredRecords(data);a.equal(result.summary.sample,50);a.equal(result.summary.winRate,60);a.equal(result.allRows[0].timeframe,'2');
+ const data={records:[...rows.values()],totals:[{timeframe:'1',sample:50,resolved:40,open:10,tp1:30,tp2:10,tp3:3}],lastSync:2000};
+ const result=Results.fromStoredRecords(data);a.equal(result.summary.sample,50);a.equal(result.summary.winRate,60);a.equal(result.allRows[0].timeframe,'1');
  a.equal(Results.filterRows(result.allRows,{category:'tp1'}).length,1);a.equal(Results.filterRows(result.allRows,{category:'closed'}).length,0);a.match(Results.buildCsv(result.allRows),/Timeframe/);
 });
 test('TP rates use all retained entries and SL remains unknown without complete evidence',()=>{
- const payload={records:[],totals:[{timeframe:'2',sample:10,resolved:8,open:2,tp1:6,tp2:4,tp3:2,sl:2,sl_observed:8}]};
+ const payload={records:[],totals:[{timeframe:'1',sample:10,resolved:8,open:2,tp1:6,tp2:4,tp3:2,sl:2,sl_observed:8}]};
  let result=Results.fromStoredRecords(payload);
  a.equal(result.summary.winRate,60);a.equal(result.summary.tp2Rate,40);a.equal(result.summary.tp3Rate,20);
  a.equal(result.summary.slRate,null);a.equal(result.pairSummaries[0].slRate,null);

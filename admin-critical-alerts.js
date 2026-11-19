@@ -5,7 +5,7 @@ function criticalAlerts({components=[],accounts=[],paused=false,observedAt=Date.
  for(const c of components){
   if(c.id==='database'&&c.status==='ERROR')add('DATA_STORE_FAILED',c.label,c.detail);
   if(paused)continue;
-  if(/^feed(2|15)$/.test(c.id)&&c.status!=='OK')add('PINE_DATA_UNAVAILABLE:'+c.id,c.label,c.detail,null,Number(c.id.slice(4)));
+  if(/^feed(1|15)$/.test(c.id)&&c.status!=='OK')add('PINE_DATA_UNAVAILABLE:'+c.id,c.label,c.detail,null,Number(c.id.slice(4)));
   if(c.id==='trading'&&['ERROR','UNKNOWN'].includes(c.status))add('EXECUTION_DISPATCH_FAILED',c.label,c.detail);
   if(c.id==='orders'&&['ERROR','WARNING','UNKNOWN'].includes(c.status))add('EXECUTION_QUEUE_FAILED',c.label,c.detail);
  }

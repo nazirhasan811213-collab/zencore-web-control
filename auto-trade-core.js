@@ -128,7 +128,7 @@
     if (input.tradingSchedule?.skipNews != null && typeof input.tradingSchedule.skipNews !== 'boolean') errors.tradingSchedule = 'Pilihan news mesti trade atau skip.';
     const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true, input.tradingSchedule?.skipNews ?? (input.tradingSchedule?.enabled === true));
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
-    if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF2 Scalping, TF15 Intra atau Both.';
+    if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF1 Scalping, TF15 Intra atau Both.';
     const manualExit={version:'MANUAL_TF2_EXIT_V2',enabled:input.manualExit?.enabled===true,timeframeMinutes:2,
       tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'};
     const scope=input.manualExit?.pairScope;
@@ -455,7 +455,7 @@
     const open=positions.filter(position=>!(['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion)&&position.origin==='MANUAL')&&normaliseSymbol(position.symbol)===symbol &&
       (position.strategyMode||'TF2_SCALPING')===mode);
     // Re-entry is a new cycle, never an add-on to a still-open setup.
-    // Keep TF2/TF15 independent and preserve the existing manual-position scope.
+    // Keep TF1/TF15 independent and preserve the existing manual-position scope.
     return open.length === 0;
   }
 
@@ -463,14 +463,14 @@
     const direct=typeof module==='object'&&module.exports?require('./pine-direct-entry').decision(market):null;
     if (!direct && !tradingWindow(settings.tradingSchedule,at).allowed) return null;
     const observed=number(market.signalObservedAt);
-    const modernEvent=['2','3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
+    const modernEvent=['1','3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
     if(!direct&&observed!==null&&(at-observed>(modernEvent?60000:30000)||observed>at+5000))return null;
     const validation = validateSettings(settings);
     const selected = validation.value.strategyMode;
     const mode=String(market.timeframe||market.strategyNormal?.tf||'').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING';
     const tf = String(market.timeframe || market.strategyNormal?.tf || '').replace(/m$/, '');
-    // Never reuse a TF2/legacy signal for a TF10 account.
-    if(!['2','3','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
+    // Never reuse a TF1/legacy signal for a TF10 account.
+    if(!['1','3','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
     const decision = direct || Contract.createEntryDecision(market);
     if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
@@ -525,7 +525,7 @@
         schemaVersion: snapshot.schemaVersion,
         strategy: snapshot.strategy,
         symbol: snapshot.symbol,
-        strategyMode: String(market.timeframe||market.strategyNormal?.tf||'2').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING',
+        strategyMode: String(market.timeframe||market.strategyNormal?.tf||'1').replace(/m$/, '')==='15'?'TF15_INTRA':'TF2_SCALPING',
         actions: snapshot.actions,
         reason: snapshot.reason,
         signalReceivedAt: snapshot.sourceReceivedAt

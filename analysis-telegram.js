@@ -32,38 +32,38 @@ const price=v=>numeric(v)===null?'—':new Intl.NumberFormat('en-US',{minimumFra
 // a message label only: both high and ordinary READY entries are delivered.
 const {entryQuality}=require('./analysis-execution-contract');
 function messageQuality(m){return entryQuality(m);}
-const SOP_VERSION='SOLID_TF2_3GREEN_HEMA23_V2';
+const SOP_VERSION='SOLID_TF1_3GREEN_HEMA13_V2';
 function entrySopAllowed(e){
  if(e.symbol==='BTCUSD')return !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')&&
-   ['2','15'].includes(e.timeframe)&&e.telegramMarket?.pineDirect===true&&e.telegramSop?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7';
- if(e.timeframe==='2'&&e.telegramSop?.entryCandle&&!require('./tf2-ribbon-scalping').candlePass(e.telegramSop.entryCandle,e.side,e.telegramMarket?.sourceBarTime))return false;
- if(e.timeframe==='2'&&e.telegramSop?.entrySafety&&!require('./tf2-entry-safety').allowed(e.telegramSop.entrySafety,e.side,e.telegramMarket?.sourceBarTime))return false;
- if(e.timeframe==='2'&&e.telegramSop?.decisionTimingVersion==='TF2_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed({...e.telegramMarket,strategyNormal:{sop:e.telegramSop}}))return false;
+   ['1','15'].includes(e.timeframe)&&e.telegramMarket?.pineDirect===true&&e.telegramSop?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7';
+ if(e.timeframe==='1'&&e.telegramSop?.entryCandle&&!require('./tf2-ribbon-scalping').candlePass(e.telegramSop.entryCandle,e.side,e.telegramMarket?.sourceBarTime))return false;
+ if(e.timeframe==='1'&&e.telegramSop?.entrySafety&&!require('./tf2-entry-safety').allowed(e.telegramSop.entrySafety,e.side,e.telegramMarket?.sourceBarTime))return false;
+ if(e.timeframe==='1'&&e.telegramSop?.decisionTimingVersion==='TF1_BAR_CLOSE_V1'&&!require('./tf2-bar-close').confirmed({...e.telegramMarket,strategyNormal:{sop:e.telegramSop}}))return false;
  if(require('./setup-lifecycle').supported(e.telegramSop?.lifecycleVersion)&&e.telegramSop?.cycleKind==='FOLLOWUP'&&!require('./setup-lifecycle').reentry(e.side,e.telegramSop,e.telegramSop.reentryContext?.parentQualifiedAt,e.telegramSop.signalObservedAt))return false;
   if(/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
   const s=e.telegramSop;
  if(s?.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7'&&(!require('./setup-lifecycle').supported(s.lifecycleVersion)||s.lifecycleVersion!=='CLOSED_PAUSE_RESUME_V2'||!['INITIAL','FOLLOWUP'].includes(s.cycleKind)||s.currentBar?.confirmed!==true))return false;
- if(s?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'&&(!require('./setup-lifecycle').supported(s.lifecycleVersion)||s.lifecycleVersion!=='CLOSED_PAUSE_RESUME_V2'||!['INITIAL','FOLLOWUP'].includes(s.cycleKind)||s.currentBar?.confirmed!==true||(e.timeframe==='2'&&(!s.entryCandle||!s.entrySafety))))return false;
-  if(['NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf2ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
+ if(s?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'&&(!require('./setup-lifecycle').supported(s.lifecycleVersion)||s.lifecycleVersion!=='CLOSED_PAUSE_RESUME_V2'||!['INITIAL','FOLLOWUP'].includes(s.cycleKind)||s.currentBar?.confirmed!==true||(e.timeframe==='1'&&(!s.entryCandle||!s.entrySafety))))return false;
+  if(['NORMAL_20261001_TF1_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF1_SOLID_HOLD_V15','NORMAL_20261001_TF1_SOLID_HOLD_V16'].includes(s?.version)&&!require('./analysis-execution-contract').tf1ScalpPlanPass(e.side,e.telegramPlan,['NORMAL_20261001_TF1_SOLID_HOLD_V15','NORMAL_20261001_TF1_SOLID_HOLD_V16'].includes(s.version)?s.riskAtrReference:s.atrReference))return false;
   if(s?.version==='NORMAL_20261001_TF15_RIBBON_V1')return e.timeframe==='15'&&s.tf==='15m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf15-intraday').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7'].includes(s.entryPolicyVersion)&&require('./tf15-intraday').planPass(e.side,e.telegramPlan,s);
-  if(s?.version==='NORMAL_20261001_TF2_RIBBON_V1')return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7'].includes(s.entryPolicyVersion)&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
+  if(s?.version==='NORMAL_20261001_TF1_RIBBON_V1')return e.timeframe==='1'&&s.tf==='1m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf2-ribbon-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7'].includes(s.entryPolicyVersion)&&require('./tf2-ribbon-scalping').planPass(e.side,e.telegramPlan,s);
   if(s?.version==='NORMAL_20261001_TF3_RIBBON_V1')return e.timeframe==='3'&&s.tf==='3m'&&e.symbol==='XAUUSD'&&s.solid===true&&s.solidHoldActive===true&&s.solidClosedAt==null&&require('./tf3-scalping').confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power}).pass&&s.entryPolicyVersion==='PINE_3TRIGGERS_3OF4_CHOP50_V3'&&require('./tf3-scalping').planPass(e.side,e.telegramPlan,s);
-  if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&require('./analysis-execution-contract').solid80Tf2Confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power},['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version),s.version==='NORMAL_20261001_TF2_SOLID_HOLD_V16'?5:6);
-  if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='2'&&s.tf==='2m'&&e.symbol==='XAUUSD'&&
-    require('./analysis-execution-contract').currentSolidTf2Confirmations({side:e.side,solid:s.solid,green:s.green,forecast:s.forecast,power:s.power,
-      minimumGreen:s.version.includes('SEP24')?4:3,price:s.version.includes('SEP24')?s.hema2?.price:e.telegramMarket?.price,fast:s.hema2?.fast,slow:s.hema2?.slow,gates:s.gates})&&numeric(e.telegramQuality?.score)>=50&&s.eaEntryCompatible!==false;
+  if(['NORMAL_20261001_TF1_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF1_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF1_SOLID_HOLD_V15','NORMAL_20261001_TF1_SOLID_HOLD_V16'].includes(s?.version))return e.timeframe==='1'&&s.tf==='1m'&&e.symbol==='XAUUSD'&&require('./analysis-execution-contract').solid80Tf1Confirmations(e.side,{...s,sopGreen:s.green,marketPower:s.power},['NORMAL_20261001_TF1_SOLID_HOLD_V15','NORMAL_20261001_TF1_SOLID_HOLD_V16'].includes(s.version),s.version==='NORMAL_20261001_TF1_SOLID_HOLD_V16'?5:6);
+  if(['NORMAL_20261001_TF1_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF1_SEP24_HEMA5_V8'].includes(s?.version))return e.timeframe==='1'&&s.tf==='1m'&&e.symbol==='XAUUSD'&&
+    require('./analysis-execution-contract').currentSolidTf1Confirmations({side:e.side,solid:s.solid,green:s.green,forecast:s.forecast,power:s.power,
+      minimumGreen:s.version.includes('SEP24')?4:3,price:s.version.includes('SEP24')?s.hema1?.price:e.telegramMarket?.price,fast:s.hema1?.fast,slow:s.hema1?.slow,gates:s.gates})&&numeric(e.telegramQuality?.score)>=50&&s.eaEntryCompatible!==false;
 
-  const revised=['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(s?.version);
+  const revised=['NORMAL_20261001_TF1_TP1_HEMAGAP_V5','NORMAL_20261001_TF1_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF1_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(s?.version);
   if(revised){
-    if(s.version.includes('_SEQ_ATR40_')&&(!(s.tf==='2m'?[6,7]:[7]).includes(s.gates?.length)||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
-    if(e.telegramMarket?.timeframe!=null&&String(e.telegramMarket.timeframe)!=='2')return false;
+    if(s.version.includes('_SEQ_ATR40_')&&(!(s.tf==='1m'?[6,7]:[7]).includes(s.gates?.length)||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
+    if(e.telegramMarket?.timeframe!=null&&String(e.telegramMarket.timeframe)!=='1')return false;
     const power=numeric(s.power),forecast=String(s.forecast||'').toUpperCase();
     if(power===null||power<0||power>100||!(e.side==='BUY'?(forecast==='NEUTRAL'&&power>50||forecast==='BULLISH'&&power>40):e.side==='SELL'&&(forecast==='NEUTRAL'&&power<50||forecast==='BEARISH'&&power>40)))return false;
-    if(e.timeframe!=='2'||s.tf!=='2m'||e.symbol!=='XAUUSD'||s.solid!==true||s.green<3||numeric(e.telegramQuality?.score)<50||
+    if(e.timeframe!=='1'||s.tf!=='1m'||e.symbol!=='XAUUSD'||s.solid!==true||s.green<3||numeric(e.telegramQuality?.score)<50||
       !Array.isArray(s.gates)||![5,6,7].includes(s.gates.length)||!s.gates.every(g=>g.pass===true))return false;
-    const atr=numeric(s.atrReference??s.hema2?.atrReference);
+    const atr=numeric(s.atrReference??s.hema1?.atrReference);
     if(atr===null||atr<=0)return false;
-    for(const key of ['hema2']){
+    for(const key of ['hema1']){
       const r=s[key]||{},fast=numeric(r.fast),slow=numeric(r.slow);
       if(fast===null||slow===null||Math.abs(fast-slow)<=atr*.10||(e.side==='BUY'?fast<=slow:e.side==='SELL'?fast>=slow:true))return false;
     }
@@ -71,15 +71,15 @@ function entrySopAllowed(e){
   }
 
   if(String(s?.version||'').includes('_SEQ_ATR40_')&&
-    (!(s.tf==='2m'?[6,7]:[7]).includes(s.gates?.length)||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
+    (!(s.tf==='1m'?[6,7]:[7]).includes(s.gates?.length)||s.pullback?.pass!==true||!s.gates.some(g=>g.key==='pullback'&&g.pass===true)))return false;
   if(String(s?.version||'').startsWith('NORMAL_20261001_') &&
-    (!['2','15'].includes(String(e.timeframe)) || s.tf!==String(e.timeframe)+'m' ||
+    (!['1','15'].includes(String(e.timeframe)) || s.tf!==String(e.timeframe)+'m' ||
     (e.telegramMarket?.timeframe!=null && String(e.telegramMarket.timeframe)!==String(e.timeframe))))return false;
-  if(['NORMAL_20261001_TF2_V2','NORMAL_20261001_TF2_SEQ_V3','NORMAL_20261001_TF2_SEQ_ATR40_V4'].includes(s?.version)&&s.tf==='2m'||['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(s?.version)&&s.tf==='15m')
+  if(['NORMAL_20261001_TF1_V2','NORMAL_20261001_TF1_SEQ_V3','NORMAL_20261001_TF1_SEQ_ATR40_V4'].includes(s?.version)&&s.tf==='1m'||['NORMAL_20261001_TF15_V2','NORMAL_20261001_TF15_SEQ_ATR40_V4'].includes(s?.version)&&s.tf==='15m')
     return ['XAUUSD'].includes(e.symbol)&&s.solid===true&&s.green>=4&&
-      Array.isArray(s.gates)&&(s.tf==='2m'?[5,6,7]:[6,7]).includes(s.gates.length)&&s.gates.every(g=>g.pass===true)&&s['hema'+s.tf.replace('m','')]?.mode===e.side&&
-      (s.tf==='2m'||s.hema30?.mode===e.side)&&numeric(e.telegramQuality?.score)>=50;
-  const valid=s?.version===SOP_VERSION&&s.tf==='2m'||s?.version==='SOLID_TF15_3GREEN_HEMA1545_2L_V1'&&s.tf==='15m';
+      Array.isArray(s.gates)&&(s.tf==='1m'?[5,6,7]:[6,7]).includes(s.gates.length)&&s.gates.every(g=>g.pass===true)&&s['hema'+s.tf.replace('m','')]?.mode===e.side&&
+      (s.tf==='1m'||s.hema30?.mode===e.side)&&numeric(e.telegramQuality?.score)>=50;
+  const valid=s?.version===SOP_VERSION&&s.tf==='1m'||s?.version==='SOLID_TF15_3GREEN_HEMA1545_2L_V1'&&s.tf==='15m';
   return valid&&['XAUUSD'].includes(e.symbol)&&s.solid===true&&s.green>=3&&Array.isArray(s.gates)&&s.gates.length===6&&s.gates.every(g=>g.pass===true);
 }
 function qualityGrade(score){return score>=90?'A+':score>=80?'A':score>=70?'B+':score>=60?'B':score>=50?'C+':'C';}
@@ -90,7 +90,7 @@ function entryFresh(e,now=Date.now()){
   const q=e.telegramMarket;
   if(['PINE_3TRIGGERS_3OF4_CHOP50_V3','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7'].includes(e.telegramSop?.entryPolicyVersion)){
     const origin=q?.entryAuthorizedAt??q?.signalObservedAt;
-    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='2'||e.telegramSop?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'?60000:30000);
+    return Number.isFinite(origin)&&now-origin>=-5000&&now-origin<=60000&&now-e.time>=-5000&&now-e.time<=(e.timeframe==='1'||e.telegramSop?.entryPolicyVersion==='PINE_SOLID_PRICE_WT_HEMA_V6'?60000:30000);
   }
   if(q?.feedMode==='INTRABAR')return Number.isFinite(q.signalObservedAt)&&now-q.signalObservedAt>=-5000&&now-q.signalObservedAt<=30000&&now-e.time>=-5000&&now-e.time<=30000;
   const duration=Number(q?.timeframe)*60000;
@@ -110,7 +110,7 @@ function riskText(value){return String(value||'').replace(/(?:🛑\s*)?JAGA MODA
 function pineContext(s={},tf){
  const d=s.advisor||{},clean=v=>riskText(v).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').trim();
  const short=(v,n=100)=>clean(v).slice(0,n)||'Tiada data';
- const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${s['hema'+tf]?.mode||'WAIT_DATA'}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':tf==='2'?'3/5/10':'5/10/15'}: ${s.mtfScore}`];
+ const lines=['📊 ANALYSIS SEMASA',`Trend: ${short(d.trend)}`,`Movement: ${short(d.momentum)}`,`HEMA Trend: ${s['hema'+tf]?.mode||'WAIT_DATA'}`,`Checklist Pine: ${s.green}/5`,`Forecast 10 candle: ${short(s.forecast,30)} ${s.power}%`,`MTF ${tf==='15'?'15/30/45':tf==='1'?'3/5/10':'5/10/15'}: ${s.mtfScore}`];
  // Keep dashboard facts once; Coach often repeats trend, momentum and advice.
  const seen=new Set(),key=v=>clean(v).replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
  function add(label,value,max=240){const text=clean(value);if(!text)return;const k=key(text);if(!k||seen.has(k))return;seen.add(k);lines.push(`${label}: ${text.slice(0,max)}`);}
@@ -138,7 +138,7 @@ function entryAnalysis(e,s){
  return lines;
 }
 function currentPineMessage(e,p,s={},time){
- const tf=e.timeframe||'2',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
+ const tf=e.timeframe||'1',reentry=s.cycleKind==='FOLLOWUP'||/REENTRY/.test(e.entryType||''),buy=e.side==='BUY';
  const reason=entryAnalysis(e,s).map(x=>x.replace(/^Sebab entry: /,'')).join('\n');
  const bar=s.entryCandle||s.currentBar;
  const candle=bar&&Number.isFinite(bar.open)&&Number.isFinite(bar.close)?(bar.close>bar.open?'BULLISH':bar.close<bar.open?'BEARISH':'DOJI'):s.entryCandle?(buy?'BULLISH':'BEARISH'):null;
@@ -165,7 +165,7 @@ function currentPineMessage(e,p,s={},time){
 }
 
 function closeMessage(e,time){
- const tf=e.timeframe||'2',half=e.percent===50,raw=String(e.message||'').split('\n');
+ const tf=e.timeframe||'1',half=e.percent===50,raw=String(e.message||'').split('\n');
  const reason=(raw[0]?.includes(e.symbol)&&raw[0]?.includes('TF')?raw.slice(1):raw).join(' ').replace(/[\x00-\x1f]/g,' ').trim().slice(0,90);
  return [`🛑 ZENCORE | ${half?'CLOSE SEPARUH (50%)':'CLOSE ALL'} TF${tf}`,e.symbol,'',
   half?`• Tutup 50% posisi TF${tf}.`:`• Tutup semua baki posisi TF${tf}.`,
@@ -198,35 +198,35 @@ function telegramMessageBody(e){
   }
   if(e.kind!=='ENTRY')return closeMessage(e,time);
   const p=e.telegramPlan, q=e.telegramQuality;
-  if(['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
+  if(['NORMAL_20261001_TF1_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     return currentPineMessage(e,p,s,time);
   }
 
-  if(['NORMAL_20261001_TF2_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF2_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){
+  if(['NORMAL_20261001_TF1_SOLID_80PCT_LIVE_V13','NORMAL_20261001_TF1_SOLID80_SCALP_CAP_V14','NORMAL_20261001_TF1_SOLID_HOLD_V15','NORMAL_20261001_TF1_SOLID_HOLD_V16'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     const passed=s.gates.filter(g=>g.pass).length;
-    return `ZENCORE | SOLID ENTRY TF2 • ${['NORMAL_20261001_TF2_SOLID_HOLD_V15','NORMAL_20261001_TF2_SOLID_HOLD_V16'].includes(s.version)?'SOLID HOLD · SOP LENGKAP':'SOP 80%'}\n${e.symbol} • ${e.side}\nPengesahan: ${passed}/6 (${(passed/6*100).toFixed(2)}%)\nHEMA40: SEARAH\nMTF score: ${s.mtfScore}\nKelengkapan SOP bukan win rate.\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${analysisContext(s)}\n\n${footer}`;
+    return `ZENCORE | SOLID ENTRY TF1 • ${['NORMAL_20261001_TF1_SOLID_HOLD_V15','NORMAL_20261001_TF1_SOLID_HOLD_V16'].includes(s.version)?'SOLID HOLD · SOP LENGKAP':'SOP 80%'}\n${e.symbol} • ${e.side}\nPengesahan: ${passed}/6 (${(passed/6*100).toFixed(2)}%)\nHEMA40: SEARAH\nMTF score: ${s.mtfScore}\nKelengkapan SOP bukan win rate.\n\nEntry: ${price(p.entry)}\nSL: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${analysisContext(s)}\n\n${footer}`;
   }
-  if(['NORMAL_20261001_TF2_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF2_SEP24_HEMA5_V8'].includes(e.telegramSop?.version)){
+  if(['NORMAL_20261001_TF1_CURRENT_SOLID_HEMAPRICE_V7','NORMAL_20261001_TF1_SEP24_HEMA5_V8'].includes(e.telegramSop?.version)){
     const s=e.telegramSop;
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF2 • SCALPING\n${e.symbol} • ${e.side}\n${s.version.includes('SEP24')?'SOP 24/9 → TF2 V8':'SOP TF2 V7'} • SOLID semasa\n\nSOLID: AKTIF\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\nHarga TF${s.version.includes('SEP24')?5:2} vs HEMA20/40: ${s.hema2.state}\nGred: ${q.grade} (${q.score}/100)\n\nEntry rujukan harga live: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
+    return `ZENCORE | SOLID ENTRY TF1 • SCALPING\n${e.symbol} • ${e.side}\n${s.version.includes('SEP24')?'SOP 24/9 → TF1 V8':'SOP TF1 V7'} • SOLID semasa\n\nSOLID: AKTIF\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\nHarga TF${s.version.includes('SEP24')?5:2} vs HEMA20/40: ${s.hema1.state}\nGred: ${q.grade} (${q.score}/100)\n\nEntry rujukan harga live: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
   }
 
-  if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')||['NORMAL_20261001_TF2_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF2_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(e.telegramSop?.version)){
+  if(/^NORMAL_20261001_TF(2_V2|15_V2|2_SEQ_V3|2_SEQ_ATR40_V4|15_SEQ_ATR40_V4)$/.test(e.telegramSop?.version||'')||['NORMAL_20261001_TF1_TP1_HEMAGAP_V5','NORMAL_20261001_TF1_SEQ_TP1_HEMAGAP_V5','NORMAL_20261001_TF1_SEQ_ATR40_TP1_HEMAGAP_V5'].includes(e.telegramSop?.version)){
     const s=e.telegramSop,tf=s.tf.replace('m','');
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
-    return `ZENCORE | SOLID ENTRY TF${tf} • ${tf==='15'?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\n${s.version.includes('HEMAGAP')?'SOP TF2 • HEMA2 sahaja • 13/10/2026':'SOP 1/10/2026'}\n\n`+
+    return `ZENCORE | SOLID ENTRY TF${tf} • ${tf==='15'?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\n${s.version.includes('HEMAGAP')?'SOP TF1 • HEMA1 sahaja • 13/10/2026':'SOP 1/10/2026'}\n\n`+
       `SOLID: ${s.version.includes('_SEQ_')?'SETUP DIPEGANG':'PASS'}\nHarga lepas entry: PASS\nChecklist: ${s.green}/5 hijau\nForecast: ${s.forecast} ${s.power}%\n${s.pullback?`Pullback: ${s.pullback.required?'40% • PASS':'Candle biasa'}\n`:''}HEMA TF${tf}: ${s['hema'+tf]?.mode||'WAIT_DATA'}\n${tf==='15'?`HEMA TF30: ${s.hema30?.mode||'WAIT_DATA'}\n`:''}${s.version.includes('HEMAGAP')?'Ribbon HEMA: melepasi had minimum\n':''}Gred: ${q.grade} (${q.score}/100)\n\n`+
       `${s.entryAnchor==='LIVE_SIGNAL_PRICE_V1'?'Entry rujukan harga live':'Entry SOP'}: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n${footer}`;
   }
   if([SOP_VERSION,'SOLID_TF15_3GREEN_HEMA1545_2L_V1'].includes(e.telegramSop?.version)){
-    const tf15=e.telegramSop.tf==='15m',tf=tf15?'15':'2',higher=tf15?'45':'3';
+    const tf15=e.telegramSop.tf==='15m',tf=tf15?'15':'1',higher=tf15?'45':'3';
     const s=e.telegramSop;
     if(!entrySopAllowed(e)||!p)return `ZENCORE | ENTRY TIDAK DISAHKAN\n\n${footer}`;
     return `ZENCORE | SOLID ENTRY TF${tf} • ${tf15?'INTRA':'SCALPING'}\n${e.symbol} • ${e.side}\n\n`+
-      `SOLID: PASS\nChecklist: ${s.green}/5 hijau\nForecast 10 candle: ${s.forecast} ${s.power}%\n${s.pullback?`Pullback: ${s.pullback.required?'40% • PASS':'Candle biasa'}\n`:''}HEMA TF${tf}: ${(tf15?s.hema15:s.hema2)?.state||'WAIT'}\nHEMA TF${higher} confirmed: ${(tf15?s.hema45:s.hema3)?.state||'WAIT'}\n\n`+
+      `SOLID: PASS\nChecklist: ${s.green}/5 hijau\nForecast 10 candle: ${s.forecast} ${s.power}%\n${s.pullback?`Pullback: ${s.pullback.required?'40% • PASS':'Candle biasa'}\n`:''}HEMA TF${tf}: ${(tf15?s.hema15:s.hema1)?.state||'WAIT'}\nHEMA TF${higher} confirmed: ${(tf15?s.hema45:s.hema3)?.state||'WAIT'}\n\n`+
       `Entry SOP: ${price(p.entry)}\nStop Loss: ${price(p.sl)}\nTP1: ${price(p.tp1)}\nTP2: ${price(p.tp2)}\nTP3: ${price(p.tp3)}\n\n`+
       `Harga feed: ${price(e.telegramMarket?.price)}\nFeed: ${e.telegramMarket?.feedMode==='INTRABAR'?'REALTIME • candle belum tutup':'candle '+tf+'M ditutup'}\nSOP confirmation lengkap; bukan jaminan profit.\n\n${footer}`;
   }

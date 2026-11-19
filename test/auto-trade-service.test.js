@@ -717,7 +717,7 @@ test('Google hosted worker leases only ciphertext and reports connection with ex
 });
 
 
-test('hosted XAUUSD DEMO worker connects but cannot arm unsupported TF2 exit policies', async () => {
+test('hosted XAUUSD DEMO worker connects but cannot arm unsupported TF1 exit policies', async () => {
   let currentTime = 1_790_000_200_000;
   const keyPair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   const store = new MemoryAutoTradeStore();
@@ -785,7 +785,7 @@ test('hosted XAUUSD DEMO worker connects but cannot arm unsupported TF2 exit pol
   assert.equal(state.connection.state, 'HOSTED_READY');
   assert.equal(state.connection.ready, true);
   assert.equal(state.control.canTurnOn, false);
-  await assert.rejects(service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='TF2_EA_UPGRADE_REQUIRED');
+  await assert.rejects(service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='TF1_EA_UPGRADE_REQUIRED');
   assert.equal((await service.nextHostedCommand(identity,{accountId,leaseId:lease.lease.id})).command,null);
 });
 

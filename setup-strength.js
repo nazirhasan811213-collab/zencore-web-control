@@ -11,9 +11,9 @@ function assess(m,now=Date.now(),candles=[],options={}){
  const sign=side==='BUY'?1:side==='SELL'?-1:0;
  const at=m?.signalObservedAt;
  const base={version:VERSION,asOf:now,sourceAt:at||null,timeframe:tf,symbol:m?.symbol||null,side:side||null,setupKey:m?.setupKey||null,status:'INCOMPLETE',overall:null,targets:null,range:null,coverage:0,missing:[],warnings:[],groups:[],plan:{...p},meaning:'TECHNICAL_SUPPORT_NOT_WIN_PROBABILITY'};
- if(!['2','15'].includes(tf)||!sign){base.missing.push('direction/timeframe');base.reason='Arah setup belum tersedia.';return base;}
+ if(!['1','15'].includes(tf)||!sign){base.missing.push('direction/timeframe');base.reason='Arah setup belum tersedia.';return base;}
  if(!options.marketOnly&&n.solid!==true){base.missing.push('solid');base.reason='SOLID belum aktif; tunggu signal Pine.';return base;}
- if(!finite(at)||at>now+5000||now-at>(tf==='2'?60000:30000)){base.status='STALE';base.reason='Data Pine belum segar; tunggu kemas kini.';return base;}
+ if(!finite(at)||at>now+5000||now-at>(tf==='1'?60000:30000)){base.status='STALE';base.reason='Data Pine belum segar; tunggu kemas kini.';return base;}
  if(!options.marketOnly&&(!['entry','sl','tp1','tp2','tp3'].every(k=>finite(p[k])&&p[k]>0)||sign*(p.entry-p.sl)<=0||sign*(p.tp1-p.entry)<=0||sign*(p.tp2-p.tp1)<=0||sign*(p.tp3-p.tp2)<=0)){base.missing.push('validPlan');base.reason='Pelan entry, SL dan TP belum lengkap atau tidak sah.';return base;}
  const h=s['hema'+tf]||{},bar=s.currentBar||m;
  const v={fast:m.hemaFast??m.hema20??h.fast,slow:m.hemaSlow??m.hema40??h.slow,e9:m.ema9,e20:m.ema20,e50:m.ema50,wt1:m.waveTrend1??h.waveTrend1,wt2:m.waveTrend2??h.waveTrend2,rsi:m.rsi,chop:m.chopIndex??s.chopIndex,volume:m.relativeVolume,mtf:m?.setupMeta?.entryQuality?.confirmedMtf??s.mtfScore,atr:s.atrReference??m.atr,open:bar.open,high:bar.high,low:bar.low,close:bar.close,power:s.marketPower};
@@ -53,7 +53,7 @@ function assess(m,now=Date.now(),candles=[],options={}){
  const risk=Math.abs(p.entry-p.sl);
  const rewardToRisk=Object.fromEntries([1,2,3].map(i=>['tp'+i,Math.round(Math.abs(p['tp'+i]-p.entry)/risk*100)/100]));
  base.geometry={initialRisk:risk,rewardToRisk,directionalObstacle:obstacle??null};
- if(tf==='2'){
+ if(tf==='1'){
   const tp1R=Math.abs(p.tp1-p.entry)/risk;
   const tp2R=Math.abs(p.tp2-p.entry)/risk;
   const grossAtTp1=0.50*tp1R;
@@ -67,13 +67,13 @@ function assess(m,now=Date.now(),candles=[],options={}){
  if(finite(obstacle)&&sign*(p.tp1-obstacle)>0)base.warnings.push('Struktur terdekat berada sebelum TP1');
  const budget=Math.min(sign*(p.tp3-p.entry),v.atr*(0.5+base.overall/100));
  const far=Math.min(budget,finite(obstacle)?sign*(obstacle-p.entry):Infinity),near=far*0.75;
- base.range={low:Math.min(p.entry+sign*near,p.entry+sign*far),high:Math.max(p.entry+sign*near,p.entry+sign*far),basis:'ATR_HEURISTIC_CAPPED_BY_TP3_AND_NEARBY_STRUCTURE',structureAvailable:finite(obstacle),horizon:tf==='2'?'NEXT_30_MIN':'NEXT_60_MIN'};
+ base.range={low:Math.min(p.entry+sign*near,p.entry+sign*far),high:Math.max(p.entry+sign*near,p.entry+sign*far),basis:'ATR_HEURISTIC_CAPPED_BY_TP3_AND_NEARBY_STRUCTURE',structureAvailable:finite(obstacle),horizon:tf==='1'?'NEXT_30_MIN':'NEXT_60_MIN'};
  base.targets=Object.fromEntries([1,2,3].map(i=>{const dist=sign*(p['tp'+i]-p.entry),penalty=Math.max(0,dist/v.atr-0.5)*15+(finite(obstacle)&&sign*(p['tp'+i]-obstacle)>0?10:0);return ['tp'+i,Math.max(0,Math.round(base.overall-penalty))];}));
  base.warnings.push('Skor teknikal dan julat indikator; belum dikalibrasi dengan hasil sebenar');return base;
 }
 function evaluate(records){
  const groups=[];
- for(const symbol of ['XAUUSD','BTCUSD'])for(const tf of ['2','15'])for(const floor of [0,40,60,80]){
+ for(const symbol of ['XAUUSD','BTCUSD'])for(const tf of ['1','15'])for(const floor of [0,40,60,80]){
   const upper=floor===0?40:floor===40?60:floor===60?80:101;
   const rows=records.filter(r=>(r.symbol||r.setupAssessment?.symbol)===symbol&&r.timeframe===tf&&r.setupAssessment?.version===VERSION&&r.setupAssessment.status==='AVAILABLE'&&r.setupAssessment.overall>=floor&&r.setupAssessment.overall<upper);
   if(rows.length)groups.push({symbol,timeframe:tf,band:floor+'–'+(upper-1),sample:rows.length,open:rows.filter(r=>r.state==='OPEN').length,tp1Observed:rows.filter(r=>r.hitTp1).length,tp2Observed:rows.filter(r=>r.hitTp2).length,tp3Observed:rows.filter(r=>r.hitTp3).length});
@@ -82,7 +82,7 @@ function evaluate(records){
 }
 const diagnosticState=new Map();
 function diagnose(a,now=Date.now()){
- if(!['2','15'].includes(a?.timeframe))return;
+ if(!['1','15'].includes(a?.timeframe))return;
  const value={timeframe:a.timeframe,status:a.status,missing:a.missing,coverage:a.coverage,reason:a.reason||null};
  const key=JSON.stringify(value),last=diagnosticState.get(a.timeframe);
  if(last&&last.key===key&&now-last.at<60000)return;

@@ -2,9 +2,9 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createFeedMetadataDiagnostics}=require('../feed-metadata-diagnostics');
 function batch(rule=true,channel='DASHBOARD'){
- const row=Array(67).fill(null);row[0]='XAUUSD';row[65]={version:'HEMA23_LIVE_V1'};
- row[66]={entryEvent:false,...(rule?{entryRuleVersion:'TF2_3GREEN_TP1_HEMAGAP_V1',pendingEntryReturn:true}:{})};
- return {timeframe:'2',feedChannel:channel,feedVersion:'TF2_REALTIME_V1',emittedAt:1000,markets:[row],authToken:'NEVER_EXPOSE',password:'NEVER_EXPOSE'};
+ const row=Array(67).fill(null);row[0]='XAUUSD';row[65]={version:'HEMA13_LIVE_V1'};
+ row[66]={entryEvent:false,...(rule?{entryRuleVersion:'TF1_3GREEN_TP1_HEMAGAP_V1',pendingEntryReturn:true}:{})};
+ return {timeframe:'1',feedChannel:channel,feedVersion:'TF1_REALTIME_V1',emittedAt:1000,markets:[row],authToken:'NEVER_EXPOSE',password:'NEVER_EXPOSE'};
 }
 test('distinguishes mixed revised and unversioned ingress from state rejection',()=>{
  const d=createFeedMetadataDiagnostics({now:()=>1250});d.record(batch(),['XAUUSD']);d.record(batch(false));
@@ -31,8 +31,8 @@ test('bounded SOLID lifecycle evidence identifies inactive source without retain
 });
 
 
-test('current TF2 own-timeframe HEMA metadata is recognized in diagnostics',()=>{
- const b=batch();b.markets[0][65]={version:'HEMA2_LIVE_V1'};
+test('current TF1 own-timeframe HEMA metadata is recognized in diagnostics',()=>{
+ const b=batch();b.markets[0][65]={version:'HEMA1_LIVE_V1'};
  const d=createFeedMetadataDiagnostics();d.record(b,['XAUUSD']);
  assert.equal(d.snapshot().channels[0].latest.hasLiveHema,true);
 });

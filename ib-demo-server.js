@@ -45,7 +45,7 @@ function createDemoHandler({now=Date.now,secure=true,credentials={email:EMAIL,sa
     if(!['active','disabled'].includes(b.status)){reply(res,400,{ok:false,error:'Status demo tidak sah.'});return true;}u.status=b.status;reply(res,200,{ok:true,demo:true});return true;
    }
    if(req.method==='POST'&&pathname==='/demo/ib/settings'){
-    const b=await json(req);if(!['TF2','TF15'].includes(b.tf)||!Number.isFinite(b.lot)||b.lot<.01||b.lot>1||!Number.isInteger(b.layers)||b.layers<1||b.layers>5||typeof b.enabled!=='boolean'){reply(res,400,{ok:false,error:'Tetapan demo tidak sah.'});return true;}session.data.settings[b.tf]={lot:b.lot,layers:b.layers,enabled:b.enabled};reply(res,200,{ok:true,demo:true});return true;
+    const b=await json(req);if(!['TF1','TF15'].includes(b.tf)||!Number.isFinite(b.lot)||b.lot<.01||b.lot>1||!Number.isInteger(b.layers)||b.layers<1||b.layers>5||typeof b.enabled!=='boolean'){reply(res,400,{ok:false,error:'Tetapan demo tidak sah.'});return true;}session.data.settings[b.tf]={lot:b.lot,layers:b.layers,enabled:b.enabled};reply(res,200,{ok:true,demo:true});return true;
    }
    if(req.method==='POST'&&pathname==='/demo/ib/message'){
     const b=await json(req),ids=Array.isArray(b.userIds)?[...new Set(b.userIds)]:[],text=typeof b.message==='string'?b.message.trim():'';

@@ -11,14 +11,14 @@ function batch(symbol='XAUUSD'){
  return {feedVersion:'TF15_REALTIME_V1',timeframe:'15',confirmed:false,emittedAt:now,markets:[row]};
 }
 const {readyMarket}=require('./fixtures/current-market');
-function market(tf='2',symbol='XAUUSD'){return readyMarket({tf,symbol,at:now});}
+function market(tf='1',symbol='XAUUSD'){return readyMarket({tf,symbol,at:now});}
 const settings=mode=>({capitalUsd:1000,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],strategyMode:mode});
-test('TF2/TF15/Both choose own timeframe and sizing; other entry pairs rejected',()=>{
+test('TF1/TF15/Both choose own timeframe and sizing; other entry pairs rejected',()=>{
  for(const mode of Core.STRATEGY_MODES){const s=Core.validateSettings(settings(mode));assert.equal(s.ok,true);
-  for(const tf of ['2','15']){const c=Core.buildSetupCommand(market(tf),s.value,null,now);const allowed=mode==='BOTH'||mode===(tf==='2'?'TF2_SCALPING':'TF15_INTRA');
+  for(const tf of ['1','15']){const c=Core.buildSetupCommand(market(tf),s.value,null,now);const allowed=mode==='BOTH'||mode===(tf==='1'?'TF2_SCALPING':'TF15_INTRA');
    assert.equal(!!c,allowed);if(c){assert.equal(c.payload.layers,tf==='15'?2:3);assert.equal(c.payload.exitPolicy,null);}}
  }
- assert.equal(Contract.createEntryDecision(market('2','EURUSD')),null);
+ assert.equal(Contract.createEntryDecision(market('1','EURUSD')),null);
  assert.equal(Core.validateSettings({...settings('BOTH'),symbols:['EURUSD']}).ok,true);
 });
 test('TF15 compact ingress authorizes unconfirmed entry and isolates management',()=>{
@@ -32,16 +32,16 @@ test('Both dispatches separate strategy commands and management cannot cross tim
  const store=new MemoryAutoTradeStore();const service=createAutoTradeService({store,now:()=>now,allowDemoExecution:false,localEaExecutionUserIds:['owner'],allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes'});
  store.podsByUser.set('owner',{id:'pod-owner',userId:'owner',ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:now,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.3.0-ea-local',symbolSpecs:{}});
  await service.saveSettings('owner',{...settings('BOTH'),riskAcknowledged:true});await store.setControl('owner',{desiredState:'ON',effectiveState:'ON'});
- assert.deepEqual(await service.dispatchMarkets([market('2','XAUUSD'),market('15','XAUUSD')]),{queued:2});
+ assert.deepEqual(await service.dispatchMarkets([market('1','XAUUSD'),market('15','XAUUSD')]),{queued:2});
  const rows=store.commands.get('pod-owner');assert.deepEqual(rows.map(r=>r.payload.strategyMode),['TF2_SCALPING','TF15_INTRA']);
  await store.replacePositions('owner',[{ticket:'1',symbol:'XAUUSD',strategyMode:'TF15_INTRA'}],now);
- const wrong={...market('2','XAUUSD'),positionManagement:{action:'EXIT_ALL'}};
+ const wrong={...market('1','XAUUSD'),positionManagement:{action:'EXIT_ALL'}};
  assert.deepEqual(await service.dispatchMarkets([wrong]),{queued:0});
  const correct={...wrong,timeframe:'15'};assert.deepEqual(await service.dispatchMarkets([correct]),{queued:1});assert.equal(rows.at(-1).payload.strategyMode,'TF15_INTRA');
 });
 test('Telegram state dedupe is independent for two timeframes on the same pair',async()=>{
  const alerts=new AnalysisAlerts({fetchFn:()=>{throw Error('No external sends');}});await alerts.init();
- await alerts.record(market('2'));await alerts.record(market('15'));
+ await alerts.record(market('1'));await alerts.record(market('15'));
  const entry=alerts.events.filter(e=>e.kind==='ENTRY');assert.equal(entry.length,2);
  for(const e of entry){assert.ok(entrySopAllowed(e));assert.ok(entryFresh(e,now));assert.match(telegramMessage(e),new RegExp('ENTRY TF'+e.timeframe));}
  assert.match(telegramMessage(entry[1]),/INTRA/);clearInterval(alerts.cleanupTimer);

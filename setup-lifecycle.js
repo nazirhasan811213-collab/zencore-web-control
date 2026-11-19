@@ -20,7 +20,7 @@ function pullback(side,path,after,through,atr){
  return found;
 }
 function momentum(side,s={}){
- const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema2||s.hema3||s.hema15||{},r=s.reentryContext||{},atr=s.atrReference;
+ const sign=side==='BUY'?1:side==='SELL'?-1:0,h=s.hema1||s.hema3||s.hema15||{},r=s.reentryContext||{},atr=s.atrReference;
  const nums=[h.fast,h.slow,r.fastPrevious,r.slowPrevious,h.waveTrend1,h.waveTrend2,r.wtGapPrevious,r.previousHigh,r.previousLow,s.price,atr];
  return !!sign&&nums.every(finite)&&atr>0&&
   sign*(h.fast-h.slow)>=atr*.10&&sign*(h.fast-r.fastPrevious)>0&&sign*(h.slow-r.slowPrevious)>0&&
@@ -40,7 +40,7 @@ function reentry(side,s,after,observed){
 }
 function closedReentry(side,s,after,observed){
  const sign=side==='BUY'?1:side==='SELL'?-1:0,tf=parseInt(s.tf,10),step=tf*60000,r=s.reentryContext||{},b=s.currentBar;
- if(!sign||![2,15].includes(tf)||!finite(after)||!finite(observed)||!finite(s.qualifiedAt)||s.qualifiedAt<=after||r.version!==NEW_VERSION||!b||b.confirmed!==true||![b.time,b.open,b.high,b.low,b.close,s.atrReference].every(finite)||s.atrReference<=0||b.time+step>s.qualifiedAt+1000||s.qualifiedAt>b.time+step+60000||s.qualifiedAt>observed||!(sign*(b.close-b.open)>0))return null;
+ if(!sign||![1,15].includes(tf)||!finite(after)||!finite(observed)||!finite(s.qualifiedAt)||s.qualifiedAt<=after||r.version!==NEW_VERSION||!b||b.confirmed!==true||![b.time,b.open,b.high,b.low,b.close,s.atrReference].every(finite)||s.atrReference<=0||b.time+step>s.qualifiedAt+1000||s.qualifiedAt>b.time+step+60000||s.qualifiedAt>observed||!(sign*(b.close-b.open)>0))return null;
  const h=s['hema'+tf]||{};
  if(![h.fast,h.slow,h.waveTrend1,h.waveTrend2].every(finite)||sign*(h.fast-h.slow)<=0||sign*(h.waveTrend1-h.waveTrend2)<=0)return null;
  // Current candle plus server-retained authenticated confirmed OHLC. Never trust

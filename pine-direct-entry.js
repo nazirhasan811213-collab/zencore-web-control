@@ -4,15 +4,20 @@ const POLICY='PINE_DIRECT_FILL_GAP4_V1';
 const NO_DEADLINE=253402300799000; // finite compatibility timestamp; no trading TTL
 function isEvent(m={}) {
  const meta=m.setupMeta||{};
- return /^[A-Z0-9][A-Z0-9._#&+!-]{0,31}$/.test(m.symbol || '')&&['2','15'].includes(String(m.timeframe))&&
+ return /^[A-Z0-9][A-Z0-9._#&+!-]{0,31}$/.test(m.symbol || '')&&['1','15'].includes(String(m.timeframe))&&
   m.feedChannel==='EXECUTION'&&m.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'&&
   m.entryEvent===true&&meta.entryPolicyVersion==='PINE_NATIVE_SOLID_ENTRY_V7';
 }
 function isCommand(c={}){return c.type==='PLACE_SETUP'&&c.payload?.analysisSnapshot?.executionPolicy===POLICY;}
+function hemaAligned(m,side){
+ const h=m.hemaConfirmation?.tf1||{},fast=m.hema20??m.hemaFast??h.fast,slow=m.hema40??m.hemaSlow??h.slow;
+ return [fast,slow].every(v=>Number.isFinite(v)&&v>0)&&(side==='BUY'?fast>slow:side==='SELL'?fast<slow:false);
+}
 function decision(m={}) {
  if(!isEvent(m))return null;
  const meta=m.setupMeta,tf=String(m.timeframe),side=meta.solidSide,sign=side==='BUY'?1:side==='SELL'?-1:0;
  const p={entry:m.normal3Entry,sl:m.initialSl,tp1:m.tp1,tp2:m.tp2,tp3:m.tp3};
+ if(tf==='1'&&!hemaAligned(m,side))return null;
  if(!sign||!m.setupKey||![meta.completedAt,m.entryAuthorizedAt,m.signalObservedAt].every(x=>Number.isFinite(x)&&x>0)||
   m.entryAuthorizedAt!==meta.completedAt||m.entryAuthorizedAt>m.signalObservedAt||
   !Object.values(p).every(x=>Number.isFinite(x)&&x>0)||sign*(p.entry-p.sl)<=0||
@@ -27,4 +32,4 @@ function decision(m={}) {
   confirmationEvidence:{owner:'PINE',executionPolicy:POLICY}};
  return {signalKey:[POLICY,tf,m.symbol,side,m.setupKey,meta.completedAt].join('|'),snapshot};
 }
-module.exports={POLICY,NO_DEADLINE,isEvent,isCommand,decision};
+module.exports={POLICY,NO_DEADLINE,isEvent,isCommand,decision,hemaAligned};

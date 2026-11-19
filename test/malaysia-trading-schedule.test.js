@@ -36,8 +36,8 @@ async function harness(at,positions=[]) {
   connectorVersion:'1.1.0-ea-local',lastSeenAt:at,symbolSpecs:{}});
  await service.saveSettings(userId,{capitalUsd:100,lotPerLayer:.01,layers:3,symbols:['XAUUSD'],riskAcknowledged:true,tradingSchedule:schedule});
  await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});store.positions.set(userId,positions);
- const market={symbol:'XAUUSD',timeframe:'2',receivedAt:at,strategyNormal:{state:'READY',tf:'2m',solid:true,side:'BUY',
-  entrySopVersion:'SOLID_TF2_3GREEN_HEMA23_V2',sop:{gates:Array.from({length:6},()=>({pass:true}))},
+ const market={symbol:'XAUUSD',timeframe:'1',receivedAt:at,strategyNormal:{state:'READY',tf:'1m',solid:true,side:'BUY',
+  entrySopVersion:'SOLID_TF1_3GREEN_HEMA13_V2',sop:{gates:Array.from({length:6},()=>({pass:true}))},
   plan:{entry:100,sl:99,tp1:101,tp2:102,tp3:103}}};
  return {store,service,market,userId};
 }
@@ -60,12 +60,12 @@ test('per-account setting persists; old client updates retain enabled schedule',
  assert.equal((await service.state(userId)).control.tradingWindow.allowed,true);
 });
 
-test('new TF2 policy blocks old executor entries but keeps management available',async()=>{
+test('new TF1 policy blocks old executor entries but keeps management available',async()=>{
  const {store,service,market,userId}=await harness(my(10));
  store.podsByUser.get(userId).connectorVersion='1.0.0-ea-local';
  const state=await service.state(userId);assert.equal(state.control.exitPolicyReady,false);assert.equal(state.control.canEnter,false);
  assert.deepEqual(await service.dispatchMarkets([market]),{queued:0});
- await assert.rejects(service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='TF2_EA_UPGRADE_REQUIRED');
+ await assert.rejects(service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),e=>e.code==='TF1_EA_UPGRADE_REQUIRED');
 });
 
 test('news choice is independent of overnight session and survives validation',()=>{

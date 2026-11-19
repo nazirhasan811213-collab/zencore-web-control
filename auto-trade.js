@@ -205,8 +205,8 @@
   let modeDraft = null;
   const editingMode=()=>byId('riskTimeframe')?.value==='15'?'TF15_INTRA':'TF2_SCALPING';
   const tradeFields = [
-    ['TF2_SCALPING','XAUUSD','gold','lotPerLayer','layers','tf2Total'],
-    ['TF2_SCALPING','BTCUSD','fx','btcTf2Lot','btcTf2Layers','btcTf2Total'],
+    ['TF2_SCALPING','XAUUSD','gold','lotPerLayer','layers','tf1Total'],
+    ['TF2_SCALPING','BTCUSD','fx','btcTf1Lot','btcTf1Layers','btcTf1Total'],
     ['TF15_INTRA','XAUUSD','gold','tf15LotPerLayer','tf15Layers','tf15Total'],
     ['TF15_INTRA','BTCUSD','fx','btcTf15Lot','btcTf15Layers','btcTf15Total']
   ];
@@ -233,7 +233,7 @@
       setText(totalId,valid?(Number(lot)*Number(layers)).toFixed(3)+' lot':'—');
       if(enabled)active[mode].push(valid?'ENTRY AKTIF':'SEMAK INPUT');
     }
-    for(const [mode,statusId] of [['TF2_SCALPING','tf2EntryState'],['TF15_INTRA','tf15EntryState']]){
+    for(const [mode,statusId] of [['TF2_SCALPING','tf1EntryState'],['TF15_INTRA','tf15EntryState']]){
       const states=active[mode];
       setText(statusId,states.includes('SEMAK INPUT')?'SEMAK INPUT':states.length?'ENTRY AKTIF':'TIADA ENTRY');
     }
@@ -273,7 +273,7 @@
     }
     const settings = state.settings;
     setText('summaryExposure', settings?.totalLot == null ? '—' : Number(settings.totalLot).toFixed(3));
-    setText('summaryLayers', settings ? ['TF2_SCALPING','TF15_INTRA'].map(mode=>{const cfg=Core.effectiveSettings({...settings,strategyMode:mode},'XAUUSD');return (mode==='TF2_SCALPING'?'TF2':'TF15')+' '+(cfg.enabled?cfg.totalLot+' lot':'OFF');}).join(' · ') : 'Belum dikonfigurasi');
+    setText('summaryLayers', settings ? ['TF2_SCALPING','TF15_INTRA'].map(mode=>{const cfg=Core.effectiveSettings({...settings,strategyMode:mode},'XAUUSD');return (mode==='TF2_SCALPING'?'TF1':'TF15')+' '+(cfg.enabled?cfg.totalLot+' lot':'OFF');}).join(' · ') : 'Belum dikonfigurasi');
   }
 
   function renderPositions(state) {
@@ -289,7 +289,7 @@
       const pnl = Number(position.profitUsd || 0);
       return `<tr>
         <td><b>${escape(position.symbol)}</b><small>#${escape(position.ticket)}</small></td>
-        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'3'))}</small></td>
+        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'1'))}</small></td>
         <td><b>${escape(position.volume)}</b><small>lot</small></td>
         <td><b>${escape(price(position.entry, position.symbol))} → ${escape(price(position.currentPrice, position.symbol))}</b><small>${escape(timeText(position.openedAt))}</small></td>
         <td><b>${escape(price(position.activeSl, position.symbol))}</b><small>Initial ${escape(price(position.exitPlan?.sl ?? position.initialSl, position.symbol))}</small></td>
@@ -554,7 +554,7 @@
       if (!event.target.matches('input, select')) return;
       if(event.target.closest('.symbol-fieldset'))return;
       const field=tradeFields.find(([, , ,lotId,layerId])=>[lotId,layerId].includes(event.target.id));
-      if(field){byId('riskTimeframe').value=field[0]==='TF15_INTRA'?'15':'2';byId('riskSymbol').value=field[1];}
+      if(field){byId('riskTimeframe').value=field[0]==='TF15_INTRA'?'15':'1';byId('riskSymbol').value=field[1];}
       settingsDirty = true;
       updateRiskPreview();
     });

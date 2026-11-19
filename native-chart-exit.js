@@ -13,14 +13,19 @@ function yellowExitSide(market) {
 function forActiveSetup(market, latest, positions, mode, now) {
   const s=latest?.payload?.analysisSnapshot, t=market?.signalObservedAt;
   const side=yellowExitSide(market),yellow=side!==null&&side===s?.side;
+  // Carry only an explicit confirmed close across the TF1 rollout. The old
+  // executed setup keeps its original identity, fills and protection levels.
+  const migratedClose=String(market?.timeframe)==='1'&&s?.executionTimeframe==='2'&&
+    s.analysisSopVersion==='NORMAL_20261001_TF2_RIBBON_V1'&&mode==='TF2_SCALPING'&&
+    market.feedVersion==='TF1_REALTIME_V1'&&market.confirmed===true;
   if((market?.nativeChartExitAll!==true&&!yellow)||market.feedChannel!=='EXECUTION'||
      !['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.setupMeta?.entryPolicyVersion)||
      latest?.status!=='EXECUTED'||!['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(s?.entryPolicyVersion)||
      !Number.isFinite(t)||now-t>30000||t>now+5000||
-     String(market.timeframe)!==String(s.executionTimeframe)||
+     (!migratedClose&&String(market.timeframe)!==String(s.executionTimeframe))||
      !positions.some(p=>p.origin!=='MANUAL'&&p.symbol===market.symbol&&
        (p.strategyMode||'TF2_SCALPING')===mode)) return market;
-  return {...market,setupKey:s.setupKey,
+  return {...market,...(migratedClose?{timeframe:'2',sourceExecutionTimeframe:'1'}:{}),setupKey:s.setupKey,
     strategyNormal:{...market.strategyNormal,side:s.side,entrySopVersion:s.analysisSopVersion},
     positionManagement:{action:'EXIT_ALL',confirmedChartClose:market.confirmed===true&&(yellow||market.nativeChartExitAll===true),reason:yellow?(s.side==='BUY'?'Candle kuning garis merah — CLOSE ALL BUY':'Candle kuning garis hijau — CLOSE ALL SELL'):'Native chart Close Separuh / Close All'}};
 }
