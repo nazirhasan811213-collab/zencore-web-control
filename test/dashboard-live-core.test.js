@@ -50,3 +50,27 @@ test('dashboard account summary requires a fresh MT5 snapshot and never invents 
  delete view.market.rsi;delete view.market.momentum;
  assert.equal(pineAnalysis(view,now)[1],'RSI — • Momentum —');
  });
+
+test('recent analysis remains readable between Pine updates without being marked live',()=>{
+ const {available,context}=require('../dashboard-live-core');
+ const v={...view(2,now-80000,4000),status:'STALE'};
+ v.market.setupMeta={entryQuality:{score:67}};
+ v.market.strategyNormal={side:'BUY',state:'WAIT',reason:'Tunggu candle tutup',sop:{forecast:'BULLISH'}};
+ v.market.hemaFast=4001;v.market.hemaSlow=4000;v.market.waveTrend1=12;v.market.waveTrend2=10;
+ assert.equal(fresh(v,now),false);
+ assert.equal(available(v,now),true);
+ assert.equal(context(v,now).score,67);
+ assert.match(context(v,now).summary,/HEMA Bullish.*Momentum Bullish/);
+ assert.equal(context(v,now).advice,'Tunggu candle tutup');
+ assert.equal(context(v,now+100001),null);
+ assert.equal(available({...v,status:'INVALID_TIME'},now),false);
+});
+test('new SSE analysis replaces older polling data without borrowing another timeframe',()=>{
+ const {latestView}=require('../dashboard-live-core');
+ const polled={...view(2,now-80000,4000),entryReady:false,status:'STALE'};
+ const pushed=view(2,now,4001);
+ assert.equal(latestView(polled,pushed).market.price,4001);
+ assert.equal(latestView(polled,pushed).entryReady,false);
+ assert.equal(latestView(pushed,polled).market.price,4001);
+ assert.equal(latestView(undefined,pushed).market.price,4001);
+});

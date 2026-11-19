@@ -1550,10 +1550,12 @@ async function handlePodProvisioning(req, res) {
 // Read-only analysis projection. Never pass this snapshot to order dispatch.
 async function fetchLocalAnalysisMarkets(){
   const markets=await fetchLocalMarkets();
-  const tf2=require('./tf2-ribbon-market-hub').analysisMarkets();
-  if(!tf2.length)return markets;
-  const symbols=new Set(tf2.map(m=>m.symbol));
-  return markets.filter(m=>!(String(m.timeframe)==='2'&&symbols.has(m.symbol))).concat(tf2);
+  const analysis=[
+    ...require('./tf2-ribbon-market-hub').analysisMarkets(),
+    ...require('./tf15-market-hub').analysisMarkets()
+  ];
+  const keys=new Set(analysis.map(m=>m.symbol+'|'+m.timeframe));
+  return markets.filter(m=>!keys.has(m.symbol+'|'+m.timeframe)).concat(analysis);
 }
 
 function fetchLocalMarkets() {

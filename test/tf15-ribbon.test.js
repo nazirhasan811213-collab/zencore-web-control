@@ -128,3 +128,20 @@ test('TF15 new entries require BE policy metadata; old feed remains available fo
  const next=fixture();delete require.cache[require.resolve('../tf15-market-hub')];const m=require('../tf15-market-hub').ingest(next.batch,next.now)[0];a.equal(C.createEntryDecision(m).snapshot.exitLockVersion,'PINE_STEPLOCK_BE_TF15_V1');
  a.equal(S.POLICY.tp1Lock,0);a.equal(S.POLICY.tp3Extension,null);
 });
+
+test('TF15 analysis follows the newest Dashboard observation for its own pair',()=>{
+ delete require.cache[require.resolve('../tf15-market-hub')];
+ const isolated=require('../tf15-market-hub'),f=fixture();
+ f.batch.feedChannel='EXECUTION';
+ const first=isolated.ingest(f.batch,f.now)[0];
+ const dashboard=JSON.parse(JSON.stringify(f.batch));
+ dashboard.feedChannel='DASHBOARD';dashboard.emittedAt+=1000;dashboard.markets[0][6]=4102;
+ isolated.ingest(dashboard,f.now+1000);
+ const analysis=isolated.analysisMarkets(f.now+1000).find(m=>m.symbol==='XAUUSD');
+ a.equal(analysis.feedChannel,'DASHBOARD');
+ a.equal(analysis.price,4102);
+ a.equal(analysis.timeframe,'15');
+ a.equal(C.createEntryDecision(analysis),null);
+ a.equal(first.price,4100);
+ a.equal(isolated.analysisMarkets(f.now+18001001).length,0);
+});

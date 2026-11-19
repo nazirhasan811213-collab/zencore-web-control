@@ -8,14 +8,15 @@
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
  function fresh(v){return !failed&&Live.fresh(v);}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
- function state(v){return !fresh(v)?'WAITING':ready(v)?'SOLID '+v.market.strategyNormal.side:v.displayState==='READY'?'WAIT CONFIRMATION':v.displayState.replaceAll('_',' ');}
+ function state(v){return !fresh(v)?'WAITING':ready(v)?'SOLID '+v.market.strategyNormal.side:v.displayState==='READY'?'WAIT CONFIRMATION':(v.displayState||v.market?.strategyNormal?.state||'WATCH').replaceAll('_',' ');}
  function tone(v){return ready(v)?v.market.strategyNormal.side==='BUY'?'buy':'sell':'';}
  function dot(id,live){$(id).classList.toggle('live',live);}
  async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
  function views(){
   return symbols.flatMap(symbol=>[2,15].map(timeframe=>{
    const view=payload?.pairs?.find(p=>p.symbol===symbol)?.views?.find(v=>Number(v.timeframe)===timeframe);
-   return {...(view||{timeframe,status:'WAITING',displayState:'WAITING',market:null}),symbol,timeframe};
+   const pushed=pushedViews.get(symbol)?.find(v=>Number(v.timeframe)===timeframe);
+   return {...(Live.latestView(view,pushed)||{timeframe,status:'WAITING',displayState:'WAITING',market:null}),symbol,timeframe};
   }));
  }
  function quotesFor(symbol){
@@ -111,7 +112,7 @@
    stream.addEventListener('timeframes',e=>{try{
     const j=JSON.parse(e.data);
     if(j.ok&&j.symbol===symbol&&Array.isArray(j.views)){
-     pushedViews.set(symbol,j.views);renderLive();
+     pushedViews.set(symbol,j.views);render();
     }
    }catch(_){}});
    const disconnected=()=>{pushedViews.delete(symbol);renderLive();};
@@ -123,43 +124,45 @@
   const live=all.filter(fresh).length;dot('feedDot',live>0);$('feedState').textContent=failed?'TERPUTUS':live?live+'/'+(symbols.length*2)+' FEED LIVE':'TUNGGU DATA';
   for(const [symbol,{fields}] of cardsBySymbol){
    const tf=Number(fields.timeframe.value),v=all.find(v=>v.symbol===symbol&&v.timeframe===tf);
-   const current=fresh(v)&&v.market?.symbol===symbol,n=current?v.market.strategyNormal:null;
+   const current=fresh(v),available=Live.available(v)&&v.market?.symbol===symbol;
+   const n=available?v.market.strategyNormal:null,context=available?Live.context(v):null;
    const plan=n?.plan,assessment=current?v.assessment:null;
    const setup=ready(v)?'Signal '+n?.side:n?.side?'Menunggu entry · '+n.side:'Menunggu setup';
-   fields.state.textContent=current?setup:'Menunggu data segar';
+   fields.state.textContent=current?setup:available?'Analisis terakhir · '+context.ageSeconds+'s · '+(n?.side||'Tunggu setup'):'Menunggu data Pine';
    fields.state.className='dashboard-pair-state '+tone(v);
    for(const key of ['entry','sl','tp1','tp2','tp3'])fields[key].textContent=format(plan?.[key],symbol);
    const range=assessment?.range;
-   const scored=assessment?.status==='AVAILABLE'&&Number.isFinite(assessment.overall);
-   fields.strengthTf.textContent='TF'+tf;
-   fields.strengthScore.textContent=scored?assessment.overall+'%':'—';
+   const technicalScore=assessment?.status==='AVAILABLE'&&Number.isFinite(assessment.overall)?assessment.overall:null;
+   const score=technicalScore??context?.score;
+   const scored=score!==null&&score!==undefined;
+   fields.strengthTf.textContent='TF'+tf+(technicalScore===null&&scored?' · Pine':'');
+   fields.strengthScore.textContent=scored?score+'%':'—';
    fields.strengthPanel.classList.toggle('has-score',scored);
    fields.strength.textContent=scored
     ?range?'Julat '+format(range.low,symbol)+'–'+format(range.high,symbol):''
-    :assessment?.reason||'';
+    :assessment?.reason||n?.reason||'';
    fields.analysis.href=link(symbol,tf);
   }
   for(const view of all){
    const {symbol,timeframe}=view;
    const {row,status,metrics,message,readings,values}=marketRows.get(symbol+'|'+timeframe);
    row.hidden=filter!=='both'&&String(timeframe)!==filter;
-   const m=view.market,n=m?.strategyNormal,advisor={...m?.dashboard,...n?.sop?.advisor},levels=view.nearbyLevels||{};
+   const m=view.market,n=m?.strategyNormal,levels=view.nearbyLevels||{};
    const current=fresh(view)&&m?.symbol===symbol;
-   const side=current&&['BUY','SELL'].includes(n?.side)?n.side:null;
-   status.textContent=side||(current?'Tunggu setup':'Tiada data segar');
+   const context=m?.symbol===symbol?Live.context(view):null,available=!!context;
+   const side=available&&['BUY','SELL'].includes(n?.side)?n.side:null;
+   status.textContent=available?(side||'Tunggu setup')+(current?'':' · Data terakhir '+context.ageSeconds+'s'):'Tiada data Pine semasa';
    status.className='compact-market-state '+(side==='BUY'?'buy':side==='SELL'?'sell':'');
-   message.hidden=current;
-   readings.hidden=!current;
-   const momentum=m?.momentum||advisor.momentum;
+   message.hidden=available;
+   readings.hidden=!available;
+   const momentum=context?.momentum;
    const support=format(m?.nearestSupport??levels.supports?.[0],symbol);
    const resistance=format(m?.nearestResistance??levels.resistances?.[0],symbol);
    const facts=[typeof momentum==='string'&&momentum.trim()?momentum:null,support!=='—'?'Support '+support:null,resistance!=='—'?'Resistance '+resistance:null].filter(Boolean);
-   metrics.textContent=current?facts.join(' · '):'';
-   if(current){
-    const coachAdvice=typeof advisor.aiCoach==='string'?advisor.aiCoach.match(/\[NASIHAT\]\s*:[ \t]*([^\r\n]+)/i)?.[1]:null;
-    const data=[m.marketStructure||advisor.trend||advisor.dashboard?.structure,
-     m.proTip||advisor.proTip,advisor.mtfSummary,advisor.advice||coachAdvice];
-    values.forEach((value,index)=>{value.textContent=typeof data[index]==='string'&&data[index].trim()?data[index]:'—';});
+   metrics.textContent=available?facts.join(' · '):'';
+   if(available){
+    const data=[context.trend,context.guide,context.summary,context.advice];
+    values.forEach((value,index)=>{value.textContent=data[index];});
    }
   }
  }
@@ -179,6 +182,6 @@
  }
  api('/auth/me').then(j=>{$('welcomeName').textContent=j.user?.displayName||'Trader';}).catch(()=>{});
  $('logoutButton').onclick=async()=>{$('logoutButton').disabled=true;try{await fetch('/auth/logout',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});}finally{location.replace('/login');}};
- selectChart();render();startLiveStream();poll();connections();const clockTimer=setInterval(renderLive,1000);window.addEventListener('pagehide',()=>{stopped=true;streams.forEach(stream=>stream.close());clearInterval(clockTimer);});
+ selectChart();render();startLiveStream();poll();connections();const clockTimer=setInterval(render,1000);window.addEventListener('pagehide',()=>{stopped=true;streams.forEach(stream=>stream.close());clearInterval(clockTimer);});
 })();
 

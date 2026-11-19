@@ -56,4 +56,14 @@ function ingest(batch,now=Date.now()){
  return out;
 }
 function markets(){return [...entries.values()].filter(m=>Date.now()-m.receivedAt<=18000000);}
-module.exports={ingest,markets};
+function analysisMarkets(now=Date.now()){
+ const latest=new Map();
+ for(const market of channels.values()){
+  if(now-market.receivedAt>18000000)continue;
+  const old=latest.get(market.symbol);
+  if(!old||market.signalObservedAt>old.signalObservedAt||
+    market.signalObservedAt===old.signalObservedAt&&market.receivedAt>old.receivedAt)latest.set(market.symbol,market);
+ }
+ return [...latest.values()];
+}
+module.exports={ingest,markets,analysisMarkets};
