@@ -1997,6 +1997,27 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'home.html', 'text/html; charset=utf-8');
   }
 
+  if (AUTH_ENABLED && req.method === 'GET' && pathname === '/arus/theme.css') {
+    return sendAuthAsset(res, 'arus-theme.css', 'text/css; charset=utf-8');
+  }
+
+  if (AUTH_ENABLED && req.method === 'GET' && (pathname === '/arus' || pathname.startsWith('/arus/'))) {
+    const session = await requireSession(req, res, '/login');
+    if (!session) return;
+    const { role } = session.user;
+    if (!['client', 'ib', 'viewer'].includes(role)) return redirect(res, '/app');
+    const portal = require('./arus-portal');
+    const page = portal.pageFor(pathname, role);
+    if (!page) return sendJson(res, 404, { ok: false, error: 'Halaman Arus tidak tersedia.' });
+    if (page.redirect) return redirect(res, page.redirect);
+    res.writeHead(200, {
+      ...securityHeaders(AUTH_CSP),
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store'
+    });
+    return res.end(portal.render(page, role));
+  }
+
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/analysis') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;

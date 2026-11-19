@@ -1,0 +1,24 @@
+.arus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .8rem 1.5rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+  border-block-end: 1px solid #42617e;
+  background: linear-gradient(125deg, #152740, #0d182b);
+  box-shadow: 0 5px 0 #080e19, 0 14px 26px #0005;
+  color: #eaf4ff;
+}
+.arus-bar nav { display: flex; flex-wrap: wrap; gap: .5rem; }
+.arus-bar a {
+  color: #eaf4ff;
+  padding: .55rem .8rem;
+  text-decoration: none;
+  border: 1px solid #44617d;
+  border-radius: .55rem;
+  background: linear-gradient(#294662, #1a2b42);
+  box-shadow: inset 0 1px #ffffff33, 0 3px #0b1420;
+}
+.arus-bar a:hover { color: #a5f5e7; }
+.arus-bar a:focus-visible { outline: 2px solid #80ebdf; outline-offset: 3px; }
+.arus-bar .arus-brand { background: linear-gradient(#abfaec, #5fd0c4); color: #102331; font-weight: 800; }
