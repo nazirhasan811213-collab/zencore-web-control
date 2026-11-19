@@ -1,7 +1,7 @@
 const {chromium}=require('playwright');
 const fs=require('fs'),assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  const advisor=tf=>({mtfSummary:tf===1?'TF Sepakat NAIK. Fokus BUY.':'TF Sepakat TURUN. Fokus SELL.',trend:tf===1?'Uptrend':'Downtrend',momentum:tf===1?'Bullish':'Bearish',proTip:'Entry pada harga zon.',advice:'Check resistance dulu.',aiCoach:'• [TREND]: '+(tf===1?'NAIK':'TURUN')+'. • [MOMENTUM]: Masih kuat. • [HALANGAN]: Dekat resistance.'});
  let missing=false,recoveryMode=false,clockOffset=0,polls=0,ageTf1=0;

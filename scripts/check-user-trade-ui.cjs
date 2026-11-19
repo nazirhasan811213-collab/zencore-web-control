@@ -1,7 +1,7 @@
 const {chromium}=require('playwright'),fs=require('fs'),a=require('node:assert/strict');
 const M=require('../admin-user-trade-service');
 (async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  const at=Date.now(),DAY=86400000;let fail=false,settings=M.defaults(),posted=null,reads=0;
  const connected=(online,lastTradeAt,on)=>({lastSeenAt:at-(online?1000:DAY),connection:{online},transport:'EA_LOCAL',tradeMode:'REAL',serverMask:'****Live',accountMask:'****1234',control:{desiredState:on?'ON':'STOPPED',effectiveState:on?'ON':'STOPPED'},tradingActivity:{lastTradeAt,openPositions:0,executedSetups7d:online?3:0,executedSetups30d:4}});

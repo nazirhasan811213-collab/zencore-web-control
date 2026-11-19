@@ -1,7 +1,7 @@
 'use strict';
 const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:assert/strict'),V=require('../ib-demo-real-view'),{dataset}=require('../ib-demo-data'),Core=require('../auto-trade-core');
 (async()=>{
- const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[];let saved={enabled:true,tp1:1.5,tp2:2.5,tp3:3.5,sl:4},posted=null;
+ const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[];let saved={enabled:true,tp1:1.5,tp2:2.5,tp3:3.5,sl:4},posted=null;
  page.on('pageerror',e=>errors.push(e.message));
  const state=()=>{const s=V.state({data:dataset()},Date.now());s.settings.manualExit=saved;s.control.desiredState='STOPPED';s.pod.manualExitVersion='MANUAL_TF2_EXIT_V3';return s;};
  await page.route('**/*',async r=>{const p=new URL(r.request().url()).pathname;

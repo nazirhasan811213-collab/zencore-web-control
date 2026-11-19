@@ -1,7 +1,7 @@
 'use strict';
 const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:assert/strict'),V=require('../ib-demo-real-view'),{dataset}=require('../ib-demo-data');
 (async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],calls=[];
+ const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],calls=[];
  let effective='STOPPED',diagnostics='failure',stopFails=true,acceptDialog=false;
  let initial=V.state({data:dataset()},Date.now()).settings;
  initial.capitalUsd=900;

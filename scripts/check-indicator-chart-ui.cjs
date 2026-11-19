@@ -1,6 +1,6 @@
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1050}}),errors=[],requests=[];
+ const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1440,height:1050}}),errors=[],requests=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push({method:r.method(),url:r.url()}));
  const now=Date.now(),latest=Math.floor(now/900000)*900000;let stale=false,missing=false;
  const candles=tf=>Array.from({length:tf===1?48:18},(_,i)=>{const close=4100+Math.sin(i*.4)*3+i*.15;return {time:latest-((tf===1?48:18)-1-i)*tf*60000,timeframe:String(tf),observedAt:now,open:close-.3,high:close+.6,low:close-.8,close,hema20:close-.8,hema40:close-1.6,solid:i===35?'BUY':null};});
