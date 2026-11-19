@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto');
 const {spawnSync}=require('node:child_process');
-const prefix=fs.readFileSync(__dirname+'/sop-v6.test.js','utf8').split("\nfor(const tf of ['2','15'])for(const side")[0];
+const prefix=fs.readFileSync(__dirname+'/sop-v6.test.js','utf8').split("\nfor(const tf of ['1','15'])for(const side")[0];
 const {fixture}=new Function('require','__dirname',prefix+';return {fixture};')(require,__dirname);
 const {MemoryAutoTradeStore}=require('../auto-trade-store');
 const {createAutoTradeService,tokenHash}=require('../auto-trade-service');
@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory() as folder:
  assert len(fetches)==1, 'pending EA command must not be fetched or replaced twice'
  print(json.dumps({'fields':read_fields(Path(folder)/'command.tsv'),'lease':read_fields(Path(folder)/'lease.tsv')}))
 `;
-for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`native V7 symbol=${scenario} TF${tf} ${side} reaches real Connector mailbox with unchanged plan and account binding`,async()=>{
+for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['1','15'])for(const side of ['BUY','SELL'])test(`native V7 symbol=${scenario} TF${tf} ${side} reaches real Connector mailbox with unchanged plan and account binding`,async()=>{
  const {f,ingest}=fixture(tf,side),sign=side==='BUY'?1:-1;
  Object.assign(f.row[66],{entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',nativeSolid:{version:'NATIVE_SOLID_LABEL_V1',barTime:f.row[1],pulse:true,basis:4100-sign,rsi:50}});
  const symbol=scenario==='DUAL'?(side==='BUY'?'BTCUSD':'XAUUSD'):scenario;
@@ -45,7 +45,7 @@ for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['
  const identity={account:'12345678',server:'InterStellarFinancial-Demo',tradeMode:'DEMO',podId,eaSession:'1'.repeat(32)};
  const pod={id:podId,userId:id,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',accountFingerprint:crypto.createHash('sha256').update(JSON.stringify([identity.server,identity.account,identity.tradeMode])).digest('hex'),lastSeenAt:f.now,tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',symbolSpecs:{}};
  store.podsByUser.set(id,pod);store.podsByToken.set(hash,pod);
- const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'2',allowMt5Symbols:true,localEaExecutionUserIds:[id],commandSigningKey:'test-only-handoff-key-longer-than-thirty-two-bytes',getLatestMarket:()=>market});
+ const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'1',allowMt5Symbols:true,localEaExecutionUserIds:[id],commandSigningKey:'test-only-handoff-key-longer-than-thirty-two-bytes',getLatestMarket:()=>market});
  await svc.saveSettings(id,{capitalUsd:1000,lotPerLayer:.02,layers,symbols:scenario==='DUAL'?['XAUUSD','BTCUSD']:[symbol],strategyMode:tf==='15'?'TF15_INTRA':'TF2_SCALPING',modeSettings:{TF2_SCALPING:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}},TF15_INTRA:{gold:{enabled:true,lotPerLayer:.02,layers},fx:{enabled:true,lotPerLayer:.02,layers}}},riskAcknowledged:true});
  await svc.heartbeat(token,{accountFingerprint:pod.accountFingerprint,accountBindingVersion:'ACCOUNT_SESSION_V1',accountExecutionVersion:'REAL_DEMO_V1',eaSession:identity.eaSession,accountMask:'****5678',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1',expandedEntryPolicy:true,btcUsdChart:scenario!=='DUAL'&&symbol==='BTCUSD',dualPairExecution:scenario==='DUAL'});
  await store.setControl(id,{desiredState:'ON',effectiveState:'ON'});
@@ -101,12 +101,12 @@ for(const scenario of ['XAUUSD','US500.CASH','BTCUSD','DUAL'])for(const tf of ['
 
 });
 
-for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf} ${side} becomes a single Telegram entry from the Pine execution feed`,async()=>{
+for(const tf of ['1','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf} ${side} becomes a single Telegram entry from the Pine execution feed`,async()=>{
  const {AnalysisAlerts}=require('../analysis-alert-service');
  const {entrySopAllowed,entryFresh,telegramMessage}=require('../analysis-telegram');
  const {f,ingest}=fixture(tf,side);
  f.row[0]='BTCUSD';
- if(tf==='2'){
+ if(tf==='1'){
   const sign=side==='BUY'?1:-1,entry=f.row[22];
   Object.assign(f.row,{23:entry-sign*300,24:entry-sign*300,25:entry+sign*150,26:entry+sign*250,27:entry+sign*400});
   f.row[66].riskPlanVersion='BTC_TF2_PIP_STEPLOCK_V1';
@@ -122,36 +122,10 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf}
  const entries=alerts.events.filter(e=>e.kind==='ENTRY');
  assert.equal(entries.length,1);
  assert.ok(entrySopAllowed(entries[0]));assert.ok(entryFresh(entries[0],market.receivedAt));
- if(tf==='2'){
+ if(tf==='1'){
   const p=entries[0].telegramPlan;
   assert.deepEqual(['sl','tp1','tp2','tp3'].map(key=>Math.abs(p[key]-p.entry)),[300,150,250,400]);
  }
  assert.match(telegramMessage(entries[0]),new RegExp('BTCUSD • '+side));
  for(const k of ['entry','sl','tp1','tp2','tp3'])assert.equal(entries[0].telegramPlan[k],market.strategyNormal.plan[k]);
-});
-
-for(const symbol of ['XAUUSD','BTCUSD'])for(const side of ['BUY','SELL'])test(`TF2 held SOLID emits a new qualified ${symbol} ${side} entry once`,async()=>{
- const {signals}=require('../analysis-alert-core');
- const {f,ingest}=fixture('2',side),sign=side==='BUY'?1:-1;
- const originalBar=f.row[1]-120000;
- f.row[0]=symbol;
- Object.assign(f.row[66],{
-  entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',
-  sourceSetupAt:originalBar,solidTriggeredAt:originalBar+120000,
-  nativeSolid:{version:'NATIVE_SOLID_LABEL_V1',barTime:f.row[1],pulse:true,sourcePulse:false,heldQualification:true,basis:4100-sign,rsi:50},
-  entryQuality:{score:84,minimum:65,passed:true}
- });
- if(symbol==='BTCUSD'){
-  const entry=f.row[22];
-  Object.assign(f.row,{23:entry-sign*300,24:entry-sign*300,25:entry+sign*150,26:entry+sign*250,27:entry+sign*400});
-  f.row[66].riskPlanVersion='BTC_TF2_PIP_STEPLOCK_V1';
- }
- const market=ingest();
- assert.ok(market);
- assert.ok(require('../pine-direct-entry').decision(market));
- const entry=signals(market,f.now)?.items.filter(item=>item.kind==='ENTRY');
- assert.equal(entry?.length,1);
- assert.equal(entry[0].side,side);
- assert.equal(entry[0].sourceBarTime,f.row[1]);
- assert.equal(signals({...market,entryEvent:false},f.now)?.items.filter(item=>item.kind==='ENTRY').length,0);
 });

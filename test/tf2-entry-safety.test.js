@@ -4,9 +4,9 @@ const Safety=require('../tf2-entry-safety'),S=require('../tf2-ribbon-scalping'),
 function fixture(side='BUY'){
  const now=Date.now()+ ++seq,sign=side==='BUY'?1:-1,row=Array(67).fill(null),t=now-180000;
  Object.assign(row,{0:'XAUUSD',1:t,6:4100,13:sign*2,14:sign,16:35,21:4,22:4100,23:4100-sign*3,24:4100-sign*3,25:4100+sign*4,26:4100+sign*8,27:4100+sign*12,28:true,29:side==='BUY',34:side,35:true,36:true,37:true,38:true,39:true,40:true,41:true,42:side==='BUY'?'BULLISH':'BEARISH',43:60,48:'HOLD',49:'HOLD',52:100,56:0,57:'INITIAL',58:'NONE',59:false});
- row[65]={version:'HEMA2_LIVE_V1',tf2:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
+ row[65]={version:'HEMA1_LIVE_V1',tf1:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}};
  row[66]={entryRuleVersion:S.RULE,exitLockVersion:S.POLICY.exitLockVersion,entryPolicyVersion:S.POLICY.entryPolicyVersion,planMode:"Fixed R:R",riskPlanVersion:S.RISK,atrPeriod:10,solidSide:side,solidHoldActive:true,solidClosedAt:null,solidTriggeredAt:t,setupAt:t,sourceEntry:4100-sign,solidEligible:true,completedAt:now,completionPrice:4100,riskAtrReference:4,riskStructure:4100-sign*2,riskTick:.01,entryEvent:true,entryAuthorizedAt:now,dashboardAi:{momentum:side==='BUY'?'Bullish 🟢':'Bearish 🔴',mtfScore:sign,dashboard:{mtfTimeframes:['3','5','10']}}};
- return {row,now,batch:{feedVersion:'TF2_REALTIME_V1',timeframe:'2',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
+ return {row,now,batch:{feedVersion:'TF1_REALTIME_V1',timeframe:'1',schemaVersion:'32.3-EXIT-STEPLOCK',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',feedChannel:'EXECUTION',confirmed:false,emittedAt:now,markets:[row]}};
 }
 
 let clock=100000;
@@ -36,7 +36,7 @@ test('transition signal does not repeat each candle; reason identifies ATR high/
  let s=replay(5);a.equal(s.event,'CHOP_BLOCK');a.match(Safety.message(Safety.evidence(s)),/ATR tinggi/);s=Safety.step(s,candle(102,101,5));a.equal(s.event,null);
  a.match(Safety.message(Safety.evidence(replay(1))),/ATR rendah/);
 });
-function guarded(){const f=fixture();f.row[1]=f.now-120000;f.batch.confirmed=true;Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,decisionTimingVersion:'TF2_BAR_CLOSE_V1',decisionBarCloseAt:f.now,entrySafety:{version:Safety.VERSION,barTime:f.row[1],ready:true,chopBlocked:false,atr:3,flips:2,event:''}});return f;}
+function guarded(){const f=fixture();f.row[1]=f.now-60000;f.batch.confirmed=true;Object.assign(f.row[66],{entryPolicyVersion:S.SOLID_POLICY,decisionTimingVersion:'TF1_BAR_CLOSE_V1',decisionBarCloseAt:f.now,entrySafety:{version:Safety.VERSION,barTime:f.row[1],ready:true,chopBlocked:false,atr:3,flips:2,event:''}});return f;}
 for(const kind of ['high','low','warmup','stale','unknown','forged'])test('server contract rejects '+kind+' even if READY forced',()=>{
  delete require.cache[require.resolve('../tf2-ribbon-market-hub')];const H=require('../tf2-ribbon-market-hub'),f=guarded(),e=f.row[66].entrySafety;
  if(['high','low','forged'].includes(kind)){e.atr=kind==='low'?1:5;e.chopBlocked=kind!=='forged';}if(kind==='warmup')e.ready=false;if(kind==='stale')e.barTime--;if(kind==='unknown')e.version='unknown';
@@ -53,8 +53,8 @@ test('Telegram closed Execution only, fresh and deduplicated; delivery independe
  Object.assign(m.strategyNormal.sop.entrySafety,{chopBlocked:true,atr:5,event:'CHOP_BLOCK'});
  const e=Safety.signal(m,f.now);a.match(e.guideText,/ATR tinggi/);await alerts.recordGuide(e);await alerts.recordGuide(e);a.equal(alerts.events.filter(x=>x.notificationKey===e.notificationKey).length,1);
  a.equal(Safety.signal({...m,confirmed:false},f.now),null);a.equal(Safety.signal({...m,feedChannel:'DASHBOARD'},f.now),null);a.equal(Safety.signal(m,f.now+60001),null);
- a.equal(require('../entry-delivery-check').checkEntryDelivery({payload:{side:'BUY',analysisSnapshot:d.snapshot}},m,f.now).reason,'TF2_ENTRY_SAFETY_BLOCKED');
- a.equal(require('../analysis-telegram').entrySopAllowed({timeframe:'2',side:'BUY',telegramSop:{entrySafety:m.setupMeta.entrySafety},telegramMarket:{sourceBarTime:m.sourceBarTime}}),false);
+ a.equal(require('../entry-delivery-check').checkEntryDelivery({payload:{side:'BUY',analysisSnapshot:d.snapshot}},m,f.now).reason,'TF1_ENTRY_SAFETY_BLOCKED');
+ a.equal(require('../analysis-telegram').entrySopAllowed({timeframe:'1',side:'BUY',telegramSop:{entrySafety:m.setupMeta.entrySafety},telegramMarket:{sourceBarTime:m.sourceBarTime}}),false);
  }finally{clearInterval(alerts.cleanupTimer);}
 });
 test('Pine has only ATR reversal trigger; obsolete safety states removed',()=>{

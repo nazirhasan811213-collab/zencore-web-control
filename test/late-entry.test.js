@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const Contract=require('../analysis-execution-contract');
 function market(side,price){
- return {symbol:'XAUUSD',timeframe:'2',price,receivedAt:Date.now(),strategyNormal:{state:'READY',side,
+ return {symbol:'XAUUSD',timeframe:'1',price,receivedAt:Date.now(),strategyNormal:{state:'READY',side,
   sop:{sopGreen:5,marketPower:70,forecast:side==='BUY'?'BULLISH':'BEARISH',gates:[{pass:true},{pass:true}]},
   plan:side==='BUY'?{entry:100,sl:99,tp1:101,tp2:102,tp3:103}:{entry:100,sl:101,tp1:99,tp2:98,tp3:97}}};
 }
@@ -11,7 +11,7 @@ test('late BUY and SELL are refused at TP1, beyond TP1, and at SL',()=>{
  for(const price of [99,98,101])assert.equal(Contract.createEntryDecision(market('SELL',price)),null);
  for(const side of ['BUY','SELL']){
   const decision=Contract.createEntryDecision(market(side,100));
-  assert.ok(decision);assert.equal(decision.snapshot.executionTimeframe,'2');
+  assert.ok(decision);assert.equal(decision.snapshot.executionTimeframe,'1');
   assert.equal(decision.snapshot.entry,100);
  }
 });

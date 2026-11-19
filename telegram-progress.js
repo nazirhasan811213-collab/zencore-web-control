@@ -1,6 +1,6 @@
 'use strict';
 const Turn=require('./telegram-turn-confirmation');
-const MAX_AGE={'2':60000,'15':30000};
+const MAX_AGE={'1':60000,'15':30000};
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 function fresh(time,at,maximum){return finite(time)&&time>0&&at-time>=-5000&&at-time<=maximum;}
 function validPlan(side,p){
@@ -19,7 +19,7 @@ function allowed(e,at=Date.now()){
 }
 function progress(previous,next,market,events,at=Date.now()){
  const tf=String(next.timeframe),maximum=MAX_AGE[tf];
- if(tf==='2'&&require('./tf2-bar-close').applies(market)&&!require('./tf2-bar-close').confirmed(market)){next.telegramProgress=previous?.telegramProgress||null;return [];}
+ if(tf==='1'&&require('./tf2-bar-close').applies(market)&&!require('./tf2-bar-close').confirmed(market)){next.telegramProgress=previous?.telegramProgress||null;return [];}
  const opened=events.find(e=>e.kind==='ENTRY'&&!e.telegramDuplicate);
  const closed=events.some(e=>e.kind==='CLOSE'&&e.percent===100);
  const active=opened?{side:opened.side,setupKey:opened.setupKey,plan:opened.telegramPlan,atrReference:opened.telegramSop?.riskAtrReference||opened.telegramSop?.atrReference}:previous?.activePlan;

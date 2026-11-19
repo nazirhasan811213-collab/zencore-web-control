@@ -8,8 +8,8 @@ const {createEntryDecision,entryConfirmationsPass,createManagementDecision}=requ
 function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
  const pending=new Map(),latest=new Map(),directPending=new Map(),closePending=new Map();
  // Ribbon Dashboard is display-only for BOTH TFs. Only EXECUTION can replace order authority.
- const tf2Ribbon=m=>['2','15'].includes(String(m?.timeframe))&&m?.strategyNormal?.entrySopVersion===`NORMAL_20261001_TF${m.timeframe}_RIBBON_V1`;
- const executionInput=m=>!tf2Ribbon(m)||m.feedChannel==='EXECUTION';
+ const tf1Ribbon=m=>['1','15'].includes(String(m?.timeframe))&&m?.strategyNormal?.entrySopVersion===`NORMAL_20261001_TF${m.timeframe}_RIBBON_V1`;
+ const executionInput=m=>!tf1Ribbon(m)||m.feedChannel==='EXECUTION';
  const key=m=>String(m?.symbol||'')+'|'+String(m?.timeframe||'');
  const tick=createCoalescingDispatcher(async()=>{
   let markets;
@@ -29,7 +29,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
   current.strategyNormal?.side===entry.strategyNormal?.side&&current.setupKey===entry.setupKey;}
  function onMarket(m){
   if(!executionInput(m))return;
-  if(!m||(!PineDirect.isEvent(m)&&!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'].includes(m.symbol))||!['2','3','15'].includes(String(m.timeframe)))return;
+  if(!m||(!PineDirect.isEvent(m)&&!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'].includes(m.symbol))||!['1','3','15'].includes(String(m.timeframe)))return;
   // A confirmed close is an event. A later HOLD snapshot cannot supersede it.
   if(m.feedChannel==='EXECUTION'&&m.confirmed===true&&(m.nativeChartExitAll===true||yellowExitSide(m))){
    closePending.set([key(m),m.sourceBarTime??m.time??m.signalObservedAt,m.setupKey].join('|'),m);
@@ -42,7 +42,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
    // Independent TradingView alerts can arrive in reverse channel order.
    // Only a fresh authorized execution with still-matching current confirmations survives.
    const matchingExit=!!createManagementDecision(m)&&m.setupKey&&m.setupKey===old.setupKey&&m.strategyNormal?.side===old.strategyNormal?.side;
-   if(!['2','3','15'].includes(String(m.timeframe))||m.feedChannel!=='EXECUTION'||(!matchingExit&&(!createEntryDecision(m)||!sameConfirmation(m,old))))return;
+   if(!['1','3','15'].includes(String(m.timeframe))||m.feedChannel!=='EXECUTION'||(!matchingExit&&(!createEntryDecision(m)||!sameConfirmation(m,old))))return;
   }else latest.set(k,m);
   // Keep a fresh execution event through matching dashboard confirmations only.
   // Changed direction, setup or failed confirmations revoke every pending entry.

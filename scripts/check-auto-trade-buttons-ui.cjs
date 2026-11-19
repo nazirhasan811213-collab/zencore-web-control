@@ -1,7 +1,7 @@
 'use strict';
 const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:assert/strict'),V=require('../ib-demo-real-view'),{dataset}=require('../ib-demo-data');
 (async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],calls=[];
+ const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],calls=[];
  let effective='STOPPED',diagnostics='failure',stopFails=true,acceptDialog=false;
  let initial=V.state({data:dataset()},Date.now()).settings;
  initial.capitalUsd=900;
@@ -9,9 +9,9 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
  page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>acceptDialog?d.accept():d.dismiss());
  await page.route('**/*',async r=>{const p=new URL(r.request().url()).pathname,method=r.request().method();
   if(p==='/auth/me')return r.fulfill({json:{ok:true,user:{id:'test-only',role:'client',status:'active'}}});
-  if(p==='/api/analysis/timeframes')return r.fulfill({json:{views:[{timeframe:2,status:'LIVE',market:{symbol:'XAUUSD',strategyNormal:{plan:{entry:4000,sl:3998}}}},{timeframe:15,status:'LIVE',market:{symbol:'XAUUSD',strategyNormal:{plan:{entry:4010,sl:4006}}}}]}});
+  if(p==='/api/analysis/timeframes')return r.fulfill({json:{views:[{timeframe:1,status:'LIVE',market:{symbol:'XAUUSD',strategyNormal:{plan:{entry:4000,sl:3998}}}},{timeframe:15,status:'LIVE',market:{symbol:'XAUUSD',strategyNormal:{plan:{entry:4010,sl:4006}}}}]}});
   if(p==='/api/auto-trade/state')return r.fulfill({json:state()});
-  if(p==='/api/auto-trade/execution-diagnostics')return r.fulfill(diagnostics==='failure'?{status:503,json:{error:'Diagnostic test failure'}}:{json:{commands:[{type:'PLACE_SETUP',symbol:'XAUUSD',timeframe:'2',status:'FAILED',resultCode:'LEASE_EXPIRED',createdAt:Date.now()}]}});
+  if(p==='/api/auto-trade/execution-diagnostics')return r.fulfill(diagnostics==='failure'?{status:503,json:{error:'Diagnostic test failure'}}:{json:{commands:[{type:'PLACE_SETUP',symbol:'XAUUSD',timeframe:'1',status:'FAILED',resultCode:'LEASE_EXPIRED',createdAt:Date.now()}]}});
   if(method==='PUT'&&p.startsWith('/api/auto-trade/')){
    const body=r.request().postDataJSON();calls.push({p,body});
    if(p.endsWith('/manual-exit')) initial.manualExit={tp1:2,tp2:4,tp3:6,sl:3,...body};
@@ -38,10 +38,10 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
   await page.locator('#riskTimeframe').selectOption('15');
   a.match(await page.locator('#riskEntry').textContent(),/4,?010/);
   a.equal(await page.locator('#applyRecommendationButton').isEnabled(),true);
-  await page.locator('#riskTimeframe').selectOption('2');
+  await page.locator('#riskTimeframe').selectOption('1');
   const box2=await page.locator('.tf-setting-card').nth(0).boundingBox();
   const box15=await page.locator('.tf-setting-card').nth(1).boundingBox();
-  a.equal(box2.y,box15.y,'TF2 and TF15 share a row on desktop');
+  a.equal(box2.y,box15.y,'TF1 and TF15 share a row on desktop');
   const values=async()=>page.locator('#settingsForm input,#settingsForm select').evaluateAll(xs=>xs.map(x=>[x.id,x.value,x.type==='checkbox'?x.checked:null]));const before=await values();
   await page.locator('#turnOnButton').click();await page.locator('#onDialog .dialog-cancel').click();a.equal(calls.length,0);
   await page.locator('#turnOnButton').click();await page.locator('#onConfirmation').fill('WRONG');await page.locator('#confirmOnButton').click();await page.getByText('Pengesahan ON tidak sah.',{exact:true}).waitFor();a.equal(await page.locator('#confirmOnButton').isEnabled(),true);

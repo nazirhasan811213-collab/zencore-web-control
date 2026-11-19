@@ -4,23 +4,23 @@ const {createEntrySetupTracker,POLICY}=require('../entry-setup-state');
 const {evaluateEntrySop}=require('../normal-entry-sop');
 const Contract=require('../analysis-execution-contract'),Core=require('../auto-trade-core');
 const {entrySopAllowed,telegramMessage}=require('../analysis-telegram');
-test('TF2 omits HEMA3 while TF15 retains two HEMA gates, with independent ATR policy',()=>{
+test('TF1 omits HEMA3 while TF15 retains two HEMA gates, with independent ATR policy',()=>{
  const tracker=createEntrySetupTracker();
- for(const tf of ['2','15']){
+ for(const tf of ['1','15']){
   const d={...fixture(tf),normal3PricePastEntry:true,setupMeta:{entryEvent:true}};
   const legacy=tracker.update(d);
   assert.equal(legacy,d);
   assert.equal(evaluateEntrySop(legacy,tf).version,`NORMAL_20261001_TF${tf}_V2`);
-  assert.equal(evaluateEntrySop(legacy,tf).gates.length,tf==='2'?5:6);
+  assert.equal(evaluateEntrySop(legacy,tf).gates.length,tf==='1'?5:6);
   assert.equal(evaluateEntrySop(legacy,tf).standardReady,true);
   const upgraded=tracker.update({...d,setupMeta:{policy:POLICY,atrBeforeBar:1}});
-  assert.equal(evaluateEntrySop(upgraded,tf).gates.length,tf==='2'?6:7);
+  assert.equal(evaluateEntrySop(upgraded,tf).gates.length,tf==='1'?6:7);
   assert.equal(upgraded.pullback.state,'WAIT_PULLBACK');
  }
 });
 test('ATR40 preserves every original SOP gate for both TFs and directions',()=>{
- for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
-  const higher=tf==='2'?'3':'30',buy=side==='BUY';
+ for(const tf of ['1','15'])for(const side of ['BUY','SELL']){
+  const higher=tf==='1'?'3':'30',buy=side==='BUY';
   const d={...fixture(tf,side),normal3SetupPolicy:POLICY,normal3SetupArmed:true,pullback:{pass:true,state:'PULLBACK_READY'}};
   assert.equal(evaluateEntrySop(d,tf).standardReady,true);
   const mutations=[
@@ -38,20 +38,20 @@ test('ATR40 preserves every original SOP gate for both TFs and directions',()=>{
   }
  }
 });
-function fixture(tf='2',side='BUY'){
+function fixture(tf='1',side='BUY'){
  const buy=side==='BUY',r=buy?{fast:102,slow:101}:{fast:98,slow:99},higher=tf==='15'?'30':'3';
  return {symbol:'XAUUSD',timeframe:tf,setupKey:'SETUP-'+tf+'-'+side,time:1000000,tradeActive:true,
   normal3Side:side,normal3Entry:100,initialSl:buy?98:102,tp1:buy?106:94,tp2:buy?112:88,tp3:buy?118:82,
   open:100,high:buy?104:100.1,low:buy?99.9:96,normal3Close:buy?103.5:96.5,normal3Atr:1,
   normal3Solid:true,normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,
   normal3Forecast:buy?'BULLISH':'BEARISH',normal3MarketPower:70,
-  setupMeta:{policy:POLICY,atrBeforeBar:1},hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1',['tf'+tf]:r,['tf'+higher]:r}};
+  setupMeta:{policy:POLICY,atrBeforeBar:1},hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1',['tf'+tf]:r,['tf'+higher]:r}};
 }
 function market(d){const x=evaluateEntrySop(d,d.timeframe),at=Date.now();return {symbol:d.symbol,timeframe:d.timeframe,receivedAt:at,signalObservedAt:at,setupKey:d.setupKey,price:d.normal3Close,
  strategyNormal:{tf:d.timeframe+'m',side:x.side,state:x.standardReady?'READY':'WATCH',solid:x.solid,entrySopVersion:x.version,
   sop:{gates:x.gates,pullback:x.pullback,sopGreen:x.green,forecast:x.forecast,marketPower:x.power,...Object.fromEntries(Object.entries(x).filter(([k])=>k.startsWith('hema')))},
   plan:{entry:100,sl:d.initialSl,tp1:d.tp1,tp2:d.tp2,tp3:d.tp3}}};}
-for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side}: large candle waits for 40%, later candle confirms without new SOLID`,()=>{
+for(const tf of ['1','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side}: large candle waits for 40%, later candle confirms without new SOLID`,()=>{
  const tracker=createEntrySetupTracker(),d=fixture(tf,side),first=tracker.update(d);
  assert.equal(first.pullback.state,'WAIT_PULLBACK');assert.equal(evaluateEntrySop(first,tf).standardReady,false);
  const buy=side==='BUY',level=buy?102.4:97.6;
@@ -67,7 +67,7 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`TF${tf} ${side
  assert.equal(Contract.createEntryDecision({...m,strategyNormal:{...m.strategyNormal,sop:{...s,pullback:{pass:false}}}}),null);
 });
 test('normal candle needs no pullback; 1.5 ATR is inclusive; missing ATR cannot bypass guard',()=>{
- for(const tf of ['2','15']){
+ for(const tf of ['1','15']){
   const d=fixture(tf),tracker=createEntrySetupTracker();
   const small=tracker.update({...d,high:101.49,normal3Close:101.4});assert.equal(small.pullback.required,false);assert.equal(small.pullback.pass,true);
   const large=tracker.update({...d,high:101.5,normal3Close:101.5});assert.equal(large.pullback.required,true);assert.equal(large.pullback.pass,false);
@@ -81,14 +81,14 @@ test('new high recalculates pullback; later ordinary candle preserves original i
  const next=tracker.update({...d,time:1120000,normal3Solid:false,open:103.1,high:103.2,low:102.8,normal3Close:103});assert.equal(next.pullback.level,103);assert.equal(next.pullback.pass,true);
 });
 test('TFs use their own ATR and maintain isolated setup state',()=>{
- const tracker=createEntrySetupTracker();const a=tracker.update(fixture('2'));
+ const tracker=createEntrySetupTracker();const a=tracker.update(fixture('1'));
  const b=tracker.update({...fixture('15'),setupMeta:{policy:POLICY,atrBeforeBar:3}});
  assert.equal(a.pullback.required,true);assert.equal(b.pullback.required,false);
- assert.equal(tracker.update({...fixture('2'),tradeActive:false}).normal3SetupArmed,false);
+ assert.equal(tracker.update({...fixture('1'),tradeActive:false}).normal3SetupArmed,false);
  assert.equal(tracker.update({...fixture('15'),normal3Solid:false,setupMeta:{policy:POLICY,atrBeforeBar:3}}).normal3SetupArmed,true);
 });
 test('current confirmations still block entry after pullback; closed setup cannot rearm',()=>{
- for(const tf of ['2','15']){
+ for(const tf of ['1','15']){
   const tracker=createEntrySetupTracker(),d=fixture(tf);tracker.update(d);
   const pulled={...d,normal3Solid:false,normal3Close:102.4};
   const wrong=tracker.update({...pulled,normal3Forecast:'BEARISH'});assert.equal(wrong.pullback.pass,true);assert.equal(evaluateEntrySop(wrong,tf).standardReady,false);

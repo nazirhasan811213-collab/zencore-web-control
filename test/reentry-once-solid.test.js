@@ -1,12 +1,12 @@
 'use strict';
 const test=require('node:test'),a=require('node:assert/strict'),fs=require('node:fs');
 const {notificationKey}=require('../telegram-notification-key');
-for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test('one reentry identity per SOLID '+tf+' '+side,()=>{
+for(const tf of ['1','15'])for(const side of ['BUY','SELL'])test('one reentry identity per SOLID '+tf+' '+side,()=>{
  const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:tf,side,setupKey:'candidate-A',telegramSop:{cycleKind:'FOLLOWUP',sourceSetupAt:100,triggerAt:101}};
  const key=notificationKey(e);
  a.equal(key,notificationKey({...e,setupKey:'candidate-B',sourceBarTime:999,entryType:'HIGH_REENTRY',telegramPlan:{entry:999},telegramSop:{...e.telegramSop,triggerAt:999,qualifiedAt:1000}}));
  a.notEqual(key,notificationKey({...e,telegramSop:{...e.telegramSop,sourceSetupAt:200}}));
- a.notEqual(key,notificationKey({...e,timeframe:tf==='2'?'15':'2'}));
+ a.notEqual(key,notificationKey({...e,timeframe:tf==='1'?'15':'1'}));
  a.notEqual(key,notificationKey({...e,telegramSop:{...e.telegramSop,cycleKind:'INITIAL'}}));
  const fallback={...e,telegramSop:{cycleKind:'FOLLOWUP',triggerAt:101}};
  a.equal(notificationKey(fallback),notificationKey({...fallback,setupKey:'retry'}));
@@ -22,7 +22,7 @@ test('database ledger rejects a second candidate in same SOLID across restart',a
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){}})},one=new AnalysisAlerts({pool}),two=new AnalysisAlerts({pool});one.ready=two.ready=true;let t=Date.now()-20000;
- const market=(key,source)=>({symbol:'XAUUSD',timeframe:'2',setupKey:key,receivedAt:++t,strategyNormal:{state:'READY',side:'BUY',sop:{cycleKind:'FOLLOWUP',sourceSetupAt:source,triggerAt:source,sopGreen:4,forecast:'BULLISH',marketPower:70,gates:[{pass:true},{pass:true}]},plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}},positionManagement:{action:'HOLD'}});
+ const market=(key,source)=>({symbol:'XAUUSD',timeframe:'1',setupKey:key,receivedAt:++t,strategyNormal:{state:'READY',side:'BUY',sop:{cycleKind:'FOLLOWUP',sourceSetupAt:source,triggerAt:source,sopGreen:4,forecast:'BULLISH',marketPower:70,gates:[{pass:true},{pass:true}]},plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}},positionManagement:{action:'HOLD'}});
  await one.record(market('A',100));await two.record(market('B',100));await two.record(market('C',200));
  const entries=events.filter(e=>e.kind==='ENTRY');a.equal(entries.length,3);
  a.deepEqual(entries.map(e=>e.telegramDuplicate),[false,true,false]);a.equal(entries[0].telegramSop.sourceSetupAt,100);

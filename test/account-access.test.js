@@ -33,7 +33,7 @@ test('expired account blocks entry dispatch but leaves management path available
  const {createAutoTradeService}=require('../auto-trade-service');const audits=[];
  const store={listOnProfiles:async()=>[{userId:'test'}],appendAudit:async(...args)=>audits.push(args),listManagedProfiles:async()=>[]};
  const service=createAutoTradeService({store,commandSigningKey:'this-is-a-long-test-signing-key-123456789',allowDemoExecution:true,entryAccessAllowed:async()=>false});
- await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'2',strategyNormal:{solid:true}}]);a.equal(audits[0][2].reason,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');
+ await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'1',strategyNormal:{solid:true}}]);a.equal(audits[0][2].reason,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');
 });
 test('editing profile and restarting never renew a client period',async()=>{
  const store=new MemoryAuthStore(),u=await store.createUser({displayName:'Client',email:'edit@access.test',passwordHash:'test'}),row=store.usersById.get(u.id),deadline=+row.access_expires_at;

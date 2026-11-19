@@ -15,7 +15,7 @@ test('one concise private Telegram message uses actual weighted fill and observe
 });
 test('heartbeat observation is authenticated, full, connected, owner scoped and cannot break execution',async()=>{
  const {MemoryAutoTradeStore}=require('../auto-trade-store'),{createAutoTradeService}=require('../auto-trade-service');const store=new MemoryAutoTradeStore(),observed=[];
- const service=createAutoTradeService({store,commandSigningKey:'test-signing-key-longer-than-thirty-two-characters',scalpingTimeframe:'2',now:()=>at,onConfirmedPositions:async s=>{observed.push(s);if(observed.length===2)throw Error('queue unavailable');}}),user='11111111-1111-4111-8111-111111111111';
+ const service=createAutoTradeService({store,commandSigningKey:'test-signing-key-longer-than-thirty-two-characters',scalpingTimeframe:'1',now:()=>at,onConfirmedPositions:async s=>{observed.push(s);if(observed.length===2)throw Error('queue unavailable');}}),user='11111111-1111-4111-8111-111111111111';
  const c=await service.connectLocalEa(user),hb={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',tradeMode:'DEMO',terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,connectorVersion:'1.4.0-ea-local',accountFingerprint:'a'.repeat(64),terminalConnected:true,positions:[p()]};
  await service.heartbeat(c.podToken,hb);a.equal(observed.length,1);a.equal(observed[0].userId,user);a.equal(observed[0].podId,c.podId);a.equal(observed[0].positions[0].setupId,setupId);
  await service.heartbeat(c.podToken,hb);a.equal(observed.length,2,'notification queue failure does not reject MT5 heartbeat');

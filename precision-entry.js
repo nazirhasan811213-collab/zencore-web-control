@@ -57,7 +57,7 @@ function connectPredictionStream(){
   }catch(_){}
 }
 function clearPairView(){
-  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine TF2 + HEMA2 untuk '+activePair,plan:null}});
+  renderMarket({symbol:activePair,freshness:'OFFLINE',strategyNormal:{mode:'NORMAL',state:'WAIT',side:'WAIT',score:0,reason:'Menunggu feed Pine TF1 + HEMA1 untuk '+activePair,plan:null}});
   renderPerformance({summary:{resolved:0,wins:0,losses:0,winRate:null,maturity:'EARLY',recent:[]}});
   nativeChartPoints=[];drawZenCoreChart(nativeChartPoints);
 }
@@ -103,7 +103,7 @@ function gateMarkup(g){
 function qualityLayer(m){
   const n=m?.strategyNormal||{};
   const s=n?.sop||{};
-  if(n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'){
+  if(n.entrySopVersion==='SOLID_TF1_3GREEN_HEMA13_V2'){
     const gates=s.gates||[],passed=gates.filter(g=>g.pass).length;
     return {score:Math.round(passed/Math.max(1,gates.length)*100),grade:n.state==='READY'?'SOP READY':'WAIT',
       checks:gates.map(g=>({label:g.label,detail:g.detail||(g.pass?'PASS':'WAIT'),earned:g.pass?1:0,max:1})),
@@ -243,7 +243,7 @@ function renderMarket(m){
   const active=m?.activeTradePlan||null;
   const planSide=active?.side||n.side||'WAIT';
   const q=qualityLayer(m);
-  const qualityAllowed=n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'||['C+','B','B+','A','A+'].includes(q.grade);
+  const qualityAllowed=n.entrySopVersion==='SOLID_TF1_3GREEN_HEMA13_V2'||['C+','B','B+','A','A+'].includes(q.grade);
   const p=active?.plan||(qualityAllowed?n?.plan:null)||null;
   window.__lastReceived=m?.receivedAt||null;
 
@@ -273,10 +273,10 @@ function renderMarket(m){
   setText('sopScore',(s.sopGreen??0)+'/5');
 
   setText('qualityGrade',q.grade);
-  setText('qualityScore',(n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'?'SOP lengkap: ':'Quality: ')+q.score+'/100');
+  setText('qualityScore',(n.entrySopVersion==='SOLID_TF1_3GREEN_HEMA13_V2'?'SOP lengkap: ':'Quality: ')+q.score+'/100');
   setText('qualityMeterLabel',q.score+'%');
   if($('qualityRail'))$('qualityRail').style.width=q.score+'%';
-  setText('qualityBadge',n.entrySopVersion==='SOLID_TF2_3GREEN_HEMA23_V2'?(state==='READY'?'SOP PASS':'WAIT'):q.aPlusExecution?'A+ TAKE':'FILTER');
+  setText('qualityBadge',n.entrySopVersion==='SOLID_TF1_3GREEN_HEMA13_V2'?(state==='READY'?'SOP PASS':'WAIT'):q.aPlusExecution?'A+ TAKE':'FILTER');
   if($('qualityBadge'))$('qualityBadge').className='quality-badge '+(q.aPlusExecution?'good':q.score>=70?'warn':'bad');
   setText('executionTitle',q.action);
   setText('executionAdvice',q.advice);

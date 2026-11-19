@@ -5,11 +5,11 @@ const num=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Num
 function createEntrySetupTracker(){
  const states=new Map();
  function update(d={}){
-  if(['TF2_SOLID_80PCT_LIVE_V2','TF2_SOLID_HOLD_SCALP_CAP_V5','TF2_SOLID_HOLD_SCALP_CAP_V4','TF2_SOLID_80PCT_SCALP_CAP_V3'].includes((d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion))return d;
-  if(require('./tf2-current-solid-sop').isCurrentSolidTf2(d))return d;
-  const tf=String(d.timeframe);if(!['2','15'].includes(tf))return d;
-  const meta=d.setupMeta||d.tf2SetupMeta;
-  const pendingReturn=tf==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
+  if(['TF1_SOLID_80PCT_LIVE_V2','TF1_SOLID_HOLD_SCALP_CAP_V5','TF1_SOLID_HOLD_SCALP_CAP_V4','TF1_SOLID_80PCT_SCALP_CAP_V3'].includes((d.setupMeta||d.tf1SetupMeta)?.entryRuleVersion))return d;
+  if(require('./tf2-current-solid-sop').isCurrentSolidTf1(d))return d;
+  const tf=String(d.timeframe);if(!['1','15'].includes(tf))return d;
+  const meta=d.setupMeta||d.tf1SetupMeta;
+  const pendingReturn=tf==='1'&&meta?.entryRuleVersion==='TF1_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
   // Alert snapshots are versioned separately from the server deploy. Preserve
   // the original six gates until that TF's Pine explicitly supplies ATR40 data.
   const atrPolicy=meta?.policy===POLICY;

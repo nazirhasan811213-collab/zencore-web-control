@@ -7,7 +7,7 @@ test('PG purges both record stores, blocks old replay and applies cutoff to tota
  try{
   await db.query(`CREATE SCHEMA ${schema}`);pool=new Pool({connectionString:url,options:`-c search_path=${schema}`});
   await pool.query('CREATE TABLE zencore_analysis_alerts(id BIGSERIAL PRIMARY KEY,data JSONB NOT NULL)');
-  const entry=(key,time)=>({kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',setupKey:key,side:'BUY',time,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106}});
+  const entry=(key,time)=>({kind:'ENTRY',symbol:'XAUUSD',timeframe:'1',setupKey:key,side:'BUY',time,telegramPlan:{entry:100,sl:98,tp1:102,tp2:104,tp3:106}});
   const old=entry('old',R.START_AT-1),boundary=entry('boundary',R.START_AT),current=new CurrentSignalRecords({pool,now,log});await current.init();
   // Seed a record from the old deployment, then enforce the policy on startup.
   const rows=new Map();applyEvent(rows,old);const r=rows.get(idFor(old));

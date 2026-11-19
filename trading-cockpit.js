@@ -13,7 +13,7 @@
  function dot(id,live){$(id).classList.toggle('live',live);}
  async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
  function views(){
-  return symbols.flatMap(symbol=>[2,15].map(timeframe=>{
+  return symbols.flatMap(symbol=>[1,15].map(timeframe=>{
    const view=payload?.pairs?.find(p=>p.symbol===symbol)?.views?.find(v=>Number(v.timeframe)===timeframe);
    const pushed=pushedViews.get(symbol)?.find(v=>Number(v.timeframe)===timeframe);
    return {...(Live.latestView(view,pushed)||{timeframe,status:'WAITING',displayState:'WAITING',market:null}),symbol,timeframe};
@@ -34,7 +34,7 @@
   $('pairCards').append(card);
  }
  const marketRows=new Map();
- for(const symbol of symbols)for(const timeframe of [2,15]){
+ for(const symbol of symbols)for(const timeframe of [1,15]){
   const row=el('details',undefined,'compact-market-row'),summary=el('summary');
   const pair=el('span',symbol,'compact-market-pair');
   pair.append(el('small','TF'+timeframe));
@@ -55,10 +55,10 @@
   marketRows.set(symbol+'|'+timeframe,{row,status,metrics,message,readings,values});
  }
  const dashboardCharts=new Map();
- let chartTf=2;
+ let chartTf=1;
  function selectChart(){
   const symbol=$('chartPair').value;
-  for(const pair of symbols)for(const tf of [2,15]){
+  for(const pair of symbols)for(const tf of [1,15]){
    const host=$(pair==='XAUUSD'?'dashboardChart'+tf:'dashboardBitcoinChart'+tf);
    const key=pair+'|'+tf;
    host.hidden=pair!==symbol||tf!==chartTf;
@@ -173,7 +173,7 @@
  function renderAccount(a){
   const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
   set('overviewAccount',v.account);set('overviewServer',v.server);set('overviewPositions',v.count??'—');
-  set('overviewModes',v.count===null?'Menunggu laporan MT5':`TF2: ${v.tf2} • TF15: ${v.tf15}`);
+  set('overviewModes',v.count===null?'Menunggu laporan MT5':`TF1: ${v.tf1} • TF15: ${v.tf15}`);
   set('overviewLot',v.lot===null?'—':v.lot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3}));
   set('overviewFloating',v.floating===null?'—':v.floating.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
   set('overviewSeen',v.lastSeen?'Laporan MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Data belum disahkan / tidak segar');

@@ -10,7 +10,7 @@ const NATIVE_POLICY='PINE_NATIVE_SOLID_ENTRY_V7';
 const NEW_POLICY='PINE_SOLID_PRICE_WT_HEMA_V6';
 const FORECAST_POLICY='PINE_3TRIGGERS_3OF4_FORECAST45_V4';
 function nativeConfirmations(side,s={}) {
- const sign=side==='BUY'?1:side==='SELL'?-1:0,e=s.nativeSolid||{},h=s.hema2||s.hema15||{},b=s.currentBar||{};
+ const sign=side==='BUY'?1:side==='SELL'?-1:0,e=s.nativeSolid||{},h=s.hema1||s.hema15||{},b=s.currentBar||{};
  const dataReady=!!sign&&e.version==='NATIVE_SOLID_LABEL_V1'&&e.pulse===true&&e.barTime===b.time&&b.confirmed===true&&[s.price,s.sourceEntry,s.atrReference,e.basis,e.rsi,h.waveTrend1,h.waveTrend2].every(Number.isFinite)&&s.atrReference>0&&e.rsi>=0&&e.rsi<=100;
  const values={entry:dataReady&&sign*(s.price-s.sourceEntry)>0,basis:dataReady&&sign*(s.price-e.basis)>0,wt:dataReady&&sign*(h.waveTrend1-h.waveTrend2)>0,rsi:dataReady&&(sign>0?e.rsi<75:e.rsi>25)};
  const gates=Object.entries(values).map(([key,pass])=>({key,pass,label:{entry:'Harga lepas entry SOLID',basis:'Harga searah SMA20',wt:'WT searah',rsi:'RSI belum ekstrem'}[key]})),passed=gates.filter(g=>g.pass).length;

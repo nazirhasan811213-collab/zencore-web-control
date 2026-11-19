@@ -4,7 +4,7 @@ const {rebasedManagement}=require('../live-entry-management');
 const C=require('../analysis-execution-contract');
 function fixture(side='BUY'){
  const sign=side==='BUY'?1:-1,p={symbol:'XAUUSD',side,strategyMode:'TF2_SCALPING',entry:4001,sl:4001-sign*3,tp1:4001+sign*2,tp2:4001+sign*4,tp3:4001+sign*6,analysisSnapshot:{entryAnchor:'LIVE_SIGNAL_PRICE_V1'}};
- return {command:{id:'entry-id',payload:p},positions:[{origin:'ZENCORE',symbol:'XAUUSD',side,strategyMode:'TF2_SCALPING',entry:p.entry,currentPrice:p.entry,activeSl:p.sl,openedAt:1000,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3}],market:{symbol:'XAUUSD',timeframe:'2',receivedAt:2000,positionManagement:{action:'EXIT_SL',slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:9999}}};
+ return {command:{id:'entry-id',payload:p},positions:[{origin:'ZENCORE',symbol:'XAUUSD',side,strategyMode:'TF2_SCALPING',entry:p.entry,currentPrice:p.entry,activeSl:p.sl,openedAt:1000,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3}],market:{symbol:'XAUUSD',timeframe:'1',receivedAt:2000,positionManagement:{action:'EXIT_SL',slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:9999}}};
 }
 test('old chart SL and exit cannot close rebased orders; TP1/2/3 use command targets',()=>{
  for(const side of ['BUY','SELL']){

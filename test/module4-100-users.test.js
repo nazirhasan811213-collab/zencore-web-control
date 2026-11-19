@@ -10,7 +10,7 @@ const Core=require('../auto-trade-core');
 test('100 users preserve isolated step locks, close-all instructions and broker-flat gates',async()=>{
  const now=1792370000000,store=new MemoryAutoTradeStore(),users=[];
  for(let i=0;i<100;i++){
-  const tf=i%2?'15':'2',side=i%4<2?'BUY':'SELL',f=fixture(tf,side,'INITIAL');
+  const tf=i%2?'15':'1',side=i%4<2?'BUY':'SELL',f=fixture(tf,side,'INITIAL');
   const id=crypto.randomUUID(),podId=crypto.randomUUID(),token='zcpod_'+crypto.randomBytes(36).toString('base64url'),hash=tokenHash(token);
   Object.assign(f.command,{id:crypto.randomUUID(),userId:id,podId});
   f.command.payload.analysisSnapshot.exitLockVersion=tf==='15'?'PINE_STEPLOCK_BE_TF15_V1':'PINE_STEPLOCK_150_TP3_PLUS3_V1';
@@ -25,7 +25,7 @@ test('100 users preserve isolated step locks, close-all instructions and broker-
  const queueTimes=[],start=performance.now();let delivered=0,missing=0,duplicates=0;const ids=new Set();
  async function phase(index,close=false){
   for(const u of users){const p=u.command.payload;for(const position of u.positions)position.currentPrice=index===3?p.tp3+u.sign*3.01:p['tp'+(index+1)];}
-  const markets=['2','15'].map(tf=>({...users.find(u=>u.tf===tf).market,...(close?{nativeChartExitAll:true}:{}),timeframe:tf}));
+  const markets=['1','15'].map(tf=>({...users.find(u=>u.tf===tf).market,...(close?{nativeChartExitAll:true}:{}),timeframe:tf}));
   const t=performance.now(),result=await svc.dispatchMarkets(markets);queueTimes.push(performance.now()-t);
   const expected=index===3&&!close?50:100;assert.equal(result.queued,expected);
   for(const u of users){
@@ -61,7 +61,7 @@ test('100 users preserve isolated step locks, close-all instructions and broker-
   assert.equal(Core.permitsPositionEntry(market,[]),true,'flat removes position block only, not remaining SOP');
  }
  const sorted=[...queueTimes].sort((a,b)=>a-b);
- console.log(JSON.stringify({scope:'OFFLINE_MEMORY_STORE_NO_EA_OR_BROKER',users:100,tf2:50,tf15:50,expectedManagementCommands:450,delivered,missing,duplicates,partialCloseBlocked:100,flatTransitionsRecorded:100,queueBatchMedianMs:+sorted[Math.floor(sorted.length/2)].toFixed(2),queueBatchMaxMs:+Math.max(...queueTimes).toFixed(2),totalMs:+(performance.now()-start).toFixed(2)}));
+ console.log(JSON.stringify({scope:'OFFLINE_MEMORY_STORE_NO_EA_OR_BROKER',users:100,tf1:50,tf15:50,expectedManagementCommands:450,delivered,missing,duplicates,partialCloseBlocked:100,flatTransitionsRecorded:100,queueBatchMedianMs:+sorted[Math.floor(sorted.length/2)].toFixed(2),queueBatchMaxMs:+Math.max(...queueTimes).toFixed(2),totalMs:+(performance.now()-start).toFixed(2)}));
  assert.equal(delivered,450);assert.equal(missing,0);assert.equal(duplicates,0);
  for(const u of users){
   for(const position of u.positions){position.activeSl=u.command.payload.sl;position.currentPrice=u.command.payload.tp1;}
@@ -69,7 +69,7 @@ test('100 users preserve isolated step locks, close-all instructions and broker-
  }
  const getPod=store.getPodForUser.bind(store),visited=new Set();
  store.getPodForUser=async id=>{visited.add(id);if(id===users[0].id)throw new Error('simulated one-account failure');return getPod(id);};
- await assert.rejects(()=>svc.dispatchMarkets(['2','15'].map(tf=>users.find(u=>u.tf===tf).market)));
+ await assert.rejects(()=>svc.dispatchMarkets(['1','15'].map(tf=>users.find(u=>u.tf===tf).market)));
  assert.equal(visited.size,100,'one failed management profile must not skip all other users');
  assert.equal([...store.commands.values()].flat().filter(c=>c.type==='MANAGE_POSITION'&&c.status==='PENDING').length,99,'healthy accounts still receive protection commands');
 });

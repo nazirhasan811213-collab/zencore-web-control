@@ -15,7 +15,7 @@ function fixture(tf,side){
   normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,
   normal3Forecast:buy?'BULLISH':'BEARISH',normal3MarketPower:70,
   setupMeta:{policy:POLICY,atrBeforeBar:2,solidLatched:true},
-  hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1',
+  hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1',
    ['tf'+tf]:hema,['tf'+(tf==='15'?'30':'3')]:hema}};
 }
 function market(d){
@@ -25,7 +25,7 @@ function market(d){
    plan:{entry:d.normal3Entry,sl:d.initialSl,tp1:d.tp1,tp2:d.tp2,tp3:d.tp3},
    sop:{...sop,sopGreen:sop.green,marketPower:sop.power}}};
 }
-for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
+for(const tf of ['1','15'])for(const side of ['BUY','SELL']){
  test(`TF${tf} ${side}: TP1 ends entry even after pullback and repeated SOLID; new setup must arm separately`,()=>{
   const tracker=createEntrySetupTracker(),d=fixture(tf,side);
   assert.ok(createEntryDecision(market(tracker.update(d))));
@@ -58,10 +58,10 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
  });
 }
 test('legacy six-gate alerts also expire without changing their SOP or exit payload',()=>{
- for(const tf of ['2','15']){
+ for(const tf of ['1','15']){
   const tracker=createEntrySetupTracker(),d={...fixture(tf,'SELL'),setupMeta:{},
    positionExitAction:'HOLD',activeSl:100,slMoveTriggered:true,slMoveAction:'MOVE_SL_ENTRY'};
-  assert.equal(evaluateEntrySop(tracker.update(d),tf).gates.length,tf==='2'?5:6);
+  assert.equal(evaluateEntrySop(tracker.update(d),tf).gates.length,tf==='1'?5:6);
   const expired=tracker.update({...d,tp1Hit:true});
   assert.equal(evaluateEntrySop(expired,tf).standardReady,false);
   assert.equal(expired.positionExitAction,d.positionExitAction);
@@ -70,9 +70,9 @@ test('legacy six-gate alerts also expire without changing their SOP or exit payl
   assert.equal(evaluateEntrySop(tracker.update(d),tf).standardReady,false);
  }
 });
-test('expiry is isolated between TF2 and TF15',()=>{
+test('expiry is isolated between TF1 and TF15',()=>{
  const tracker=createEntrySetupTracker();
- tracker.update({...fixture('2','SELL'),tp1Hit:true});
+ tracker.update({...fixture('1','SELL'),tp1Hit:true});
  assert.equal(evaluateEntrySop(tracker.update(fixture('15','SELL')),'15').standardReady,true);
 });
 test('TF15 decoder retains historical target hits and protection for the entry guard',()=>{

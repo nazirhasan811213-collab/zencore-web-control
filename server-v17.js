@@ -4,7 +4,7 @@ const path=require('path');
 const {acceptsSnapshot,acceptsFeedSource,effectiveReceivedAt}=require('./market-feed-sync');
 const {normalEntrySop}=require('./normal-entry-sop');
 const feedMetadataDiagnostics=require('./feed-metadata-diagnostics').createFeedMetadataDiagnostics();
-const tf2SetupTracker=require('./entry-setup-state').createEntrySetupTracker();
+const tf1SetupTracker=require('./entry-setup-state').createEntrySetupTracker();
 const {chartTradePlan}=require('./chart-trade-plan');
 const {levelsAtFill:levelsAtLivePrice}=require('./live-entry-levels');
 
@@ -392,18 +392,18 @@ function fastTradeStrategy(symbol,d){
   return{mode:'FAST',tf:'1m',state,side,score:a1.confidence,streak:st.streak,reason,analysis1m:a1,plan,targetRange:'20–30 pips'};
 }
 function normalScalpStrategy(symbol,d){
-  if(String(d.timeframe)==='2'&&(d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion==='TF2_SOLID_HOLD_SCALP_CAP_V5')return require('./tf2-solid-hold-v5').strategy(d);
-  if(String(d.timeframe)==='2'&&(d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion==='TF2_SOLID_HOLD_SCALP_CAP_V4')return require('./tf2-solid-hold-sop').strategy(d);
-  if(String(d.timeframe)==='2'&&(d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion==='TF2_SOLID_80PCT_SCALP_CAP_V3')return require('./tf2-scalp-range-sop').strategy(d);
-  if(String(d.timeframe)==='2'&&['TF2_SOLID_80PCT_LIVE_V2','TF2_SOLID_80PCT_V1'].includes((d.setupMeta||d.tf2SetupMeta)?.entryRuleVersion))return require('./tf2-solid-80-sop').strategy(d);
+  if(String(d.timeframe)==='1'&&(d.setupMeta||d.tf1SetupMeta)?.entryRuleVersion==='TF1_SOLID_HOLD_SCALP_CAP_V5')return require('./tf2-solid-hold-v5').strategy(d);
+  if(String(d.timeframe)==='1'&&(d.setupMeta||d.tf1SetupMeta)?.entryRuleVersion==='TF1_SOLID_HOLD_SCALP_CAP_V4')return require('./tf2-solid-hold-sop').strategy(d);
+  if(String(d.timeframe)==='1'&&(d.setupMeta||d.tf1SetupMeta)?.entryRuleVersion==='TF1_SOLID_80PCT_SCALP_CAP_V3')return require('./tf2-scalp-range-sop').strategy(d);
+  if(String(d.timeframe)==='1'&&['TF1_SOLID_80PCT_LIVE_V2','TF1_SOLID_80PCT_V1'].includes((d.setupMeta||d.tf1SetupMeta)?.entryRuleVersion))return require('./tf2-solid-80-sop').strategy(d);
   const life=signalCoreBySymbol.get(symbol);
-  const meta=d.setupMeta||d.tf2SetupMeta;
-  const currentSolidOnly=String(d.timeframe)==='2'&&['TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1','TF2_SEP24_4GREEN_HEMA5_V1'].includes(meta?.entryRuleVersion);
-  const pendingReturn=String(d.timeframe)==='2'&&meta?.entryRuleVersion==='TF2_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
+  const meta=d.setupMeta||d.tf1SetupMeta;
+  const currentSolidOnly=String(d.timeframe)==='1'&&['TF1_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1','TF1_SEP24_4GREEN_HEMA5_V1'].includes(meta?.entryRuleVersion);
+  const pendingReturn=String(d.timeframe)==='1'&&meta?.entryRuleVersion==='TF1_3GREEN_TP1_HEMAGAP_V1'&&meta?.pendingEntryReturn===true;
   // Chart protection may finish a virtual position that this user never opened.
   // Actual user positions, queued commands and replay guards remain in dispatch.
-  if(life?.stage==='COOLDOWN'&&!pendingReturn&&!currentSolidOnly)return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
-  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF2_V2',tf:'2m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — perlukan SOLID, entry line, checklist 4/5, forecast dan HEMA2 semasa daripada Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
+  if(life?.stage==='COOLDOWN'&&!pendingReturn&&!currentSolidOnly)return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF1_V2',tf:'1m',state:'COOLDOWN',side:'WAIT',score:0,reason:life.reason||'Trade selesai — tunggu setup baru',sop:null,plan:null};
+  if(!['32.0','32.4','V32',32].includes(d?.normalSopVersion))return{mode:'NORMAL',entrySopVersion:'NORMAL_20261001_TF1_V2',tf:'1m',state:'WARMING',side:'WAIT',score:0,reason:'UPDATE FEED REQUIRED — perlukan SOLID, entry line, checklist 4/5, forecast dan HEMA1 semasa daripada Pine.',sop:{feedReady:false,passed:0,total:5},plan:null};
   const x=normalEntrySop({...d,sidewaysGuard:sidewaysGuardBySymbol.get(symbol)?.active===true});
   const reentry=['NORMAL','HIGH'].includes(x.reentryType)&&['BUY','SELL'].includes(x.reentrySide);
   const side=reentry?x.reentrySide:x.side;
@@ -421,15 +421,15 @@ function normalScalpStrategy(symbol,d){
   const reason=sopReady&&entryWindowOpen&&!eaEntryCompatible?'SOP TP2 lulus, tetapi EA sedia ada mengehadkan entry sebelum TP1. Tiada order dihantar.':x.marketRegime?.pass===false?`NO ENTRY — ${x.marketRegime.reason}; tunggu market jelas.`:ready?(reentry?`${x.reentryType} ${side} RE-ENTRY — candle di luar HEMA.`:`SOLID ${side} SETUP — pengesahan semasa lulus: entry line + ${x.minimumGreen}/5 checklist + forecast + HEMA${x.version.includes('SEP24')?5:2} ${x.currentSolidOnly?'harga di luar ribbon':x.version.includes('HEMAGAP')?'tidak nipis':'searah'}.`):
     sopReady&&pinePlan&&!entryWindowOpen?'WAIT PULLBACK — harga di luar julat entry hingga TP1; semak semula SOP semasa.':
     sopReady?'Paras Entry, SL dan TP pada carta Pine belum lengkap atau tidak sah.':
-    `${side==='BUY'||side==='SELL'?side:'Normal TF2'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
+    `${side==='BUY'||side==='SELL'?side:'Normal TF1'} setup belum lengkap — tunggu: ${failed.join(' • ')}`;
   const basePlan=ready&&(pendingReturn||currentSolidOnly)?{...pinePlan,...levelsAtLivePrice(pinePlan,N(d.close)),entryAnchor:'LIVE_SIGNAL_PRICE_V1',sourceChartPlan:{side:pinePlan.side,entry:pinePlan.entry,sl:pinePlan.sl,tp1:pinePlan.tp1,tp2:pinePlan.tp2,tp3:pinePlan.tp3}}:pinePlan;
   const plan=(ready||sopReady&&entryWindowOpen)?{...basePlan,condition:reentry?'PINE SOP RE-ENTRY '+x.reentryType:pinePlan.condition,
     planType:reentry?`${x.reentryType} RE-ENTRY 3M — PINE ${pinePlan.tpMode}`:pinePlan.planType}:null;
   return{
-    mode:'NORMAL',entrySopVersion:x.version,tf:`${d.timeframe||'2'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason:state==='PAUSED'?'AUTO ENTRY DIHENTIKAN — pembaikan sistem sedang dibuat.':reason,solid:x.solid,pullback:x.pullback,triggerPolicy:x.sequential?'SOLID_LATCH_CURRENT_CONFIRMATIONS':'SIMULTANEOUS',plan,
+    mode:'NORMAL',entrySopVersion:x.version,tf:`${d.timeframe||'1'}m`,state,side,entryType:reentry?`${x.reentryType}_REENTRY`:'SOLID_ENTRY',score:Math.round(gates.filter(g=>g.pass).length/gates.length*100),reason:state==='PAUSED'?'AUTO ENTRY DIHENTIKAN — pembaikan sistem sedang dibuat.':reason,solid:x.solid,pullback:x.pullback,triggerPolicy:x.sequential?'SOLID_LATCH_CURRENT_CONFIRMATIONS':'SIMULTANEOUS',plan,
     confirmations:{m3:ready?'PASS':'WAIT',m5:x.m5Pass?'PASS':'WAIT'},
     sop:{feedReady:true,passed:gates.filter(g=>g.pass).length,total:gates.length,gates,
-      atrReference:x.atrReference,entryExpiryTarget:x.entryExpiryTarget,minimumGreen:x.minimumGreen,eaEntryCompatible,marketRegime:x.marketRegime,hema2:x.hema2,hema3:x.hema3,solid:x.solid,pullback:x.pullback,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
+      atrReference:x.atrReference,entryExpiryTarget:x.entryExpiryTarget,minimumGreen:x.minimumGreen,eaEntryCompatible,marketRegime:x.marketRegime,hema1:x.hema1,hema3:x.hema3,solid:x.solid,pullback:x.pullback,priceCrossEntry:x.cross,pricePastEntry:x.pricePast,sopGreen:x.green,
       sop1:x.flags[0],sop2:x.flags[1],sop3:x.flags[2],sop4:x.flags[3],sop5:x.flags[4],
       forecast:x.forecast,marketPower:x.power,forecastPass:x.forecastPass,
       reentrySignal:x.reentryType,reentrySide:x.reentrySide,reentryHemaPass:d?.normal3ReentryHemaPass===true,reentryGates:x.reentryGates,
@@ -553,7 +553,7 @@ function marketSummary(symbol){
   dashboard.mtfTotal=N(d.mtfTotal);dashboard.globalTrend=N(d.globalTrend);
   dashboard.setupProbability=N(d.setupProbability);dashboard.confluence=N(d.confluenceStars);
   dashboard.relativeVolume=N(d.relativeVolume);dashboard.chop=N(d.chopIndex);
-  const coach=(d.setupMeta||d.tf2SetupMeta)?.dashboardAi;
+  const coach=(d.setupMeta||d.tf1SetupMeta)?.dashboardAi;
   if(coach){for(const k of ['aiCoach','proTip','mtfSummary','trend','momentum','advice'])dashboard[k]=String(coach[k]||'').slice(0,1500);dashboard.mtfTotal=N(coach.mtfScore);dashboard.mtfOverall=String(coach.mtfOverall||'').slice(0,80);}
 
   return{symbol,feedUpdateVersion:d.feedUpdateVersion,feedChannel:d.feedChannel,entryEvent:d.entryEvent,entryAuthorizedAt:d.entryAuthorizedAt,setupKey:d.setupKey||null,signalObservedAt:d.signalObservedAt||null,online:true,freshness:feedFreshness(d),status:predictionStatus(d,symbol,p),strategyFast,strategyNormal,analysis3m:a3,fastTrade1m:fast,sidewaysGuard:!!sg.active,sidewaysReason:sg.reason,sidewaysChop:sg.chop,sidewaysEmaFlips:sg.emaFlips,sidewaysPriceReversals:sg.priceReversals,signal,signalState:core.stage,signalLocked:!!core.locked,signalReason:core.reason,signalWarnings:core.warnings||[],opportunityType:opp.type,opportunitySide:opp.side,opportunityStrength:opp.strength,opportunityReason:opp.reason,opportunityRisk:opp.risk,opportunityPrice:opp.price||null,opportunityTriggeredAt:opp.triggeredAt||0,signalInvalidStreak:core.invalidStreak||0,signalLockedAt:core.lockedAt||0,signalCooldownUntil:core.cooldownUntil||0,signalConfidence:signalConf,dashboard,prediction:sg.active?'WAIT':p.direction,underlyingPrediction:p.direction,rawPrediction:sg.active?'WAIT':p.direction,predictionConfidence:sg.active?0:p.confidence,predictionConsensus:p.consensus,predictionEvidence:p.totalEvidence,predictionAgreement:p.agreement,predictionStrength:p.strength,predictionHorizon:p.horizon,predictionConflict:p.conflict,reasons:p.reasons,currentAction:p.currentAction,grade:predictionGrade(p),stability:st,readiness:rd,radarScore:predictionRadarScore(d,symbol,p),zone:z.state,rr:rr(d),price:N(d.close),timeframe:String(d.timeframe||'—'),receivedAt:N(d.receivedAt),sourceBarTime:N(d.time),tradeActive:d.tradeActive===true&&!d.slHit,setupProbability:N(d.setupProbability),confluence:N(d.confluenceStars),feedMode:d.confirmed===false?'INTRABAR':'BAR-CLOSE',positionManagement:{stage:U(d.positionExitStage||'IDLE'),action:U(d.positionExitAction||'IDLE'),partialArmed:d.exitPartialArmed===true,oppositeYellow:d.exitOppositeYellow===true,remainingPct:N(d.exitRemainingPct),yellowType:U(d.exitYellowType||'NONE'),reason:String(d.exitReason||''),initialSl:N(d.initialSl??d.sl),activeSl:N(d.activeSl??d.sl),slLockStage:N(d.slLockStage)||0,slLockLabel:U(d.slLockLabel||'INITIAL'),slMoveAction:U(d.slMoveAction||'NONE'),slMoveTriggered:d.slMoveTriggered===true,exitCloseType:U(d.exitCloseType||'NONE')}};
@@ -588,13 +588,13 @@ function broadcastMarkets(){const payload=JSON.stringify(marketsPayload());for(c
 function broadcastPrediction(symbol){const summary=marketSummary(symbol);require('./analysis-alert-bus').emit('market',summary);const set=predictionClients.get(symbol);if(!set)return;const payload=JSON.stringify(summary);for(const res of set){try{res.write(`event: prediction\ndata: ${payload}\n\n`)}catch(_){set.delete(res)}}}
 function expandCompactMarket(row,batch){
   if(!Array.isArray(row)||row.length<61)return null;
-  const versionedManagement=String(batch.timeframe)==='2'&&batch.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'&&['TF2_SOLID_80PCT_SCALP_CAP_V3','TF2_SOLID_HOLD_SCALP_CAP_V4','TF2_SOLID_HOLD_SCALP_CAP_V5'].includes(row[66]?.entryRuleVersion);
+  const versionedManagement=String(batch.timeframe)==='1'&&batch.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'&&['TF1_SOLID_80PCT_SCALP_CAP_V3','TF1_SOLID_HOLD_SCALP_CAP_V4','TF1_SOLID_HOLD_SCALP_CAP_V5'].includes(row[66]?.entryRuleVersion);
   const managementBlocked=versionedManagement?require('./tf2-live-management').block(row,batch):batch.confirmed===false;
   const [symbol,time,barIndex,open,high,low,close,ema9,ema20,ema50,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,entry,initialSl,activeSl,tp1,tp2,tp3,tradeActive,tradeIsBuy,tp1Hit,tp2Hit,tp3Hit,slHit,normal3Side,normal3Solid,normal3PricePastEntry,normal3Sop1,normal3Sop2,normal3Sop3,normal3Sop4,normal3Sop5,normal3Forecast,normal3MarketPower,normal5Position,normal5Close,normal5Hema20,normal5Hema40,positionExitStage,positionExitAction,exitPartialArmed,exitOppositeYellow,exitRemainingPct,exitYellowType,exitCloseType,exitReason,slLockStage,slLockLabel,slMoveAction,slMoveTriggered,action,normal3PriceCrossEntry,normal3ReentrySignal,normal3ReentrySide,normal3ReentryHemaPass]=row;
   return{
     schemaVersion:batch.schemaVersion||'32.3-EXIT-STEPLOCK',
-    ...(['HEMA23_V1','HEMA23_LIVE_V1'].includes(row[65]?.version)?{hemaConfirmation:row[65]}:{}),
-    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,tf2SetupMeta:row[66],setupKey:row[66]?.setupAt?`TF2|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
+    ...(['HEMA13_V1','HEMA13_LIVE_V1'].includes(row[65]?.version)?{hemaConfirmation:row[65]}:{}),
+    source:'ZenCore AI Dashboard Pro + Alerts',feedUpdateVersion:batch.feedUpdateVersion,feedChannel:batch.feedChannel,entryAuthorizedAt:row[66]?.entryAuthorizedAt,feedVersion:batch.feedVersion,feedType:'MULTI_PAIR_BATCH',confirmed:batch.confirmed!==false,entryEvent:row[66]?.entryEvent,tf1SetupMeta:row[66],setupKey:row[66]?.setupAt?`TF1|${symbol}|${normal3Side}|${row[66].setupAt}`:null,signalObservedAt:Number(batch.emittedAt)||null,tpMode:batch.tpMode,
     symbol,timeframe:String(batch.timeframe||'3'),time,barIndex,open,high,low,close,ema9,ema20,ema50,
     hemaFast:hema20,hemaSlow:hema40,hema20,hema40,basis,waveTrend1,waveTrend2,rsi,
     chopIndex,relativeVolume,globalTrend,setupProbability,confluenceStars,atr,action,
@@ -614,7 +614,7 @@ function storeSnapshot(parsed){
   const previous=latestBySymbol.get(symbol);
   // Current realtime entry payload must survive a competing legacy chart alert.
   if(!acceptsFeedSource(previous,parsed))return null;
-  const d=tf2SetupTracker.update({...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'});
+  const d=tf1SetupTracker.update({...parsed,symbol,receivedAt:Date.now(),feedType:parsed.feedType||'LIVE'});
   latestBySymbol.set(symbol,d);
   const arr=historyBySymbol.get(symbol)||[];
   const key=N(d.time)||N(d.barIndex)||Date.now();
@@ -630,8 +630,8 @@ function storeSnapshot(parsed){
 function captureBody(body){
   let parsed=null;try{parsed=JSON.parse(body)}catch(_){}
   if(!parsed)return;
-  parsed=require('./tf2-feed-source').normalizeTf2FeedSource(parsed);
-  if(parsed.feedVersion==='TF2_REALTIME_V1'&&parsed.markets?.some(r=>r?.[66]?.entryRuleVersion==='TF2_SOLID_RIBBON_V1')){
+  parsed=require('./tf2-feed-source').normalizeTf1FeedSource(parsed);
+  if(parsed.feedVersion==='TF1_REALTIME_V1'&&parsed.markets?.some(r=>r?.[66]?.entryRuleVersion==='TF1_SOLID_RIBBON_V1')){
     const items=require('./tf2-ribbon-market-hub').ingest(parsed);
     feedMetadataDiagnostics.record(parsed,items.map(m=>m.symbol));
     for(const market of items)require('./analysis-alert-bus').emit('market',market);
@@ -639,7 +639,7 @@ function captureBody(body){
   }
   if(parsed.feedVersion==='TF3_REALTIME_V1'){
     const items=require('./tf3-market-hub').ingest(parsed);
-    for(const m of items){m.entryEvent=false;m.strategyNormal={...m.strategyNormal,state:'WAIT',reason:'Scalping dipindahkan ke TF2; TF3 untuk urus posisi lama sahaja'};}
+    for(const m of items){m.entryEvent=false;m.strategyNormal={...m.strategyNormal,state:'WAIT',reason:'Scalping dipindahkan ke TF1; TF3 untuk urus posisi lama sahaja'};}
     feedMetadataDiagnostics.record(parsed,items.map(m=>m.symbol));
     for(const market of items)require('./analysis-alert-bus').emit('market',market);
     return;
@@ -681,18 +681,18 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,`http://${req.headers.host||'localhost'}`),pathname=url.pathname;
   if(req.method==='OPTIONS')return send(res,204,'');
   if(req.method==='GET'&&pathname==='/sop-version')return send(res,200,JSON.stringify({
-    version:'PINE_3TRIGGERS_3OF4_CHOP50_V3',releaseVersion:'TF2_EXECUTION_AUTHORITY_20261019',
-    activeScalpingTimeframe:'2',activeEntryTimeframes:['2','15'],timeframes:['2','15'],legacyTf2EntryEnabled:false,
-    tf2Policy:require('./tf2-ribbon-scalping').POLICY,legacyTf3ManagementOnly:true,executionAuthority:'TF2_EXECUTION_CHANNEL_ONLY',tf15Policy:require('./tf15-intraday').POLICY,
+    version:'PINE_3TRIGGERS_3OF4_CHOP50_V3',releaseVersion:'TF1_NATIVE_HEMA_20261119',
+    activeScalpingTimeframe:'1',activeEntryTimeframes:['1','15'],timeframes:['1','15'],legacyTf2EntryEnabled:false,
+    tf1Policy:{...require('./tf2-ribbon-scalping').POLICY,entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',atrPeriod:8,slMaximumPrice:4,mandatoryTriggers:['NATIVE_SOLID','PRICE_PAST_SOLID','WT_DIRECTION','HEMA_COLOR_DIRECTION'],checklistMandatory:false,forecastRequired:false},legacyTf3ManagementOnly:true,executionAuthority:'TF1_EXECUTION_CHANNEL_ONLY',tf15Policy:require('./tf15-intraday').POLICY,
     entrySignalsPaused:/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''),
     feedIngress:feedMetadataDiagnostics.snapshot(),observedGoldFeed:{timeframe:latestBySymbol.get('XAUUSD')?.timeframe||null,
       rule:latestBySymbol.get('XAUUSD')?.setupMeta?.entryRuleVersion||null,receivedAt:latestBySymbol.get('XAUUSD')?.receivedAt||null},
     feedRefreshVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',analysisFreshness:'PINE_EMITTED_AT',maxExecutionAgeMs:60000,
     entryReplayProtection:'FRESH_EXECUTION_EVENT_V2',telegramDedupVersion:'SETUP_AND_CHAT_V2',
     analysisTransport:'SSE_WITH_POLL_FALLBACK',rawSnapshotRetentionHours:5,executionAlertCap:12,dashboardAlertCap:6,
-    checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf2SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
-    targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',exitPolicies:{TF2:'PINE_STEPLOCK_150_TP3_PLUS3_V1',TF15:'PINE_STEPLOCK_BE_TF15_V1'},
-    tf2DecisionTiming:{version:'TF2_BAR_CLOSE_V1',pineRevision:'3.6-CANDLE-ENTRY-SL4',entryCandle:{version:'TF2_NATIVE_CANDLE_DIRECTION_V1',mandatory:true,tf:'2',requiresUpdatedPine:true,rule:'ZENCORE_BODY_AND_OHLC_DIRECTION_AT_CLOSE'},entrySafety:{version:'TF2_ATR_REVERSALS_V2',atrPeriod:8,atrAbove:4.5,atrBelow:1.5,minimumDirectionChanges:2,closedCandles:6,release:'RECHECK_EACH_CLOSE',requiresUpdatedPine:true},localStepLockEa:'2.16',brokerSl:'EVERY_TICK',legacyCompatible:true},telegramGuideSchedule:{timezone:'Asia/Kuala_Lumpur',tf2Minutes:30,tf15Minutes:60,enabled:true,forecast:'CONDITIONAL_NEXT_MOVEMENT_V2',history:require('./indicator-chart-history').history.status(),retryMissingDataMs:105000},telegramMessageStyle:'PINE_DASHBOARD_INSIGHTS_V3',telegramChartScreenshot:{enabled:false,reason:'REAL_TRADINGVIEW_CAPTURE_SOURCE_NOT_CONFIGURED'},telegramPullbackPolicy:{version:require('./telegram-turn-confirmation').VERSION,closedCandle:true,priceConfirmation:'PREVIOUS_EXTREME_OR_TWO_ADVERSE_CLOSES',momentum:'WT_AGAINST_OR_WEAKENING',minimumCurrentAtrRetracement:0.20,oncePerTpStage:true},telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.9',eaVersion:'2.16',tf2FillGuard:{version:'TF2_FILL_GUARD_V1',protectedEaVersion:'2.16',legacyEntryEnabled:true,slMaximumPrice:4,entryBeforeTp1:true,lockAtOrBeyondActualFill:true},activeSop:{version:'PINE_NATIVE_SOLID_ENTRY_V7',scriptRevision:'7.1',marketEntryBlock:false,oppositeYellowExit:{confirmed:true,buy:'BJ_BEARISH_REVERSAL',sell:'BJ_BULLISH_REVERSAL',action:'CLOSE_ALL'},mandatory:['NATIVE_SOLID_LABEL','PRICE_PAST_SOLID','PRICE_VS_SMA20','WT_DIRECTION','RSI_NOT_EXTREME','BAR_CLOSE'],checklistMandatory:false,forecastMandatory:false,tf2Atr:8,tf2SlMaximum:4,tf15Atr:14,legacyFeedCompatible:true,reentry:'CLOSED_PAUSE_RESUME_V2',reentryEvidence:'SERVER_CONFIRMED_CANDLES_AFTER_MT5_FLAT'},setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF2:'2',TF15:'15'}
+    checklistMinimum:4,minimumConfirmations:3,totalConfirmations:4,forecastRequired:false,chopIndexExclusiveMaximum:50,tf1SlMinimumPrice:3,atrPeriod:14,atrReference:'SOP_COMPLETION_ATR14',
+    targetAnchor:'SOP_COMPLETION_PRICE',exitPolicy:'PINE_STEPLOCK_150_TP3_PLUS3_V1',exitPolicies:{TF1:'PINE_STEPLOCK_150_TP3_PLUS3_V1',TF15:'PINE_STEPLOCK_BE_TF15_V1'},
+    tf1DecisionTiming:{version:'TF1_BAR_CLOSE_V1',pineRevision:'3.6-CANDLE-ENTRY-SL4',entryCandle:{version:'TF1_NATIVE_CANDLE_DIRECTION_V1',mandatory:true,tf:'1',requiresUpdatedPine:true,rule:'ZENCORE_BODY_AND_OHLC_DIRECTION_AT_CLOSE'},entrySafety:{version:'TF1_ATR_REVERSALS_V2',atrPeriod:8,atrAbove:4.5,atrBelow:1.5,minimumDirectionChanges:2,closedCandles:6,release:'RECHECK_EACH_CLOSE',requiresUpdatedPine:true},localStepLockEa:'2.16',brokerSl:'EVERY_TICK',legacyCompatible:true},telegramGuideSchedule:{timezone:'Asia/Kuala_Lumpur',tf1Minutes:30,tf15Minutes:60,enabled:true,forecast:'CONDITIONAL_NEXT_MOVEMENT_V2',history:require('./indicator-chart-history').history.status(),retryMissingDataMs:105000},telegramMessageStyle:'PINE_DASHBOARD_INSIGHTS_V3',telegramChartScreenshot:{enabled:false,reason:'REAL_TRADINGVIEW_CAPTURE_SOURCE_NOT_CONFIGURED'},telegramPullbackPolicy:{version:require('./telegram-turn-confirmation').VERSION,closedCandle:true,priceConfirmation:'PREVIOUS_EXTREME_OR_TWO_ADVERSE_CLOSES',momentum:'WT_AGAINST_OR_WEAKENING',minimumCurrentAtrRetracement:0.20,oncePerTpStage:true},telegramFollowsSop:true,requiresNewPineFeed:true,connectorBuild:'2.1.44',eaVersion:'2.44',tf1FillGuard:{version:'TF1_FILL_GUARD_V1',protectedEaVersion:'2.16',legacyEntryEnabled:true,slMaximumPrice:4,entryBeforeTp1:true,lockAtOrBeyondActualFill:true},activeSop:{version:'PINE_NATIVE_SOLID_ENTRY_V7',scriptRevision:'TF1-NATIVE-SOLID-V7.1',marketEntryBlock:false,oppositeYellowExit:{confirmed:true,buy:'BJ_BEARISH_REVERSAL',sell:'BJ_BULLISH_REVERSAL',action:'CLOSE_ALL'},mandatory:['HEMA_COLOR_DIRECTION','NATIVE_SOLID_LABEL','PRICE_PAST_SOLID','PRICE_VS_SMA20','WT_DIRECTION','RSI_NOT_EXTREME','BAR_CLOSE'],checklistMandatory:false,forecastMandatory:false,tf1Atr:8,tf1SlMaximum:4,tf15Atr:14,legacyFeedCompatible:true,reentry:'CLOSED_PAUSE_RESUME_V2',reentryEvidence:'SERVER_CONFIRMED_CANDLES_AFTER_MT5_FLAT'},setupLifecyclePolicy:require('./setup-lifecycle').POLICY,checklistHemaTimeframes:{TF1:'1',TF15:'15'}
   }));
   if(req.method==='POST'&&pathname==='/webhook'){
     const body=await readBody(req);

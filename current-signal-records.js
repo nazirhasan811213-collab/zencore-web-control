@@ -4,7 +4,7 @@ const Retention=require('./record-retention');
 const validTime=t=>Number.isFinite(t)&&t>0;
 function idFor(e){return crypto.createHash('sha256').update(JSON.stringify([e.symbol,String(e.timeframe),e.setupKey||e.notificationKey||null])).digest('hex');}
 function applyEvent(rows,e){
- if(e.telegramDuplicate||!['XAUUSD','BTCUSD'].includes(e.symbol)||!['2','15'].includes(String(e.timeframe))||!validTime(e.time))return [];
+ if(e.telegramDuplicate||!['XAUUSD','BTCUSD'].includes(e.symbol)||!['1','2','15'].includes(String(e.timeframe))||!validTime(e.time))return [];
  const tf=String(e.timeframe),id=idFor(e),changed=[];
  if(e.kind==='ENTRY'){
   const p=e.telegramPlan,sign=e.side==='BUY'?1:e.side==='SELL'?-1:0;
@@ -61,7 +61,7 @@ class CurrentSignalRecords{
   }this.error=null;this.lastSync=this.now();return imported;
   }catch(e){this.error='Rekod signal gagal diselaraskan';throw e;}
  }
- start(){if(this.timer)return;const run=()=>this.sync().then(async n=>{if(n){const stats=(await this.pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER(WHERE state='OPEN')::int AS open FROM zencore_current_signal_records")).rows[0];this.log.log?.('Durable TF2/TF15 records synchronized:',JSON.stringify({updated:n,...stats}));}}).catch(()=>this.log.error?.('Durable TF2/TF15 records sync unavailable'));run();this.timer=setInterval(run,15000);this.timer.unref?.();}
+ start(){if(this.timer)return;const run=()=>this.sync().then(async n=>{if(n){const stats=(await this.pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER(WHERE state='OPEN')::int AS open FROM zencore_current_signal_records")).rows[0];this.log.log?.('Durable TF1/TF15 records synchronized:',JSON.stringify({updated:n,...stats}));}}).catch(()=>this.log.error?.('Durable TF1/TF15 records sync unavailable'));run();this.timer=setInterval(run,15000);this.timer.unref?.();}
  stop(){clearInterval(this.timer);this.timer=null;}
  async read(){
   const retention=Retention.metadata(this.now());

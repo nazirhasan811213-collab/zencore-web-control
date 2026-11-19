@@ -1,5 +1,5 @@
 const {chromium}=require('playwright'),fs=require('fs'),assert=require('node:assert/strict');
-(async()=>{const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));let decision=null,calls=0;
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));let decision=null,calls=0;
  const row={id:'00000000-0000-4000-8000-000000000002',displayName:'Trader Baru',email:'new@example.test',phone:'0123456789',ibName:'Partner IB',createdAt:Date.now(),status:'pending',decision:'pending'};
  await page.route('**/*',async route=>{const path=new URL(route.request().url()).pathname;
  if(path==='/register')return route.fulfill({body:fs.readFileSync('register.html','utf8'),contentType:'text/html; charset=utf-8'});

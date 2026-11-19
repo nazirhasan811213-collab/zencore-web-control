@@ -186,8 +186,8 @@ if (AUTH_ENABLED) {
 
     if(store.pool){
       const records=new (require('./current-signal-records').CurrentSignalRecords)({pool:store.pool});
-      try{await records.init();currentSignalRecords=records;records.start();console.log('Durable TF2/TF15 signal records ready');}
-      catch(_){console.error('Durable TF2/TF15 signal records unavailable');}
+      try{await records.init();currentSignalRecords=records;records.start();console.log('Durable TF1/TF15 signal records ready');}
+      catch(_){console.error('Durable TF1/TF15 signal records unavailable');}
     }
     if (store.pool) {
       const collector = new SignalOutcomeStore({pool:store.pool,fetchSummary:fetchLocalValidation});
@@ -265,7 +265,7 @@ if (AUTH_ENABLED) {
       console.log(`ZenCore local EA demo-only scoped gate: ${localEaDemoExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
-        scalpingTimeframe: '2',
+        scalpingTimeframe: '1',
         onConfirmedPositions: snapshot=>positionTelegram?.observe(snapshot),
         viewerAccount:async userId=>(await authState.store.findUserByIdForLogin(userId))?.role==='viewer',
         entryAccessAllowed:async userId=>{const u=await authState.store.findUserByIdForLogin(userId);return require('./account-access').allowed(u)&&require('./account-handover').canTrade(u);},
@@ -1790,8 +1790,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/auto-trade.css') return sendAuthAsset(res, 'auto-trade.css', 'text/css; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_Gold_065_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_Gold_065_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_Multi_Pair_Feed_32_3.pine', 'text/plain; charset=utf-8');
-  if (req.method === 'GET' && pathname === '/downloads/ZenCore_SOP_HEMA23.md') return sendAuthAsset(res, 'docs/LIVE_SOP_HEMA23.md', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_SOP_HEMA13.md') return sendAuthAsset(res, 'docs/LIVE_SOP_HEMA13.md', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_Main.pine') return sendAuthAsset(res, 'ZenCore_AI_Dashboard_Pro_WebBridge.pine', 'text/plain; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF1_SOP_V7.pine') return sendAuthAsset(res, 'ZenCore_TF1_SOP_V7.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_2M_MultiPair.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF2_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF2_Realtime_Feed.pine', 'text/plain; charset=utf-8');
   if (req.method === 'GET' && pathname === '/downloads/ZenCore_TF15_Realtime_Feed.pine') return sendAuthAsset(res, 'ZenCore_TF15_Intraday.pine', 'text/plain; charset=utf-8');
@@ -2031,7 +2032,7 @@ const server = http.createServer(async (req, res) => {
   if(req.method==='GET' && pathname==='/api/analysis/chart'){
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     const symbol=url.searchParams.get('symbol')||'XAUUSD',tf=url.searchParams.get('tf');
-    if(!require('./analysis-dual-model').SYMBOLS.includes(symbol)||!['2','15'].includes(tf))return sendJson(res,400,{ok:false,error:'Pair atau timeframe carta tidak disokong.'});
+    if(!require('./analysis-dual-model').SYMBOLS.includes(symbol)||!['1','15'].includes(tf))return sendJson(res,400,{ok:false,error:'Pair atau timeframe carta tidak disokong.'});
     return sendJson(res,200,require('./indicator-chart-history').history.snapshot(tf,Date.now(),symbol));
   }
 
@@ -2066,7 +2067,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res,200,{ok:true,...await analysisAlerts.feed(new URL(req.url,'http://localhost').searchParams.get('after'))});
       if (req.method==='GET' && pathname==='/api/analysis-alerts/active-plan') {
         const symbol=String(new URL(req.url,'http://localhost').searchParams.get('symbol')||'').toUpperCase();
-        return sendJson(res,200,{ok:true,activePlan:await analysisAlerts.activePlan(symbol,Number(url.searchParams.get('timeframe')||2))});
+        return sendJson(res,200,{ok:true,activePlan:await analysisAlerts.activePlan(symbol,Number(url.searchParams.get('timeframe')||1))});
       }
       if(req.method==='POST') {
         const body=await readJson(req);

@@ -5,7 +5,7 @@ const Core = require('../auto-trade-core');
 
 function readyMarket(overrides = {}) {
   return {
-    symbol: 'XAUUSD',timeframe:'2',
+    symbol: 'XAUUSD',timeframe:'1',
     receivedAt: 1_790_000_010_000,
     strategyNormal: {
       state: 'READY',

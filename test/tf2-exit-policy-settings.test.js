@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),C=require('../auto-trade-core');
 const settings={capitalUsd:100,lotPerLayer:.01,layers:3,symbols:['XAUUSD','EURUSD'],strategyMode:'TF2_SCALPING'};
-test('TF2 preset exists for gold and FX; no change to sizing or TF15 exit policy',()=>{
+test('TF1 preset exists for gold and FX; no change to sizing or TF15 exit policy',()=>{
  const existing={version:'LEGACY_TF15'};
  const v=C.validateSettings({...settings,strategyExitPolicies:{TF15_INTRA:existing}});
  assert.equal(v.ok,true);

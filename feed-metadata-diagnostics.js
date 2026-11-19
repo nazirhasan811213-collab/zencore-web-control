@@ -1,19 +1,19 @@
 'use strict';
-const RULE='TF2_3GREEN_TP1_HEMAGAP_V1';
-const SEPT='TF2_SEP24_4GREEN_HEMA5_V1';
-const CURRENT='TF2_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1';
+const RULE='TF1_3GREEN_TP1_HEMAGAP_V1';
+const SEPT='TF1_SEP24_4GREEN_HEMA5_V1';
+const CURRENT='TF1_CURRENT_SOLID_3GREEN_HEMA_PRICE_V1';
 // Bounded, account-free ingress evidence. Never retain the raw webhook body.
 function createFeedMetadataDiagnostics({now=Date.now}={}){
  const channels=new Map();
  function record(batch,acceptedSymbols=[]){
   const tf=String(batch?.timeframe),channel=batch?.feedChannel;
-  if(!['2','3','15'].includes(tf)||!['DASHBOARD','EXECUTION'].includes(channel)||
+  if(!['1','3','15'].includes(tf)||!['DASHBOARD','EXECUTION'].includes(channel)||
    batch?.feedVersion!==`TF${tf}_REALTIME_V1`||!Array.isArray(batch?.markets))return;
   const row=batch.markets.find(r=>Array.isArray(r)&&r[0]==='XAUUSD');
   if(!row)return;
   const meta=row[66],key=`TF${tf}_${channel}`,previous=channels.get(key);
   const current=[CURRENT,SEPT].includes(meta?.entryRuleVersion)&&meta?.currentSolidOnly===true;
-  const solid80=['TF2_SOLID_RIBBON_V1','TF3_SOLID_RIBBON_V1','TF15_SOLID_RIBBON_V1','TF2_SOLID_80PCT_LIVE_V2','TF2_SOLID_HOLD_SCALP_CAP_V5','TF2_SOLID_HOLD_SCALP_CAP_V4','TF2_SOLID_80PCT_SCALP_CAP_V3'].includes(meta?.entryRuleVersion);
+  const solid80=['TF1_SOLID_RIBBON_V1','TF3_SOLID_RIBBON_V1','TF15_SOLID_RIBBON_V1','TF1_SOLID_80PCT_LIVE_V2','TF1_SOLID_HOLD_SCALP_CAP_V5','TF1_SOLID_HOLD_SCALP_CAP_V4','TF1_SOLID_80PCT_SCALP_CAP_V3'].includes(meta?.entryRuleVersion);
   const revised=current||solid80||meta?.entryRuleVersion===RULE&&meta?.pendingEntryReturn===true;
   const observedAt=now(),emittedAt=Number(batch.emittedAt);
   const sample={receivedAt:observedAt,emittedAt:Number.isFinite(emittedAt)?emittedAt:null,
@@ -21,7 +21,7 @@ function createFeedMetadataDiagnostics({now=Date.now}={}){
    scriptRevision:typeof meta?.scriptRevision==='string'?meta.scriptRevision.slice(0,64):null,entryPolicyVersion:typeof meta?.entryPolicyVersion==='string'?meta.entryPolicyVersion.slice(0,64):null,planMode:['Fixed R:R','Fibonacci'].includes(meta?.planMode)?meta.planMode:null,rule:solid80?meta.entryRuleVersion:current?meta.entryRuleVersion:meta?.entryRuleVersion===RULE?RULE:null,currentSolidOnly:current,pendingEntryReturn:meta?.pendingEntryReturn===true,
    hemaRequiredTimeframes:Array.isArray(meta?.hemaRequiredTfs)&&meta.hemaRequiredTfs.length===1&&[2,5].includes(meta.hemaRequiredTfs[0])?[String(meta.hemaRequiredTfs[0])]:null,
    hasEntryMetadata:!!meta&&typeof meta==='object'&&!Array.isArray(meta),
-   hasLiveHema:(tf==='15'?['HEMA15_LIVE_V1','HEMA1530_V1'].includes(row[65]?.version):(tf==='3'?row[65]?.version==='HEMA3_LIVE_V1':['HEMA2_LIVE_V1','HEMA23_LIVE_V1'].includes(row[65]?.version))),
+   hasLiveHema:(tf==='15'?['HEMA15_LIVE_V1','HEMA1530_V1'].includes(row[65]?.version):(tf==='3'?row[65]?.version==='HEMA3_LIVE_V1':['HEMA1_LIVE_V1','HEMA13_LIVE_V1'].includes(row[65]?.version))),
    lifecycleVersion:['PULLBACK_REQUALIFY_V1','CLOSED_PAUSE_RESUME_V2'].includes(meta?.lifecycleVersion)?meta.lifecycleVersion:null,cycleKind:['INITIAL','FOLLOWUP'].includes(meta?.cycleKind)?meta.cycleKind:null,
    entryDeliveryVersion:meta?.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?meta.entryDeliveryVersion:null,
    solidHoldActive:meta?.solidHoldActive===true,

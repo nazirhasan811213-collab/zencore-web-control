@@ -95,45 +95,67 @@ jobs:
       - name: Install browser test tools
         run: npm install --no-save --package-lock=false playwright@1.58.2
 
-      - name: Install test browser
-        run: npx playwright install --with-deps chromium
+      - name: Select available Chrome or install test browser
+        id: browser
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || true)"
+          if [ -n "$browser_path" ]; then
+            echo "ZENCORE_QA_CHROMIUM=$browser_path" >> "$GITHUB_ENV"
+            "$browser_path" --version
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Check Analysis popup and mobile layout
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-analysis-alert-ui.cjs
 
       - name: Check Pine insights dual timeframe UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-pine-insights-ui.cjs
       - name: Check Strength dashboard and incomplete feed recovery
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-strength-dashboard-ui.cjs
 
       - name: Check user trade monitoring UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-user-trade-ui.cjs
 
       - name: Check account handover and admin reset
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-account-handover-ui.cjs
 
       - name: Check Auto Trade button actions and diagnostic failure isolation
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-auto-trade-buttons-ui.cjs
 
       - name: Check editable manual exit defaults and persistence
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-manual-exit-ui.cjs
 
       - name: Check managed username login
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-managed-login-ui.cjs
 
       - name: Check isolated IB demo UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-ib-demo-ui.cjs
 
       - name: Check admin Telegram messaging UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-admin-telegram-ui.cjs
 
       - name: Check registration approval UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-registration-ui.cjs
 
       - name: Check native indicator chart UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-indicator-chart-ui.cjs
 
       - name: Check durable signal records UI
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         run: node scripts/check-records-ui.cjs
 
       - name: Save Analysis previews

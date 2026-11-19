@@ -2,11 +2,11 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {AnalysisAlerts}=require('../analysis-alert-service');
 
-test('Telegram skips queued currency alerts and delivers XAUUSD closes separately for TF2 and TF15',async()=>{
+test('Telegram skips queued currency alerts and delivers XAUUSD closes separately for TF1 and TF15',async()=>{
  const events=[
-  {symbol:'GBPUSD',kind:'ENTRY',timeframe:'2'},
+  {symbol:'GBPUSD',kind:'ENTRY',timeframe:'1'},
   {symbol:'GBPJPY',kind:'CLOSE',timeframe:'15'},
-  {symbol:'XAUUSD',kind:'CLOSE',timeframe:'2'},
+  {symbol:'XAUUSD',kind:'CLOSE',timeframe:'1'},
   {symbol:'XAUUSD',kind:'CLOSE',timeframe:'15'}
  ].map((e,i)=>({...e,id:i+1,time:Date.now(),message:e.symbol+' close'}));
  const statuses=[],sent=[];
@@ -25,7 +25,7 @@ test('Telegram skips queued currency alerts and delivers XAUUSD closes separatel
  await alerts.deliver();
  assert.deepEqual(statuses,[[1,'skipped'],[2,'skipped'],[3,'sent'],[4,'sent']]);
  assert.equal(sent.length,2);
- assert.match(sent[0],/XAUUSD/);assert.match(sent[0],/TF2\b/);
+ assert.match(sent[0],/XAUUSD/);assert.match(sent[0],/TF1\b/);
  assert.match(sent[1],/XAUUSD/);assert.match(sent[1],/TF15\b/);
  assert.ok(sent.every(message=>!message.includes('GBP')));
 });

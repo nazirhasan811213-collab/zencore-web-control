@@ -107,7 +107,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/register?ib=nazir');
 
-    response = await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=2`);
+    response = await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=1`);
     assert.equal(response.status, 401);
 
     response = await fetch(`${BASE}/api/markets`);
@@ -365,12 +365,12 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.match(analysisPage, /mt5LiveMonitor[^>]+hidden/);
     assert.match(analysisPage, /auto-trade-monitor\.js/);
     assert.match(analysisPage, /indicator-chart\.js/);
-    response=await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=2`,{headers:{Cookie:cookie}});
-    assert.equal(response.status,200);const chart=await response.json();assert.equal(chart.timeframe,'2');assert.equal(chart.source,'PINE_FEED');assert(Array.isArray(chart.candles));
+    response=await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=1`,{headers:{Cookie:cookie}});
+    assert.equal(response.status,200);const chart=await response.json();assert.equal(chart.timeframe,'1');assert.equal(chart.source,'PINE_FEED');assert(Array.isArray(chart.candles));
     response=await fetch(`${BASE}/api/analysis/chart?symbol=BTCUSD&tf=15`,{headers:{Cookie:cookie}});
     assert.equal(response.status,200);const btcChart=await response.json();assert.equal(btcChart.symbol,'BTCUSD');assert.equal(btcChart.timeframe,'15');assert(Array.isArray(btcChart.candles));
     response=await fetch(`${BASE}/api/analysis/chart?symbol=XAUUSD&tf=3`,{headers:{Cookie:cookie}});assert.equal(response.status,400);
-    response=await fetch(`${BASE}/api/analysis/chart?symbol=EURUSD&tf=2`,{headers:{Cookie:cookie}});assert.equal(response.status,400);
+    response=await fetch(`${BASE}/api/analysis/chart?symbol=EURUSD&tf=1`,{headers:{Cookie:cookie}});assert.equal(response.status,400);
 
 
     response = await fetch(`${BASE}/results`, { headers: { Cookie: cookie } });

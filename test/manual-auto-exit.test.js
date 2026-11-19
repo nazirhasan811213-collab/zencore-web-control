@@ -79,10 +79,10 @@ test('manual telemetry survives normalization and storage without account creden
  const clean=Core.sanitisePosition(raw);assert.equal(clean.origin,'MANUAL');
  await store.replacePositions(userId,[clean],at);assert.equal((await store.listPositions(userId))[0].positionId,'666');
 });
-test('TF2 manual exit acts on exact matching manual ticket; TF15, wrong side and stale data cannot act',async()=>{
+test('TF1 manual exit acts on exact matching manual ticket; TF15, wrong side and stale data cannot act',async()=>{
  const {service,store}=await setup();await service.saveSettings(userId,settings);
  await store.replacePositions(userId,[{ticket:'555',positionId:'666',origin:'MANUAL',symbol:'XAUUSD',side:'SELL',strategyMode:'TF2_SCALPING',volume:.02,entry:4000,openedAt:at-1000}],at);
- const market={symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'CLOSE_50_NOW'}};
+ const market={symbol:'XAUUSD',timeframe:'1',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'CLOSE_50_NOW'}};
  for(const m of [{...market,timeframe:'15'},{...market,strategyNormal:{side:'BUY'}},{...market,receivedAt:at-31000,signalObservedAt:at-31000}])await service.dispatchMarkets([m]);
  assert.equal([...store.commands.values()].flat().filter(c=>c.type==='MANUAL_EXIT_ACTION').length,0);
  await service.dispatchMarkets([market]);
@@ -94,7 +94,7 @@ test('TF2 manual exit acts on exact matching manual ticket; TF15, wrong side and
 test('chart SL/TP exit is not copied onto a manual entry with its own smaller targets',async()=>{
  const {service,store}=await setup();await service.saveSettings(userId,settings);
  await store.replacePositions(userId,[{ticket:'555',positionId:'666',origin:'MANUAL',symbol:'XAUUSD',side:'SELL',volume:.02,openedAt:at-1000}],at);
- await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'EXIT_SL',slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:5000}}]);
+ await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'1',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'EXIT_SL',slMoveTriggered:true,slMoveAction:'MOVE_SL_TP1',activeSl:5000}}]);
  assert.equal([...store.commands.values()].flat().filter(c=>['MANUAL_EXIT_ACTION','MANAGE_POSITION'].includes(c.type)).length,0);
 });
 test('queued manual ON config is revoked after user saves OFF',async()=>{
@@ -127,7 +127,7 @@ test('OFF revokes queued manual closes and prevents further manual actions',asyn
  const config=(await service.nextCommand(podToken)).command;
  await service.acknowledgeCommand(podToken,config.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
  await store.replacePositions(userId,[{ticket:'555',positionId:'666',origin:'MANUAL',symbol:'XAUUSD',side:'SELL',strategyMode:'TF2_SCALPING',volume:.02,entry:4000,openedAt:at-1000}],at);
- const market={symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'CLOSE_50_NOW'}};
+ const market={symbol:'XAUUSD',timeframe:'1',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action:'CLOSE_50_NOW'}};
  await service.dispatchMarkets([market]);
  await service.saveManualExit(userId,{enabled:false});
  for(let i=0;i<3;i++){const c=(await service.nextCommand(podToken)).command;assert.notEqual(c?.type,'MANUAL_EXIT_ACTION');if(c)await service.acknowledgeCommand(podToken,c.id,{status:'EXECUTED',code:'MANUAL_EXIT_OFF'});}
@@ -143,7 +143,7 @@ test('manual step lock accepts custom presets but never dispatches Pine close in
  const config=(await service.nextCommand(podToken)).command;assert.equal(config.type,'MANUAL_EXIT_CONFIG');
  await service.acknowledgeCommand(podToken,config.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
  await store.replacePositions(userId,[{ticket:'555',positionId:'666',origin:'MANUAL',symbol:'XAUUSD',side:'SELL',strategyMode:'TF2_SCALPING',volume:.02,entry:4000,openedAt:at-1000}],at);
- for(const action of ['CLOSE_50_NOW','EXIT_REMAINING','EXIT_ALL','EXIT_SL'])await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'2',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action,oppositeYellow:true}}]);
+ for(const action of ['CLOSE_50_NOW','EXIT_REMAINING','EXIT_ALL','EXIT_SL'])await service.dispatchMarkets([{symbol:'XAUUSD',timeframe:'1',receivedAt:at,signalObservedAt:at,strategyNormal:{side:'SELL'},positionManagement:{action,oppositeYellow:true}}]);
  assert.equal([...store.commands.values()].flat().filter(c=>['MANUAL_EXIT_ACTION','MANAGE_POSITION','PLACE_SETUP'].includes(c.type)).length,0);
 });
 

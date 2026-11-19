@@ -22,18 +22,18 @@ function acceptsSnapshot(previous, incoming) {
 
 // A versioned realtime bridge owns execution data across candle boundaries.
 // A legacy chart payload has no current HEMA/event fields and cannot replace it.
-function realtimeTf2(snapshot){
-  return String(snapshot?.timeframe)==='2'&&snapshot?.feedVersion==='TF2_REALTIME_V1'&&
-    snapshot?.hemaConfirmation?.version==='HEMA23_LIVE_V1'&&
+function realtimeTf1(snapshot){
+  return String(snapshot?.timeframe)==='1'&&snapshot?.feedVersion==='TF1_REALTIME_V1'&&
+    snapshot?.hemaConfirmation?.version==='HEMA13_LIVE_V1'&&
     typeof snapshot?.entryEvent==='boolean'&&number(snapshot?.signalObservedAt)>0;
 }
 function acceptsFeedSource(previous,incoming){
   // Check ownership before bar ordering: a newer legacy bar must not displace
-  // TF2 and then cause its next realtime update to fail the bar-time check.
-  if(realtimeTf2(previous)&&!realtimeTf2(incoming))return false;
+  // TF1 and then cause its next realtime update to fail the bar-time check.
+  if(realtimeTf1(previous)&&!realtimeTf1(incoming))return false;
   if(!acceptsSnapshot(previous,incoming))return false;
   if(!previous||number(previous.time)!==number(incoming.time))return true;
-  const oldRealtime=realtimeTf2(previous),newRealtime=realtimeTf2(incoming);
+  const oldRealtime=realtimeTf1(previous),newRealtime=realtimeTf1(incoming);
   if(oldRealtime||newRealtime){
     if(oldRealtime&&!newRealtime)return false;
     if(oldRealtime&&newRealtime&&number(incoming.signalObservedAt)<number(previous.signalObservedAt))return false;
@@ -53,4 +53,4 @@ function effectiveReceivedAt(snapshot) {
     : received;
 }
 
-module.exports = {acceptsSnapshot,acceptsFeedSource,realtimeTf2,effectiveReceivedAt};
+module.exports = {acceptsSnapshot,acceptsFeedSource,realtimeTf1,effectiveReceivedAt};

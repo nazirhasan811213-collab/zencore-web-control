@@ -19,7 +19,7 @@
       <header class="portal-top autotrade-top">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><i class="brand-orbit"></i></div>
-          <div><b>ZenCore Precision Entry</b><span>TF2 / TF15 · REAL / DEMO</span></div>
+          <div><b>ZenCore Precision Entry</b><span>TF1 / TF15 · REAL / DEMO</span></div>
         </div>
 
         <nav class="top-nav" aria-label="Navigasi utama">
@@ -42,7 +42,7 @@
             <span id="masterStatusPill" class="master-pill stopped"><i></i> STOPPED</span>
           </div>
           <h1>Kawal Auto Trade MT5.</h1>
-          <p>Pilih strategi, set lot dan layer, lepas tu check connection MT5. TF2 dan TF15 jalan ikut SOP sendiri.</p>
+          <p>Pilih strategi, set lot dan layer, lepas tu check connection MT5. TF1 dan TF15 jalan ikut SOP sendiri.</p>
         </div>
         <div class="hero-mode">
           <span>ROLLOUT MODE</span>
@@ -155,7 +155,7 @@
             <div class="settings-fields dual-capital"><label><span>MODAL (USD)</span><input id="capitalUsd" name="capitalUsd" type="number" min="10" max="100000000" step="0.01" value="100" required></label></div>
             <div class="settings-fields mt5-symbol-fields"><label><span>PAIR AUTO TRADE</span><select id="tradeSymbols"><option value="XAUUSD">XAUUSD sahaja</option><option value="BTCUSD">BTCUSD sahaja</option><option value="XAUUSD,BTCUSD">XAUUSD + BTCUSD</option></select></label></div>
             <div class="dual-trade-settings">
-              <section class="tf-setting-card" aria-labelledby="tf2Heading"><header><h3 id="tf2Heading">Scalping <b>TF2</b></h3><strong id="tf2EntryState">TIADA ENTRY</strong></header><div data-auto-pair="XAUUSD"><h4>XAUUSD</h4><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf2Total">—</b></p></div><div data-auto-pair="BTCUSD" hidden><h4>BTCUSD</h4><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="btcTf2Lot" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="btcTf2Layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="btcTf2Total">—</b></p></div></section>
+              <section class="tf-setting-card" aria-labelledby="tf1Heading"><header><h3 id="tf1Heading">Scalping <b>TF1</b></h3><strong id="tf1EntryState">TIADA ENTRY</strong></header><div data-auto-pair="XAUUSD"><h4>XAUUSD</h4><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="lotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf1Total">—</b></p></div><div data-auto-pair="BTCUSD" hidden><h4>BTCUSD</h4><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="btcTf1Lot" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="btcTf1Layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="btcTf1Total">—</b></p></div></section>
               <section class="tf-setting-card" aria-labelledby="tf15Heading"><header><h3 id="tf15Heading">Intra <b>TF15</b></h3><strong id="tf15EntryState">TIADA ENTRY</strong></header><div data-auto-pair="XAUUSD"><h4>XAUUSD</h4><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="tf15LotPerLayer" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="tf15Layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="tf15Total">—</b></p></div><div data-auto-pair="BTCUSD" hidden><h4>BTCUSD</h4><div class="tf-inputs"><label><span>SAIZ LOT / LAYER</span><input id="btcTf15Lot" type="number" min="0.001" max="100" step="0.001" placeholder="Isi lot"></label><label><span>BILANGAN LAYER</span><input id="btcTf15Layers" type="number" min="1" step="1" placeholder="Isi layer"></label></div><p>Jumlah lot: <b id="btcTf15Total">—</b></p></div></section>
             </div>
             <p class="tf-empty-note">Lot atau layer kosong = tiada entry selepas Simpan.</p>
@@ -172,7 +172,7 @@
               <p id="manualExitError" class="form-error" role="alert"></p>
               <p><b>Khusus entry manual:</b> TP1/TP2/TP3 ialah paras untuk menggerakkan SL, bukan arahan tutup posisi. EA mengosongkan TP broker pada posisi yang diambil alih.</p>
               <ol><li>Entry dibuka: SL dikira daripada harga fill MT5.</li><li>Harga sampai TP1: SL ke harga entry.</li><li>Harga sampai TP2: SL ke TP1.</li><li>Harga sampai TP3: SL ke TP2.</li><li>Harga melepasi TP3 sebanyak 2.00 untuk XAUUSD atau 1× ATR untuk BTCUSD pada EA 2.35: SL ke TP3.</li></ol>
-              <p>BUY: paras sasaran di atas entry. SELL: paras sasaran di bawah entry. SL hanya bergerak ke arah mengunci untung. Posisi ditutup apabila SL aktif disentuh. Signal exit Pine tidak menutup posisi dalam mod ini. Memerlukan EA 2.26 / Connector 2.1.25 atau VPS Manager 1.1.9.</p>
+              <p>BUY: paras sasaran di atas entry. SELL: paras sasaran di bawah entry. SL hanya bergerak ke arah mengunci untung. Posisi ditutup apabila SL aktif disentuh. Signal exit Pine tidak menutup posisi dalam mod ini. Gunakan EA 2.44 / Connector 2.1.44 atau VPS Manager 1.1.28 untuk TF1 baharu.</p>
               <small>Untuk XAUUSD, anda boleh ubah jarak TP/SL. Medan kosong guna default: TP1 2.00, TP2 4.00, TP3 6.00, SL 3.00. TP1 mesti kurang daripada TP2 dan TP2 kurang daripada TP3. Tetapan baharu digunakan untuk posisi manual baharu; pelan posisi yang sudah diambil alih dikekalkan.  Hanya akaun hedging; posisi lama dan EA lain tidak diambil alih. TP/SL dikira dari entry setiap tiket. Had 10 layer ialah amaran sahaja; posisi tambahan tetap dilindungi. Saiz lot ikut entry anda. Tetapan berkuat kuasa selepas EA menerima arahan Simpan. SL sedia ada yang lebih ketat dikekalkan.</small>
             </fieldset>
             <fieldset class="symbol-fieldset">
@@ -198,7 +198,7 @@
             <span id="riskLevel" class="risk-level pending">PENDING</span>
           </div>
           <label class="risk-symbol" for="riskSymbol"><span>PAIR RUJUKAN</span><select id="riskSymbol"></select></label>
-          <label class="risk-symbol" for="riskTimeframe"><span>TIMEFRAME</span><select id="riskTimeframe"><option value="2">TF2 Scalping</option><option value="15">TF15 Intraday</option></select></label>
+          <label class="risk-symbol" for="riskTimeframe"><span>TIMEFRAME</span><select id="riskTimeframe"><option value="1">TF1 Scalping</option><option value="15">TF15 Intraday</option></select></label>
           <div class="risk-figure">
             <span>ANGGARAN RISIKO</span>
             <b id="riskPercent">—</b>
@@ -322,11 +322,11 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/setup-lifecycle.js?v=20261017-v1" defer></script><script src="/tf15-intraday.js?v=20261017-lifecycle-v1" defer></script><script src="/tf2-bar-close.js?v=20261027" defer></script><script src="/tf2-ribbon-scalping.js?v=20261115-dual-pair" defer></script><script src="/analysis-execution-contract.js?v=20261115-dual-pair" defer></script>
-  <script src="/auto-trade-core.js?v=20261115-dual-pair" defer></script>
-  <script src="/auto-trade.js?v=20261115-arming-ack" defer></script>
-  <script src="/viewer-mode.js?v=1.1" defer></script>
-<script src="/workspace-shell.js?v=20261007.2" defer></script>
+  <script src="/setup-lifecycle.js?v=20261119-tf1-hema" defer></script><script src="/tf15-intraday.js?v=20261119-tf1-hema" defer></script><script src="/tf2-bar-close.js?v=20261119-tf1-hema" defer></script><script src="/tf2-ribbon-scalping.js?v=20261119-tf1-hema" defer></script><script src="/analysis-execution-contract.js?v=20261119-tf1-hema" defer></script>
+  <script src="/auto-trade-core.js?v=20261119-tf1-hema" defer></script>
+  <script src="/auto-trade.js?v=20261119-tf1-hema" defer></script>
+  <script src="/viewer-mode.js?v=20261119-tf1-hema" defer></script>
+<script src="/workspace-shell.js?v=20261119-tf1-hema" defer></script>
 </body>
 </html>
 

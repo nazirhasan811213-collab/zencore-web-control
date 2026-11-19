@@ -1,5 +1,5 @@
 'use strict';
-const MINUTE=60000,INTERVALS={'2':30*MINUTE,'15':60*MINUTE};
+const MINUTE=60000,INTERVALS={'1':30*MINUTE,'15':60*MINUTE};
 const finite=Number.isFinite;
 const clock=t=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(t));
 // Only confirmed, completed source candles may supply structure or indicators.
@@ -11,11 +11,11 @@ function closedRows(candles,now,tf){
     ![c.open,c.high,c.low,c.close].every(v=>finite(v)&&v>0)||c.high<Math.max(c.open,c.close)||c.low>Math.min(c.open,c.close))continue;
   if(!map.has(c.time)||c.observedAt>map.get(c.time).observedAt)map.set(c.time,c);
  }
- return [...map.values()].sort((a,b)=>a.time-b.time).slice(tf==='2'?-15:-12);
+ return [...map.values()].sort((a,b)=>a.time-b.time).slice(tf==='1'?-15:-12);
 }
 function nearbyLevels(rows,price,atr,tf,symbol='XAUUSD'){
  if(rows.length<3||!finite(price)||!finite(atr)||atr<=0)return {supports:[],resistances:[]};
- const cap=tf==='2'?symbol==='BTCUSD'?atr*2:Math.min(atr*2,3.5):atr*3,levels=[];
+ const cap=tf==='1'?symbol==='BTCUSD'?atr*2:Math.min(atr*2,3.5):atr*3,levels=[];
  for(let i=1;i<rows.length-1;i++){
   const c=rows[i];
   if(c.high>rows[i-1].high&&c.high>=rows[i+1].high)levels.push(c.high);
@@ -57,7 +57,7 @@ const price=v=>v.toFixed(2);
 function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVALS[tf],symbol=m?.symbol||'XAUUSD'){
  const a=assess(m,candles,now,tf),end=slot+INTERVALS[tf];
  const date=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(slot));
- const lines=[`📊 ZENCORE • TF${tf}`,tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`${date} • ${symbol}`,`🕙 ${clock(slot)}–${clock(end)} MYT`,a.fresh?`Data ${clock(m.signalObservedAt)} MYT • Candle tutup ${clock(a.closedAt)} MYT`:'Data belum segar / candle tutup belum cukup',''];
+ const lines=[`📊 ZENCORE • TF${tf}`,tf==='1'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM',`${date} • ${symbol}`,`🕙 ${clock(slot)}–${clock(end)} MYT`,a.fresh?`Data ${clock(m.signalObservedAt)} MYT • Candle tutup ${clock(a.closedAt)} MYT`:'Data belum segar / candle tutup belum cukup',''];
  if(!a.fresh)lines.push('🔴 DATA BELUM CUKUP / TIDAK SEGAR','ELAK ENTRY BAHARU berdasarkan report ini.','','🛡️ PANDUAN ZENCORE','Tunggu data candle tutup yang sah. Jika pegang posisi, semak SL dan sambungan MT5.');
  else{
   const avoid=a.highRisk||a.limited||a.sign===0||!a.levels.supports.length||!a.levels.resistances.length;
@@ -88,7 +88,7 @@ function buildGuide(tf,m,candles,now,slot=Math.floor(now/INTERVALS[tf])*INTERVAL
  }
  const dashboardContext=a.fresh?require('./telegram-dashboard-context').snapshot(m,tf):null;
  lines.push(...require('./telegram-dashboard-context').lines(dashboardContext,tf));
- const compact=[`📊 ZENCORE • TF${tf} • ${tf==='2'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM'}`,`${symbol} • ${date} • ${clock(slot)}–${clock(end)} MYT`];
+ const compact=[`📊 ZENCORE • TF${tf} • ${tf==='1'?'PANDUAN 30 MINIT':'PANDUAN 1 JAM'}`,`${symbol} • ${date} • ${clock(slot)}–${clock(end)} MYT`];
  if(!a.fresh)compact.push('Data belum cukup. Tunggu data sah.','Jika pegang posisi: semak SL dan sambungan MT5.','Panduan ZenCore — Jangan entry berdasarkan laporan ini.');
  else{
   const support=a.levels.supports[0],resistance=a.levels.resistances[0],last=closedRows(candles,now,tf).at(-1);

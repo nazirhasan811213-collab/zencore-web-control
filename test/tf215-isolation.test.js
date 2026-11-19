@@ -13,7 +13,7 @@ function market(tf,side='BUY',at=Date.now()){
  const x=evaluateEntrySop({timeframe:tf,normal3Side:side,normal3Entry:100,normal3Close:100.1,normal3Atr:1,
  normal3Solid:true,normal3PricePastEntry:true,normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,
  normal3Forecast:side==='BUY'?'BULLISH':'BEARISH',normal3MarketPower:60,normal5Position:side==='BUY'?'ABOVE':'BELOW',
- hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA23_LIVE_V1',['tf'+tf]:ribbon,['tf'+(tf==='15'?'30':'3')]:ribbon}},tf);
+ hemaConfirmation:{version:tf==='15'?'HEMA1530_V1':'HEMA13_LIVE_V1',['tf'+tf]:ribbon,['tf'+(tf==='15'?'30':'3')]:ribbon}},tf);
  return {symbol:'XAUUSD',timeframe:tf,receivedAt:at,price:100,signalObservedAt:at,feedMode:'INTRABAR',
  strategyNormal:{tf:tf+'m',state:'READY',side,solid:true,entrySopVersion:x.version,
  sop:{gates:x.gates,sopGreen:x.green,forecast:x.forecast,marketPower:x.power,m5Position:side==='BUY'?'ABOVE':'BELOW',
@@ -28,17 +28,17 @@ async function setup(){
  await store.setControl('owner',{desiredState:'ON',effectiveState:'ON'});
  return {svc,store,at};
 }
-test('Both queues TF2 BUY and TF15 SELL independently on the same pair, without duplicates',async()=>{
- const {svc,store,at}=await setup();const rows=[market('2','BUY',at),market('15','SELL',at)];
+test('Both queues TF1 BUY and TF15 SELL independently on the same pair, without duplicates',async()=>{
+ const {svc,store,at}=await setup();const rows=[market('1','BUY',at),market('15','SELL',at)];
  assert.equal((await svc.dispatchMarkets(rows)).queued,2);
  assert.equal((await svc.dispatchMarkets(rows)).queued,0);
  const commands=store.commands.get('pod');assert.deepEqual(commands.map(c=>c.payload.strategyMode),['TF2_SCALPING','TF15_INTRA']);
  assert.deepEqual(commands.map(c=>c.payload.layers),[3,2]);
  assert.deepEqual(commands.map(c=>c.payload.side),['BUY','SELL']);
 });
-test('TF15 WAIT cannot block qualified TF2; TF2 WAIT cannot block qualified TF15',async()=>{
- for(const tf of ['2','15']){
- const {svc,store,at}=await setup(),other=tf==='2'?'15':'2';
+test('TF15 WAIT cannot block qualified TF1; TF1 WAIT cannot block qualified TF15',async()=>{
+ for(const tf of ['1','15']){
+ const {svc,store,at}=await setup(),other=tf==='1'?'15':'1';
  const waiting=market(other,'BUY',at);waiting.strategyNormal.state='WATCH';waiting.strategyNormal.solid=false;
  assert.equal((await svc.dispatchMarkets([waiting,market(tf,'BUY',at)])).queued,1);
  assert.equal(store.commands.get('pod')[0].payload.analysisSnapshot.executionTimeframe,tf);
@@ -46,7 +46,7 @@ test('TF15 WAIT cannot block qualified TF2; TF2 WAIT cannot block qualified TF15
 });
 test('position exclusion uses pair and own TF; another TF position does not alter entry SOP',()=>{
  const pos=[{symbol:'XAUUSD',strategyMode:'TF2_SCALPING',side:'BUY'}];
- assert.equal(Core.permitsPositionEntry(market('2'),pos),false);
+ assert.equal(Core.permitsPositionEntry(market('1'),pos),false);
  assert.equal(Core.permitsPositionEntry(market('15','SELL'),pos),true);
 });
 test('pending command guard remains per TF in SQL stores',async()=>{
@@ -55,26 +55,26 @@ test('pending command guard remains per TF in SQL stores',async()=>{
  await store.hasRecentHostedEntryCommand('owner','XAUUSD',100,'TF2_SCALPING');
  for(const x of seen){assert.match(x.sql,/COALESCE\(payload->>'strategyMode','TF2_SCALPING'\) = \$4/);assert.equal(x.args.length,4);}
 });
-test('Telegram entries and close state are separate for TF2 and TF15',async()=>{
+test('Telegram entries and close state are separate for TF1 and TF15',async()=>{
  const alerts=new AnalysisAlerts();await alerts.init();const at=Date.now();
  try{
- await alerts.record(market('2','BUY',at));await alerts.record(market('15','SELL',at));
+ await alerts.record(market('1','BUY',at));await alerts.record(market('15','SELL',at));
  const entries=alerts.events.filter(e=>e.kind==='ENTRY');assert.equal(entries.length,2);
- for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('ENTRY TF'+e.timeframe));assert.match(msg,/Coach Tips:/);assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='2'?'30':'3')+':'));}
- const close=market('2','BUY',at+1);close.strategyNormal.state='WATCH';close.positionManagement={action:'EXIT_ALL',reason:'EXIT_ALL'};
- await alerts.record(close);assert.equal(await alerts.activePlan('XAUUSD',2),null);assert.equal((await alerts.activePlan('XAUUSD',15)).side,'SELL');
- assert.match(telegramMessage(alerts.events.at(-1)),/CLOSE ALL TF2/);
+ for(const e of entries){assert.equal(entrySopAllowed(e),true);const msg=telegramMessage(e);assert.match(msg,new RegExp('ENTRY TF'+e.timeframe));assert.match(msg,/Coach Tips:/);assert.doesNotMatch(msg,new RegExp('HEMA TF'+(e.timeframe==='1'?'30':'3')+':'));}
+ const close=market('1','BUY',at+1);close.strategyNormal.state='WATCH';close.positionManagement={action:'EXIT_ALL',reason:'EXIT_ALL'};
+ await alerts.record(close);assert.equal(await alerts.activePlan('XAUUSD',1),null);assert.equal((await alerts.activePlan('XAUUSD',15)).side,'SELL');
+ assert.match(telegramMessage(alerts.events.at(-1)),/CLOSE ALL TF1/);
  const e=entries[0];assert.equal(entrySopAllowed({...e,timeframe:'15'}),false);assert.equal(entrySopAllowed({...e,telegramMarket:{...e.telegramMarket,timeframe:'15'}}),false);
  }finally{clearInterval(alerts.cleanupTimer);}
 });
-test('mismatched or missing timeframe never inherits TF2 for entry or close alerts',()=>{
- const m=market('15');assert.equal(signals({...m,timeframe:'2'}),null);assert.equal(signals({...m,timeframe:undefined}),null);
+test('mismatched or missing timeframe never inherits TF1 for entry or close alerts',()=>{
+ const m=market('15');assert.equal(signals({...m,timeframe:'1'}),null);assert.equal(signals({...m,timeframe:undefined}),null);
 });
 
 test('delivery rejects queued entry when same-TF direction changes, preserving other TF',async()=>{
- const {svc,store,at}=await setup();const rows=[market('2','BUY',at),market('15','SELL',at)];
+ const {svc,store,at}=await setup();const rows=[market('1','BUY',at),market('15','SELL',at)];
  await svc.dispatchMarkets(rows);
- const current=new Map(rows.map(m=>[m.timeframe,m]));current.set('2',{...rows[0],strategyNormal:{state:'WATCH',side:'SELL'}});
+ const current=new Map(rows.map(m=>[m.timeframe,m]));current.set('1',{...rows[0],strategyNormal:{state:'WATCH',side:'SELL'}});
  const token='zcpod_'+'t'.repeat(48),hash=require('../auto-trade-service').tokenHash(token);
  store.podsByToken.set(hash,{...store.podsByUser.get('owner'),tokenHash:hash});
  const guarded=createAutoTradeService({store,now:()=>at,localEaExecutionUserIds:['owner'],commandSigningKey:'test-signing-key-longer-than-thirty-two-bytes',getLatestMarket:(symbol,tf)=>current.get(tf)});
@@ -84,11 +84,11 @@ test('delivery rejects queued entry when same-TF direction changes, preserving o
 });
 
 test('restored SOP independently rejects forecast and HEMA contradictions despite stale READY gates',()=>{
- for(const tf of ['2','15'])for(const side of ['BUY','SELL']){
+ for(const tf of ['1','15'])for(const side of ['BUY','SELL']){
   const m=market(tf,side),s=m.strategyNormal.sop;
   assert.ok(Contract.createEntryDecision(m));
   const bad=[{forecast:'NEUTRAL',marketPower:side==='SELL'?69:45},
-   {['hema'+(tf==='15'?'30':'2')]:{mode:side==='SELL'?'BUY':'SELL'}},
+   {['hema'+(tf==='15'?'30':'1')]:{mode:side==='SELL'?'BUY':'SELL'}},
    {sopGreen:3},{forecast:'NEUTRAL',marketPower:50}];
   for(const edit of bad){
    const changed={...m,strategyNormal:{...m.strategyNormal,sop:{...s,...edit}}};
@@ -102,8 +102,8 @@ test('restored SOP independently rejects forecast and HEMA contradictions despit
 });
 
 test('delivery revokes SELL when forecast or HEMA changes even if state, plan and gates remain READY',async()=>{
- for(const edit of [{forecast:'NEUTRAL',marketPower:69},{hema2:{mode:'BUY'}}]){
-  const {svc,store,at}=await setup(),m=market('2','SELL',at);
+ for(const edit of [{forecast:'NEUTRAL',marketPower:69},{hema1:{mode:'BUY'}}]){
+  const {svc,store,at}=await setup(),m=market('1','SELL',at);
   assert.equal((await svc.dispatchMarkets([m])).queued,1);
   const current={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,...edit}}};
   const token='zcpod_'+'t'.repeat(48),hash=require('../auto-trade-service').tokenHash(token);

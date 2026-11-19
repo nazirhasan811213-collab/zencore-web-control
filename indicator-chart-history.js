@@ -9,7 +9,7 @@ class ChartHistory {
   this.pool=pool;if(!pool)return;
   await pool.query("CREATE TABLE IF NOT EXISTS zencore_guide_candles(tf TEXT NOT NULL, bar_time BIGINT NOT NULL, data JSONB NOT NULL, PRIMARY KEY(tf,bar_time))");
   const saved=await pool.query("SELECT data FROM zencore_guide_candles WHERE bar_time >= $1 ORDER BY bar_time",[now-Core.MAX_AGE]);
-  for(const {data} of saved.rows){if(!data||!['2','15'].includes(data.timeframe)||data.confirmed!==true)continue;const key=historyKey(data.timeframe,data.symbol||'XAUUSD');this.rows.set(key,Core.merge(this.rows.get(key),data,data.timeframe,now));}
+  for(const {data} of saved.rows){if(!data||!['1','15'].includes(data.timeframe)||data.confirmed!==true)continue;const key=historyKey(data.timeframe,data.symbol||'XAUUSD');this.rows.set(key,Core.merge(this.rows.get(key),data,data.timeframe,now));}
   if(!this.timer){this.timer=setInterval(()=>this.flush().catch(()=>console.error('Guide candle persistence unavailable')),15000);this.timer.unref?.();}
  }
  async flush(now=Date.now()){
@@ -27,7 +27,7 @@ class ChartHistory {
   if(this.pool&&retained?.confirmed===true)this.dirty.set(key+'|'+p.time,retained);
   for(const [key,c] of this.dirty)if(c.time<now-Core.MAX_AGE)this.dirty.delete(key);
  }
- status(now=Date.now()){return {persistent:!!this.pool,timeframes:Object.fromEntries(['2','15'].map(tf=>{const rows=this.snapshot(tf,now).candles.filter(c=>c.confirmed===true);return [tf,{confirmedCandles:rows.length,lastClosedAt:rows.at(-1)?rows.at(-1).time+Number(tf)*60000:null}];}))};}
+ status(now=Date.now()){return {persistent:!!this.pool,timeframes:Object.fromEntries(['1','15'].map(tf=>{const rows=this.snapshot(tf,now).candles.filter(c=>c.confirmed===true);return [tf,{confirmedCandles:rows.length,lastClosedAt:rows.at(-1)?rows.at(-1).time+Number(tf)*60000:null}];}))};}
  snapshot(tf,now=Date.now(),symbol='XAUUSD'){
   tf=String(tf);const key=historyKey(tf,symbol),candles=Core.merge(this.rows.get(key),null,tf,now);
   this.rows.set(key,candles);

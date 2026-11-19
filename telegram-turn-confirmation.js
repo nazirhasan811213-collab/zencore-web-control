@@ -1,5 +1,5 @@
 'use strict';
-const VERSION='CLOSED_PRICE_TURN_V1',PERIOD={'2':120000,'15':900000};
+const VERSION='CLOSED_PRICE_TURN_V1',PERIOD={'1':60000,'15':900000};
 const finite=Number.isFinite;
 function validBar(b,tf){
  return b?.confirmed===true&&b.timeframe===tf&&PERIOD[tf]&&['time','closedAt','observedAt','open','high','low','close','wt1','wt2','atr'].every(k=>finite(b[k]))&&b.time>0&&b.closedAt===b.time+PERIOD[tf]&&b.observedAt>=b.closedAt-1000&&b.observedAt-b.closedAt<=60000&&b.atr>0&&[b.open,b.high,b.low,b.close].every(x=>x>0)&&b.high>=Math.max(b.open,b.close)&&b.low<=Math.min(b.open,b.close);

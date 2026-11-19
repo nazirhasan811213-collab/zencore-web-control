@@ -8,6 +8,6 @@ for(const tf of ['3','15'])test(`TF${tf} close is a scoped action, not an execut
  a.match(message,/09:00:00 MYT/);a.doesNotMatch(message,/SEMUA POSISI SUDAH DITUTUP|undefined/);
 });
 test('legacy 50% close wording does not turn into a full-close instruction',()=>{
- const message=telegramMessage({kind:'CLOSE',symbol:'XAUUSD',timeframe:'2',time:Date.now(),id:1,percent:50,message:'Partial profit'});
+ const message=telegramMessage({kind:'CLOSE',symbol:'XAUUSD',timeframe:'1',time:Date.now(),id:1,percent:50,message:'Partial profit'});
  a.match(message,/CLOSE SEPARUH \(50%\)/);a.match(message,/Tutup 50% posisi/);a.doesNotMatch(message,/Tutup semua baki/);
 });

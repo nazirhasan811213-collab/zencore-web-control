@@ -3,7 +3,7 @@
 const MAX_AGE=5*60*60*1000,MAX_BARS=300,finite=Number.isFinite;
 function point(m){
  const tf=String(m?.timeframe),time=m?.sourceBarTime??m?.time;
- if(!['XAUUSD','BTCUSD'].includes(m?.symbol)||!['2','15'].includes(tf)||!finite(time)||time<=0||
+ if(!['XAUUSD','BTCUSD'].includes(m?.symbol)||!['1','15'].includes(tf)||!finite(time)||time<=0||
    ![m.open,m.high,m.low,m.close].every(v=>finite(v)&&v>0)||m.high<Math.max(m.open,m.close)||m.low>Math.min(m.open,m.close)||m.low>m.high)return null;
  const s=m.strategyNormal?.sop||{},h=s['hema'+tf]||{},signal=s.chartSignal;
  const solidAt=signal?.present?signal.triggeredAt:s.triggerAt;

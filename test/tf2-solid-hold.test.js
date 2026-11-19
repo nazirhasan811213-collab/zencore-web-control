@@ -3,12 +3,12 @@ const test=require('node:test'),a=require('node:assert/strict'),fs=require('node
 const E=require('../tf2-solid-hold-sop'),R=require('../tf2-scalp-range'),C=require('../analysis-execution-contract'),T=require('../analysis-telegram'),B=require('../tf2-scalp-range-sop'),P=require('../tf2-post-close-reentry');
 function data(side='BUY'){
  const t=Date.now(),sign=side==='BUY'?1:-1,p=R.levels(side,4100,3);
- return {symbol:'XAUUSD',timeframe:'2',feedMode:'INTRABAR',receivedAt:t,signalObservedAt:t,entryAuthorizedAt:t,entryEvent:true,feedChannel:'EXECUTION',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',price:4100,close:4100,normal3Close:4100,normal3Entry:4100,normal3Atr:3,initialSl:p.sl,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3,waveTrend1:sign*2,waveTrend2:sign,normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Sop5:true,normal3Forecast:side==='BUY'?'BULLISH':'BEARISH',normal3MarketPower:60,hemaConfirmation:{tf2:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}},setupMeta:{entryRuleVersion:E.RULE,riskPlanVersion:R.VERSION,solidHoldActive:true,solidClosedAt:null,solidSide:side,solidTriggeredAt:t-240000,setupAt:t-240000,sourceEntry:4100-sign*.2,solidEligible:true,completedAt:t,completionPrice:4100,riskAtrReference:3,dashboardAi:{mtfScore:sign}}};
+ return {symbol:'XAUUSD',timeframe:'1',feedMode:'INTRABAR',receivedAt:t,signalObservedAt:t,entryAuthorizedAt:t,entryEvent:true,feedChannel:'EXECUTION',feedUpdateVersion:'SPLIT_CHANNEL_BOOTSTRAP_V2',price:4100,close:4100,normal3Close:4100,normal3Entry:4100,normal3Atr:3,initialSl:p.sl,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3,waveTrend1:sign*2,waveTrend2:sign,normal3Sop1:true,normal3Sop2:true,normal3Sop3:true,normal3Sop4:true,normal3Sop5:true,normal3Forecast:side==='BUY'?'BULLISH':'BEARISH',normal3MarketPower:60,hemaConfirmation:{tf1:{fast:4100+sign,slow:4100,fastPreviousBar:4100,slowPreviousBar:4100-sign}},setupMeta:{entryRuleVersion:E.RULE,riskPlanVersion:R.VERSION,solidHoldActive:true,solidClosedAt:null,solidSide:side,solidTriggeredAt:t-240000,setupAt:t-240000,sourceEntry:4100-sign*.2,solidEligible:true,completedAt:t,completionPrice:4100,riskAtrReference:3,dashboardAi:{mtfScore:sign}}};
 }
 function decision(x){return C.createEntryDecision({...x,strategyNormal:E.strategy(x)});}
 test('old native SOLID qualifies later on fresh complete SOP for BUY and SELL',()=>{
  for(const side of ['BUY','SELL']){const x=data(side),n=E.strategy(x);a.equal(n.solid,true);a.equal(n.state,'READY');a.equal(n.sop.passed,6);a.ok(decision(x));a.ok(n.sop.qualifiedAt>n.sop.triggerAt);
- a.ok(T.entrySopAllowed({symbol:'XAUUSD',timeframe:'2',side,telegramPlan:n.plan,telegramSop:{...n.sop,version:E.VERSION,tf:'2m',green:5,power:60}}));}
+ a.ok(T.entrySopAllowed({symbol:'XAUUSD',timeframe:'1',side,telegramPlan:n.plan,telegramSop:{...n.sop,version:E.VERSION,tf:'1m',green:5,power:60}}));}
 });
 test('held SOLID persists while incomplete; five of six cannot authorize',()=>{
  const x=data();x.setupMeta.solidEligible=false;x.setupMeta.completedAt=null;x.normal3MarketPower=40;
@@ -38,11 +38,11 @@ test('no invented SOLID, opposite direction, missing latch or TF15 cross-talk',(
 });
 test('V3 freshness policy cannot be relaxed by V4 latch fields',()=>{
  const x=data();x.setupMeta.entryRuleVersion=B.RULE;const n=B.strategy(x);a.equal(n.state,'WAIT');a.equal(C.createEntryDecision({...x,strategyNormal:n}),null);
- a.equal(C.solid80Tf2Confirmations('BUY',{...E.strategy(data()).sop}),false);
+ a.equal(C.solid80Tf1Confirmations('BUY',{...E.strategy(data()).sop}),false);
 });
 test('Pine holds only native chart SOLID; qualification is once, full SOP, CLOSE ALL wins, wire unchanged',()=>{
  const s=fs.readFileSync(require.resolve('../ZenCore_Original_Full_TF2_Scalp_Caps.pine'),'utf8');
- a.ok(s.includes(require('../tf2-solid-hold-v5').RULE));a.match(s,/varip bool zc_hold_active = false/);
+ a.ok(s.includes(require('../tf2-solid-hold-v5').RULE.replace("TF1","TF2")));a.match(s,/varip bool zc_hold_active = false/);
  a.match(s,/if current_condition == 3\s+zc_close_all_pulse := true/);
  a.match(s,/if zc_close_all_pulse\s+zc_pending_key := ""\s+zc_hold_active := false/);
  a.match(s,/zc_hold_active and na\(zc_seq_completed\).*zc80_passed >= 5/);
@@ -64,10 +64,10 @@ test('current server route keeps V4 separate from TF15 and legacy latches',()=>{
 });
 test('alert service retains hold proof and deduplicates ENTRY without sending messages',async()=>{
  const {AnalysisAlerts}=require('../analysis-alert-service'),service=new AnalysisAlerts();await service.init();
- const x=data();x.setupKey='TF2|XAUUSD|BUY|held';x.strategyNormal=E.strategy(x);
+ const x=data();x.setupKey='TF1|XAUUSD|BUY|held';x.strategyNormal=E.strategy(x);
  await service.ingest(x);a.equal(service.events.length,1);a.equal(service.events[0].kind,'ENTRY');
  const event=service.events[0];a.equal(event.telegramSop.solidHoldActive,true);a.equal(event.telegramSop.riskAtrReference,3);a.ok(T.entrySopAllowed(event));
- a.match(T.telegramMessage(event),/ENTRY TF2/);
+ a.match(T.telegramMessage(event),/ENTRY TF1/);
  const later={...x,receivedAt:x.receivedAt+1,entryEvent:false};await service.ingest(later);a.equal(service.events.length,1);
  const closed={...x,receivedAt:x.receivedAt+2,entryEvent:false,setupMeta:{...x.setupMeta,solidHoldActive:false,solidClosedAt:x.receivedAt+2},positionManagement:{action:'EXIT_ALL',reason:'SOP CLOSE ALL'}};
  closed.strategyNormal=E.strategy(closed);await service.ingest(closed);a.equal(service.events.at(-1).kind,'CLOSE');a.equal(service.events.at(-1).percent,100);

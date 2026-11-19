@@ -11,7 +11,7 @@ test('Gold dashboard scope and saved MT5 symbols are independent',()=>{
 });
 test('removed currencies cannot authorize entry, but existing position exit remains available',()=>{
  for(const symbol of ['GBPUSD','GBPJPY']){
- const market={symbol,timeframe:'2',receivedAt:Date.now(),strategyNormal:{state:'READY',side:'BUY',plan:{entry:100,sl:99,tp1:101,tp2:102,tp3:103}},positionManagement:{action:'EXIT_ALL',reason:'EXIT_ALL'}};
+ const market={symbol,timeframe:'1',receivedAt:Date.now(),strategyNormal:{state:'READY',side:'BUY',plan:{entry:100,sl:99,tp1:101,tp2:102,tp3:103}},positionManagement:{action:'EXIT_ALL',reason:'EXIT_ALL'}};
  assert.equal(Contract.createEntryDecision(market),null);assert.ok(Contract.createManagementDecision(market));
  }
 });

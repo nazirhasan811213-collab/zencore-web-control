@@ -1,5 +1,5 @@
 const {chromium}=require('playwright'),fs=require('fs'),a=require('node:assert/strict');
-(async()=>{const browser=await chromium.launch({headless:true,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));let preview=null,sends=0;
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined,args:['--no-sandbox']}),page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));let preview=null,sends=0;
 const ids=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002'];
 await page.route('**/*',async r=>{const path=new URL(r.request().url()).pathname;
  if(path==='/admin/telegram')return r.fulfill({body:fs.readFileSync('admin-telegram.html','utf8'),contentType:'text/html'});

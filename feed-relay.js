@@ -15,7 +15,7 @@ function createFeedRelay({target='',secret='',receive=false,now=Date.now,log=con
  function payload(body){
   if(typeof body!=='string'||Buffer.byteLength(body)>MAX_BYTES)throw fail(413,'RELAY_PAYLOAD_TOO_LARGE');
   let p;try{p=JSON.parse(body);}catch{throw fail(400,'RELAY_JSON_REQUIRED');}
-  if(!p||Array.isArray(p)||typeof p!=='object'||!['2','15'].includes(String(p.timeframe))||!Array.isArray(p.markets))throw fail(400,'RELAY_FEED_REQUIRED');
+  if(!p||Array.isArray(p)||typeof p!=='object'||!['1','15'].includes(String(p.timeframe))||!Array.isArray(p.markets))throw fail(400,'RELAY_FEED_REQUIRED');
   const at=Number(p.emittedAt);
   if(!Number.isFinite(at)||at<=0||now()-at>MAX_AGE||at>now()+5000)throw fail(409,'RELAY_SOURCE_STALE');
   if(Object.hasOwn(p,'authToken'))throw fail(400,'RELAY_UNSANITIZED_PAYLOAD');

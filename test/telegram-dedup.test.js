@@ -3,11 +3,11 @@ const assert=require('node:assert/strict');
 const {AnalysisAlerts}=require('../analysis-alert-service');
 const {notificationKey}=require('../telegram-notification-key');
 
-const market=(time,setupKey='setup-A',tf='2')=>({symbol:'XAUUSD',timeframe:tf,setupKey,receivedAt:time,
+const market=(time,setupKey='setup-A',tf='1')=>({symbol:'XAUUSD',timeframe:tf,setupKey,receivedAt:time,
  strategyNormal:{state:'READY',side:'BUY',sop:{sopGreen:4,forecast:'BULLISH',marketPower:70,gates:[{pass:true},{pass:true}]},plan:{entry:2000,sl:1990,tp1:2010,tp2:2020,tp3:2030}},positionManagement:{action:'HOLD'}});
 
 test('notification identity ignores arrival, SL and event IDs, preserves TF/setup but ignores re-entry relabel and candle retries',()=>{
- const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:'2',side:'BUY',setupKey:'A',telegramPlan:{entry:2000,sl:1990}};
+ const e={kind:'ENTRY',symbol:'XAUUSD',timeframe:'1',side:'BUY',setupKey:'A',telegramPlan:{entry:2000,sl:1990}};
  assert.equal(notificationKey(e),notificationKey({...e,id:999,time:Date.now(),telegramPlan:{entry:2000,sl:1995}}));
  for(const edit of [{timeframe:'15'},{setupKey:'B'},{side:'SELL'}])assert.notEqual(notificationKey(e),notificationKey({...e,...edit}));
  const re={...e,entryType:'HIGH_REENTRY',sourceBarTime:123};
@@ -71,7 +71,7 @@ test('upgrade adopts the key of an already-announced legacy position without rep
 });
 
 test('queued duplicate event IDs and users sharing a chat send one notification, including after restart',async()=>{
- const e={symbol:'XAUUSD',kind:'CLOSE',timeframe:'2',setupKey:'A',percent:100,time:Date.now(),message:'close'};
+ const e={symbol:'XAUUSD',kind:'CLOSE',timeframe:'1',setupKey:'A',percent:100,time:Date.now(),message:'close'};
  const events=[e,{...e},{...e,timeframe:'15'}],claims=new Set(),sent=[],statuses=[];
  let batch=[{id:1,event_id:1,user_id:'one'},{id:2,event_id:2,user_id:'two'},{id:3,event_id:3,user_id:'one'}];
  const pool={query:async(sql,args)=>{

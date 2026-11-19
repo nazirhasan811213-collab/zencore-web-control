@@ -55,7 +55,7 @@ test('Postgres active plan lookup is parameterized and scopes user, pod, symbol,
 });
 
 
-test('restored TF15 BE exit keeps TP2/TP3 locks, full close, no extension, and rejects use by TF2',()=>{
+test('restored TF15 BE exit keeps TP2/TP3 locks, full close, no extension, and rejects use by TF1',()=>{
  for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP']){
   const {command,position,market,sign}=fixture('15',side,kind),p=command.payload;
   p.analysisSnapshot.exitLockVersion='PINE_STEPLOCK_BE_TF15_V1';
@@ -70,13 +70,13 @@ test('restored TF15 BE exit keeps TP2/TP3 locks, full close, no extension, and r
    const out=P.management({...market,setupKey:p.analysisSnapshot.setupKey,positionManagement:{action}},[position],command,NOW);
    a.equal(Core.buildManagementCommand(out).payload.actions[0].percent,100);
   }
-  p.strategyMode='TF2_SCALPING';p.analysisSnapshot.executionTimeframe='2';p.analysisSnapshot.analysisSopVersion='NORMAL_20261001_TF2_RIBBON_V1';
+  p.strategyMode='TF2_SCALPING';p.analysisSnapshot.executionTimeframe='1';p.analysisSnapshot.analysisSopVersion='NORMAL_20261001_TF1_RIBBON_V1';
   a.equal(P.valid(command),false);
  }
 });
 
 test('MT5 fill plan ignores chart price exits and retains fresh native chart closes',()=>{
- for(const tf of ['2','15'])for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP']){
+ for(const tf of ['1','15'])for(const side of ['BUY','SELL'])for(const kind of ['INITIAL','FOLLOWUP']){
   const {command,position,market}=fixture(tf,side,kind);
   position.fillRiskVersion='MT5_FILL_PLAN_V1';
   position.currentPrice=command.payload.tp3;
