@@ -52,3 +52,4 @@ int main(){
   self.assertIn('if(!manualEnabled || !Permissions()',manual)
   self.assertNotIn('quote>=t3:quote<=t3',manual)
   self.assertIn('code="MANUAL_EXIT_STEPLOCK_ONLY"',source)
+

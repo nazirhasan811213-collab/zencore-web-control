@@ -61,3 +61,4 @@ int main(){
    cpp.write_text('#include <string>\nusing string=std::string;\n#include <cassert>\n#include <cmath>\n#include <algorithm>\n#include <initializer_list>\n#define MathCeil std::ceil\n#define MathFloor std::floor\n#define MathIsValidNumber std::isfinite\n#define MathAbs std::abs\n'+rules+main)
    subprocess.run([compiler,'-std=c++17',str(cpp),'-o',str(out)],check=True,capture_output=True)
    subprocess.run([str(out)],check=True,capture_output=True)
+

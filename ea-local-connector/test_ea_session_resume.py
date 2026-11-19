@@ -25,3 +25,4 @@ int main(){
   with tempfile.TemporaryDirectory() as folder:
    p=Path(folder);(p/'test.cpp').write_text(cpp);r=subprocess.run([compiler,'-std=c++17',str(p/'test.cpp'),'-o',str(p/'test.exe')],capture_output=True,text=True)
    self.assertEqual(r.returncode,0,r.stderr);subprocess.run([str(p/'test.exe')],check=True)
+

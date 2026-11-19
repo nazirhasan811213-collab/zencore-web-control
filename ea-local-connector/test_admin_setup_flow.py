@@ -42,3 +42,4 @@ class AdminFlowTests(unittest.TestCase):
     calls.append((path,data));return {'generation':0} if path.endswith('/handover') else {'completed':True,'brokerCloseConfirmed':False}
    with patch.object(m,'admin_request',side_effect=admin):r=m.clear_slot(1)
    self.assertFalse(r['brokerCloseConfirmed']);self.assertNotIn(1,m.configs);self.assertIn(2,m.configs);self.assertTrue(vault.path(2).exists());self.assertFalse(vault.path(1).exists());self.assertEqual(calls[-1][1]['resetPolicy'],'MASTER_RESET_RELEASE_V3')
+

@@ -64,3 +64,4 @@ class V2ConnectorTests(unittest.TestCase):
    r.api=API()
    with patch('protocol.time.time',return_value=NOW/1000):r.renew_lease(local)
    self.assertEqual(read_fields(path/'lease.tsv')['desiredState'],'STOPPED')
+

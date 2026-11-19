@@ -99,3 +99,4 @@ int main(){
   with tempfile.TemporaryDirectory() as tmp:
    p=Path(tmp);(p/'test.cpp').write_text(cpp);exe=p/'force.exe';r=subprocess.run(['g++','-std=c++17',str(p/'test.cpp'),'-o',str(exe)],capture_output=True,text=True)
    self.assertEqual(r.returncode,0,r.stderr);subprocess.run([str(exe)],check=True,capture_output=True)
+

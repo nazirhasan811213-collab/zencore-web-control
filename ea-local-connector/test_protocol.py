@@ -138,3 +138,4 @@ class RealAccountTests(unittest.TestCase):
         self.assertEqual(command_fields(command,{**IDENTITY,'tradeMode':'REAL'})['tradeMode'],'REAL')
         with self.assertRaisesRegex(ValueError,'SYSTEM_CONTRACT_REJECTED'):
             command_fields(command,IDENTITY)
+

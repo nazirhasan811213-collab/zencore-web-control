@@ -92,3 +92,4 @@ class OnHandoffTests(unittest.TestCase):
   path,calls,acks=self.run_case(force_reset=True,reset_capable=False)
   self.assertFalse((path/'command.tsv').exists());self.assertEqual(acks[0]['code'],'EA_MASTER_RESET_UPGRADE_REQUIRED')
   self.assertNotIn('/api/execution/heartbeat',calls)
+

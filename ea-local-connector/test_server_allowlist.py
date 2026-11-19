@@ -20,3 +20,4 @@ class UniversalServers(unittest.TestCase):
   self.assertEqual(h['accountMask'],'****01')
   self.assertEqual(len(h['serverMask']),12)
   self.assertEqual(len(h['accountFingerprint']),64)
+

@@ -22,3 +22,4 @@ class TF15ProtocolTests(unittest.TestCase):
    p={**{k:snap[k] for k in ('symbol','side','entry','sl','tp1','tp2','tp3')},'analysisContractVersion':CONTRACT,'strategy':STRATEGY,'schemaVersion':SCHEMA,'analysisSnapshot':snap,'lotPerLayer':.01,'layers':2,'strategyMode':mode}
    c=verified_command(signed('PLACE_SETUP',p),KEY,POD,NOW)
    self.assertEqual(command_fields(c,IDENTITY)['executionTimeframe'],tf)
+

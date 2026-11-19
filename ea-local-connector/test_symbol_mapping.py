@@ -105,3 +105,4 @@ int main(){
    p=pathlib.Path(tmp);(p/'routes.cpp').write_text(harness+role+route+main)
    subprocess.run([compiler,'-std=c++17',str(p/'routes.cpp'),'-o',str(p/'routes')],check=True,capture_output=True)
    subprocess.run([str(p/'routes')],check=True,capture_output=True)
+

@@ -43,3 +43,4 @@ class LocalLinkTests(unittest.TestCase):
      self.assertEqual(fields['identity'],'session-'+fields['sequence'])
    finally:worker.join(30)
    self.assertFalse(worker.is_alive());self.assertEqual(errors,[])
+

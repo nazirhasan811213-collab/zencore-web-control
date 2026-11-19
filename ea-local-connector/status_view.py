@@ -15,3 +15,4 @@ def status_cards(local=None, cloud=None, now_ms=0, paired=False):
     if paired and fresh and not exact:entry=('KEMAS KINI EA 2.00','bad')
     if cloud.get('entryBlockedReason')=='GLOBAL_ENTRY_PAUSED':entry=('SERVER PAUSED','warn')
     return {'mt5':mt5,'cloud':server,'entry':entry}
+

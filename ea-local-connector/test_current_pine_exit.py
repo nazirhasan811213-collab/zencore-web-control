@@ -27,3 +27,4 @@ class CurrentPineExitTests(unittest.TestCase):
     if tf=='15':self.assertEqual(command_fields(c,IDENTITY)['exitLockVersion'],'PINE_STEPLOCK_BE_TF15_V1')
     else:
      with self.assertRaisesRegex(ValueError,'EXIT_POLICY_REJECTED'):command_fields(c,IDENTITY)
+

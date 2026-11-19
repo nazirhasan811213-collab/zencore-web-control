@@ -24,3 +24,4 @@ class PackageContractTests(unittest.TestCase):
   self.assertIn('ZenCoreSetup-$buildVersion.exe',script)
   self.assertIn('PANDUAN_INSTALL_$buildVersion.txt',script)
   self.assertNotIn('2.1.2',script)
+

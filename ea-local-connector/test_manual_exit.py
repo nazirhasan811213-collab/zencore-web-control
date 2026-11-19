@@ -40,3 +40,4 @@ class ManualExitTests(unittest.TestCase):
   self.assertNotIn('manualLayers>=10)Close',source)
   manual=source[source.index('void ManageManual()'):source.index('void OnTradeTransaction')]
   self.assertNotIn('trade.Buy(',manual);self.assertNotIn('trade.Sell(',manual)
+
