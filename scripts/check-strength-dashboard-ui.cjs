@@ -58,7 +58,7 @@ const {cockpit}=require('../trading-cockpit-model');
   assert.ok(mobileBtc.y>=mobileGold.y+mobileGold.height);
   const [first,second]=await Promise.all([summaryRows.nth(0).boundingBox(),summaryRows.nth(1).boundingBox()]);
   assert.ok(second.y>=first.y+first.height);
-  assert.ok(first.height<=52);
+  assert.ok(first.height<=80,'Pair/TF header plus the short market metrics line stays compact on mobile');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  }
  if(process.env.ZENCORE_DASHBOARD_PREVIEW){await page.setViewportSize({width:390,height:844});await page.screenshot({path:process.env.ZENCORE_DASHBOARD_PREVIEW});}

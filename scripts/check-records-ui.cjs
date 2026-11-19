@@ -16,7 +16,7 @@ const {chromium}=require('playwright'),fs=require('fs'),a=require('node:assert/s
  });
  try{
   await page.goto('http://localhost/results');await page.getByText('REKOD DATABASE',{exact:true}).waitFor();
-  a.match(await page.locator('#recordRetention').innerText(),/2 bulan bergulir/);a.match(await page.locator('#recordRetention').innerText(),/November 2026/);a.equal(await page.locator('#summarySample').innerText(),'1');a.equal(await page.locator('#summaryWins').innerText(),'1');a.equal(await page.locator('#summaryWinRate').innerText(),'50.0%');
+  a.match(await page.locator('#recordRetention').innerText(),/2 bulan bergulir/);a.match(await page.locator('#recordRetention').innerText(),/November 2026/);a.equal(await page.locator('#summarySample').innerText(),'2');a.equal(await page.locator('#summaryWins').innerText(),'1');a.equal(await page.locator('#summaryWinRate').innerText(),'50.0%');
   a.equal(await page.locator('#historyTableBody tr').count(),2);a.match(await page.locator('#historyTableBody').innerText(),/TF15/);a.match(await page.locator('#historyTableBody').innerText(),/CLOSE SIGNAL/);
   await page.getByRole('button',{name:'History Signal',exact:true}).click();
   await page.locator('[data-filter="tp1"]').click();a.equal(await page.locator('#historyTableBody tr').count(),1);
@@ -24,8 +24,8 @@ const {chromium}=require('playwright'),fs=require('fs'),a=require('node:assert/s
   const download=page.waitForEvent('download');await page.locator('#exportButton').click();const file=await download;a.match(fs.readFileSync(await file.path(),'utf8'),/Timeframe/);
   await page.screenshot({path:'records-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'records-mobile.png',fullPage:true});a.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  fail=true;await page.locator('#refreshButton').click();await page.getByText('CUBA SEMULA',{exact:true}).waitFor();a.equal(await page.locator('#summarySample').innerText(),'1');
-  fail=false;await page.reload();await page.getByText('REKOD DATABASE',{exact:true}).waitFor();a.equal(await page.locator('#summarySample').innerText(),'1');
+  fail=true;await page.locator('#refreshButton').click();await page.getByText('CUBA SEMULA',{exact:true}).waitFor();a.equal(await page.locator('#summarySample').innerText(),'2');
+  fail=false;await page.reload();await page.getByText('REKOD DATABASE',{exact:true}).waitFor();a.equal(await page.locator('#summarySample').innerText(),'2');
   a.ok(!requests.some(u=>u.includes('/api/validation')));a.deepEqual(errors,[]);console.log('Durable records UI passed: TFs, summary, filters, CSV, mobile, reload and failure preservation.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
