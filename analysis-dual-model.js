@@ -12,10 +12,12 @@ function dualAnalysis(markets,symbol,now=Date.now()) {
   const transportLagMs=emitted&&at>=emitted?at-emitted:null;
   const freshnessLimitMs=tf===2?60000:30000;
   const candles=require('./indicator-chart-history').history.snapshot(String(tf),now,symbol).candles,guideModel=require('./telegram-trade-guide');
-  const assessment=require('./setup-strength').assess(market,now,candles);
+  const strength=require('./setup-strength');
+  const assessment=strength.assess(market,now,candles);
+  const marketAssessment=strength.assess(market,now,candles,{marketOnly:true});
   const nearbyLevels=guideModel.nearbyLevels(guideModel.closedRows(candles,now,String(tf)),market?.price,market?.strategyNormal?.sop?.atrReference??market?.atr,String(tf),symbol);
   require('./setup-strength').diagnose(assessment,now);
-  return {timeframe:tf,label:tf===15?'Intra':'Scalping TF2',confirmationTimeframe:tf===15?30:2,mtfTimeframes:tf===15?[15,30,45]:[3,5,10],status:!at?'WAITING':at>now+5000||emitted>now+5000?'INVALID_TIME':ageMs>freshnessLimitMs||sourceAgeMs>freshnessLimitMs?'STALE':'LIVE',ageMs,sourceAgeMs,transportLagMs,freshnessLimitMs,market,assessment,nearbyLevels,guide:require('./telegram-trade-guide').buildGuide(String(tf),market,candles,now,undefined,symbol)};
+  return {timeframe:tf,label:tf===15?'Intra':'Scalping TF2',confirmationTimeframe:tf===15?30:2,mtfTimeframes:tf===15?[15,30,45]:[3,5,10],status:!at?'WAITING':at>now+5000||emitted>now+5000?'INVALID_TIME':ageMs>freshnessLimitMs||sourceAgeMs>freshnessLimitMs?'STALE':'LIVE',ageMs,sourceAgeMs,transportLagMs,freshnessLimitMs,market,assessment,marketAssessment,nearbyLevels,guide:require('./telegram-trade-guide').buildGuide(String(tf),market,candles,now,undefined,symbol)};
  })};
 }
 module.exports={dualAnalysis,SYMBOLS};

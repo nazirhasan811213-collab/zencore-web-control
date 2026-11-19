@@ -44,3 +44,31 @@ test('confirmed Pine MTF context is used by analysis when quality entry is enabl
  m.setupMeta={entryQuality:{confirmedMtf:-3}};
  a.equal(assess(m,now).overall,55);
 });
+
+test('TF2 market analysis is available before a trade plan and SOLID qualify',()=>{
+ const m=market(),original=structuredClone(m);
+ m.strategyNormal.plan=null;m.strategyNormal.solid=false;
+ const expected=assess(original,now);
+ const reading=assess(m,now,[],{marketOnly:true});
+ a.equal(reading.status,'AVAILABLE');
+ a.equal(reading.overall,expected.overall);
+ a.equal(reading.scope,'MARKET');
+ a.equal(reading.targets,null);
+ a.equal(reading.geometry,undefined);
+ a.equal(reading.range,null);
+ a.equal(m.strategyNormal.plan,null);
+ a.equal(assess(m,now).overall,null);
+ const {dualAnalysis}=require('../analysis-dual-model');
+ m.strategyNormal.tf='2m';
+ const view=dualAnalysis([m],'XAUUSD',now).views[0];
+ a.equal(view.marketAssessment.status,'AVAILABLE');
+ a.equal(view.assessment.status,'INCOMPLETE');
+ a.equal(view.market.strategyNormal.plan,null);
+});
+
+test('market readings retain source freshness and indicator validation',()=>{
+ for(const change of [m=>m.signalObservedAt=now-60001,m=>m.signalObservedAt=now+5001,m=>delete m.rsi,m=>m.rsi=110]){
+  const m=market();m.strategyNormal.plan=null;change(m);
+  a.equal(assess(m,now,[],{marketOnly:true}).overall,null);
+ }
+});

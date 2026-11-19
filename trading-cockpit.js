@@ -126,7 +126,7 @@
    const tf=Number(fields.timeframe.value),v=all.find(v=>v.symbol===symbol&&v.timeframe===tf);
    const current=fresh(v),available=Live.available(v)&&v.market?.symbol===symbol;
    const n=available?v.market.strategyNormal:null,context=available?Live.context(v):null;
-   const plan=n?.plan,assessment=current?v.assessment:null;
+   const plan=n?.plan,assessment=current?(v.assessment?.status==='AVAILABLE'?v.assessment:v.marketAssessment):null;
    const setup=ready(v)?'Signal '+n?.side:n?.side?'Menunggu entry · '+n.side:'Menunggu setup';
    fields.state.textContent=current?setup:available?'Analisis terakhir · '+context.ageSeconds+'s · '+(n?.side||'Tunggu setup'):'Menunggu data Pine';
    fields.state.className='dashboard-pair-state '+tone(v);
@@ -141,6 +141,8 @@
    fields.strength.textContent=scored
     ?range?'Julat '+format(range.low,symbol)+'–'+format(range.high,symbol):''
     :assessment?.reason||n?.reason||'';
+   fields.analysisSummary.textContent=context?'TF'+tf+' · '+context.summary:'Menunggu bacaan Pine TF'+tf+'.';
+   fields.analysisReason.textContent=available?n?.reason||context.guide:'';
    fields.analysis.href=link(symbol,tf);
   }
   for(const view of all){

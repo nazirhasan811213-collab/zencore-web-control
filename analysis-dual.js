@@ -45,7 +45,7 @@
    if(s.hemaShape)nodes.push(el('div','Bentuk HEMA: '+s.hemaShape.state+(live&&s.hemaShape.pass?' • LULUS':''),'hema-shape'+(live&&s.hemaShape.pass?' pass':'')));
    nodes.push(el('h3',(live?'Plan trade':'Plan terakhir')+' • '+(n.side||'WAIT')+(!live&&m?' • DATA LAMA':'')));
    const levels=el('div',undefined,'levels');for(const [k,name] of [['entry','ENTRY'],['sl','SL'],['tp1','TP1'],['tp2','TP2'],['tp3','TP3']])levels.append(metric(name,price(n.plan?.[k])));nodes.push(levels);
-   const assessment=view?.assessment;
+   const assessment=view?.assessment?.status==='AVAILABLE'?view.assessment:view?.marketAssessment;
    if(assessment?.status==='AVAILABLE'){
     const geometry=assessment.geometry;
     const quality=el('div',undefined,'levels');

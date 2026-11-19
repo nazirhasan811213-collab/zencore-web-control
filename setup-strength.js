@@ -3,14 +3,18 @@
 const VERSION='PINE_TECHNICAL_STRENGTH_V2';
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const clamp=x=>Math.max(0,Math.min(1,x));
-function assess(m,now=Date.now(),candles=[]){
- const n=m?.strategyNormal||{},s=n.sop||{},p=n.plan||{},tf=String(m?.timeframe||'').replace(/m$/,''),sign=n.side==='BUY'?1:n.side==='SELL'?-1:0;
+function assess(m,now=Date.now(),candles=[],options={}){
+ const n=m?.strategyNormal||{},s=n.sop||{},p=n.plan||{},tf=String(m?.timeframe||'').replace(/m$/,'');
+ const fast=m?.hemaFast??m?.hema20,slow=m?.hemaSlow??m?.hema40;
+ const side=['BUY','SELL'].includes(n.side)?n.side:options.marketOnly&&finite(fast)&&finite(slow)?
+  fast>slow?'BUY':fast<slow?'SELL':null:null;
+ const sign=side==='BUY'?1:side==='SELL'?-1:0;
  const at=m?.signalObservedAt;
- const base={version:VERSION,asOf:now,sourceAt:at||null,timeframe:tf,symbol:m?.symbol||null,side:n.side||null,setupKey:m?.setupKey||null,status:'INCOMPLETE',overall:null,targets:null,range:null,coverage:0,missing:[],warnings:[],groups:[],plan:{...p},meaning:'TECHNICAL_SUPPORT_NOT_WIN_PROBABILITY'};
+ const base={version:VERSION,asOf:now,sourceAt:at||null,timeframe:tf,symbol:m?.symbol||null,side:side||null,setupKey:m?.setupKey||null,status:'INCOMPLETE',overall:null,targets:null,range:null,coverage:0,missing:[],warnings:[],groups:[],plan:{...p},meaning:'TECHNICAL_SUPPORT_NOT_WIN_PROBABILITY'};
  if(!['2','15'].includes(tf)||!sign){base.missing.push('direction/timeframe');base.reason='Arah setup belum tersedia.';return base;}
- if(n.solid!==true){base.missing.push('solid');base.reason='SOLID belum aktif; tunggu signal Pine.';return base;}
+ if(!options.marketOnly&&n.solid!==true){base.missing.push('solid');base.reason='SOLID belum aktif; tunggu signal Pine.';return base;}
  if(!finite(at)||at>now+5000||now-at>(tf==='2'?60000:30000)){base.status='STALE';base.reason='Data Pine belum segar; tunggu kemas kini.';return base;}
- if(!['entry','sl','tp1','tp2','tp3'].every(k=>finite(p[k])&&p[k]>0)||sign*(p.entry-p.sl)<=0||sign*(p.tp1-p.entry)<=0||sign*(p.tp2-p.tp1)<=0||sign*(p.tp3-p.tp2)<=0){base.missing.push('validPlan');base.reason='Pelan entry, SL dan TP belum lengkap atau tidak sah.';return base;}
+ if(!options.marketOnly&&(!['entry','sl','tp1','tp2','tp3'].every(k=>finite(p[k])&&p[k]>0)||sign*(p.entry-p.sl)<=0||sign*(p.tp1-p.entry)<=0||sign*(p.tp2-p.tp1)<=0||sign*(p.tp3-p.tp2)<=0)){base.missing.push('validPlan');base.reason='Pelan entry, SL dan TP belum lengkap atau tidak sah.';return base;}
  const h=s['hema'+tf]||{},bar=s.currentBar||m;
  const v={fast:m.hemaFast??m.hema20??h.fast,slow:m.hemaSlow??m.hema40??h.slow,e9:m.ema9,e20:m.ema20,e50:m.ema50,wt1:m.waveTrend1??h.waveTrend1,wt2:m.waveTrend2??h.waveTrend2,rsi:m.rsi,chop:m.chopIndex??s.chopIndex,volume:m.relativeVolume,mtf:m?.setupMeta?.entryQuality?.confirmedMtf??s.mtfScore,atr:s.atrReference??m.atr,open:bar.open,high:bar.high,low:bar.low,close:bar.close,power:s.marketPower};
  base.inputs={...v,forecast:s.forecast||null};
@@ -25,7 +29,7 @@ function assess(m,now=Date.now(),candles=[]){
  add('Regime',20,['chop'],()=>clamp((65-v.chop)/25));
  add('Volume',10,['volume'],()=>clamp(v.volume/1.2));
  const f=String(s.forecast||'').toUpperCase(),opposed=sign===1?f.startsWith('BEARISH'):f.startsWith('BULLISH');
- if(!finite(v.atr)||v.atr<=0)base.missing.push('atr');
+ if(!options.marketOnly&&(!finite(v.atr)||v.atr<=0))base.missing.push('atr');
  if(v.rsi<0||v.rsi>100||v.chop<0||v.chop>100||v.power<0||v.power>100||Math.abs(v.mtf)>3||v.volume<0||v.high<Math.max(v.open,v.close)||v.low>Math.min(v.open,v.close))base.missing.push('invalidIndicatorRange');
  base.missing=[...new Set(base.missing)];base.coverage=base.groups.reduce((a,g)=>a+(g.score===null?0:g.weight),0);
  if(base.missing.length){base.reason='Input Pine belum lengkap: '+base.missing.join(', ')+'.';return base;}
@@ -35,6 +39,12 @@ function assess(m,now=Date.now(),candles=[]){
  if(sign*v.mtf<=-2){total=Math.min(total,55);base.warnings.push('MTF melawan arah setup');}
  if(v.chop>=60){total=Math.min(total,55);base.warnings.push('Market berulang-alik');}
  base.status='AVAILABLE';base.overall=Math.round(total);
+ if(options.marketOnly){
+  base.scope='MARKET';
+  base.reason='Bacaan teknikal '+side+' berdasarkan indikator Pine.';
+  base.warnings.push('Skor teknikal market berdasarkan data Pine');
+  return base;
+ }
  const guide=require('./telegram-trade-guide');
  const closed=guide.closedRows((candles||[]).filter(c=>c?.observedAt<=at&&(!c.symbol||c.symbol===m.symbol)),at,tf);
  const levels=guide.nearbyLevels(closed,p.entry,v.atr,tf,m.symbol);
