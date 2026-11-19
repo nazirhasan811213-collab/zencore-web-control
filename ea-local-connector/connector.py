@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -97,6 +98,29 @@ RESET_MESSAGES={
 TRANSIENT_HTTP_STATUS = frozenset((408, 429, 500, 502, 503, 504))
 TRANSIENT_NETWORK_ERRORS = frozenset({'NETWORK_UNAVAILABLE', *(f'HTTP_{status}' for status in TRANSIENT_HTTP_STATUS)})
 
+class ConnectionRequestError(RuntimeError):
+    def __init__(self, code, stage, cause=None):
+        super().__init__(code)
+        self.stage = stage
+        self.cause = cause
+
+def request_stage(path):
+    route = path.split('?', 1)[0]
+    if route == '/api/execution/heartbeat': return 'CLOUD_HEARTBEAT'
+    if route == '/api/execution/commands/next': return 'COMMAND_FETCH'
+    if route.startswith('/api/execution/commands/') and route.endswith('/ack'): return 'COMMAND_ACK'
+    return 'CLOUD_REQUEST'
+
+def network_cause(error):
+    if isinstance(error, urllib.error.URLError): error = error.reason
+    if isinstance(error, socket.gaierror): return 'DNS'
+    if isinstance(error, ssl.SSLError): return 'TLS'
+    if isinstance(error, TimeoutError): return 'TIMEOUT'
+    if isinstance(error, (ConnectionResetError, ConnectionAbortedError, http.client.RemoteDisconnected, http.client.IncompleteRead)):
+        return 'CONNECTION_INTERRUPTED'
+    if isinstance(error, ConnectionRefusedError): return 'CONNECTION_REFUSED'
+    return 'TRANSPORT'
+
 class Api:
     def __init__(self):
         handler = urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
@@ -109,20 +133,22 @@ class Api:
         if token: headers['Authorization'] = 'Bearer '+token
         if data is not None: headers['Content-Type']='application/json'
         req = urllib.request.Request(BASE+path, None if data is None else json.dumps(data).encode(), headers)
+        stage = request_stage(path)
         try:
-            # A heartbeat must fail fast enough to retry before the 12-second lease expires.
-            timeout = 4 if path == '/api/execution/heartbeat' else 10
+            # The command long poll waits up to 500 ms on the server.
+            timeout = 4 if stage != 'CLOUD_REQUEST' else 10
             with self.opener.open(req, timeout=timeout) as result:
                 value = json.loads(result.read(200000))
         except urllib.error.HTTPError as error:
             if error.code in TRANSIENT_HTTP_STATUS:
                 error.close()
-                raise RuntimeError(f'HTTP_{error.code}') from None
+                raise ConnectionRequestError(f'HTTP_{error.code}', stage) from None
             try: code = json.loads(error.read(2000)).get('code','HTTP_'+str(error.code))
             except Exception: code = 'HTTP_'+str(error.code)
+            finally: error.close()
             raise RuntimeError(code) from None
-        except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError, http.client.IncompleteRead):
-            raise RuntimeError('NETWORK_UNAVAILABLE') from None
+        except (OSError, http.client.IncompleteRead) as error:
+            raise ConnectionRequestError('NETWORK_UNAVAILABLE', stage, network_cause(error)) from None
         if value.get('ok') is False: raise RuntimeError(value.get('code','REQUEST_REJECTED'))
         return value
 
@@ -270,15 +296,26 @@ def readiness_message(code):
     }
     return messages.get(code,'Arahan ditolak: '+str(code or 'UNKNOWN')[:40])
 
-def reconnect_delay(failures):
-    # Spread recovery across VPS slots; never extend the maximum wait beyond 10s.
-    return min(10,2**min(failures,4))*random.uniform(.8,1.0)
+def reconnect_delay(failures, code):
+    # Spread retries across VPS slots and give rate-limited requests more time.
+    if code == 'HTTP_429':
+        cap = min(10, 2**min(failures, 4))
+    else:
+        cap = 1 if failures <= 1 else 2
+    return cap * random.uniform(.8, 1.0)
+
+def connection_label(code, error):
+    if isinstance(error, ConnectionRequestError):
+        return ' · '.join(part for part in (code, error.stage, error.cause) if part)
+    return code
 
 class Runner:
     def __init__(self,config,status,on_unpaired=None,background_lease=True):
         self.config=config; self.status=status; self.on_unpaired=on_unpaired; self.api=Api(); self.stop=threading.Event()
         self.lease_lock=threading.RLock();self.background_lease=background_lease
+        self.health_lock=threading.Lock()
         self.lease_retry_at=0;self.lease_failure_count=0;self.lease_error=None
+        self.lease_request_error=None
         self.next_link_check=0
         self.channel=Path(config['channel'])
         self.last_verified=0
@@ -303,13 +340,19 @@ class Runner:
                 target.replace(self.channel/'execution-timing.previous.jsonl')
             with target.open('a',encoding='utf-8') as log:log.write(json.dumps(row)+'\n')
         except (OSError,ValueError,TypeError):pass
-    def connection_health(self, code):
+    def connection_health(self, code, error=None):
         # Fixed codes only: no credentials, account identifiers or response bodies.
         safe={'LOCAL_FILE_LOCKED','EA_OFFLINE','EA_HEARTBEAT_MISSING','ACCOUNT_CHANGED','ACCOUNT_MODE_CHANGED','ACCOUNT_MODE_REJECTED','REAL_EA_UPGRADE_REQUIRED','INVALID_POD_TOKEN','TRANSPORT_REPLACED','INVALID_MT5_IDENTITY','EA_UPGRADE_REQUIRED','EA_SESSION_INVALID','EA_SESSION_CHANGED','ACCOUNT_BINDING_CHANGED','CONNECTION_PENDING','CONNECTED'} | TRANSIENT_NETWORK_ERRORS
         code=code if code in safe else 'CONNECTION_PENDING'
-        try:
-            atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':self.connection_stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count)}))
-        except OSError:pass
+        details = {}
+        stage = self.connection_stage
+        if isinstance(error, ConnectionRequestError):
+            stage = error.stage
+            if error.cause: details['networkCause'] = error.cause
+        with self.health_lock:
+            try:
+                atomic_write(self.channel/'connector-health.json',json.dumps({'build':CONNECTOR_BUILD,'code':code,'stage':stage,'recordedAtMs':int(time.time()*1000),'lastCloudHeartbeatMs':self.last_cloud_heartbeat_ms,'consecutiveFailures':max(self.failure_count,self.lease_failure_count),**details}))
+            except OSError:pass
         return code
     def cycle(self):
         if self.lease_error in ('INVALID_POD_TOKEN','TRANSPORT_REPLACED'):raise RuntimeError(self.lease_error)
@@ -405,10 +448,11 @@ class Runner:
         # last verified lease expire on its original deadline.
         self.next_heartbeat=0
         self.lease_failure_count+=1
-        self.lease_retry_at=time.monotonic()+reconnect_delay(self.lease_failure_count)
+        self.lease_retry_at=time.monotonic()+reconnect_delay(self.lease_failure_count,str(error))
         raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) else str(error)
-        self.lease_error=self.connection_health(raw)
-        self.status(self.lease_error+' — lease belum sah; sambungan akan dicuba semula.')
+        self.lease_request_error=error if isinstance(error, ConnectionRequestError) else None
+        self.lease_error=self.connection_health(raw,self.lease_request_error)
+        self.status(connection_label(self.lease_error,self.lease_request_error)+' — Menyambung semula ke ZenCore.')
     def renew_lease(self, local=None, api=None):
         with self.lease_lock:
             if self.stop.is_set() or time.monotonic()<self.lease_retry_at:return False
@@ -440,6 +484,7 @@ class Runner:
             'podId':self.config['podId'],'eaSession':current['eaSession']}))
         self.last_cloud_heartbeat_ms=int(time.time()*1000)
         self.lease_failure_count=0;self.lease_retry_at=0;self.lease_error=None
+        self.lease_request_error=None
         self.next_heartbeat=time.monotonic()+2
         return True
     def invalidate_lease(self):
@@ -488,7 +533,7 @@ class Runner:
                 self.cycle()
                 if self.command_fetch_seconds>=.5:delay=.05
                 self.failure_count=0
-                if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'))
+                if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'),self.lease_request_error)
             except Exception as error:
                 if str(error) not in TRANSIENT_NETWORK_ERRORS:
                     self.invalidate_lease()
@@ -502,7 +547,7 @@ class Runner:
                     try: self.api.request('/api/execution/link-status',token=self.config['podToken'])
                     except RuntimeError as link_error:
                         if str(link_error)=='INVALID_POD_TOKEN': raw='INVALID_POD_TOKEN'
-                code=self.connection_health(raw)
+                code=self.connection_health(raw,error)
                 if code in ('INVALID_POD_TOKEN','TRANSPORT_REPLACED'):
                     self.stop.set()
                     self.status('Link lama dibatalkan. Pilih akaun MT5 baharu dan pautkan semula.')
@@ -516,8 +561,8 @@ class Runner:
                     'INVALID_POD_TOKEN':'Pautan tidak sah. Pautkan semula akaun ZenCore.',
                     'TRANSPORT_REPLACED':'Pautan diganti oleh Connector lain. Semak PC yang aktif.',
                 }
-                self.status(code+' — '+hints.get(code,'Entry baharu menunggu sambungan; Connector cuba semula.'))
-                delay=reconnect_delay(self.failure_count) if code in TRANSIENT_NETWORK_ERRORS else 2
+                self.status(connection_label(code,error)+' — '+hints.get(code,'Entry baharu menunggu sambungan; Connector cuba semula.'))
+                delay=reconnect_delay(self.failure_count,code) if code in TRANSIENT_NETWORK_ERRORS else 2
             self.stop.wait(delay)
         self.invalidate_lease()
 
@@ -775,3 +820,4 @@ if __name__=='__main__':
     try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
     except OSError:raise SystemExit('ZenCore Connector sudah berjalan.')
     root=tk.Tk();App(root);root.mainloop()
+

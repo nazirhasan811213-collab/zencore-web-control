@@ -1,13 +1,13 @@
 [Setup]
 AppId=ZenCoreVPSConnectorManager
 AppName=ZenCore VPS Connector Manager
-AppVersion=1.1.21
+AppVersion=1.1.28
 AppPublisher=ZenCore
 DefaultDirName={localappdata}\ZenCore\VPSConnector
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=ZenCoreVPSSetup-1.1.21
+OutputBaseFilename=ZenCoreVPSSetup-1.1.28
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -27,3 +27,4 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: 
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ZenCoreVPSManager"; ValueData: """{app}\ZenCoreVPSManager.exe"""; Flags: uninsdeletevalue
 [Run]
 Filename: "{app}\ZenCoreVPSManager.exe"; Description: "Buka ZenCore VPS Manager"; Flags: nowait postinstall skipifsilent
+

@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.36"
- #property version "2.36"
+ #define ZENCORE_RELEASE "2.44"
+ #property version "2.44"
 #else
- #define ZENCORE_RELEASE "2.37"
- #property version "2.37"
+ #define ZENCORE_RELEASE "2.44"
+ #property version "2.44"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -427,6 +427,21 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  return ok;
 }
 bool RejectEntry(string code){lastEntryCode=code;return false;}
+// BTCUSD TF2 uses a fixed strategy pip of 10 price units.
+const double BTC_TF2_PIP=10.0;
+bool BtcPipTargets(string symbol,bool buy,double fill,double &tp1,double &tp2,double &tp3,double &tp3Lock){
+ double tick=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+ if(tick<=0 || fill<=0)return false;
+ double sign=buy?1.0:-1.0;
+ tp1=Price(symbol,fill+sign*15*BTC_TF2_PIP);
+ tp2=Price(symbol,fill+sign*25*BTC_TF2_PIP);
+ tp3=Price(symbol,fill+sign*40*BTC_TF2_PIP);
+ double lockTicks=(fill+sign*70*BTC_TF2_PIP)/tick;
+ // The last StepLock stage requires a candle beyond TP3 plus 30 pips.
+ tp3Lock=Price(symbol,(buy?MathFloor(lockTicks+1e-8)+1:MathCeil(lockTicks-1e-8)-1)*tick);
+ return buy?fill<tp1 && tp1<tp2 && tp2<tp3 && tp3<tp3Lock:
+            tp3Lock>0 && tp3Lock<tp3 && tp3<tp2 && tp2<tp1 && tp1<fill;
+}
 // Pure price rules: also exercised by the offline native regression harness.
 bool Tf2EntryPriceAllowed(bool buy,double quote,double tp1){
  return quote>0 && tp1>0 && (buy?quote<tp1:quote>tp1);
@@ -483,11 +498,14 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(!directEntry && !VolumeValid(symbol,lot))return RejectEntry("VOLUME_INVALID");
  if(side!="BUY" && side!="SELL")return RejectEntry("SIDE_REJECTED");
  bool buy=side=="BUY";
- bool guardedTf2=strategyMode=="TF2_SCALPING" && executionTf=="2" && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
+ bool guardedTf2=strategyMode=="TF2_SCALPING" && (executionTf=="1" || executionTf=="2") && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
  bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
  bool fillPlan=directEntry || guardedTf2 || fillTf15;
+ bool btcPip=ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
+ if(btcPip)exitLockVersion="BTC_TF2_PIP_STEPLOCK_V1";
+
  const double guardRisk=4.0;
- double stopDistance=directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
+ double stopDistance=btcPip?30*BTC_TF2_PIP:directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
  double entryTickSize=fillPlan?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
@@ -534,6 +552,11 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     if(sl<=0 || quoteRisk<=0 || quoteRisk>stopDistance+1e-8)return RejectEntry("EXECUTION_SL_INVALID");
    }
    // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
+   if(btcPip){
+    double previewTp1,previewTp2,previewTp3,previewLock;
+    if(!BtcPipTargets(symbol,buy,buy?tick.ask:tick.bid,previewTp1,previewTp2,previewTp3,previewLock))
+     return RejectEntry(i>0?"SETUP_PARTIAL":"BTC_PIP_TARGET_INVALID");
+   }
    double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
    if(netting){
     bool hasPosition=PositionSelect(symbol);
@@ -585,17 +608,25 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     return RejectEntry("FILL_PINE_ENTRY_GAP_4USD");
    }
    double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
-   double t1=Price(symbol,ExecutionTarget(fill,entry,tp1)),t2=Price(symbol,ExecutionTarget(fill,entry,tp2)),t3=Price(symbol,ExecutionTarget(fill,entry,tp3));
+   double t1=0,t2=0,t3=0,lockTrigger=0;
+   bool targetsReady=true;
+   if(btcPip)targetsReady=BtcPipTargets(symbol,buy,fill,t1,t2,t3,lockTrigger);
+   else{
+    t1=Price(symbol,ExecutionTarget(fill,entry,tp1));
+    t2=Price(symbol,ExecutionTarget(fill,entry,tp2));
+    t3=Price(symbol,ExecutionTarget(fill,entry,tp3));
+    targetsReady=buy?fill<t1 && t1<t2 && t2<t3:t3>0 && fill>t1 && t1>t2 && t2>t3;
+   }
    double fillRisk=buy?fill-safeSl:safeSl-fill;
-   bool protectedFill=(!guardedTf2 || directEntry || Tf2EntryPriceAllowed(buy,fill,tp1)) && safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8 &&
-     (buy?fill<t1 && t1<t2 && t2<t3:t3>0 && fill>t1 && t1>t2 && t2>t3);
+   bool protectedFill=targetsReady && (!guardedTf2 || directEntry || Tf2EntryPriceAllowed(buy,fill,tp1)) &&
+     safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8;
    // Keep the previous plan on disk until the new broker stop is confirmed.
    bool stopChanged=false;
    if(protectedFill && MathAbs(safeSl-currentSl)>1e-8){
     stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
-   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3)));
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
    if(!protectedFill){
     if(addingNetLayer && stopChanged && !(trade.PositionModify(filledTicket,currentSl,0) && BrokerDone()))
      Print("ZenCore PRIOR_STOP_RESTORE_PENDING ticket=",filledTicket);
@@ -683,12 +714,30 @@ bool ProtectionAttemptAllowed(ulong ticket){
  return true;
 }
 // Only a completed broker M2 candle after this position opened can raise a stage.
-double ClosedTf2Quote(string symbol,long openedAt){
+double ClosedTf2Quote(string symbol,long openedAt,bool useExecutableSide=false,bool buy=true){
  MqlRates closedBars[];
  if(CopyRates(symbol,PERIOD_M2,1,1,closedBars)!=1)return 0;
  long closedAt=(long)closedBars[0].time+120;
  if(closedAt>TimeCurrent() || closedAt<=openedAt || closedBars[0].close<=0)return 0;
- return closedBars[0].close;
+ if(!useExecutableSide)return closedBars[0].close;
+ // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the M2 candle for BTC.
+ static string cachedSymbol="";
+ static long cachedClose=0;
+ static ulong retryAt=0;
+ static MqlTick lastTick;
+ ulong now=GetTickCount64();
+ if(cachedSymbol!=symbol || cachedClose!=closedAt){
+  cachedSymbol=symbol;cachedClose=closedAt;retryAt=0;
+  lastTick.bid=0;lastTick.ask=0;
+ }
+ if(lastTick.bid>0 && lastTick.ask>0)return buy?lastTick.bid:lastTick.ask;
+ if(now<retryAt)return 0;
+ retryAt=now+1000;
+ MqlTick quotes[];
+ int count=CopyTicksRange(symbol,quotes,COPY_TICKS_INFO,(ulong)closedBars[0].time*1000,(ulong)closedAt*1000-1);
+ if(count<=0)return 0;
+ lastTick=quotes[count-1];
+ return buy?lastTick.bid:lastTick.ask;
 }
 void ManageLocalStepLock(){
  if(!Permissions())return;
@@ -703,18 +752,28 @@ void ManageLocalStepLock(){
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
-  if(t1<=0 || !(buy?t1<t2 && t2<t3:t1>t2 && t2>t3))continue;
+  bool btcCandleLock=Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1" || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V2";
+  bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
+  double lockTrigger=Val("tp3LockTrigger");
+  bool candleLock=pineLock || btcCandleLock;
+  bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
+                   (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
+  if(t1<=0 || !ordered)continue;
   MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
   double quote=buy?tick.bid:tick.ask,target=0;
   if((pineLock || tf15Be) && planEntry>0)entry=planEntry;
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
-  double decisionQuote=pineLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME)):quote;
+  double decisionQuote=candleLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
    if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;
+  }
+  if(btcCandleLock && decisionQuote>0){
+   if(lockTrigger>0 && (buy?decisionQuote>=lockTrigger:decisionQuote<=lockTrigger))observed=4;
+   else if(observed==1 && decisionQuote==t1)observed=0;
   }
   if(observed>stage){stage=observed;if(!WriteAtomic(stageFile,Row("symbol",symbol)+Row("side",buy?"BUY":"SELL")+Row("stage",(string)stage)))continue;}
   if(fillAnchor && stage>=1){
@@ -726,7 +785,7 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if(pineLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
+  if(candleLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
   if(pineLock && target>0){
    // A Pine reference reached TP1 before this account filled. Never convert
    // that reference lock into a loss-making stop or a forced market close.
@@ -740,7 +799,7 @@ void ManageLocalStepLock(){
   if(!ProtectionAttemptAllowed(ticket))continue;
   // The level was already observed. If broker freeze/delay prevented installing
   // it and price crossed back through it, close this owned position only.
-  bool lockBreached=pineLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
+  bool lockBreached=candleLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
   if(lockBreached){if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore LOCK_EXIT_PENDING retcode=",trade.ResultRetcode());continue;}
   double distance=MathMax(SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL),SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL))*SymbolInfoDouble(symbol,SYMBOL_POINT);
   if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)continue;
@@ -968,7 +1027,7 @@ void Process(bool chartWorker){
   if(!directEntry && symbol==""){MapSymbols();symbol=EntrySymbol(c);}
   lastEntryCode=directEntry?(armed?"EA_ENTRY_CHART_NOT_ATTACHED":"ENTRY_STOPPED"):"MT5_SYMBOL_UNRESOLVED";
   string executionTf=Get("executionTimeframe");
-  if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
+  if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="1" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
   else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry);
   code=ok?"SETUP_OPENED":lastEntryCode;
@@ -1109,3 +1168,4 @@ void OnTimer(){
  Comment("ZenCore ",ZENCORE_RELEASE," • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");
 }
 void OnDeinit(const int reason){EventKillTimer();ReleaseSplitWorker();for(int i=0;i<ArraySize(manualAtrSources);i++)IndicatorRelease(manualAtrSources[i].handle);if(registeredRole!=CHART_AUTO)GlobalVariableDel(ChartRoleKey(ChartID()));if(lockHandle!=INVALID_HANDLE){FileDelete(channel+"\\heartbeat.tsv",FILE_COMMON);FileClose(lockHandle);lockHandle=INVALID_HANDLE;}Comment("");}
+

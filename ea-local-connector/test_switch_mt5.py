@@ -19,3 +19,4 @@ class SwitchTests(unittest.TestCase):
    m.admin_request=request;r=m.clear_slot(1,preserve_profile=True)
    self.assertFalse(r['brokerCloseConfirmed']);self.assertFalse(v.path(1).exists());self.assertEqual(v.load_folder(1),str(root/'1'));self.assertTrue(v.path(2).exists());self.assertIn(2,m.configs)
    self.assertTrue(paths[-1].endswith('/switch-mt5'))
+

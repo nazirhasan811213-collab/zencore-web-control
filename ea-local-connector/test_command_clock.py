@@ -39,3 +39,4 @@ class CommandClockTests(unittest.TestCase):
  def test_error_reporting_never_exposes_unknown_exception_contents(self):
   self.assertEqual(validation_code(ValueError('private-secret')), 'COMMAND_VALIDATION_FAILED')
   self.assertEqual(validation_code(KeyError('private-secret')), 'REQUIRED_FIELD_MISSING')
+

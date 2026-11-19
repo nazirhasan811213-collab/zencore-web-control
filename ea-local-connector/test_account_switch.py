@@ -43,3 +43,4 @@ class AccountSwitchTests(unittest.TestCase):
    runner=Runner({**IDENTITY,'channel':folder},lambda _:None)
    runner.invalidate_lease()
    self.assertEqual(read_fields(Path(folder)/'lease.tsv')['expiresAt'],'0')
+

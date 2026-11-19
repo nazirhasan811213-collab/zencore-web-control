@@ -99,3 +99,4 @@ class VpsManagerTests(unittest.TestCase):
         self.manager.pair(2,self.channel(2),'secret')
         self.assertIn(2,self.manager.configs)
         self.manager.pending.clear();self.manager.reset(1)
+

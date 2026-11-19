@@ -36,3 +36,4 @@ try {
 } finally {
     if (-not $terminal.HasExited) { Stop-Process -Id $terminal.Id -ErrorAction SilentlyContinue }
 }
+

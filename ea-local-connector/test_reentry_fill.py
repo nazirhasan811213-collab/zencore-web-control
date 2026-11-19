@@ -19,3 +19,4 @@ class ReentryFillTests(unittest.TestCase):
  def test_heartbeat_reports_capability_setup_and_per_position_targets(self):
   h=local_heartbeat();h.update(reentryVersion='TF2_POST_CLOSE_HALF_LAYERS_V1',fillRiskVersion='FILL_PRICE_ATR_V1',positionCount=1,p0ticket='55',p0positionId='55',p0symbol='XAUUSD',p0side='BUY',p0strategyMode='TF2_SCALPING',p0volume='.01',p0entry='4100',p0currentPrice='4101',p0activeSl='4097.75',p0profitUsd='1',p0openedAt=str(NOW),p0setupId=ID[:20],p0fillRiskVersion='FILL_PRICE_ATR_V1',p0tp1='4101.5',p0tp2='4103',p0tp3='4104.5',p0initialSl='4097.75')
   x=heartbeat(h,IDENTITY,NOW);self.assertTrue(x['terminalConnected']);self.assertEqual(x['fillRiskVersion'],'FILL_PRICE_ATR_V1');self.assertEqual(x['positions'][0]['tp1'],4101.5);self.assertEqual(x['positions'][0]['setupId'],ID[:20])
+

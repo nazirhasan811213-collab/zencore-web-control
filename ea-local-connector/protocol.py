@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.36'
-CONNECTOR_BUILD = '2.1.36'
+EA_VERSION = '2.44'
+CONNECTOR_BUILD = '2.1.44'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -169,15 +169,15 @@ def command_fields(command, identity):
                 if snap.get(key) != payload.get(key): raise ValueError('ANALYSIS_PRICE_MISMATCH')
             if payload['side'] not in ('BUY','SELL'): raise ValueError('SIDE_REJECTED')
             execution_tf=str(snap.get('executionTimeframe','')).replace('m','')
-            if snap.get('analysisSopVersion') in ('NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'):
-                expected_tf='15' if mode=='TF15_INTRA' else '2' if snap.get('analysisSopVersion')=='NORMAL_20261001_TF2_RIBBON_V1' else '3'
+            if snap.get('analysisSopVersion') in ('NORMAL_20261001_TF1_RIBBON_V1','NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'):
+                expected_tf='15' if mode=='TF15_INTRA' else '1' if snap.get('analysisSopVersion')=='NORMAL_20261001_TF1_RIBBON_V1' else '2' if snap.get('analysisSopVersion')=='NORMAL_20261001_TF2_RIBBON_V1' else '3'
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
                     if not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
-                if snap.get('maxEntryGap')!=4 or execution_tf not in ('2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
+                if snap.get('maxEntryGap')!=4 or execution_tf not in ('1','2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
                 fields['executionPolicy']='PINE_DIRECT_FILL_GAP4_V1'
             fields['side'] = payload['side']
             fields['slPolicy']='EXACT_ANALYSIS_V2'
@@ -305,3 +305,4 @@ def command_server_time(result, request_elapsed_ms):
         raise ValueError('SERVER_TIME_REQUIRED')
     # Add the full measured round trip conservatively; never extend the signed deadline.
     return value + max(0, request_elapsed_ms)
+

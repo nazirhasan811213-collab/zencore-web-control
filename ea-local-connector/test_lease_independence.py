@@ -45,3 +45,4 @@ class LeaseIndependenceTests(unittest.TestCase):
    with patch('protocol.os.replace',side_effect=PermissionError('locked')) as replace,patch('protocol.time.sleep'):
     with self.assertRaises(PermissionError):atomic_write(path,'new')
    self.assertEqual(path.read_text(),'old');self.assertEqual(replace.call_count,6)
+

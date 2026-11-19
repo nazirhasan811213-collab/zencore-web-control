@@ -39,3 +39,4 @@ class FastPollTests(unittest.TestCase):
    runner.timing('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','DELIVERED',commandFetchMs=12,serverQueueAgeMs=250,password=1234,account=12345678)
    row=json.loads((Path(folder)/'execution-timing.jsonl').read_text())
    self.assertEqual(set(row),{'commandId','stage','recordedAtMs','commandFetchMs','serverQueueAgeMs'})
+

@@ -29,3 +29,4 @@ class InstallEaTests(unittest.TestCase):
    with patch.object(connector,'RESOURCE',resource),patch.object(connector.subprocess,'CREATE_NO_WINDOW',0,create=True),patch.object(connector.subprocess,'run'):
     with self.assertRaisesRegex(RuntimeError,'EA_COMPILE_FAILED'):connector.install_ea(root)
    self.assertFalse(target.exists())
+

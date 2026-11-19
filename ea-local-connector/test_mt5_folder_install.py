@@ -86,3 +86,4 @@ class FolderInstallTests(unittest.TestCase):
   (app/'ZenCoreExecutor.ex5').write_bytes(payload)
   with patch('vps_manager.RESOURCE',self.root/'missing'),patch('vps_manager.sys.frozen',True,create=True),patch('vps_manager.sys.executable',str(app/'ZenCoreVPSManager.exe')):
    self.assertEqual((install_ea(data)/'ZenCoreExecutor.ex5').read_bytes(),payload)
+

@@ -21,3 +21,4 @@ class BrokerMetadataTests(unittest.TestCase):
         with self.assertRaises(ValueError):broker_metadata(fields,selected)
 
 if __name__=='__main__':unittest.main()
+

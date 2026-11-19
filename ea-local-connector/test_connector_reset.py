@@ -64,3 +64,4 @@ class ResetTests(unittest.TestCase):
   with patch('connector.messagebox.askyesno',return_value=True),patch('connector.load_config',return_value=None),patch('connector.reset_connector_data') as reset,patch('connector.threading.Thread',Immediate):app.reset_link()
   reset.assert_called_once();self.assertIsNone(app.session_api);self.assertFalse(app.available)
   for n in ('email','password','account','folder'):self.assertEqual(getattr(app,n).value,'')
+

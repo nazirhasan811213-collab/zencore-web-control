@@ -12,7 +12,7 @@ class LayerExecution(unittest.TestCase):
         if not compiler:
             self.skipTest('g++ unavailable')
         source = pathlib.Path(__file__).with_name('ZenCoreExecutor.mq5').read_text()
-        start = source.index('bool Tf2EntryPriceAllowed')
+        start = source.index('const double BTC_TF2_PIP=')
         end = source.index('\n}', source.index('\n return true;', source.index('bool Entry(', start))) + 2
         entry = source[start:end].replace('(string)identifier', 'std::to_string(identifier)').replace('(string)TimeCurrent()', 'std::to_string(TimeCurrent())')
         mock = r'''
@@ -29,6 +29,8 @@ using uint = unsigned int;
 #define MathCeil std::ceil
 #define MathFloor std::floor
 #define MathMin std::min
+#define MathMax std::max
+#define ZENCORE_SPLIT_ROLE 0
 enum {ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
       POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_VOLUME,
@@ -100,7 +102,7 @@ bool HistoryDealSelect(ulong){return true;}
 long HistoryDealGetInteger(ulong,int){return positions.back().id;}
 double HistoryDealGetDouble(ulong,int){return lastDeal;}
 bool CloseTicket(ulong ticket,double volume){positions.at(ticket-1).volume-=volume;return true;}
-void Print(string,ulong){}
+template<class... Args> void Print(Args...){}
 struct Trade{
  ulong magic=0;
  double volume=0;
@@ -200,6 +202,31 @@ int main(){
  assert(!Run(true,12)&&sends==0&&lastEntryCode=="QUOTE_NOT_READY");
  assert(now-quoteWaitStarted==4000);
  assert(brokerSymbols[0]==_Symbol);
+ enabledSymbols="XAUUSD,BTCUSD";_Symbol="BTCUSD.pro";missingQuotes=0;brokerDelay=0;
+ for(bool merged:{false,true})for(bool buy:{false,true}){
+  netting=merged;positions.clear();calls=0;sends=0;
+  int sign=buy?1:-1;
+  assert(Entry("BTCUSD",_Symbol,buy?"BUY":"SELL",.01,2,4000,
+    4000-sign*2,4000+sign,4000+sign*2,4000+sign*3,"btc",false,
+    "TF2_SCALPING",false,0,"MT5_FILL_STEPLOCK","2",true));
+  assert(lastRisk.find("exitLockVersion=BTC_TF2_PIP_STEPLOCK_V1")!=string::npos);
+  const auto &position=positions.back();
+  double p1,p2,p3,lock;
+  assert(BtcPipTargets(_Symbol,buy,position.entry,p1,p2,p3,lock));
+  assert(std::abs(position.sl-(position.entry-300*sign))<=.0100001);
+  assert(std::abs(lock-position.entry-sign*700)>0 && std::abs(lock-position.entry-sign*700)<=.0100001);
+  assert(lastRisk.find("tp3LockTrigger="+Num(lock))!=string::npos);
+  double targets[3]={p1,p2,p3},distances[3]={150,250,400};
+  for(int i=0;i<3;i++){
+   assert(std::abs(sign*(targets[i]-position.entry)-distances[i])<=.005001);
+   assert(lastRisk.find("tp"+std::to_string(i+1)+"="+Num(targets[i]))!=string::npos);
+  }
+ }
+ double a,b,c,d;
+ assert(BtcPipTargets(_Symbol,true,64000,a,b,c,d));
+ assert(a==64150 && b==64250 && c==64400 && d==64700.01);
+ assert(BtcPipTargets(_Symbol,false,64000,a,b,c,d));
+ assert(a==63850 && b==63750 && c==63600 && d==63299.99);
 }
 '''
         with tempfile.TemporaryDirectory() as folder:
@@ -210,3 +237,4 @@ int main(){
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             subprocess.run([str(binary)], check=True, cwd=folder)
+
