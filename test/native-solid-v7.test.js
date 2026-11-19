@@ -52,11 +52,16 @@ for(const tf of ['2','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke 
  const first=d.onMarket(m);await d.onMarket({...m,feedChannel:'DASHBOARD',signalObservedAt:f.now+1,entryEvent:false,strategyNormal:{...m.strategyNormal,state:'WAIT',plan:null}});
  a.equal(d.getLatestMarket('XAUUSD',tf),m);release();await first;a.equal(valid,true);a.equal(batches.length,1);
 });
-test('V7.1 native SOLID cannot be cancelled by the removed HEMA entry filter; follow-up HEMA remains required',()=>{
- for(const tf of ['2','15']){
-  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7.1`));a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
- }
+test('TF2 follows confirmed trend reversals while TF15 keeps its own lifecycle',()=>{
+ const tf2=fs.readFileSync(__dirname+'/../ZenCore_TF2_SOP_V7.pine','utf8');
+ a.match(tf2,/TF2-NATIVE-SOLID-V7.3/);
+ a.match(tf2,/bool zc_held_colour_end = barstate.isconfirmed and zc_hold_active/);
+ a.match(tf2,/bool zc_trend_solid = [^\n]*barstate.isconfirmed/);
+ const tf15=fs.readFileSync(__dirname+'/../ZenCore_TF15_SOP_V7.pine','utf8');
+ a.match(tf15,/bool zc_held_colour_end = false/);
+ a.match(tf15,/TF15-NATIVE-SOLID-V7.1/);
 });
+
 for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{
  const {f,ingest,sign}=native('2',side);f.row[3]=4100+sign*.5;f.row[40]=false;const m=ingest(),d=C.createEntryDecision(m),check=require('../entry-delivery-check').checkEntryDelivery;
  a.ok(d);const payload={...d.snapshot,side,analysisSnapshot:d.snapshot};a.equal(check({payload},m,f.now).ok,true);
@@ -75,4 +80,13 @@ test('optional TF2 structure entry gates initial and follow-up qualification usi
  a.match(obstacle,/for i = 2 to 14/);
  a.match(obstacle,/high\[i-1\]/);
  a.match(obstacle,/low\[i-1\]/);
+});
+
+test('TF2 quality mode can qualify an unconsumed held SOLID on a later closing candle',()=>{
+ const source=fs.readFileSync(`${__dirname}/../ZenCore_TF2_SOP_V7.pine`,'utf8');
+ a.match(source,/bool zn_initial_solid = zc_hold_active and not na\(zc_source_setup_at\) and not na\(zc_seq_trigger\)/);
+ a.match(source,/bool zc_hold_qualify = [^\n]*barstate.isconfirmed[^\n]*na\(zc_seq_completed\)[^\n]*zc_new_entry_pass/);
+ a.match(source,/bool zn_held_qualification = zc_hold_qualify and zc_cycle_kind == "INITIAL" and not zc_seq_pulse/);
+ a.match(source,/f_bool\(zc_seq_pulse or zn_held_qualification\)/);
+ a.match(source,/bool zc24_bootstrap_replay = zc24_bootstrap and not zc_hold_qualify/);
 });

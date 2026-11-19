@@ -129,3 +129,29 @@ for(const tf of ['2','15'])for(const side of ['BUY','SELL'])test(`BTCUSD TF${tf}
  assert.match(telegramMessage(entries[0]),new RegExp('BTCUSD • '+side));
  for(const k of ['entry','sl','tp1','tp2','tp3'])assert.equal(entries[0].telegramPlan[k],market.strategyNormal.plan[k]);
 });
+
+for(const symbol of ['XAUUSD','BTCUSD'])for(const side of ['BUY','SELL'])test(`TF2 held SOLID emits a new qualified ${symbol} ${side} entry once`,async()=>{
+ const {signals}=require('../analysis-alert-core');
+ const {f,ingest}=fixture('2',side),sign=side==='BUY'?1:-1;
+ const originalBar=f.row[1]-120000;
+ f.row[0]=symbol;
+ Object.assign(f.row[66],{
+  entryPolicyVersion:'PINE_NATIVE_SOLID_ENTRY_V7',
+  sourceSetupAt:originalBar,solidTriggeredAt:originalBar+120000,
+  nativeSolid:{version:'NATIVE_SOLID_LABEL_V1',barTime:f.row[1],pulse:true,sourcePulse:false,heldQualification:true,basis:4100-sign,rsi:50},
+  entryQuality:{score:84,minimum:65,passed:true}
+ });
+ if(symbol==='BTCUSD'){
+  const entry=f.row[22];
+  Object.assign(f.row,{23:entry-sign*300,24:entry-sign*300,25:entry+sign*150,26:entry+sign*250,27:entry+sign*400});
+  f.row[66].riskPlanVersion='BTC_TF2_PIP_STEPLOCK_V1';
+ }
+ const market=ingest();
+ assert.ok(market);
+ assert.ok(require('../pine-direct-entry').decision(market));
+ const entry=signals(market,f.now)?.items.filter(item=>item.kind==='ENTRY');
+ assert.equal(entry?.length,1);
+ assert.equal(entry[0].side,side);
+ assert.equal(entry[0].sourceBarTime,f.row[1]);
+ assert.equal(signals({...market,entryEvent:false},f.now)?.items.filter(item=>item.kind==='ENTRY').length,0);
+});
