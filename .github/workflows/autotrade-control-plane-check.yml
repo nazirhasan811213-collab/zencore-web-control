@@ -95,8 +95,16 @@ jobs:
       - name: Install browser test tools
         run: npm install --no-save --package-lock=false playwright@1.58.2
 
-      - name: Install test browser
-        run: npx playwright install --with-deps chromium
+      - name: Select available Chrome or install test browser
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || true)"
+          if [ -n "$browser_path" ]; then
+            echo "ZENCORE_QA_CHROMIUM=$browser_path" >> "$GITHUB_ENV"
+            "$browser_path" --version
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Check Analysis popup and mobile layout
         run: node scripts/check-analysis-alert-ui.cjs
