@@ -2022,6 +2022,7 @@ const server = http.createServer(async (req, res) => {
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 
+  if(require('./public-intro-video').serveIntroVideo(req,res,pathname))return;
   if(req.method==='GET' && pathname==='/welcome.css')return sendAuthAsset(res,'welcome.css','text/css; charset=utf-8');
   if(req.method==='GET' && pathname==='/welcome')return sendAuthAsset(res,'welcome.html','text/html; charset=utf-8');
   if(req.method==='GET' && pathname==='/api/trading-cockpit') {
