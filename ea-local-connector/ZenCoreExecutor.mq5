@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.44"
- #property version "2.44"
+ #define ZENCORE_RELEASE "2.45"
+ #property version "2.45"
 #else
- #define ZENCORE_RELEASE "2.44"
- #property version "2.44"
+ #define ZENCORE_RELEASE "2.45"
+ #property version "2.45"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -808,6 +808,20 @@ void ManageLocalStepLock(){
 }
 
 bool ValidManualDistances(double t1,double t2,double t3,double sl){return MathIsValidNumber(t1)&&MathIsValidNumber(t2)&&MathIsValidNumber(t3)&&MathIsValidNumber(sl)&&t1>0&&t2>t1&&t3>t2&&sl>0;}
+// Configuration is not a trade. Save it while Algo Trading is OFF; ManageManual
+// still checks Permissions() before adopting positions or changing any broker SL.
+string ManualConfigReason(bool leaseFound,bool leaseBound,bool leaseFresh,bool layersValid,bool scopeValid,bool enabled,bool hedging,bool distancesValid,bool versionValid){
+ if(!leaseFound)return "MANUAL_EXIT_LEASE_NOT_FOUND";
+ if(!leaseBound)return "MANUAL_EXIT_LEASE_BINDING_CHANGED";
+ if(!leaseFresh)return "MANUAL_EXIT_LEASE_EXPIRED";
+ if(!layersValid)return "MANUAL_EXIT_LAYER_POLICY_INVALID";
+ if(!scopeValid)return "MANUAL_EXIT_PAIR_SCOPE_INVALID";
+ if(!enabled)return "READY";
+ if(!hedging)return "MANUAL_EXIT_HEDGING_REQUIRED";
+ if(!distancesValid)return "MANUAL_EXIT_DISTANCES_INVALID";
+ if(!versionValid)return "MANUAL_EXIT_VERSION_UNSUPPORTED";
+ return "READY";
+}
 bool SaveManualConfig(){return WriteAtomic("manual-config.tsv",Row("version","MANUAL_TF2_EXIT_V3")+Row("podId",ownerPod)+Row("enabled",manualEnabled?"1":"0")+Row("since",(string)manualSince)+Row("pairScope",manualPairScope)+Row("tp1",Num(manualTp1))+Row("tp2",Num(manualTp2))+Row("tp3",Num(manualTp3))+Row("sl",Num(manualSl)));}
 bool ManualLease(){
  if(!ReadFields("lease.tsv"))return false;
@@ -998,11 +1012,25 @@ void Process(bool chartWorker){
  bool ok=false;string code="BROKER_REJECTED";
  if(type=="MANUAL_EXIT_CONFIG"){
   // Signed by Connector; fresh lease binds even when auto entry is STOPPED.
-  bool bound=ReadFields("lease.tsv") && Get("podId")==commandPod && Get("eaSession")==eaSession && Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && (long)Val("expiresAt")>UtcMs();
-  ok=bound && layerPolicyValid && ValidManualPairScope(cfgPairScope) && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl) && (configVersion=="MANUAL_TF2_EXIT_V3" || (configVersion=="MANUAL_TF2_EXIT_V2" && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3))));
+  bool leaseFound=ReadFields("lease.tsv");
+  bool leaseBound=leaseFound && Get("podId")==commandPod && Get("eaSession")==eaSession && Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode();
+  bool leaseFresh=leaseFound && (long)Val("expiresAt")>UtcMs();
+  bool versionValid=configVersion=="MANUAL_TF2_EXIT_V3" || (configVersion=="MANUAL_TF2_EXIT_V2" && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3);
+  code=ManualConfigReason(leaseFound,leaseBound,leaseFresh,layerPolicyValid,ValidManualPairScope(cfgPairScope),configEnabled,AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl),versionValid);
+  ok=code=="READY";
   bool newlyEnabled=!manualEnabled || ownerPod!=commandPod;
-  if(ok&&configEnabled&&(newlyEnabled||manualPairScope!=cfgPairScope))ok=ExcludeExistingManual(cfgPairScope,newlyEnabled);
-  if(ok){if(ownerPod!=commandPod)resumePending=false;ownerPod=commandPod;manualEnabled=configEnabled;manualPairScope=cfgPairScope;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
+  if(ok&&configEnabled&&(newlyEnabled||manualPairScope!=cfgPairScope)){
+   ok=ExcludeExistingManual(cfgPairScope,newlyEnabled);
+   if(!ok)code="MANUAL_EXIT_EXCLUSION_SAVE_FAILED";
+  }
+  if(ok){
+   if(ownerPod!=commandPod)resumePending=false;
+   ownerPod=commandPod;manualEnabled=configEnabled;manualPairScope=cfgPairScope;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;
+   if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;
+   if(!SaveManualConfig()){manualEnabled=false;ok=false;}
+   SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";
+   if(ok&&configEnabled&&!Permissions())Print("ZenCore manual exit settings saved; execution waiting: ",PermissionReason());
+  }
  }
  else if(type=="MANUAL_EXIT_ACTION"){
   // Manual entry uses its own local SL milestones, never Pine close signals.
