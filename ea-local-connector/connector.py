@@ -282,6 +282,19 @@ def readiness_message(code):
         'NETTING_POSITION_EXISTS':'Akaun netting masih ada posisi simbol ini. Entry baharu tidak ditambah.',
         'SETUP_POSITION_EXISTS':'Setup TF yang sama masih terbuka. Tunggu semua posisi tutup.',
         'ENTRY_PLAN_INVALID':'Susunan harga entry, SL dan TP tidak sah. Semak pelan Pine.',
+        'MANUAL_EXIT_CONFIG_REJECTED':'EA lama menolak tetapan manual. Pasang EA 2.45 untuk sebab penolakan terperinci.',
+        'MANUAL_EXIT_LEASE_NOT_FOUND':'Auto Exit: fail sesi tiada. Connector sedang menyambung semula.',
+        'MANUAL_EXIT_LEASE_BINDING_CHANGED':'Auto Exit: sesi atau akaun tidak sepadan. Semak terminal yang dipautkan.',
+        'MANUAL_EXIT_LEASE_EXPIRED':'Auto Exit: sesi tamat. Tunggu Connector pulih, kemudian Simpan semula.',
+        'MANUAL_EXIT_LAYER_POLICY_INVALID':'Auto Exit: kontrak layer tidak sah. Kemas kini Connector dan EA serentak.',
+        'MANUAL_EXIT_PAIR_SCOPE_INVALID':'Auto Exit: pilih XAUUSD, BTCUSD atau kedua-duanya.',
+        'MANUAL_EXIT_HEDGING_REQUIRED':'Auto Exit manual memerlukan akaun hedging; akaun ini netting.',
+        'MANUAL_EXIT_DISTANCES_INVALID':'Auto Exit: pastikan 0 < TP1 < TP2 < TP3 dan SL > 0.',
+        'MANUAL_EXIT_VERSION_UNSUPPORTED':'Auto Exit: versi tetapan tidak serasi. Kemas kini Connector dan EA.',
+        'MANUAL_EXIT_EXCLUSION_SAVE_FAILED':'Auto Exit: gagal merekod posisi lama. Semak akses folder Common MT5.',
+        'MANUAL_EXIT_SAVE_FAILED':'Auto Exit: gagal menyimpan tetapan. Semak akses folder Common MT5.',
+        'TERMINAL_ALGO_DISABLED':'Algo Trading MT5 OFF. Tetapan disimpan tetapi exit belum boleh dijalankan.',
+        'EA_ALGO_DISABLED':'Allow Algo Trading EA OFF. Tetapan disimpan tetapi exit belum boleh dijalankan.',
         'QUOTE_NOT_READY':'Harga broker belum tersedia. Tunggu quote MT5.',
         'RISK_FILE_WRITE_FAILED':'Fail pelan risiko tidak boleh ditulis. Semak permission folder Common MT5.',
         'BROKER_ENTRY_REJECTED':'Broker menolak order. Semak retcode dan Experts MT5.',
@@ -419,6 +432,9 @@ class Runner:
                 metrics['serverQueueAgeMs']=result['serverTime']-command['createdAt']
             self.timing(command['id'],'DELIVERED',**metrics)
         message='MT5 '+self.config.get('tradeMode','DEMO')+' tersambung • '+('SERVER PAUSED' if self.entry_blocked_reason=='GLOBAL_ENTRY_PAUSED' else self.desired_state)
+        if local.get('manualExitEnabled')=='1':
+            allowed=all(local.get(k)=='1' for k in ('terminalConnected','terminalTradeAllowed','accountTradeAllowed','expertTradeAllowed'))
+            message+=' • AUTO EXIT MANUAL '+('AKTIF' if allowed else 'TETAPAN DISIMPAN — SEMAK ALGO TRADING / PERMISSION MT5')
         if self.last_result and self.last_result[0]!='EXECUTED':
             message+=' • '+readiness_message(self.last_result[1])
         self.status(message)
