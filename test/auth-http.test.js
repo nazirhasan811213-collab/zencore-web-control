@@ -121,6 +121,17 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('location'), '/login');
 
+    response = await fetch(`${BASE}/welcome`);
+    assert.equal(response.status, 200);
+    const welcome = await response.text();
+    assert.match(welcome, /href="\/u\/nazir"/);
+    assert.match(welcome, /src="\/media\/zencore-promotion-150s\.mp4"/);
+    assert.doesNotMatch(welcome, /href="https:\/\/wa\.me/);
+
+    response = await fetch(`${BASE}/welcome?ib=missing-referrer`);
+    assert.equal(response.status, 200);
+    assert.doesNotMatch(await response.text(), /href="\/u\/nazir"/);
+
     response = await fetch(`${BASE}/auth/promotion/nazir`, { headers:{Origin:'https://zencore-terminal.magicpeony2.chatgpt.site'} });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://zencore-terminal.magicpeony2.chatgpt.site');

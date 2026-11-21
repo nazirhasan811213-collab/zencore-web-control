@@ -2024,7 +2024,32 @@ const server = http.createServer(async (req, res) => {
 
   if(require('./public-intro-video').serveIntroVideo(req,res,pathname))return;
   if(req.method==='GET' && pathname==='/welcome.css')return sendAuthAsset(res,'welcome.css','text/css; charset=utf-8');
-  if(req.method==='GET' && pathname==='/welcome')return sendAuthAsset(res,'welcome.html','text/html; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/welcome') {
+    const code = url.searchParams.get('ib') ?? DEFAULT_IB_CODE;
+    let promotion;
+    try {
+      if (authState.ready && authState.service) promotion = await authState.service.publicPromotion(code);
+    } catch (error) {
+      if (error.status !== 404) console.warn('ZenCore welcome promotion lookup failed');
+    }
+
+    let links = '';
+    if (promotion) {
+      const registrationPath = '/u/' + encodeURIComponent(promotion.code);
+      links = `<a class="btn" href="${registrationPath}">Daftar ZenCore ↗</a>`;
+      if (promotion.whatsappReady) {
+        const whatsappUrl = promotion.whatsappRegisterUrl.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+        links += `<a class="textlink" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer">Daftar melalui WhatsApp ↗</a>`;
+      }
+    }
+    const body = fs.readFileSync(path.join(__dirname, 'welcome.html'), 'utf8').replace('<!-- registration-links -->', links);
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      ...securityHeaders(AUTH_CSP)
+    });
+    return res.end(body);
+  }
   if(req.method==='GET' && pathname==='/api/trading-cockpit') {
     if(AUTH_ENABLED && !await requireSession(req,res))return;
     try{return sendJson(res,200,require('./trading-cockpit-model').cockpit(await fetchLocalAnalysisMarkets()));}

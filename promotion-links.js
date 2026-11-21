@@ -1,6 +1,6 @@
 'use strict';
-const LANDING_URL = 'https://zencore-terminal.magicpeony2.chatgpt.site';
 const SYSTEM_URL = 'https://zencore-precision-entry.onrender.com';
+const LANDING_URL = `${SYSTEM_URL}/welcome`;
 function whatsappNumber(value) {
   let text = String(value || '').trim().replace(/[\s()+.-]/g, '');
   if (text.startsWith('00')) text = text.slice(2);
@@ -12,7 +12,7 @@ function promotionLinks(contact) {
   if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(code) || !contact.active || (contact.userStatus && contact.userStatus !== 'active')) return null;
   const phone = whatsappNumber(contact.phone);
   const registrationUrl = `${SYSTEM_URL}/u/${encodeURIComponent(code)}`;
-  const landingUrl = `${LANDING_URL}/?ib=${encodeURIComponent(code)}`;
+  const landingUrl = `${LANDING_URL}?ib=${encodeURIComponent(code)}`;
   const message = intent => `Hi ${contact.displayName || 'Admin / IB'}, saya ${intent === 'register' ? 'nak daftar dan guna' : 'nak tahu lebih lanjut tentang'} sistem ZenCore. Kod IB: ${code.toUpperCase()}. Pautan pendaftaran: ${registrationUrl}`;
   return { code, displayName: contact.displayName, phone, landingUrl, registrationUrl,
     whatsappReady: !!phone,

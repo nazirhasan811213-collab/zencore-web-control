@@ -12,6 +12,7 @@ test('WhatsApp normalizes Malaysian and international formats and rejects unsafe
 });
 test('promotion preserves IB assignment, separates messages and never fabricates a number', () => {
   const p = promotionLinks({ code:'azman', displayName:'Azman', active:true, phone:'0123456789' });
+  assert.equal(new URL(p.landingUrl).pathname, '/welcome');
   assert.equal(new URL(p.landingUrl).searchParams.get('ib'),'azman');
   assert.equal(p.registrationUrl.endsWith('/u/azman'),true);
   assert.equal(new URL(p.whatsappRegisterUrl).searchParams.get('text').includes('nak daftar'),true);

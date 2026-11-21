@@ -1,6 +1,8 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
 const ASSETS={
+ '/media/zencore-promotion-150s.mp4':['promotion-150s.mp4','video/mp4'],
+ '/media/zencore-promotion-150s.jpg':['promotion-150s.jpg','image/jpeg'],
  '/media/zencore-introduction-v1.mp4':['introduction-v1.mp4','video/mp4'],
  '/media/zencore-introduction-v1.jpg':['introduction-v1.jpg','image/jpeg']
 };
