@@ -71,3 +71,36 @@
   .trade-walkthrough summary::after { grid-column: 2; grid-row: 1; }
   .trade-walkthrough details > p, .sample-reading { margin-inline: 16px; }
 }
+
+.auto-flow, .signal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.auto-flow {
+  padding: 0;
+  counter-reset: auto-step;
+}
+.auto-flow li, .signal-grid > div {
+  padding: clamp(16px, 2.5vw, 26px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.auto-flow li {
+  list-style: none;
+  counter-increment: auto-step;
+  border-left: 2px solid var(--green);
+}
+.auto-flow li::before {
+  content: counter(auto-step, decimal-leading-zero);
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+.auto-flow h3, .signal-grid dt { margin: 5px 0; font-size: 1.1rem; font-weight: 700; }
+.auto-flow p, .signal-grid dd { margin: 0; color: var(--muted); }
+#signal-telegram .signal-grid > div { background: linear-gradient(155deg, #142a22, var(--panel) 70%); }
+@media (max-width: 600px) {
+  .auto-flow, .signal-grid { grid-template-columns: 1fr; }
+}
