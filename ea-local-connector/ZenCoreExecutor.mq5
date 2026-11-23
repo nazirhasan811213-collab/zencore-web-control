@@ -531,7 +531,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return RejectEntry("RISK_FILE_WRITE_FAILED");
  // Store chart targets locally so StepLock survives a TradingView/feed outage.
- if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
+ if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("executionTimeframe",executionTf)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
  for(int i=0;i<layers;i++){
   int quoteRetries=0,brokerRetries=0;
   while(true){
@@ -626,7 +626,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
-   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("executionTimeframe",executionTf)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
    if(!protectedFill){
     if(addingNetLayer && stopChanged && !(trade.PositionModify(filledTicket,currentSl,0) && BrokerDone()))
      Print("ZenCore PRIOR_STOP_RESTORE_PENDING ticket=",filledTicket);
@@ -713,21 +713,22 @@ bool ProtectionAttemptAllowed(ulong ticket){
  int n=ArraySize(protectionTickets);if(n<128){ArrayResize(protectionTickets,n+1);ArrayResize(protectionTryAt,n+1);protectionTickets[n]=ticket;protectionTryAt[n]=now;}
  return true;
 }
-// Only a completed broker M2 candle after this position opened can raise a stage.
-double ClosedTf2Quote(string symbol,long openedAt,bool useExecutableSide=false,bool buy=true){
+// Only a completed broker candle after this position opened can raise a stage.
+double ClosedLockQuote(string symbol,long openedAt,ENUM_TIMEFRAMES timeframe,bool useExecutableSide,bool buy){
  MqlRates closedBars[];
- if(CopyRates(symbol,PERIOD_M2,1,1,closedBars)!=1)return 0;
- long closedAt=(long)closedBars[0].time+120;
+ if(CopyRates(symbol,timeframe,1,1,closedBars)!=1)return 0;
+ long closedAt=(long)closedBars[0].time+PeriodSeconds(timeframe);
  if(closedAt>TimeCurrent() || closedAt<=openedAt || closedBars[0].close<=0)return 0;
  if(!useExecutableSide)return closedBars[0].close;
- // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the M2 candle for BTC.
+ // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the selected candle for BTC.
  static string cachedSymbol="";
  static long cachedClose=0;
+ static ENUM_TIMEFRAMES cachedTimeframe=PERIOD_CURRENT;
  static ulong retryAt=0;
  static MqlTick lastTick;
  ulong now=GetTickCount64();
- if(cachedSymbol!=symbol || cachedClose!=closedAt){
-  cachedSymbol=symbol;cachedClose=closedAt;retryAt=0;
+ if(cachedSymbol!=symbol || cachedClose!=closedAt || cachedTimeframe!=timeframe){
+  cachedSymbol=symbol;cachedClose=closedAt;cachedTimeframe=timeframe;retryAt=0;
   lastTick.bid=0;lastTick.ask=0;
  }
  if(lastTick.bid>0 && lastTick.ask>0)return buy?lastTick.bid:lastTick.ask;
@@ -756,6 +757,8 @@ void ManageLocalStepLock(){
   bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
   double lockTrigger=Val("tp3LockTrigger");
   bool candleLock=pineLock || btcCandleLock;
+  string lockTf=Get("executionTimeframe");
+  ENUM_TIMEFRAMES lockTimeframe=lockTf=="1"?PERIOD_M1:lockTf=="15"?PERIOD_M15:PERIOD_M2;
   bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
                    (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
   if(t1<=0 || !ordered)continue;
@@ -765,7 +768,7 @@ void ManageLocalStepLock(){
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
-  double decisionQuote=candleLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
+  double decisionQuote=candleLock?ClosedLockQuote(symbol,(long)PositionGetInteger(POSITION_TIME),lockTimeframe,btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
