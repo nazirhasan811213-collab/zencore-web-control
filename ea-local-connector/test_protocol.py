@@ -55,6 +55,25 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(fields['lot'],'0.01');self.assertEqual(fields['layers'],3)
         command['payload']['sl']=2400
         with self.assertRaisesRegex(ValueError,'ANALYSIS_PRICE_MISMATCH'):command_fields(command,IDENTITY)
+    def test_staged_entry_mailbox_carries_scope_and_keeps_lot(self):
+        snap={'contractVersion':CONTRACT,'decisionOwner':'ZENCORE_ANALYSIS','decision':'ENTRY_AUTHORIZED',
+          'symbol':'XAUUSD','side':'BUY','entry':2500,'sl':2496.5,'tp1':2502,'tp2':2503.5,'tp3':2505,
+          'executionTimeframe':'1','analysisSopVersion':'NORMAL_20261001_TF1_RIBBON_V1',
+          'executionPolicy':'PINE_DIRECT_FILL_GAP4_V1','maxEntryGap':4,
+          'stagedEntry':{'phase':'PREVIEW','previewId':ID}}
+        payload={**{k:snap[k] for k in ('symbol','side','entry','sl','tp1','tp2','tp3')},
+          'analysisContractVersion':CONTRACT,'strategy':STRATEGY,'schemaVersion':SCHEMA,
+          'analysisSnapshot':snap,'lotPerLayer':0.01,'layers':4}
+        command=verified_command(signed('PLACE_SETUP',payload),KEY,POD,NOW)
+        fields=command_fields(command,IDENTITY)
+        self.assertEqual((fields['lot'],fields['layers'],fields['stagedPhase'],fields['stagedPreviewId']),
+                         ('0.01',4,'PREVIEW',ID))
+        with self.assertRaisesRegex(ValueError,'STAGED_ENTRY_REJECTED'):
+            command_fields(command,{**IDENTITY,'tradeMode':'REAL'})
+        command['payload']['analysisSnapshot']['stagedEntry']['phase']='ABORT'
+        with self.assertRaisesRegex(ValueError,'STAGED_ENTRY_ID_REJECTED'):
+            command_fields(command,IDENTITY)
+
     def test_rejects_unapproved_action_and_local_field_injection(self):
         with self.assertRaises(ValueError):encode_fields({'server':'Demo\naccount\t999'})
         with tempfile.TemporaryDirectory() as folder:

@@ -7,6 +7,7 @@ zc24_feed = input.bool(true, "Aktifkan web feed (SOLID V7)", group=zc24_group)
 zn_pullback = input.float(0.10, "Re-entry: pullback minimum / ATR", minval=0.01, step=0.05, group=zc24_group)
 zn_sideways = input.float(0.75, "Re-entry: julat 2 candle mendatar / ATR", minval=0.10, step=0.05, group=zc24_group)
 zn_show_link = input.bool(true, "Papar garis dari SOLID ke entry", group=zc24_group)
+zc50_preview = input.bool(false, "Uji isyarat entry dua fasa (demo)", group=zc24_group)
 zc24_channel = input.string("Unified", "Feed channel", options=["Unified", "Dashboard", "Execution"], group=zc24_group)
 zc24_secret = input.string("", "Webhook secret", group=zc24_group, display=display.none)
 zc24_mt5_symbol = input.string("", "Simbol MT5 (kosong = simbol carta)")
@@ -76,6 +77,7 @@ varip bool xc_half_event_sent = false
 varip bool xc_full_event_sent = false
 bool zc_close_all_pulse = false
 bool zc_seq_pulse = false
+bool zc_solid_candidate = false
 int zc_seq_now = barstate.isrealtime ? timenow : time_close
 // Capture the actual native label, without changing its trigger or native plan.
 var int zc_native_setup = na
@@ -415,9 +417,9 @@ if (is_zone_turn_green or is_zone_turn_red) and TRADE_MODEL_ON
             tp2 := isBuy ? ENTRY + (initial_risk * rrTP2) : ENTRY - (initial_risk * rrTP2)
             tp3 := isBuy ? ENTRY + (initial_risk * rrTP3) : ENTRY - (initial_risk * rrTP3)
         
-        tp1 := isBuy ? ENTRY + math.min(math.abs(tp1-ENTRY),1.5) : ENTRY - math.min(math.abs(tp1-ENTRY),1.5)
-        tp2 := isBuy ? ENTRY + math.min(math.abs(tp2-ENTRY),2.5) : ENTRY - math.min(math.abs(tp2-ENTRY),2.5)
-        tp3 := isBuy ? ENTRY + math.min(math.abs(tp3-ENTRY),3.5) : ENTRY - math.min(math.abs(tp3-ENTRY),3.5)
+        tp1 := isBuy ? ENTRY + math.min(math.abs(tp1-ENTRY),2.0) : ENTRY - math.min(math.abs(tp1-ENTRY),2.0)
+        tp2 := isBuy ? ENTRY + math.min(math.abs(tp2-ENTRY),3.5) : ENTRY - math.min(math.abs(tp2-ENTRY),3.5)
+        tp3 := isBuy ? ENTRY + math.min(math.abs(tp3-ENTRY),5.0) : ENTRY - math.min(math.abs(tp3-ENTRY),5.0)
 
         if zc_btc
             float btcSign = isBuy ? 1.0 : -1.0
@@ -1140,6 +1142,7 @@ if curr_active and curr_triggered
             else if is_in_profit and wt1 < wt2 and close < basis and is_hema_bear
                 current_condition := 1
 
+        zc_solid_candidate := current_condition == 1 and current_condition > max_alert_level
         if current_condition > max_alert_level and barstate.isconfirmed
             if current_condition == 3
                 zc_close_all_pulse := true
@@ -1681,11 +1684,11 @@ if zc_hold_qualify
     zc_seq_plan_mode := tpModeStr
     float planSign = zc24_buy ? 1.0 : -1.0
     zc_seq_tp1 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,1.618) : zc_seq_entry+planSign*zc_seq_risk*rrTP1
-    zc_seq_tp1 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp1-zc_seq_entry),1.5)
+    zc_seq_tp1 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp1-zc_seq_entry),2.0)
     zc_seq_tp2 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,2.618) : zc_seq_entry+planSign*zc_seq_risk*rrTP2
-    zc_seq_tp2 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp2-zc_seq_entry),2.5)
+    zc_seq_tp2 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp2-zc_seq_entry),3.5)
     zc_seq_tp3 := tpModeStr == "Fibonacci" ? f_priceFromRatio(draft_sl,zc_seq_entry,4.236) : zc_seq_entry+planSign*zc_seq_risk*rrTP3
-    zc_seq_tp3 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp3-zc_seq_entry),3.5)
+    zc_seq_tp3 := zc_seq_entry+planSign*math.min(math.abs(zc_seq_tp3-zc_seq_entry),5.0)
     if zc_btc
         zc_seq_tp1 := zc_seq_entry+planSign*btcTp1Distance
         zc_seq_tp2 := zc_seq_entry+planSign*btcTp2Distance
@@ -1867,15 +1870,14 @@ varip int zc24_last_sent = 0
 varip string zc24_sent_protection = ""
 varip int[] zc24_sends = array.new_int()
 bool zc24_bootstrap = barstate.isrealtime and not zc24_started
-if zc24_bootstrap and not zc_hold_new_source
+if zc24_bootstrap and not zc_hold_qualify and not zc_hold_new_source
     zc24_suppressed_setup := zc24_setup_at
 if not na(zc24_setup_at) and (na(zc24_retry_setup) or zc24_retry_setup != zc24_setup_at)
     zc24_retry_setup := zc24_setup_at
     zc24_entry_attempts := 0
     zc24_entry_last_sent := 0
-bool zc24_entry_window = not na(zc_seq_completed) and zc_seq_now-zc_seq_completed >= 0 and zc_seq_now-zc_seq_completed <= 60000 and zc24_ready
 bool zc24_retry_due = zc24_entry_attempts == 0 or (zc24_entry_attempts == 1 ? timenow-zc24_entry_last_sent >= 8000 : timenow-zc24_entry_last_sent >= 12000)
-bool zc24_event = barstate.isconfirmed and zc24_ready and zc24_entry_window and not zc24_bootstrap and not na(zc24_setup_at) and (na(zc24_suppressed_setup) or zc24_suppressed_setup != zc24_setup_at) and zc24_entry_attempts < 3 and zc24_retry_due
+bool zc24_event = zc_hold_qualify and not na(zc24_setup_at) and (na(zc24_suppressed_setup) or zc24_suppressed_setup != zc24_setup_at) and zc24_entry_attempts == 0
 string zc24_protection = str.tostring(zc24_setup_at) + "|" + zc24_exit_stage + "|" + zc24_exit_action + "|" + str.tostring(zc24_lock_stage) + "|" + str.tostring(xc_half_bar) + "|" + f_bool(zc_hold_active)
 string zc24_hema_json = "{\"version\":\"HEMA1_LIVE_V1\",\"tf1\":{\"fast\":" + f_num(he1) + ",\"slow\":" + f_num(he2) + ",\"fastPreviousBar\":" + f_num(he1[1]) + ",\"slowPreviousBar\":" + f_num(he2[1]) + "}}"
 string zc_all_dashboard = "{\"structure\":" + f_quote(mkt_struct) + ",\"demand\":" + f_quote(demand_state) + ",\"volume\":" + f_num(current_vol) + ",\"relativeVolume\":" + f_num(rvol) + ",\"dxy\":" + f_quote(dxy_dir) + ",\"supplyDemand\":" + f_quote(snd_clearance_str) + ",\"whales\":" + f_quote(whale_state) + ",\"chop\":" + f_num(chop_val) + ",\"rsi\":" + f_num(rsi_val) + ",\"risk\":" + f_quote(risk_lvl) + ",\"setupScore\":" + f_num(success_prob) + ",\"stars\":" + f_int(conf_stars) + ",\"next3Bars\":" + f_quote(next_3_forecast) + ",\"mtfTimeframes\":[" + f_quote(tf_1) + "," + f_quote(tf_2) + "," + f_quote(tf_3) + "],\"htfRibbonTimeframe\":" + f_quote(htf_sop) + ",\"htfBull\":" + f_bool(htf_hema_bull) + ",\"htfBear\":" + f_bool(htf_hema_bear) + ",\"obPrediction\":" + f_quote(na(pred_lbl) ? "" : label.get_text(pred_lbl)) + "}"
@@ -1891,7 +1893,7 @@ string zs_json = "{\"version\":\"TF1_ATR_REVERSALS_V2\",\"barTime\":"+f_int(zs_l
 string zn_reentry_proof = "{\"version\":\"CLOSED_PAUSE_RESUME_V2\",\"parentQualifiedAt\":"+f_int(zc_parent_qualified)+",\"virtualClosedAt\":"+f_int(zn_event_reset_at)+",\"restAt\":"+f_int(zn_event_rest_at)+",\"restKind\":"+f_quote(zn_event_rest_kind)+",\"pullbackAtrMinimum\":"+f_num(zn_pullback)+",\"sidewaysAtrMaximum\":"+f_num(zn_sideways)+",\"confirmed\":"+f_bool(barstate.isconfirmed)+",\"barTime\":"+f_int(time)+",\"closedAt\":"+f_int(time_close)+",\"previousHigh\":"+f_num(high[1])+",\"previousLow\":"+f_num(low[1])+",\"open\":"+f_num(open)+",\"close\":"+f_num(close)+",\"requiresMt5Flat\":true}"
 string zn_solid_evidence = "{\"version\":\"NATIVE_SOLID_LABEL_V1\",\"barTime\":"+f_int(time)+",\"basis\":"+f_num(basis)+",\"rsi\":"+f_num(rsi_val)+",\"pulse\":"+f_bool(zc_seq_pulse)+"}"
 string zn_yellow_evidence = "{\"version\":\"BJ_OPPOSITE_YELLOW_V1\",\"barTime\":"+f_int(time)+",\"fast\":"+f_num(v2_anT3Average)+",\"slow\":"+f_num(v2_nT3Average)+",\"close\":"+f_num(close)+",\"confirmed\":"+f_bool(barstate.isconfirmed)+"}"
-string zc24_meta_json = "{\"yellowExit\":"+zn_yellow_evidence+",\"nativeSolid\":"+zn_solid_evidence+",\"entryCandleVersion\":\"TF1_NATIVE_CANDLE_DIRECTION_V1\",\"decisionTimingVersion\":\"TF1_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF1_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF1-NATIVE-SOLID-V7.1\",\"entryPolicyVersion\":\"PINE_NATIVE_SOLID_ENTRY_V7\",\"riskPlanVersion\":\"TF1_PINE_ATR8_SL4_TP150_250_350_CAPS_V3\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"lifecycleVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zn_reentry_proof+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
+string zc24_meta_json = "{\"yellowExit\":"+zn_yellow_evidence+",\"nativeSolid\":"+zn_solid_evidence+",\"entryCandleVersion\":\"TF1_NATIVE_CANDLE_DIRECTION_V1\",\"decisionTimingVersion\":\"TF1_BAR_CLOSE_V1\",\"decisionBarCloseAt\":" + str.tostring(time_close) + ",\"entryRuleVersion\":\"TF1_SOLID_RIBBON_V1\",\"scriptRevision\":\"TF1-NATIVE-SOLID-V7.1\",\"entryPolicyVersion\":\"PINE_NATIVE_SOLID_ENTRY_V7\",\"riskPlanVersion\":\"TF1_PINE_ATR8_SL350_TP200_350_500_CAPS_V4\",\"entryDeliveryVersion\":\"FIXED_EVENT_RETRY_V1\",\"solidStateReason\":" + f_quote(zc_hold_reason) + ",\"entryAttempt\":" + str.tostring(zc24_entry_attempts+1) + ",\"reentryPolicyVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"lifecycleVersion\":\"CLOSED_PAUSE_RESUME_V2\",\"cycleKind\":"+f_quote(zc_cycle_kind)+",\"sourceSetupAt\":"+f_int(zc_source_setup_at)+",\"reentryContext\":"+zn_reentry_proof+",\"planMode\":" + f_quote(zc_seq_plan_mode) + ",\"nativeExitAll\":" + f_bool(zc_close_all_pulse or zc_partial_pulse) + ",\"solidSide\":" + f_quote(zc_seq_side) + ",\"solidAtTrigger\":{\"passed\":" + f_int(zc80_trigger_passed) + ",\"hema40\":" + f_bool(zc80_trigger_hema40) + "},\"solidHoldActive\":" + f_bool(zc_hold_active) + ",\"solidClosedAt\":" + f_int(zc_hold_closed_at) + ",\"atrPeriod\":8,\"riskTick\":" + f_num(syminfo.mintick) + ",\"riskAtrReference\":" + f_num(zc_seq_risk) + ",\"solidEligible\":" + f_bool(zc80_eligible) + ",\"solidTriggeredAt\":" + f_int(zc_seq_trigger) + ",\"sourceEntry\":" + f_num(zc_seq_source) + ",\"completedAt\":" + f_int(zc_seq_completed) + ",\"completionPrice\":" + f_num(zc_seq_entry) + ",\"entryEvent\":" + f_bool(zc24_event) + ",\"entryAuthorizedAt\":" + (zc24_event ? str.tostring(zc_seq_completed) : "null") + ",\"setupAt\":" + f_int(zc_seq_bar) + ",\"dashboardAi\":" + zc_seq_ai + "}"
 
 string[] zc24_parts = array.new_string()
 array.push(zc24_parts, f_quote(zc24_signal_symbol))
@@ -1982,7 +1984,27 @@ if barstate.isrealtime and zc24_feed and zc24_chart_ok
     bool zc24_dashboard_due = (zc24_channel == "Dashboard" or (zc24_channel == "Unified" and barstate.isconfirmed)) and timenow - zc24_last_sent >= 30000 and zc24_count < 6
     // Reserve six budget slots for entry attempts and protection/exit events.
     bool zc24_priority = zc24_event or zc_close_all_pulse or zc_partial_pulse or zc24_protection != zc24_sent_protection
-    bool zc24_execution_due = zc24_channel != "Dashboard" and zc24_count < 12 and (zc24_closed_retry or (barstate.isconfirmed and (zc24_priority or zc24_count < 6)))
+    bool zc24_execution_due = zc24_channel != "Dashboard" and (zc24_event ? zc24_count < 12 : zc24_count < 11 and (zc24_closed_retry or (barstate.isconfirmed and (zc24_priority or zc24_count < 6))))
+    // Separate demo schema. Existing trade receivers cannot authorize this packet.
+    varip int previewBar = na
+    varip int previewSource = na
+    varip bool previewBuy = false
+    varip bool previewResolved = false
+    bool previewEnabled = zc50_preview and zc24_channel != "Dashboard" and syminfo.basecurrency == "XAU" and syminfo.currency == "USD"
+    bool previewStart = previewEnabled and not barstate.isconfirmed and zc_solid_candidate and not na(zc_native_setup) and (na(previewBar) or previewBar != time) and zc24_count < 4
+    if previewStart
+        previewBar := time
+        previewSource := zc_native_setup
+        previewBuy := curr_isBuy
+        previewResolved := false
+    bool previewEnd = previewEnabled and barstate.isconfirmed and previewBar == time and not previewResolved and zc24_count < 11
+    if previewStart or previewEnd
+        bool previewPassed = zc_hold_qualify and zc_cycle_kind == "INITIAL" and zc_pulse_setup == previewSource and zc_pulse_buy == previewBuy
+        string previewPhase = previewStart ? "PREVIEW" : previewPassed ? "CONFIRM" : "ABORT"
+        string previewPayload = "{\"feedVersion\":\"TF1_STAGED_ENTRY_DEMO_V1\",\"symbol\":\"XAUUSD\",\"timeframe\":\"1\",\"phase\":" + f_quote(previewPhase) + ",\"sourceAt\":" + f_int(previewSource) + ",\"barAt\":" + f_int(previewBar) + ",\"barCloseAt\":" + f_int(time_close) + ",\"side\":" + f_quote(previewBuy ? "BUY" : "SELL") + "}"
+        alert(previewPayload, alert.freq_all)
+        array.push(zc24_sends, timenow)
+        previewResolved := previewEnd
     if zc24_dashboard_due or zc24_execution_due
         alert((zc24_closed_retry or zc24_same_close_replay) and zc24_channel != "Dashboard" ? zc24_closed_entry_packet : zc24_payload, alert.freq_all)
         array.push(zc24_sends, timenow)

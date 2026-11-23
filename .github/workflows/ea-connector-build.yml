@@ -5,7 +5,7 @@ on:
     branches: ['feature/ea-local-connector', 'main']
     paths: ['ea-local-connector/**', '.github/workflows/ea-connector-build.yml']
   pull_request:
-    paths: ['ea-local-connector/**', '.github/workflows/ea-connector-build.yml']
+    paths: ['ZenCore_TF1_SOP_V7.pine', 'ea-local-connector/**', '.github/workflows/ea-connector-build.yml']
 permissions:
   contents: read
 jobs:

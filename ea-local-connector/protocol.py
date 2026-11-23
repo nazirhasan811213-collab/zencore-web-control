@@ -93,7 +93,7 @@ def verified_command(command, signing_key, pod_id, now_ms=None):
     if signed.get('podId') != pod_id: raise ValueError('WRONG_POD')
     if not UUID.fullmatch(str(signed.get('id',''))): raise ValueError('INVALID_COMMAND_ID')
     now_ms = int(time.time()*1000) if now_ms is None else now_ms
-    direct = signed.get('type')=='PLACE_SETUP' and signed.get('payload',{}).get('analysisSnapshot',{}).get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
+    direct = signed.get('type')=='PLACE_SETUP' and signed.get('payload',{}).get('analysisSnapshot',{}).get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and not signed.get('payload',{}).get('analysisSnapshot',{}).get('stagedEntry')
     if not isinstance(signed.get('expiresAt'), (int,float)) or (not direct and signed['expiresAt'] <= now_ms):
         raise ValueError('COMMAND_EXPIRED')
     if signed.get('createdAt', now_ms+1) > now_ms+30000: raise ValueError('CLOCK_SKEW')
@@ -190,6 +190,19 @@ def command_fields(command, identity):
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
             fields['lot'] = number(payload['lotPerLayer'])
             fields['layers'] = int(payload['layers'])
+            staged = snap.get('stagedEntry')
+            if staged is not None:
+                if (not isinstance(staged, dict) or staged.get('phase') not in ('PREVIEW','CONFIRM','ABORT') or
+                    not UUID.fullmatch(str(staged.get('previewId',''))) or identity.get('tradeMode','DEMO') != 'DEMO' or
+                    symbol != 'XAUUSD' or mode != 'TF2_SCALPING' or execution_tf != '1' or
+                    fields.get('executionPolicy') != 'PINE_DIRECT_FILL_GAP4_V1'):
+                    raise ValueError('STAGED_ENTRY_REJECTED')
+                phase, preview_id = staged['phase'], staged['previewId']
+                if (phase == 'PREVIEW') != (preview_id == command['id']):
+                    raise ValueError('STAGED_ENTRY_ID_REJECTED')
+                if fields['layers'] < 1 or fields['layers'] > 5:
+                    raise ValueError('STAGED_ENTRY_LAYERS_REJECTED')
+                fields.update(stagedPhase=phase, stagedPreviewId=preview_id)
             if snap.get('entryAnchor') == 'FILL_PRICE_ATR_V1':
                 risk=payload.get('fillRisk', {})
                 reentry=payload.get('reentry', {})
