@@ -867,9 +867,8 @@
       openMt5ConnectDialog();
     }
   });
-  refreshMarkets();
-  const settingsVisible = () => !dashboardSettingsView || !window.frameElement || window.frameElement.closest('dialog')?.open;
-  window.setInterval(() => { if (settingsVisible()) refreshState(true); }, 3000);
-  window.setInterval(() => { if (settingsVisible()) refreshMarkets(); }, 15000);
+  if (!dashboardSettingsView) refreshMarkets();
+  window.setInterval(() => refreshState(true), dashboardSettingsView ? 10000 : 3000);
+  if (!dashboardSettingsView) window.setInterval(refreshMarkets, 15000);
 })();
 

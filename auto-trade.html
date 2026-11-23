@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/viewer-mode.css?v=1.1">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
-<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"><link rel="stylesheet" href="/terminal-v2.css?v=20261007.risk2"><link rel="stylesheet" href="/zencore-desk-theme.css?v=20261111.1"></head>
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"><link rel="stylesheet" href="/terminal-v2.css?v=20261124.compact-settings"><link rel="stylesheet" href="/zencore-desk-theme.css?v=20261111.1"></head>
 <body>
   <main class="portal-shell autotrade-shell">
     <div class="portal-wrap autotrade-wrap">
@@ -162,7 +162,7 @@
             <div hidden><input id="fxLotPerLayer" value="0.01"><input id="fxLayers" value="1"><b id="totalLotPreview"></b><b id="fxTotalLotPreview"></b></div>
             <fieldset class="symbol-fieldset">
               <legend>AUTO EXIT • ENTRY MANUAL</legend><strong id="manualExitStatus">BELUM DISAHKAN EA</strong><p id="manualLayerStatus" role="status" aria-live="polite">Layer aktif: — / 10</p>
-              <label class="risk-ack"><input id="manualExitEnabled" type="checkbox"><span>Saya buka BUY/SELL sendiri. ZenCore urus exit posisi manual baharu.</span></label>
+              <label class="risk-ack"><input id="manualExitEnabled" type="checkbox"><span class="settings-full-label">Saya buka BUY/SELL sendiri. ZenCore urus exit posisi manual baharu.</span><span class="settings-compact-label">Urus exit untuk posisi manual baharu</span></label>
               <label class="manual-pair-choice">Pair Auto Exit manual <select id="manualExitPair"><option value="XAUUSD">XAUUSD sahaja</option><option value="BTCUSD">BTCUSD sahaja</option><option value="XAUUSD,BTCUSD">XAUUSD + BTCUSD</option></select></label>
               <p>EA 2.35 mengira BTCUSD daripada ATR(8) M2 candle terakhir yang tutup ketika entry. SL = 1× ATR, TP1 = 1×, TP2 = 2× dan TP3 = 3×. Isian di bawah ialah jarak harga XAUUSD.</p>
               <p>Tick/untick dihantar terus kepada EA. OFF menghentikan pengurusan EA selepas disahkan; SL/TP yang sudah dipasang pada broker kekal. Posisi auto trade mempunyai kawalan berasingan.</p>
@@ -177,7 +177,7 @@
             </fieldset>
             <fieldset class="symbol-fieldset">
               <legend>WAKTU AKTIF TRADER (MALAYSIA)</legend>
-              <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox"><span>Gunakan waktu aktif trader: Asia 8:00–11:30 pagi; Euro 1:30–4:30 petang; US 8:00–11:30 malam dan 2:00–3:30 pagi.</span></label>
+              <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox"><span class="settings-full-label">Gunakan waktu aktif trader: Asia 8:00–11:30 pagi; Euro 1:30–4:30 petang; US 8:00–11:30 malam dan 2:00–3:30 pagi.</span><span class="settings-compact-label">Guna jadual dagangan (MYT)</span></label>
               <label><span>WAKTU NEWS</span><select id="newsTradingMode"><option value="trade">Trade waktu news</option><option value="skip">Skip waktu news</option></select></label>
               <small>Jika pilih skip, rehat entry: 8:30–9:00 malam, 9:30–10:30 malam, 2:00–2:30 pagi. Posisi terbuka terus diurus oleh SL/TP dan SOP exit. Jam tetap setiap hari. Pilihan waktu dan news ini terpakai kepada aliran lama. Pine Direct ikut trigger Pine.</small>
             </fieldset>
@@ -185,7 +185,7 @@
 
             <label class="risk-ack">
               <input id="riskAcknowledged" type="checkbox">
-              <span>Saya faham lot dan layer besar boleh naikkan risiko. ZenCore akan bagi warning, tapi order tak dihalang selepas saya confirm.</span>
+              <span class="settings-full-label">Saya faham lot dan layer besar boleh naikkan risiko. ZenCore akan bagi warning, tapi order tak dihalang selepas saya confirm.</span><span class="settings-compact-label">Saya faham risiko saiz lot dan layer.</span>
             </label>
             <div id="settingsError" class="form-error" role="alert"></div>
             <button id="saveSettingsButton" class="save-settings" type="submit">SIMPAN KONFIGURASI</button>
