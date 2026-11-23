@@ -2,7 +2,7 @@ name: ZenCore VPS 10-user Manager
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['ea-local-connector/**', '.github/workflows/vps-connector-build.yml', 'scripts/build-vps-ex5.ps1']
+    paths: ['ZenCore_TF1_SOP_V7.pine', 'ea-local-connector/**', '.github/workflows/vps-connector-build.yml', 'scripts/build-vps-ex5.ps1']
 permissions:
   contents: read
 jobs:
