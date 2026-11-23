@@ -1,7 +1,7 @@
 (() => {
  'use strict';
  const $=id=>document.getElementById(id),symbols=['XAUUSD','BTCUSD'];
- let payload=null,failed=false,filter='both',stopped=false,streams=[],pushedViews=new Map();
+ let payload=null,failed=false,stopped=false,streams=[],pushedViews=new Map();
  const Live=window.ZenCoreDashboardLive,activity=[],activityState=new Map(),cardsBySymbol=new Map();
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:symbol==='XAUUSD'?3:2});
@@ -48,27 +48,6 @@
   fields.timeframe.onchange=render;
   cardsBySymbol.set(symbol,{fields,tape:Live.createTape()});
   $('pairCards').append(card);
- }
- const marketRows=new Map();
- for(const symbol of symbols)for(const timeframe of [1,15]){
-  const row=el('details',undefined,'compact-market-row'),summary=el('summary');
-  const pair=el('span',symbol,'compact-market-pair');
-  pair.append(el('small','TF'+timeframe));
-  const status=el('span',undefined,'compact-market-state');
-  const metrics=el('span',undefined,'compact-market-metrics');
-  summary.append(pair,status,metrics);
-  const body=el('div',undefined,'compact-market-body');
-  const message=el('p','Butiran tersedia apabila data Pine segar.');
-  const readings=el('dl',undefined,'compact-market-readings');
-  const values=['Keadaan market','Panduan ZenCore','Rumusan AI','Nasihat'].map(label=>{
-   const item=el('div'),value=el('dd');
-   item.append(el('dt',label),value);readings.append(item);return value;
-  });
-  const analysis=el('a','Analisis penuh →');
-  analysis.href=link(symbol,timeframe);
-  body.append(message,readings,analysis);row.append(summary,body);
-  $('marketGrid').append(row);
-  marketRows.set(symbol+'|'+timeframe,{row,status,metrics,message,readings,values});
  }
  const dashboardCharts=new Map();
  let chartTf=1;
@@ -161,31 +140,8 @@
    fields.analysisReason.textContent=available?n?.reason||context.guide:'';
    fields.analysis.href=link(symbol,tf);
   }
-  for(const view of all){
-   const {symbol,timeframe}=view;
-   const {row,status,metrics,message,readings,values}=marketRows.get(symbol+'|'+timeframe);
-   row.hidden=filter!=='both'&&String(timeframe)!==filter;
-   const m=view.market,n=m?.strategyNormal,levels=view.nearbyLevels||{};
-   const current=fresh(view)&&m?.symbol===symbol;
-   const context=m?.symbol===symbol?Live.context(view):null,available=!!context;
-   const side=available&&['BUY','SELL'].includes(n?.side)?n.side:null;
-   status.textContent=available?(side||'Tunggu setup')+(current?'':' · Data terakhir '+context.ageSeconds+'s'):'Tiada data Pine semasa';
-   status.className='compact-market-state '+(side==='BUY'?'buy':side==='SELL'?'sell':'');
-   message.hidden=available;
-   readings.hidden=!available;
-   const momentum=context?.momentum;
-   const support=format(m?.nearestSupport??levels.supports?.[0],symbol);
-   const resistance=format(m?.nearestResistance??levels.resistances?.[0],symbol);
-   const facts=[typeof momentum==='string'&&momentum.trim()?momentum:null,support!=='—'?'Support '+support:null,resistance!=='—'?'Resistance '+resistance:null].filter(Boolean);
-   metrics.textContent=available?facts.join(' · '):'';
-   if(available){
-    const data=[context.trend,context.guide,context.summary,context.advice];
-    values.forEach((value,index)=>{value.textContent=data[index];});
-   }
-  }
  }
- for(const button of document.querySelectorAll('[data-tf]'))button.onclick=()=>{filter=button.dataset.tf;document.querySelectorAll('[data-tf]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();};
- async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();$('feedConnection').textContent='Dikemas kini '+new Date(payload.serverTime).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT';}catch(_){failed=true;$('feedConnection').textContent='Sambungan feed terganggu. Cuba menyambung semula…';}render();if(!stopped)setTimeout(poll,2000);}
+ async function poll(){if(stopped)return;try{payload=await api('/api/trading-cockpit');if(!payload.ok||!Array.isArray(payload.pairs))throw Error('DATA');failed=false;trackActivity();}catch(_){failed=true;}render();if(!stopped)setTimeout(poll,2000);}
  function renderAccount(a){
   const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
   set('overviewAccount',v.account);set('overviewServer',v.server);set('overviewPositions',v.count??'—');

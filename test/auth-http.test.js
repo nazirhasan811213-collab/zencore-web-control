@@ -355,7 +355,8 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
     const home = await response.text();
     assert.match(home, /XAUUSD/);
-    assert.match(home, /marketGrid/);
+    assert.doesNotMatch(home, /Ringkasan market|id="marketGrid"/);
+    assert.match(home, /id="dashboardAutoSettingsFrame"/);
     assert.match(home, /id="chartPair"[^>]*><option value="XAUUSD">XAUUSD<\/option><option value="BTCUSD">BTCUSD<\/option>/);
     assert.match(home, /data-field="analysis"/);
     assert.match(home, /href="\/results"/);
