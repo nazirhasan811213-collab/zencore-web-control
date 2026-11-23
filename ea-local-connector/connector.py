@@ -389,14 +389,18 @@ class Runner:
                 if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
+                if signed['type']=='MANUAL_MARKET_ORDER' and local.get('manualMarketOrderVersion')!='MANUAL_MARKET_ORDER_V1':
+                    raise ValueError('EA_MANUAL_ORDER_UPGRADE_REQUIRED')
                 force_reset=signed['type']=='SYSTEM_STOP' and signed.get('payload',{}).get('masterResetVersion')=='MASTER_RESET_FORCE_V2'
                 if force_reset and signed.get('payload',{}).get('bindingEpochHash') and signed['payload']['bindingEpochHash']!=hashlib.sha256(self.config['podToken'].encode()).hexdigest():raise ValueError('ACCOUNT_BINDING_CHANGED')
                 if force_reset and local.get('masterResetVersion')!='MASTER_RESET_FORCE_V2':raise ValueError('EA_MASTER_RESET_UPGRADE_REQUIRED')
                 # Command fetch can outlive the previous lease, or ON/STOP can change between polls.
                 # Refresh server permission after verifying the command, before handing it to EA.
-                if signed['type'] in ('SYSTEM_ON','PLACE_SETUP','MANUAL_EXIT_CONFIG') or force_reset:
+                if signed['type'] in ('SYSTEM_ON','PLACE_SETUP','MANUAL_EXIT_CONFIG','MANUAL_MARKET_ORDER') or force_reset:
                     if not self.renew_lease(local): return
                     if signed['type'] in ('SYSTEM_ON','PLACE_SETUP') and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
+                    if signed['type']=='MANUAL_MARKET_ORDER' and self.entry_blocked_reason:
+                        raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
                 direct=fields.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
                 if direct and local.get('directEntryPolicy')!='PINE_DIRECT_FILL_GAP4_V1':raise ValueError('EA_DIRECT_POLICY_UPGRADE_REQUIRED')

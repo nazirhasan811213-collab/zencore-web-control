@@ -16,12 +16,16 @@ using string=std::string;
 using ulong=unsigned long;
 constexpr int POSITION_MAGIC=1,POSITION_TYPE=2,POSITION_PRICE_OPEN=3,POSITION_SL=4,POSITION_TP=5,POSITION_VOLUME=6,POSITION_IDENTIFIER=7,POSITION_COMMENT=8,POSITION_SYMBOL=9;
 constexpr int POSITION_TIME=15,PERIOD_M2=2,POSITION_TYPE_BUY=0,SYMBOL_TRADE_STOPS_LEVEL=10,SYMBOL_TRADE_FREEZE_LEVEL=11,SYMBOL_POINT=12,SYMBOL_VOLUME_STEP=13,FILE_COMMON=14,COPY_TICKS_INFO=16;
+using ENUM_TIMEFRAMES=int;
+constexpr int PERIOD_CURRENT=0, PERIOD_M1=1, PERIOD_M15=15;
+int lastTimeframe=0;
+int PeriodSeconds(int tf){return tf*60;}
 string channel="test";
 struct MqlTick {double bid,ask;};
 struct MqlRates {long time;double close;};
 double closedQuote=100,closeBid=0,closeAsk=0;long closedTime=200,openedTime=0;int historyCount=1;
 long TimeCurrent(){return closedTime+120;}
-int CopyRates(const string&,int,int,int,std::vector<MqlRates>& rows){rows={{closedTime,closedQuote}};return historyCount;}
+int CopyRates(const string&,int tf,int,int,std::vector<MqlRates>& rows){lastTimeframe=tf;rows={{closedTime,closedQuote}};return historyCount;}
 int CopyTicksRange(const string&,std::vector<MqlTick>& out,int,ulong,ulong){out={{closeBid,closeAsk}};return 1;}
 bool allowed=true,owned=true,closed=false,failModify=false;
 int side=0;double quote=101.2,oldSl=99,positionVolume=.01;ulong clockMs=1000;
@@ -87,7 +91,8 @@ int main(){
   failModify=false;quote=100+sign*.2;clockMs+=1000;ManageLocalStepLock();assert(!closed);assert(oldSl==100); // floor at real fill
   files.clear();protectionTickets.clear();protectionTryAt.clear();closed=false;oldSl=100-sign;
   files["risk-setup.tsv"]=Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("exitLockVersion","PINE_STEPLOCK_150_TP3_PLUS3_V1")+Row("tp1",std::to_string(100+sign*1.5))+Row("tp2",std::to_string(100+sign*2.3))+Row("tp3",std::to_string(100+sign*3.5));
-  closedQuote=100+sign;quote=100+sign*3.6;clockMs+=1000;ManageLocalStepLock();assert(oldSl==100-sign); // intrabar TP3 wick does not advance
+  files["risk-setup.tsv"]+=Row("executionTimeframe","1");
+  closedQuote=100+sign;quote=100+sign*3.6;clockMs+=1000;ManageLocalStepLock();assert(oldSl==100-sign);assert(lastTimeframe==PERIOD_M1); // intrabar TP3 wick does not advance
   closedQuote=100+sign*1.6;quote=100+sign*1.7;clockMs+=1000;ManageLocalStepLock();assert(oldSl==100+sign*1.5);
   quote=100+sign*3.6;clockMs+=1000;ManageLocalStepLock();parse(files["lock-77.tsv"]);assert(Val("stage")==1); // same closed candle still TP1
   closedQuote=100+sign*2.4;quote=100+sign*2.5;clockMs+=1000;ManageLocalStepLock();parse(files["lock-77.tsv"]);assert(Val("stage")==2);
@@ -108,7 +113,7 @@ int main(){
    closeBid=100+sign*gross-(sign<0?.2:0);closeAsk=100+sign*gross+(sign>0?.2:0);
    quote=100+sign*8;ManageLocalStepLock();
   };
-  nextCashBar(1.4);assert(oldSl==100-sign);
+  nextCashBar(1.4);assert(oldSl==100-sign);assert(lastTimeframe==PERIOD_M2);
   nextCashBar(1.5);assert(oldSl==100-sign);
   nextCashBar(1.6);assert(oldSl==100);
   // A stronger stop inherited from EA 2.39 may not be loosened.

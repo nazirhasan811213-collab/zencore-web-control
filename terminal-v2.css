@@ -195,3 +195,15 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
 }
 .dashboard-setup-strength.has-score { border-color: var(--pair-accent); }
 .dashboard-setup-strength.has-score > strong { color: var(--pair-accent); }
+
+.dashboard-v3 .terminal-heading:has(.quick-order:not([hidden])){display:flex!important;flex-wrap:wrap;align-items:center}
+.quick-order{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin-left:auto;padding:10px;border:1px solid #334259;border-radius:10px;background:#121e30}
+.quick-order label{display:grid;gap:3px;font-size:.75rem}
+.quick-order input,.quick-order select,.quick-order button{font:inherit;min-height:34px;padding:4px 8px;border:1px solid #40516a;border-radius:5px;color:#edf3ff;background:#182942}
+.quick-order input{width:72px}
+.quick-order button{font-size:.8rem;font-weight:700;cursor:pointer}
+.quick-order button[value=BUY]{background:#126245}.quick-order button[value=SELL]{background:#963544}
+.quick-order button:disabled{opacity:.5;cursor:default}
+.quick-order output{width:100%;font-size:.75rem}
+.quick-order[hidden]{display:none}
+@media(max-width:600px){.quick-order{margin-left:0}}

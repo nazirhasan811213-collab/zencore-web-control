@@ -1432,6 +1432,18 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
         stepUp
       ));
     }
+    if (pathname === '/api/auto-trade/manual-order') {
+      if (req.method === 'GET') {
+        const id = new URL(req.url,'http://localhost').searchParams.get('id');
+        return sendJson(res,200,await autoTradeState.service.manualOrderStatus(userId,id));
+      }
+      if (req.method === 'POST') {
+        if (!requestOriginAllowed(req)) return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+        const body = await parseApiJson(req,res);
+        if (body === null) return;
+        return sendJson(res,202,await autoTradeState.service.manualOrder(userId,body));
+      }
+    }
     if (req.method === 'POST' && pathname === '/api/auto-trade/on') {
       const body = await parseApiJson(req, res);
       if (body === null) return;
