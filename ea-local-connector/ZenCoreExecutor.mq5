@@ -380,6 +380,20 @@ bool CloseTicket(ulong ticket,double volume){
  req.type_filling=(fill & SYMBOL_FILLING_FOK)!=0?ORDER_FILLING_FOK:ORDER_FILLING_IOC;
  return OrderSend(req,res) && (res.retcode==TRADE_RETCODE_DONE || res.retcode==TRADE_RETCODE_DONE_PARTIAL);
 }
+bool AbortStagedPreview(string symbol,string side,string previewId){
+ if(!Permissions() || !ValidId(previewId) || symbol=="" || (side!="BUY" && side!="SELL"))return false;
+ string comment="ZC:"+StringSubstr(previewId,0,20);
+ bool closed=true;
+ for(int i=PositionsTotal()-1;i>=0;i--){
+  ulong ticket=PositionGetTicket(i);
+  if(!IsOwn(ticket) || (ulong)PositionGetInteger(POSITION_MAGIC)!=MAGIC ||
+     PositionGetString(POSITION_SYMBOL)!=symbol || PositionGetString(POSITION_COMMENT)!=comment ||
+     (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)!=(side=="BUY"))continue;
+  if(!LoadOwnRisk(ticket) || Get("commandId")!=previewId)continue;
+  if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))closed=false;
+ }
+ return closed;
+}
 bool CloseGroup(string symbol,int percent,ulong scope=0,bool chartStop=false){
  ulong tickets[];double total=0;
  for(int i=0;i<PositionsTotal();i++){
@@ -627,7 +641,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
-   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("executionTimeframe",executionTf)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("commandId",id)+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("executionTimeframe",executionTf)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
    if(!protectedFill){
     if(addingNetLayer && stopChanged && !(trade.PositionModify(filledTicket,currentSl,0) && BrokerDone()))
      Print("ZenCore PRIOR_STOP_RESTORE_PENDING ticket=",filledTicket);
@@ -961,6 +975,8 @@ void Process(bool chartWorker){
  ulong scope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
  string side=Get("side"),symbols=Get("symbols");
  bool directEntry=type=="PLACE_SETUP" && Get("executionPolicy")=="PINE_DIRECT_FILL_GAP4_V1";
+ string stagedPhase=Get("stagedPhase"),stagedPreviewId=Get("stagedPreviewId");
+ string executionTf=Get("executionTimeframe");
  long target=directEntry?DirectEntryChart(c):-1;
  if(ZENCORE_SPLIT_ROLE!=CHART_AUTO){
   bool btcAttached=ZENCORE_SPLIT_ROLE==CHART_XAUUSD && directEntry && c=="BTCUSD" && armed && SplitBtcSymbol()!="";
@@ -991,7 +1007,7 @@ void Process(bool chartWorker){
  if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
  !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;resumePending=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
- if(!directEntry && (long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
+ if((!directEntry || stagedPhase!="") && (long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
  if(FileIsExist(channel+"\\"+id+".started",FILE_COMMON)){
   // Existing result is authoritative. Never overwrite it or execute a replay.
   if(!FileIsExist(channel+"\\"+id+".result",FILE_COMMON))Result(id,"REJECTED","REPLAY_OR_INTERRUPTED");
@@ -1063,7 +1079,32 @@ void Process(bool chartWorker){
  else if(type=="PLACE_SETUP"){
   if(!directEntry && symbol==""){MapSymbols();symbol=EntrySymbol(c);}
   lastEntryCode=directEntry?(armed?"EA_ENTRY_CHART_NOT_ATTACHED":"ENTRY_STOPPED"):"MT5_SYMBOL_UNRESOLVED";
-  string executionTf=Get("executionTimeframe");
+  if(stagedPhase!=""){
+   bool validStage=directEntry && c=="XAUUSD" && target>=0 && AccountMode()=="DEMO" &&
+      AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING &&
+      strategyMode=="TF2_SCALPING" && executionTf=="1" && ValidId(stagedPreviewId) && layers>=1 && layers<=5 &&
+      ((stagedPhase=="PREVIEW" && stagedPreviewId==id) ||
+       ((stagedPhase=="CONFIRM" || stagedPhase=="ABORT") && stagedPreviewId!=id));
+   if(!validStage){Result(id,"REJECTED","STAGED_ENTRY_REJECTED");return;}
+   string marker="staged-"+stagedPreviewId;
+   if(stagedPhase=="PREVIEW"){
+    if(!WriteAtomic(marker+".preview",id)){Result(id,"FAILED","STAGED_STATE_WRITE_FAILED");return;}
+   }else{
+    if(!FileIsExist(channel+"\\"+marker+".preview",FILE_COMMON)){Result(id,"REJECTED","STAGED_PREVIEW_UNKNOWN");return;}
+    if(FileIsExist(channel+"\\"+marker+".confirmed",FILE_COMMON) ||
+       (stagedPhase=="CONFIRM" && FileIsExist(channel+"\\"+marker+".aborted",FILE_COMMON))){
+     Result(id,"REJECTED","STAGED_ENTRY_RESOLVED");return;
+    }
+    if(!WriteAtomic(marker+(stagedPhase=="CONFIRM"?".confirmed":".aborted"),id)){
+     Result(id,"FAILED","STAGED_STATE_WRITE_FAILED");return;
+    }
+   }
+   if(stagedPhase=="ABORT"){
+    ok=AbortStagedPreview(symbol,side,stagedPreviewId);
+    Result(id,ok?"EXECUTED":"FAILED",ok?"STAGED_PREVIEW_CLOSED":"STAGED_PREVIEW_CLOSE_FAILED");
+    return;
+   }
+  }
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="1" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
   else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry);
