@@ -305,7 +305,32 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
   border: 1px solid #334259;
   border-radius: 8px;
 }
-.dashboard-settings-view .dual-trade-settings { margin: 0; gap: 12px; }
+.dashboard-settings-view .dual-trade-settings {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  gap: 12px;
+}
+.dashboard-settings-view .settings-panel .tf-inputs { margin-top: 8px; gap: 8px; }
+.dashboard-settings-view .settings-panel .tf-inputs input,
+.dashboard-settings-view .settings-panel .dual-capital input {
+  height: 36px;
+  min-height: 36px;
+  font-size: 15px;
+  padding: 5px 8px;
+}
+.dashboard-settings-view .tf-setting-card h3 { font-size: 16px; }
+.dashboard-settings-view .tf-setting-card h4,
+.dashboard-settings-view .tf-setting-card p { margin: 6px 0 0; }
+.dashboard-settings-view .settings-panel .mt5-symbol-fields { margin: 0; }
+.dashboard-settings-view .settings-panel .risk-ack { margin: 8px 0; }
+.dashboard-settings-view .symbol-fieldset #manualLayerStatus { margin: 4px 0; }
+.dashboard-settings-view .symbol-fieldset .tf-inputs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+.dashboard-settings-view .settings-panel .save-settings { min-height: 38px; font-size: 13px; }
+.dashboard-settings-view #manualExitError:empty,
+.dashboard-settings-view #manualExitSaveStatus:empty { display: none; }
 .dashboard-settings-view .tf-setting-card { min-width: 0; padding: 12px; }
 .dashboard-settings-view #settingsError:empty { display: none; }
 @media (max-width: 620px) {
