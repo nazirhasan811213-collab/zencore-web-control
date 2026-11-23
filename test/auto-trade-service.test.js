@@ -1069,6 +1069,12 @@ test('manual market orders require matching account, upgraded connector and uniq
   await service.saveManualExit(userId,{enabled:false,sl:3.5});
   const {commandId} = await service.manualOrder(userId,input);
   assert.equal((await service.manualOrder(userId,input)).commandId,commandId);
+  const pod = await store.getPodForUser(userId);
+  const queued = (await store.listRecentCommands(userId)).find(c=>c.id===commandId);
+  await store.createCommand({
+    id:crypto.randomUUID(), userId, podId:pod.id, type:'PLACE_SETUP', payload:{symbol:'XAUUSD'},
+    createdAt:queued.createdAt-1000, expiresAt:queued.expiresAt
+  });
   const {command} = await service.nextCommand(token);
   assert.equal(command.type,'MANUAL_MARKET_ORDER');
   assert.equal(command.payload.slMode,'AUTO_TRADE_DISTANCE');

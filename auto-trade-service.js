@@ -1491,6 +1491,10 @@ function createAutoTradeService(options = {}) {
     await store.appendAudit(pod.userId, 'COMMAND_ACKNOWLEDGED', {
       commandId: command.id, commandType: command.type, status, code: result.code, message: result.message,
       symbol:command.payload?.symbol,timeframe:command.payload?.analysisSnapshot?.executionTimeframe,
+      ...(command.type==='MANUAL_MARKET_ORDER'?{
+        commandQueuedAt:command.createdAt,commandDeliveredAt:command.deliveredAt,
+        mt5AcknowledgedAt:now(),queueToAckMs:Math.max(0,now()-command.createdAt)
+      }:{}),
       ...(command.type==='PLACE_SETUP'?{lifecycleState:status==='EXECUTED'?'MT5_ACKNOWLEDGED':'EA_REJECTED',
         sopCompletedAt:command.payload?.analysisSnapshot?.qualifiedAt||command.payload?.analysisSnapshot?.confirmationEvidence?.qualifiedAt,
         commandQueuedAt:command.createdAt,commandDeliveredAt:command.deliveredAt,

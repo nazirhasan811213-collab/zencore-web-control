@@ -1374,8 +1374,9 @@ class PostgresAutoTradeStore {
            WHEN 'MANUAL_EXIT_ACTION' THEN 2
            WHEN 'MANUAL_EXIT_CONFIG' THEN 2
            WHEN 'SYSTEM_ON' THEN 3
-           WHEN 'PLACE_SETUP' THEN 4
-           ELSE 5 END,
+           WHEN 'MANUAL_MARKET_ORDER' THEN 4
+           WHEN 'PLACE_SETUP' THEN 5
+           ELSE 6 END,
            created_at ASC
          LIMIT 1 FOR UPDATE SKIP LOCKED`,
         [podId, new Date(now)]
@@ -2230,13 +2231,14 @@ class MemoryAutoTradeStore {
       MANUAL_EXIT_ACTION: 2,
       MANUAL_EXIT_CONFIG: 2,
       SYSTEM_ON: 3,
-      PLACE_SETUP: 4
+      MANUAL_MARKET_ORDER: 4,
+      PLACE_SETUP: 5
     };
     const row = rows
       .filter(item => ['PENDING', 'DELIVERED'].includes(item.status) && item.expiresAt > now &&
         (item.type !== 'PLACE_SETUP' || item.payload?.symbol === 'XAUUSD' || item.payload?.analysisSnapshot?.executionPolicy === 'PINE_DIRECT_FILL_GAP4_V1'))
       .sort((left, right) =>
-        (priority[left.type] ?? 5) - (priority[right.type] ?? 5) || left.createdAt - right.createdAt
+        (priority[left.type] ?? 6) - (priority[right.type] ?? 6) || left.createdAt - right.createdAt
       )[0];
     if (!row) return null;
     row.status = 'DELIVERED';

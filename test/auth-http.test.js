@@ -209,6 +209,12 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
     });
     assert.equal(response.status, 403);
     assert.equal((await response.json()).code, 'VIEW_ONLY');
+    response = await fetch(`${BASE}/api/auto-trade/manual-order?id=${crypto.randomUUID()}`, {
+      headers:{Cookie:viewerCookie}
+    });
+    assert.equal(response.status,403);
+    assert.equal((await response.json()).code,'VIEW_ONLY');
+
 
     response = await fetch(`${BASE}/api/auto-trade/on`, {
       method: 'POST',
@@ -533,6 +539,7 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
         tradeMode: 'DEMO', terminalTradeAllowed: true, accountTradeAllowed: true,
         expertTradeAllowed: true, demoExecutionUnlocked,
         connectorVersion: '1.3.0-ea-local', terminalBuild: '5000',
+        accountFingerprint: 'a'.repeat(64), manualMarketOrderVersion: 'MANUAL_MARKET_ORDER_V2',
         symbolSpecs: [{ symbol: 'XAUUSD', tickSize: 0.01, tickValue: 1, volumeMin: 0.01, volumeMax: 100, volumeStep: 0.01 }],
         positions
       })
@@ -554,6 +561,35 @@ test('HTTP auth flow protects pages, analysis APIs and the MT5 control plane', {
 
     response = await heartbeat([], true);
     assert.equal(response.status, 200);
+
+    const manualUrl = `${BASE}/api/auto-trade/manual-order`;
+    const manualInput = { symbol:'XAUUSD', side:'BUY', lot:0.01, requestId:crypto.randomUUID(), accountMask:'****1234' };
+    const submitManual = origin => fetch(manualUrl, {
+      method:'POST', headers:{ Cookie:cookie, Origin:origin, 'Content-Type':'application/json' },
+      body:JSON.stringify(manualInput)
+    });
+    response = await submitManual('https://other.example');
+    assert.equal(response.status,403);
+    response = await submitManual(BASE);
+    assert.equal(response.status,202);
+    const {commandId:manualId} = await response.json();
+    const statusUrl = manualUrl + '?id=' + manualId;
+    response = await fetch(statusUrl);
+    assert.equal(response.status,401);
+    response = await fetch(statusUrl,{headers:{Cookie:cookie,Origin:'https://other.example'}});
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).status,'PENDING');
+    response = await fetch(`${BASE}/api/execution/commands/next`,{headers:{Authorization:`Bearer ${podToken}`}});
+    assert.equal((await response.json()).command.id,manualId);
+    response = await fetch(statusUrl,{headers:{Cookie:cookie}});
+    assert.equal((await response.json()).status,'DELIVERED');
+    response = await fetch(`${BASE}/api/execution/commands/${manualId}/ack`,{
+      method:'POST',headers:{Authorization:`Bearer ${podToken}`,'Content-Type':'application/json'},
+      body:JSON.stringify({status:'EXECUTED',code:'MANUAL_ORDER_FILLED'})
+    });
+    assert.equal(response.status,200);
+    response = await fetch(statusUrl,{headers:{Cookie:cookie}});
+    assert.deepEqual(await response.json(),{ok:true,status:'EXECUTED',code:'MANUAL_ORDER_FILLED'});
 
     response = await fetch(`${BASE}/api/auto-trade/on`, {
       method: 'POST',

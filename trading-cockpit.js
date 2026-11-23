@@ -168,18 +168,37 @@
   try{
    const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({side,symbol,lot,requestId:crypto.randomUUID(),accountMask:quickAccount}),signal:AbortSignal.timeout(8000)});
    const data=await r.json();
-   if(r.status>=500)throw Error('Semak MT5 sebelum cuba lagi. Status order belum disahkan.');
-   if(!r.ok)throw Error(data.error||'Arahan gagal.');
-   for(let i=0;i<18;i++){
-    await new Promise(resolve=>setTimeout(resolve,1000));
-    const order=await api('/api/auto-trade/manual-order?id='+encodeURIComponent(data.commandId));
-    if(order.status==='EXECUTED'){quickStatus.textContent='MT5 sahkan order dilaksanakan.';return;}
-    if(['FAILED','REJECTED','CANCELLED','CANCELED','EXPIRED'].includes(order.status)){
+   if(r.status>=500)throw Error('Status penghantaran belum disahkan. Semak MT5 sebelum cuba lagi.');
+   if(!r.ok)throw Error(data.error||'Arahan ditolak.');
+   const statusUrl='/api/auto-trade/manual-order?id='+encodeURIComponent(data.commandId);
+   const deadline=Date.now()+25000;
+   quickStatus.textContent='Arahan diterima ZenCore. Menunggu Connector…';
+   while(!stopped&&Date.now()<deadline){
+    let order;
+    try{
+     const response=await fetch(statusUrl,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(3500)});
+     if(response.status===401||response.status===403||response.status===404){
+      quickStatus.textContent='Status order tidak dapat disemak. Semak MT5 sebelum cuba lagi.';
+      return;
+     }
+     if(response.ok)order=await response.json();
+    }catch(_){/* A status check can be retried without submitting another order. */}
+    if(order?.status==='EXECUTED'){quickStatus.textContent='MT5 sahkan order dilaksanakan.';return;}
+    if(['FAILED','REJECTED','CANCELLED','CANCELED'].includes(order?.status)){
      quickStatus.textContent='Order tidak disahkan: '+(order.code||order.status);return;
     }
+    if(order?.status==='EXPIRED'){
+     quickStatus.textContent='Tempoh arahan tamat tanpa pengesahan MT5. Semak posisi sebelum cuba lagi.';return;
+    }
+    if(order?.status==='DELIVERED')quickStatus.textContent='Arahan dihantar ke Connector. Menunggu pengesahan MT5…';
+    if(!order)quickStatus.textContent='Menyemak semula status order…';
+    await new Promise(resolve=>setTimeout(resolve,500));
    }
-   quickStatus.textContent='Belum disahkan. Semak MT5 sebelum cuba lagi.';
-  }catch(error){quickStatus.textContent=(error.name==='TimeoutError'||error.message==='Failed to fetch'||error.message==='UNAVAILABLE')?'Sambungan terganggu. Semak MT5 sebelum cuba lagi.':error.message;}
+   quickStatus.textContent='MT5 belum mengesahkan order. Semak posisi sebelum cuba lagi.';
+  }catch(error){
+   quickStatus.textContent=['TimeoutError','AbortError','TypeError','SyntaxError'].includes(error.name)
+    ?'Status penghantaran belum disahkan. Semak MT5 sebelum cuba lagi.':error.message;
+  }
   finally{quickPending=false;updateQuickButtons();}
  });
  async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings'),api('/ready')]);
