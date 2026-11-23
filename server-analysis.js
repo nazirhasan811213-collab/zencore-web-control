@@ -1432,6 +1432,18 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
         stepUp
       ));
     }
+    if (pathname === '/api/auto-trade/manual-order') {
+      if (req.method === 'GET') {
+        const id = new URL(req.url,'http://localhost').searchParams.get('id');
+        return sendJson(res,200,await autoTradeState.service.manualOrderStatus(userId,id));
+      }
+      if (req.method === 'POST') {
+        if (!requestOriginAllowed(req)) return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+        const body = await parseApiJson(req,res);
+        if (body === null) return;
+        return sendJson(res,202,await autoTradeState.service.manualOrder(userId,body));
+      }
+    }
     if (req.method === 'POST' && pathname === '/api/auto-trade/on') {
       const body = await parseApiJson(req, res);
       if (body === null) return;
@@ -2019,6 +2031,18 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
+    if (url.searchParams.get('view') === 'dashboard-settings') {
+      const csp = AUTH_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'");
+      const html = fs.readFileSync(path.join(__dirname, 'auto-trade.html'), 'utf8')
+        .replace('<body>', '<body class="dashboard-settings-view">');
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...securityHeaders(csp),
+        'X-Frame-Options': 'SAMEORIGIN'
+      });
+      return res.end(html);
+    }
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 

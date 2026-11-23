@@ -195,3 +195,148 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
 }
 .dashboard-setup-strength.has-score { border-color: var(--pair-accent); }
 .dashboard-setup-strength.has-score > strong { color: var(--pair-accent); }
+
+.dashboard-v3 .terminal-heading:has(.quick-order:not([hidden])){display:flex!important;flex-wrap:wrap;align-items:center}
+.quick-order{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin-left:auto;padding:10px;border:1px solid #334259;border-radius:10px;background:#121e30}
+.quick-order label{display:grid;gap:3px;font-size:.75rem}
+.quick-order input,.quick-order select,.quick-order button{font:inherit;min-height:34px;padding:4px 8px;border:1px solid #40516a;border-radius:5px;color:#edf3ff;background:#182942}
+.quick-order input{width:72px}
+.quick-order button{font-size:.8rem;font-weight:700;cursor:pointer}
+.quick-order button[value=BUY]{background:#126245}.quick-order button[value=SELL]{background:#963544}
+.quick-order button:disabled{opacity:.5;cursor:default}
+.quick-order output{width:100%;font-size:.75rem}
+.quick-order[hidden]{display:none}
+@media(max-width:600px){.quick-order{margin-left:0}}
+
+/* Dashboard header trading controls and broker snapshot */
+.dashboard-v3 .terminal-heading:has(.dashboard-trade-tools) {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dashboard-trade-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  margin-inline-start: auto;
+  min-width: 0;
+}
+.dashboard-trade-tools .quick-order {
+  margin: 0;
+  align-content: center;
+}
+.quick-mt5-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.quick-mt5-summary article {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 116px;
+  padding: 10px 12px;
+  border: 1px solid #334259;
+  border-radius: 10px;
+  background: #121e30;
+}
+.quick-mt5-summary span,
+.quick-mt5-summary small {
+  font-size: .72rem;
+  color: #a8b8d2;
+}
+.quick-mt5-summary strong {
+  font-size: 1.05rem;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.quick-mt5-summary .profit strong { color: #78e1ab; }
+.quick-mt5-summary .loss strong { color: #ffa2ab; }
+@media (max-width: 760px) {
+  .dashboard-v3 .terminal-heading:has(.dashboard-trade-tools) { align-items: stretch; }
+  .dashboard-trade-tools { margin-inline-start: 0; }
+}
+@media (max-width: 480px) {
+  .dashboard-trade-tools > * { width: 100%; }
+  .quick-mt5-summary article { min-width: 0; }
+}
+
+.dashboard-v3 > .dashboard-settings-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 16px;
+  background: #121e30;
+  border: 1px solid #334259;
+  border-radius: 12px;
+}
+.dashboard-settings-panel h2 { margin: 0 0 12px; font-size: 1.125rem; }
+.dashboard-settings-panel iframe { display: block; width: 100%; min-height: 130px; border: 0; }
+
+.settings-compact-label { display: none; }
+body.zc-workspace.dashboard-settings-view { padding: 0; }
+.dashboard-settings-view .autotrade-shell { min-height: 0; padding: 0; }
+.dashboard-settings-view .autotrade-wrap { width: 100%; margin: 0; }
+.dashboard-settings-view .autotrade-wrap > :not(#autoTradeWorkspace),
+.dashboard-settings-view #autoTradeWorkspace > :not(.configuration-grid),
+.dashboard-settings-view .configuration-grid > :not(.settings-panel),
+.dashboard-settings-view .settings-panel > .panel-heading,
+.dashboard-settings-view #zcWorkspaceNav,
+.dashboard-settings-view .zc-menu-toggle,
+.dashboard-settings-view .settings-full-label,
+.dashboard-settings-view .tf-empty-note,
+.dashboard-settings-view .symbol-fieldset > p:not([id]),
+.dashboard-settings-view .symbol-fieldset > ol,
+.dashboard-settings-view .symbol-fieldset > small { display: none !important; }
+.dashboard-settings-view .settings-compact-label { display: inline; }
+.dashboard-settings-view .configuration-grid { grid-template-columns: minmax(0, 1fr); margin: 0; }
+.dashboard-settings-view .settings-panel { padding: 12px; }
+.dashboard-settings-view #settingsForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.dashboard-settings-view #settingsForm > .dual-trade-settings,
+.dashboard-settings-view #settingsForm > .risk-ack,
+.dashboard-settings-view #settingsError { grid-column: 1 / -1; }
+.dashboard-settings-view #settingsForm > .settings-fields { grid-template-columns: minmax(0, 1fr); }
+.dashboard-settings-view #settingsForm > .symbol-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #334259;
+  border-radius: 8px;
+}
+.dashboard-settings-view .dual-trade-settings {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  gap: 12px;
+}
+.dashboard-settings-view .settings-panel .tf-inputs { margin-top: 8px; gap: 8px; }
+.dashboard-settings-view .settings-panel .tf-inputs input,
+.dashboard-settings-view .settings-panel .dual-capital input {
+  height: 36px;
+  min-height: 36px;
+  font-size: 15px;
+  padding: 5px 8px;
+}
+.dashboard-settings-view .tf-setting-card h3 { font-size: 16px; }
+.dashboard-settings-view .tf-setting-card h4,
+.dashboard-settings-view .tf-setting-card p { margin: 6px 0 0; }
+.dashboard-settings-view .settings-panel .mt5-symbol-fields { margin: 0; }
+.dashboard-settings-view .settings-panel .risk-ack { margin: 8px 0; }
+.dashboard-settings-view .symbol-fieldset #manualLayerStatus { margin: 4px 0; }
+.dashboard-settings-view .symbol-fieldset .tf-inputs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+.dashboard-settings-view .settings-panel .save-settings { min-height: 38px; font-size: 13px; }
+.dashboard-settings-view #manualExitError:empty,
+.dashboard-settings-view #manualExitSaveStatus:empty { display: none; }
+.dashboard-settings-view .tf-setting-card { min-width: 0; padding: 12px; }
+.dashboard-settings-view #settingsError:empty { display: none; }
+@media (max-width: 620px) {
+  .dashboard-v3 > .dashboard-settings-panel { padding: 10px; }
+  .dashboard-settings-view #settingsForm,
+  .dashboard-settings-view .dual-trade-settings { grid-template-columns: minmax(0, 1fr); }
+}

@@ -146,6 +146,24 @@ def command_fields(command, identity):
         for i,a in enumerate(payload['actions']):
             if a.get('type')!='CLOSE_PERCENT' or (a.get('reason'),a.get('percent')) not in (('CLOSE_SEPARUH',50),('EXIT_REMAINING',100)):raise ValueError('ACTION_REJECTED')
             fields[f'a{i}type']='CLOSE_PERCENT';fields[f'a{i}value']=a['percent'];fields[f'a{i}reason']=a['reason']
+    elif kind == 'MANUAL_MARKET_ORDER':
+        lot = number(payload['lot'])
+        symbol, side, sl_mode = payload.get('symbol'), payload.get('side'), payload.get('slMode')
+        if not identity.get('eaSession') or symbol not in SUPPORTED or side not in ('BUY','SELL') or not 0.01 <= float(lot) <= 1:
+            raise ValueError('MANUAL_ORDER_INVALID')
+        fields.update(symbol=symbol,side=side,lot=lot)
+        if sl_mode is None:
+            sl = number(payload['sl'])
+            if float(sl) <= 0: raise ValueError('MANUAL_ORDER_INVALID')
+            fields['sl'] = sl
+        elif sl_mode == 'AUTO_TRADE_DISTANCE' and symbol == 'XAUUSD':
+            distance = number(payload['slDistance'])
+            if float(distance) <= 0: raise ValueError('MANUAL_ORDER_INVALID')
+            fields.update(manualSlMode=sl_mode,manualSlDistance=distance)
+        elif sl_mode == 'MANUAL_BTC_ATR8_M2' and symbol == 'BTCUSD':
+            fields['manualSlMode'] = sl_mode
+        else:
+            raise ValueError('MANUAL_ORDER_INVALID')
     elif kind == 'SYSTEM_ON':
         if payload.get('mode') != identity.get('tradeMode','DEMO') or payload.get('mode') not in ('DEMO','REAL') or payload.get('strategy') != STRATEGY or payload.get('exitSchema') != SCHEMA:
             raise ValueError('SYSTEM_CONTRACT_REJECTED')
@@ -249,7 +267,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')

@@ -6,6 +6,22 @@
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:symbol==='XAUUSD'?3:2});
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
+ const settingsFrame=$('dashboardAutoSettingsFrame');
+ let settingsObserver;
+ function fitSettingsFrame(){
+  settingsObserver?.disconnect();
+  const panel=settingsFrame.contentDocument?.querySelector('.dashboard-settings-view .autotrade-shell');
+  if(!panel)return;
+  const fit=()=>{
+   const height=Math.ceil(panel.getBoundingClientRect().height);
+   settingsFrame.height=String(height);
+  };
+  settingsObserver=new ResizeObserver(fit);
+  settingsObserver.observe(panel);
+  fit();
+ }
+ settingsFrame?.addEventListener('load',fitSettingsFrame);
+ if(settingsFrame?.contentDocument?.readyState==='complete')fitSettingsFrame();
  function fresh(v){return !failed&&Live.fresh(v);}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
  function state(v){return !fresh(v)?'WAITING':ready(v)?'SOLID '+v.market.strategyNormal.side:v.displayState==='READY'?'WAIT CONFIRMATION':(v.displayState||v.market?.strategyNormal?.state||'WATCH').replaceAll('_',' ');}
@@ -174,11 +190,52 @@
   const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
   set('overviewAccount',v.account);set('overviewServer',v.server);set('overviewPositions',v.count??'—');
   set('overviewModes',v.count===null?'Menunggu laporan MT5':`TF1: ${v.tf1} • TF15: ${v.tf15}`);
-  set('overviewLot',v.lot===null?'—':v.lot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3}));
-  set('overviewFloating',v.floating===null?'—':v.floating.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  set('overviewLot',v.lot===null?'Menunggu snapshot MT5':v.lot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3})+' total lot');
+  set('overviewFloating',v.floating===null?'—':'USD '+v.floating.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  $('quickProfitCard').classList.toggle('profit',v.floating>0);
+  $('quickProfitCard').classList.toggle('loss',v.floating<0);
   set('overviewSeen',v.lastSeen?'Laporan MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Data belum disahkan / tidak segar');
  }
+ const quickForm=$('quickOrder'),quickStatus=$('quickStatus');
+ let quickReady=false,quickPending=false,quickAccount='';
+ function updateQuickButtons(){
+  quickForm.querySelectorAll('button').forEach(b=>{b.disabled=!quickReady||quickPending;});
+ }
+ quickForm.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const side=e.submitter?.value,symbol=$('quickPair').value,lot=Number($('quickLot').value);
+  if(!quickReady||quickPending||!['BUY','SELL'].includes(side)||!quickForm.reportValidity())return;
+  if(!window.confirm(`Hantar market order ${side} ${symbol}, ${lot} lot ke MT5 (${quickAccount})? SL ikut tetapan Auto Trade.`))return;
+  quickPending=true;
+  updateQuickButtons();
+  quickStatus.textContent='Menghantar ke MT5…';
+  try{
+   const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({side,symbol,lot,requestId:crypto.randomUUID(),accountMask:quickAccount}),signal:AbortSignal.timeout(8000)});
+   const data=await r.json();
+   if(r.status>=500)throw Error('Semak MT5 sebelum cuba lagi. Status order belum disahkan.');
+   if(!r.ok)throw Error(data.error||'Arahan gagal.');
+   for(let i=0;i<18;i++){
+    await new Promise(resolve=>setTimeout(resolve,1000));
+    const order=await api('/api/auto-trade/manual-order?id='+encodeURIComponent(data.commandId));
+    if(order.status==='EXECUTED'){quickStatus.textContent='MT5 sahkan order dilaksanakan.';return;}
+    if(['FAILED','REJECTED','CANCELLED','CANCELED','EXPIRED'].includes(order.status)){
+     quickStatus.textContent='Order tidak disahkan: '+(order.code||order.status);return;
+    }
+   }
+   quickStatus.textContent='Belum disahkan. Semak MT5 sebelum cuba lagi.';
+  }catch(error){quickStatus.textContent=(error.name==='TimeoutError'||error.message==='Failed to fetch'||error.message==='UNAVAILABLE')?'Sambungan terganggu. Semak MT5 sebelum cuba lagi.':error.message;}
+  finally{quickPending=false;updateQuickButtons();}
+ });
  async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings'),api('/ready')]);
+  const account=results[0].status==='fulfilled'?results[0].value:null;
+  quickForm.hidden=account?.viewerMode===true;
+  const wasReady=quickReady;
+  quickReady=account?.manualOrderReady===true;
+  quickAccount=account?.pod?.accountMask||'';
+  updateQuickButtons();
+  if(!quickPending&&(wasReady!==quickReady||quickStatus.textContent==='Menyemak sambungan MT5…')) {
+   quickStatus.textContent=quickReady?'MT5 '+quickAccount:'Sambungan MT5 untuk order belum tersedia.';
+  }
   if(results[0].status==='fulfilled'){const a=results[0].value;renderAccount(a);$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';const paused=results[2]?.status==='fulfilled'?results[2].value?.autoEntry?.signalsPaused:null;$('tradeState').textContent=paused===true?'PAUSED':state==='ON'&&paused===null?'ON • SEMAK STATUS':state.replaceAll('_',' ');dot('tradeDot',state==='ON'&&paused===false);}else{renderAccount(null);$('mt5State').textContent='STATUS BELUM ADA';$('tradeState').textContent='STATUS BELUM ADA';dot('mt5Dot',false);dot('tradeDot',false);}
   if(results[1].status==='fulfilled'){const p=results[1].value.settings||{};const enabled=p.verified&&p.telegramEnabled&&p.telegramAvailable;$('telegramState').textContent=enabled?'AKTIF':p.telegramAvailable?'BELUM DIAKTIFKAN':'BELUM ADA';dot('telegramDot',!!enabled);}else{$('telegramState').textContent='STATUS BELUM ADA';dot('telegramDot',false);}if(!stopped)setTimeout(connections,5000);
  }
