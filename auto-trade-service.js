@@ -457,7 +457,7 @@ function createAutoTradeService(options = {}) {
         canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
-      manualOrderReady: entryAccessReady && supportsManualOrder(pod) && connection.ready && executionAllowed(userId,pod),
+      manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
       manualExitSync:(()=>{if(profile?.manualExit?.enabled&&!supportsManualExit(pod,profile.manualExit))return {status:'WAITING_EA',code:null};const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
@@ -1364,8 +1364,13 @@ function createAutoTradeService(options = {}) {
     return isLocalEa(pod) && !!pod.accountFingerprint && manualOrderPods.get(pod.id)===pod.accountFingerprint;
   }
 
-  async function manualOrderAllowed(userId,pod) {
+  function manualOrderConnectionReady(userId,pod) {
     return supportsManualOrder(pod) && executionAllowed(userId,pod) && connectionState(pod).ready &&
+      !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'');
+  }
+
+  async function manualOrderAllowed(userId,pod) {
+    return manualOrderConnectionReady(userId,pod) &&
       (!options.entryAccessAllowed || await options.entryAccessAllowed(userId));
   }
 

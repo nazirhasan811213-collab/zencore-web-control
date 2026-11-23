@@ -399,6 +399,8 @@ class Runner:
                 if signed['type'] in ('SYSTEM_ON','PLACE_SETUP','MANUAL_EXIT_CONFIG','MANUAL_MARKET_ORDER') or force_reset:
                     if not self.renew_lease(local): return
                     if signed['type'] in ('SYSTEM_ON','PLACE_SETUP') and self.desired_state!='ON': raise ValueError('CONTROL_STOPPED')
+                    if signed['type']=='MANUAL_MARKET_ORDER' and self.entry_blocked_reason:
+                        raise ValueError('CONTROL_STOPPED')
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
                 direct=fields.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
                 if direct and local.get('directEntryPolicy')!='PINE_DIRECT_FILL_GAP4_V1':raise ValueError('EA_DIRECT_POLICY_UPGRADE_REQUIRED')
