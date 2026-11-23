@@ -296,6 +296,7 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.dashboard-settings-view #settingsForm > .auto-strategy-field,
 .dashboard-settings-view #settingsForm > .dual-trade-settings,
 .dashboard-settings-view #settingsForm > .risk-ack,
 .dashboard-settings-view #settingsError { grid-column: 1 / -1; }

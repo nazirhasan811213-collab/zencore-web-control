@@ -17,6 +17,7 @@ function publicProfile(row) {
     modeSettings: {...((row.execution_settings ?? row).modeSettings||{}),TF15_INTRA:(row.execution_settings ?? row).modeSettings?.TF15_INTRA||(row.execution_settings ?? row).modeSettings?.TF10_LONG},
     tradingSchedule: (row.execution_settings ?? row).tradingSchedule || {enabled:false},
     strategyExitPolicies: (row.execution_settings ?? row).strategyExitPolicies || {},
+    entryExitStrategy: (row.execution_settings ?? row).entryExitStrategy || 'NORMAL',
     manualExit: (row.execution_settings ?? row).manualExit || {enabled:false},
     userId: row.user_id || row.userId,
     capitalUsd: capital == null ? null : Number(capital),
@@ -415,7 +416,7 @@ class PostgresAutoTradeStore {
        RETURNING *`,
       [userId, settings.capitalUsd, settings.lotPerLayer, settings.layers,
         JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null,
-        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies, manualExit:settings.manualExit})]
+        JSON.stringify({strategyMode: settings.strategyMode, entryExitStrategy:settings.entryExitStrategy, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies, manualExit:settings.manualExit})]
     );
     return publicProfile(result.rows[0]);
   }
@@ -779,6 +780,7 @@ class PostgresAutoTradeStore {
         modeSettings: row.execution_settings?.modeSettings || {},
         tradingSchedule: row.execution_settings?.tradingSchedule || {enabled:false},
         strategyExitPolicies: row.execution_settings?.strategyExitPolicies || {},
+        entryExitStrategy: row.execution_settings?.entryExitStrategy || 'NORMAL',
         manualExit:row.execution_settings?.manualExit || {enabled:false},
         capitalUsd: Number(row.capital_usd),
         lotPerLayer: row.lot_per_layer == null ? null : Number(row.lot_per_layer),

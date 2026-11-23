@@ -55,6 +55,20 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(fields['lot'],'0.01');self.assertEqual(fields['layers'],3)
         command['payload']['sl']=2400
         with self.assertRaisesRegex(ValueError,'ANALYSIS_PRICE_MISMATCH'):command_fields(command,IDENTITY)
+    def test_cash_layer_mailbox_requires_signed_direct_policy(self):
+        prices={'symbol':'XAUUSD','side':'BUY','entry':2500,'sl':2497,'tp1':2502,'tp2':2504,'tp3':2505}
+        snap={**prices,'contractVersion':CONTRACT,'decisionOwner':'ZENCORE_ANALYSIS','decision':'ENTRY_AUTHORIZED',
+              'executionPolicy':'PINE_DIRECT_FILL_GAP4_V1','executionTimeframe':'1','maxEntryGap':4,
+              'cashLayerPolicy':'USD_TP050_SL200_V1'}
+        payload={**prices,'analysisContractVersion':CONTRACT,'strategy':STRATEGY,'schemaVersion':SCHEMA,
+                 'analysisSnapshot':snap,'lotPerLayer':.01,'layers':8}
+        fields=command_fields(verified_command(signed('PLACE_SETUP',payload),KEY,POD,NOW),IDENTITY)
+        self.assertEqual((fields['type'],fields['cashLayerPolicy'],fields['lot'],fields['layers']),
+                         ('PLACE_CASH_SETUP','USD_TP050_SL200_V1','0.01',8))
+        del snap['executionPolicy']
+        with self.assertRaisesRegex(ValueError,'CASH_LAYER_POLICY_REJECTED'):
+            command_fields(verified_command(signed('PLACE_SETUP',payload),KEY,POD,NOW),IDENTITY)
+
     def test_rejects_unapproved_action_and_local_field_injection(self):
         with self.assertRaises(ValueError):encode_fields({'server':'Demo\naccount\t999'})
         with tempfile.TemporaryDirectory() as folder:

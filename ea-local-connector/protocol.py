@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.44'
-CONNECTOR_BUILD = '2.1.44'
+EA_VERSION = '2.47'
+CONNECTOR_BUILD = '2.1.47'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -197,6 +197,13 @@ def command_fields(command, identity):
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
                 if snap.get('maxEntryGap')!=4 or execution_tf not in ('1','2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
                 fields['executionPolicy']='PINE_DIRECT_FILL_GAP4_V1'
+            cash_policy = snap.get('cashLayerPolicy')
+            if cash_policy is not None:
+                if cash_policy != 'USD_TP050_SL200_V1' or fields.get('executionPolicy') != 'PINE_DIRECT_FILL_GAP4_V1':
+                    raise ValueError('CASH_LAYER_POLICY_REJECTED')
+                # A chart running older MQL ignores the distinct local command type.
+                fields['type'] = 'PLACE_CASH_SETUP'
+                fields['cashLayerPolicy'] = cash_policy
             fields['side'] = payload['side']
             fields['slPolicy']='EXACT_ANALYSIS_V2'
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
@@ -267,7 +274,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
@@ -283,7 +290,8 @@ def heartbeat(fields, selected_identity, now_ms=None):
         position['positionId']=fields.get(prefix+'positionId',position['ticket'])
         position['setupId']=fields.get(prefix+'setupId')
         position['fillRiskVersion']=fields.get(prefix+'fillRiskVersion')
-        for key in ('tp1','tp2','tp3','initialSl'):
+        if fields.get(prefix+'exitStage')=='CASH_LAYER': position['exitStage']='CASH_LAYER'
+        for key in ('tp1','tp2','tp3','initialSl','activeTp'):
             if prefix+key in fields: position[key]=float(fields[prefix+key])
         for key in ('volume','entry','currentPrice','activeSl','profitUsd','openedAt'):
             position[key] = float(fields[prefix+key])

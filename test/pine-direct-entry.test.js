@@ -19,3 +19,17 @@ for(const tf of ['1','15'])for(const side of ['BUY','SELL'])test(`Pine direct ${
  a.equal(D.decision({...m,tp2:m.tp1}),null);
  a.equal(D.decision({...m,entryAuthorizedAt:999}),null);
 });
+
+test('Low Risk preserves the chosen lot and layers and adds a cash exit policy to Pine Direct', () => {
+ const m = event();
+ const settings = {capitalUsd:500, lotPerLayer:.01, layers:8, symbols:['XAUUSD']};
+ const normal = Core.buildSetupCommand(m, settings);
+ const lowRisk = Core.buildSetupCommand(m, {...settings, entryExitStrategy:'LOW_RISK'});
+ a.equal(normal.payload.analysisSnapshot.cashLayerPolicy, undefined);
+ a.equal(lowRisk.payload.lotPerLayer, .01);
+ a.equal(lowRisk.payload.layers, 8);
+ a.equal(lowRisk.payload.totalLot, .08);
+ a.equal(lowRisk.payload.risk.riskUsd, 16);
+ a.equal(lowRisk.payload.analysisSnapshot.cashLayerPolicy, 'USD_TP050_SL200_V1');
+ a.equal(Core.validateSettings({...settings, entryExitStrategy:'unsupported'}).ok, false);
+});

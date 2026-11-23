@@ -393,6 +393,8 @@ class Runner:
                     required = ('MANUAL_MARKET_ORDER_V2',) if fields.get('manualSlMode') else ('MANUAL_MARKET_ORDER_V1','MANUAL_MARKET_ORDER_V2')
                     if local.get('manualMarketOrderVersion') not in required:
                         raise ValueError('EA_MANUAL_ORDER_UPGRADE_REQUIRED')
+                if fields.get('cashLayerPolicy') and local.get('cashLayerPolicy') != fields['cashLayerPolicy']:
+                    raise ValueError('EA_CASH_LAYER_UPGRADE_REQUIRED')
                 force_reset=signed['type']=='SYSTEM_STOP' and signed.get('payload',{}).get('masterResetVersion')=='MASTER_RESET_FORCE_V2'
                 if force_reset and signed.get('payload',{}).get('bindingEpochHash') and signed['payload']['bindingEpochHash']!=hashlib.sha256(self.config['podToken'].encode()).hexdigest():raise ValueError('ACCOUNT_BINDING_CHANGED')
                 if force_reset and local.get('masterResetVersion')!='MASTER_RESET_FORCE_V2':raise ValueError('EA_MASTER_RESET_UPGRADE_REQUIRED')
