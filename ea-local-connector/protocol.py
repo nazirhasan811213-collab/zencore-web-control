@@ -148,10 +148,22 @@ def command_fields(command, identity):
             fields[f'a{i}type']='CLOSE_PERCENT';fields[f'a{i}value']=a['percent'];fields[f'a{i}reason']=a['reason']
     elif kind == 'MANUAL_MARKET_ORDER':
         lot = number(payload['lot'])
-        sl = number(payload['sl'])
-        if not identity.get('eaSession') or payload.get('symbol') not in SUPPORTED or payload.get('side') not in ('BUY','SELL') or not 0.01 <= float(lot) <= 1 or float(sl) <= 0:
+        symbol, side, sl_mode = payload.get('symbol'), payload.get('side'), payload.get('slMode')
+        if not identity.get('eaSession') or symbol not in SUPPORTED or side not in ('BUY','SELL') or not 0.01 <= float(lot) <= 1:
             raise ValueError('MANUAL_ORDER_INVALID')
-        fields.update(symbol=payload['symbol'],side=payload['side'],lot=lot,sl=sl)
+        fields.update(symbol=symbol,side=side,lot=lot)
+        if sl_mode is None:
+            sl = number(payload['sl'])
+            if float(sl) <= 0: raise ValueError('MANUAL_ORDER_INVALID')
+            fields['sl'] = sl
+        elif sl_mode == 'AUTO_TRADE_DISTANCE' and symbol == 'XAUUSD':
+            distance = number(payload['slDistance'])
+            if float(distance) <= 0: raise ValueError('MANUAL_ORDER_INVALID')
+            fields.update(manualSlMode=sl_mode,manualSlDistance=distance)
+        elif sl_mode == 'MANUAL_BTC_ATR8_M2' and symbol == 'BTCUSD':
+            fields['manualSlMode'] = sl_mode
+        else:
+            raise ValueError('MANUAL_ORDER_INVALID')
     elif kind == 'SYSTEM_ON':
         if payload.get('mode') != identity.get('tradeMode','DEMO') or payload.get('mode') not in ('DEMO','REAL') or payload.get('strategy') != STRATEGY or payload.get('exitSchema') != SCHEMA:
             raise ValueError('SYSTEM_CONTRACT_REJECTED')

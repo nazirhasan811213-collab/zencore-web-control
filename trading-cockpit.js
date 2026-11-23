@@ -187,14 +187,14 @@
  }
  quickForm.addEventListener('submit',async e=>{
   e.preventDefault();
-  const side=e.submitter?.value,symbol=$('quickPair').value,lot=Number($('quickLot').value),sl=Number($('quickSl').value);
+  const side=e.submitter?.value,symbol=$('quickPair').value,lot=Number($('quickLot').value);
   if(!quickReady||quickPending||!['BUY','SELL'].includes(side)||!quickForm.reportValidity())return;
-  if(!window.confirm(`Hantar market order ${side} ${symbol}, ${lot} lot ke MT5 (${quickAccount})? Stop Loss: ${sl}.`))return;
+  if(!window.confirm(`Hantar market order ${side} ${symbol}, ${lot} lot ke MT5 (${quickAccount})? SL ikut tetapan Auto Trade.`))return;
   quickPending=true;
   updateQuickButtons();
   quickStatus.textContent='Menghantar ke MT5…';
   try{
-   const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({side,symbol,lot,sl,requestId:crypto.randomUUID(),accountMask:quickAccount}),signal:AbortSignal.timeout(8000)});
+   const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({side,symbol,lot,requestId:crypto.randomUUID(),accountMask:quickAccount}),signal:AbortSignal.timeout(8000)});
    const data=await r.json();
    if(r.status>=500)throw Error('Semak MT5 sebelum cuba lagi. Status order belum disahkan.');
    if(!r.ok)throw Error(data.error||'Arahan gagal.');

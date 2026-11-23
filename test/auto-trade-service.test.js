@@ -1056,22 +1056,24 @@ test('late ON ACK cannot undo a newer STOP request',async()=>{
 
 test('manual market orders require matching account, upgraded connector and unique request', async () => {
   const { store, service, userId, token } = await setup();
-  const input = { symbol:'XAUUSD',side:'BUY',lot:0.01,sl:3500,requestId:crypto.randomUUID(),accountMask:'****1234' };
+  const input = { symbol:'XAUUSD',side:'BUY',lot:0.01,requestId:crypto.randomUUID(),accountMask:'****1234' };
   await assert.rejects(service.manualOrder(userId,input),{code:'MT5_NOT_READY'});
   await service.heartbeat(token,{
     accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
     terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,
-    accountFingerprint:'a'.repeat(64),connectorVersion:'1.3.0-ea-local',terminalBuild:'5000',manualMarketOrderVersion:'MANUAL_MARKET_ORDER_V1',
+    accountFingerprint:'a'.repeat(64),connectorVersion:'1.3.0-ea-local',terminalBuild:'5000',manualMarketOrderVersion:'MANUAL_MARKET_ORDER_V2',
     symbolSpecs:[{symbol:'XAUUSD',tickSize:0.01,tickValue:1,volumeMin:0.01,volumeMax:100,volumeStep:0.01}],positions:[]
   });
   await assert.rejects(service.manualOrder(userId,{...input,accountMask:'****9999'}),{code:'MT5_NOT_READY'});
   await assert.rejects(service.manualOrder(userId,{...input,lot:0.001}),{code:'MANUAL_ORDER_INVALID'});
-  await assert.rejects(service.manualOrder(userId,{...input,sl:0}),{code:'MANUAL_ORDER_INVALID'});
+  await service.saveManualExit(userId,{enabled:false,sl:3.5});
   const {commandId} = await service.manualOrder(userId,input);
   assert.equal((await service.manualOrder(userId,input)).commandId,commandId);
   const {command} = await service.nextCommand(token);
   assert.equal(command.type,'MANUAL_MARKET_ORDER');
-  assert.equal(command.payload.sl,3500);
+  assert.equal(command.payload.slMode,'AUTO_TRADE_DISTANCE');
+  assert.equal(command.payload.slDistance,3.5);
+  assert.equal(command.payload.sl,undefined);
   assert.equal(command.payload.accountFingerprint,'a'.repeat(64));
   await service.acknowledgeCommand(token,commandId,{status:'EXECUTED',code:'MANUAL_ORDER_FILLED'});
   assert.equal((await service.manualOrderStatus(userId,commandId)).status,'EXECUTED');

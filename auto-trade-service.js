@@ -1215,7 +1215,7 @@ function createAutoTradeService(options = {}) {
     if(input.dualPairExecution===true)dualPairPods.add(pod.id);else dualPairPods.delete(pod.id);
     if(input.btcUsdChart===true)btcChartPods.add(pod.id);else btcChartPods.delete(pod.id);
     if(input.expandedEntryPolicy===true)expandedEntryPods.add(pod.id);else expandedEntryPods.delete(pod.id);
-    if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V1')manualOrderPods.set(pod.id,updated.accountFingerprint);
+    if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V2')manualOrderPods.set(pod.id,updated.accountFingerprint);
     else manualOrderPods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
@@ -1344,18 +1344,20 @@ function createAutoTradeService(options = {}) {
   }
   const entryDeliverySeen=new Set();
   async function manualOrder(userId, input) {
-    const { symbol, side, lot, sl, requestId, accountMask } = input || {};
+    const { symbol, side, lot, requestId, accountMask } = input || {};
     if (!['XAUUSD','BTCUSD'].includes(symbol) || !['BUY','SELL'].includes(side) ||
-        !Number.isFinite(sl) || sl <= 0 || !Number.isFinite(lot) || lot < 0.01 || lot > 1 || Math.abs(lot * 100 - Math.round(lot * 100)) > 1e-8 ||
+        !Number.isFinite(lot) || lot < 0.01 || lot > 1 || Math.abs(lot * 100 - Math.round(lot * 100)) > 1e-8 ||
         !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId || '')) {
-      throw serviceError('MANUAL_ORDER_INVALID','Semak pair, arah, lot (0.01–1.00) dan harga Stop Loss.');
+      throw serviceError('MANUAL_ORDER_INVALID','Semak pair, arah, lot (0.01–1.00).');
     }
     const pod = await store.getPodForUser(userId);
     if (!await manualOrderAllowed(userId,pod) || pod.accountMask !== accountMask) {
       throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
     }
+    const profile = await store.getProfile(userId);
+    const slDistance = symbol === 'XAUUSD' ? Core.validateSettings({manualExit:profile?.manualExit}).value.manualExit.sl : null;
     const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_MARKET_ORDER',
-      payload:{symbol,side,lot,sl,accountFingerprint:pod.accountFingerprint},
+      payload:{symbol,side,lot,slMode:symbol==='XAUUSD'?'AUTO_TRADE_DISTANCE':'MANUAL_BTC_ATR8_M2',slDistance,accountFingerprint:pod.accountFingerprint},
       dedupeKey:'MANUAL_MARKET_ORDER:'+requestId,ttlMs:15000});
     return {ok:true,commandId:issued.command.id};
   }

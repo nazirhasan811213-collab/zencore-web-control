@@ -310,7 +310,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -972,7 +972,8 @@ void Process(bool chartWorker){
   if(symbol=="")symbol=BtcEntrySymbol();
  }
  bool tightTf2=Get("exitPolicyVersion")=="TF2_TIGHT_SL_3C_V1";
- string slPolicy=Get("slPolicy");
+ string slPolicy=Get("slPolicy"),manualSlMode=Get("manualSlMode");
+ double manualSlDistance=Val("manualSlDistance");
  bool fillAnchor=Get("fillAnchor")=="FILL_PRICE_ATR_V1";double riskAtr=Val("riskAtr");string exitLockVersion=Get("exitLockVersion");
  double lot=Val("lot"),entry=Val("entry"),sl=Val("sl"),tp1=Val("tp1"),tp2=Val("tp2"),tp3=Val("tp3");
  int layers=(int)StringToInteger(Get("layers")),actions=(int)StringToInteger(Get("actions"));
@@ -1041,7 +1042,17 @@ void Process(bool chartWorker){
      bool buy=side=="BUY";
      double tickSize=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
      double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
-     if(!SymbolInfoTick(symbol,quote) || quote.bid<=0 || quote.ask<=0 ||
+     bool hasQuote=SymbolInfoTick(symbol,quote) && quote.bid>0 && quote.ask>0;
+     if(manualSlMode!=""){
+      double risk=manualSlMode=="AUTO_TRADE_DISTANCE" && c=="XAUUSD"?manualSlDistance:
+                  manualSlMode=="MANUAL_BTC_ATR8_M2" && c=="BTCUSD"?ManualBtcStep(symbol,(long)TimeCurrent()*1000):0;
+      sl=0;
+      if(hasQuote && tickSize>0 && MathIsValidNumber(risk) && risk>0){
+       double raw=(buy?quote.ask-risk:quote.bid+risk)/tickSize;
+       sl=Price(symbol,(buy?MathFloor(raw+1e-8):MathCeil(raw-1e-8))*tickSize);
+      }
+     }
+     if(!hasQuote ||
         !MathIsValidNumber(sl) || sl<=0 || tickSize<=0 ||
         MathAbs(sl-MathRound(sl/tickSize)*tickSize)>tickSize*1e-6 ||
         (buy?sl>=quote.bid-distance:sl<=quote.ask+distance)){

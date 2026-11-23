@@ -389,8 +389,10 @@ class Runner:
                 if fields.get('strategyMode')=='TF15_INTRA' and local.get('strategyExecutionVersion')!='TF2_TF15_V1':raise ValueError('EA_STRATEGY_UPGRADE_REQUIRED')
                 if fields.get('exitPolicyVersion') and local.get('exitPolicyVersion')!=fields['exitPolicyVersion']:
                     raise ValueError('EA_POLICY_UPGRADE_REQUIRED')
-                if signed['type']=='MANUAL_MARKET_ORDER' and local.get('manualMarketOrderVersion')!='MANUAL_MARKET_ORDER_V1':
-                    raise ValueError('EA_MANUAL_ORDER_UPGRADE_REQUIRED')
+                if signed['type']=='MANUAL_MARKET_ORDER':
+                    required = ('MANUAL_MARKET_ORDER_V2',) if fields.get('manualSlMode') else ('MANUAL_MARKET_ORDER_V1','MANUAL_MARKET_ORDER_V2')
+                    if local.get('manualMarketOrderVersion') not in required:
+                        raise ValueError('EA_MANUAL_ORDER_UPGRADE_REQUIRED')
                 force_reset=signed['type']=='SYSTEM_STOP' and signed.get('payload',{}).get('masterResetVersion')=='MASTER_RESET_FORCE_V2'
                 if force_reset and signed.get('payload',{}).get('bindingEpochHash') and signed['payload']['bindingEpochHash']!=hashlib.sha256(self.config['podToken'].encode()).hexdigest():raise ValueError('ACCOUNT_BINDING_CHANGED')
                 if force_reset and local.get('masterResetVersion')!='MASTER_RESET_FORCE_V2':raise ValueError('EA_MASTER_RESET_UPGRADE_REQUIRED')
