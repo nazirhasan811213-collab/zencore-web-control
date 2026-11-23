@@ -40,6 +40,8 @@
   let currentRecommendation = null;
   let workspaceOptedIn = false;
   try { workspaceOptedIn = sessionStorage.getItem('zencore_auto_trade_open') === '1'; } catch (_) {}
+  const dashboardSettingsView = document.body.classList.contains('dashboard-settings-view');
+  if (dashboardSettingsView) workspaceOptedIn = true;
 
   function goToLogin() { window.location.replace('/login'); }
 
@@ -858,7 +860,7 @@
   loadUser();
   refreshState(false).then(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('connect') === '1' && !currentState?.hostedAccount && !currentState?.pod) {
+    if (!dashboardSettingsView && params.get('connect') === '1' && !currentState?.hostedAccount && !currentState?.pod) {
       workspaceOptedIn = true;
       try { sessionStorage.setItem('zencore_auto_trade_open', '1'); } catch (_) {}
       renderVisibility(currentState || { ui: {} });
@@ -866,7 +868,8 @@
     }
   });
   refreshMarkets();
-  window.setInterval(() => refreshState(true), 3000);
-  window.setInterval(refreshMarkets, 15000);
+  const settingsVisible = () => !dashboardSettingsView || !window.frameElement || window.frameElement.closest('dialog')?.open;
+  window.setInterval(() => { if (settingsVisible()) refreshState(true); }, 3000);
+  window.setInterval(() => { if (settingsVisible()) refreshMarkets(); }, 15000);
 })();
 

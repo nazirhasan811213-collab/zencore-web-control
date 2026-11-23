@@ -2031,6 +2031,18 @@ const server = http.createServer(async (req, res) => {
   if (AUTH_ENABLED && req.method === 'GET' && pathname === '/auto-trade') {
     const session = await requireSession(req, res, '/login');
     if (!session) return;
+    if (url.searchParams.get('view') === 'dashboard-settings') {
+      const csp = AUTH_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'");
+      const html = fs.readFileSync(path.join(__dirname, 'auto-trade.html'), 'utf8')
+        .replace('<body>', '<body class="dashboard-settings-view">');
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...securityHeaders(csp),
+        'X-Frame-Options': 'SAMEORIGIN'
+      });
+      return res.end(html);
+    }
     return sendAuthAsset(res, 'auto-trade.html', 'text/html; charset=utf-8');
   }
 

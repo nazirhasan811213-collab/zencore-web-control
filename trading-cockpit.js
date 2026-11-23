@@ -6,6 +6,14 @@
  const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const format=(v,symbol)=>v==null||v===''||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:symbol==='XAUUSD'?3:2});
  const link=(symbol,tf)=>'/analysis?pair='+encodeURIComponent(symbol)+'&tf='+tf;
+ const settingsDialog=$('dashboardAutoSettings'),settingsFrame=$('dashboardAutoSettingsFrame');
+ function openAutoSettings(){
+  if(!settingsFrame.hasAttribute('src'))settingsFrame.src='/auto-trade?view=dashboard-settings';
+  settingsDialog.showModal();
+ }
+ document.addEventListener('click',event=>{
+  if(event.target.closest('button[data-field="autoSettings"]'))openAutoSettings();
+ });
  function fresh(v){return !failed&&Live.fresh(v);}
  function ready(v){const observed=Number(v.market?.signalObservedAt);return fresh(v)&&v.entryReady&&Number.isFinite(observed)&&Date.now()-observed<=30000;}
  function state(v){return !fresh(v)?'WAITING':ready(v)?'SOLID '+v.market.strategyNormal.side:v.displayState==='READY'?'WAIT CONFIRMATION':(v.displayState||v.market?.strategyNormal?.state||'WATCH').replaceAll('_',' ');}

@@ -261,3 +261,53 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
   .dashboard-trade-tools > * { width: 100%; }
   .quick-mt5-summary article { min-width: 0; }
 }
+
+.dashboard-plan-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dashboard-plan-actions button,
+.dashboard-settings-dialog header button {
+  border: 1px solid #40516a;
+  border-radius: 6px;
+  padding: 7px 12px;
+  background: #182942;
+  color: #edf3ff;
+  font: inherit;
+  cursor: pointer;
+}
+.dashboard-settings-dialog {
+  width: min(860px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid #334259;
+  border-radius: 12px;
+  background: #121e30;
+  color: #edf3ff;
+  overflow: hidden;
+}
+.dashboard-settings-dialog::backdrop { background: rgb(4 9 19 / 78%); }
+.dashboard-settings-dialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.dashboard-settings-dialog h2 { margin: 0; font-size: 1.125rem; }
+.dashboard-settings-dialog iframe {
+  display: block;
+  width: 100%;
+  height: min(760px, calc(100dvh - 92px));
+  border: 0;
+}
+.dashboard-settings-view .autotrade-shell { min-height: 0; padding: 10px; }
+.dashboard-settings-view .autotrade-wrap { width: 100%; margin: 0; }
+.dashboard-settings-view .autotrade-wrap > :not(#autoTradeWorkspace),
+.dashboard-settings-view #autoTradeWorkspace > :not(.configuration-grid),
+.dashboard-settings-view .configuration-grid > :not(.settings-panel),
+.dashboard-settings-view #zcWorkspaceNav { display: none !important; }
+.dashboard-settings-view .configuration-grid { grid-template-columns: minmax(0, 1fr); margin: 0; }
