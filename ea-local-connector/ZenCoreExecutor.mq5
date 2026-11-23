@@ -506,6 +506,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
 
  const double guardRisk=4.0;
  double stopDistance=btcPip?30*BTC_TF2_PIP:directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
+ if(c=="XAUUSD" && executionTf=="1")stopDistance=MathMin(stopDistance,3.50);
  double entryTickSize=fillPlan?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
