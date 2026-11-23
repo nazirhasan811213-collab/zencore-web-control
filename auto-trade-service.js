@@ -264,7 +264,7 @@ function createAutoTradeService(options = {}) {
     }
     const boundPod = await store.getPodForUser(userId);
     if (isLocalEa(boundPod) && boundPod.accountFingerprint) {
-      if (boundPod.id !== podId) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Pautan akaun berubah.', 409);
+      if (boundPod.id !== podId || (type === 'MANUAL_MARKET_ORDER' && payload.accountFingerprint !== boundPod.accountFingerprint)) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Pautan akaun berubah.', 409);
       payload = {...payload, accountFingerprint: boundPod.accountFingerprint};
     }
     const createdAt = now();
@@ -457,6 +457,7 @@ function createAutoTradeService(options = {}) {
         canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
+      manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
       manualExitSync:(()=>{if(profile?.manualExit?.enabled&&!supportsManualExit(pod,profile.manualExit))return {status:'WAITING_EA',code:null};const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
@@ -1175,6 +1176,7 @@ function createAutoTradeService(options = {}) {
   }
 
   const directEntryPods=new Set();
+  const manualOrderPods=new Map();
   const expandedEntryPods=new Set();
   const btcChartPods=new Set();
   const dualPairPods=new Set();
@@ -1213,6 +1215,8 @@ function createAutoTradeService(options = {}) {
     if(input.dualPairExecution===true)dualPairPods.add(pod.id);else dualPairPods.delete(pod.id);
     if(input.btcUsdChart===true)btcChartPods.add(pod.id);else btcChartPods.delete(pod.id);
     if(input.expandedEntryPolicy===true)expandedEntryPods.add(pod.id);else expandedEntryPods.delete(pod.id);
+    if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V1')manualOrderPods.set(pod.id,updated.accountFingerprint);
+    else manualOrderPods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
@@ -1302,6 +1306,11 @@ function createAutoTradeService(options = {}) {
       }
       return true;
     }
+    if(command.type==='MANUAL_MARKET_ORDER'){
+      const pod=await store.getPodForUser(command.userId);
+      return pod?.id===command.podId && pod.accountFingerprint===command.payload.accountFingerprint &&
+        await manualOrderAllowed(command.userId,pod);
+    }
     if(command.type!=='PLACE_SETUP')return true;
     if(['1','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='1'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
@@ -1334,6 +1343,45 @@ function createAutoTradeService(options = {}) {
     return delivery.ok;
   }
   const entryDeliverySeen=new Set();
+  async function manualOrder(userId, input) {
+    const { symbol, side, lot, sl, requestId, accountMask } = input || {};
+    if (!['XAUUSD','BTCUSD'].includes(symbol) || !['BUY','SELL'].includes(side) ||
+        !Number.isFinite(sl) || sl <= 0 || !Number.isFinite(lot) || lot < 0.01 || lot > 1 || Math.abs(lot * 100 - Math.round(lot * 100)) > 1e-8 ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId || '')) {
+      throw serviceError('MANUAL_ORDER_INVALID','Semak pair, arah, lot (0.01–1.00) dan harga Stop Loss.');
+    }
+    const pod = await store.getPodForUser(userId);
+    if (!await manualOrderAllowed(userId,pod) || pod.accountMask !== accountMask) {
+      throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
+    }
+    const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_MARKET_ORDER',
+      payload:{symbol,side,lot,sl,accountFingerprint:pod.accountFingerprint},
+      dedupeKey:'MANUAL_MARKET_ORDER:'+requestId,ttlMs:15000});
+    return {ok:true,commandId:issued.command.id};
+  }
+
+  function supportsManualOrder(pod) {
+    return isLocalEa(pod) && !!pod.accountFingerprint && manualOrderPods.get(pod.id)===pod.accountFingerprint;
+  }
+
+  function manualOrderConnectionReady(userId,pod) {
+    return supportsManualOrder(pod) && executionAllowed(userId,pod) && connectionState(pod).ready &&
+      !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'');
+  }
+
+  async function manualOrderAllowed(userId,pod) {
+    return manualOrderConnectionReady(userId,pod) &&
+      (!options.entryAccessAllowed || await options.entryAccessAllowed(userId));
+  }
+
+  async function manualOrderStatus(userId,id) {
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id || '')) throw serviceError('INVALID_ID','ID arahan tidak sah.');
+    const pod = await store.getPodForUser(userId);
+    const command = pod && await store.getControlCommand(userId,pod.id,id);
+    if(command?.type !== 'MANUAL_MARKET_ORDER')throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
+    return {ok:true,status:command.status,code:command.result?.code||null};
+  }
+
   async function nextCommand(rawToken, waitMs = 0) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
@@ -1805,6 +1853,8 @@ function createAutoTradeService(options = {}) {
     acknowledgeHostedCommand,
     saveSettings,
     saveManualExit,
+    manualOrder,
+    manualOrderStatus,
     turnOn,
     stop,
     emergencyCloseAll,
