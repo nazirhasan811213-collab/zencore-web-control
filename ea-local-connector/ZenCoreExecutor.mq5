@@ -167,12 +167,12 @@ string PermissionReason(){
  if(!AccountInfoInteger(ACCOUNT_TRADE_EXPERT))return "ACCOUNT_EXPERT_DISABLED";
  return "READY";
 }
-string LeaseReason(string pod){
+string LeaseReason(string pod,bool requireArmed=true){
  if(!ReadFields("lease.tsv"))return "LEASE_NOT_FOUND";
  if(Get("account")!=account || Get("server")!=server || Get("tradeMode")!=AccountMode() ||
     Get("podId")!=pod || Get("eaSession")!=eaSession)return "LEASE_BINDING_CHANGED";
  if((long)StringToInteger(Get("expiresAt"))<=UtcMs())return "LEASE_EXPIRED";
- if(Get("desiredState")!="ON")return "LEASE_STOPPED";
+ if(requireArmed && Get("desiredState")!="ON")return "LEASE_STOPPED";
  return "READY";
 }
 bool BrokerDone(){uint r=trade.ResultRetcode();return r==TRADE_RETCODE_DONE || r==TRADE_RETCODE_DONE_PARTIAL || r==TRADE_RETCODE_NO_CHANGES;}
@@ -310,7 +310,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -531,7 +531,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return RejectEntry("RISK_FILE_WRITE_FAILED");
  // Store chart targets locally so StepLock survives a TradingView/feed outage.
- if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
+ if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("executionTimeframe",executionTf)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
  for(int i=0;i<layers;i++){
   int quoteRetries=0,brokerRetries=0;
   while(true){
@@ -626,7 +626,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
-   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("executionTimeframe",executionTf)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
    if(!protectedFill){
     if(addingNetLayer && stopChanged && !(trade.PositionModify(filledTicket,currentSl,0) && BrokerDone()))
      Print("ZenCore PRIOR_STOP_RESTORE_PENDING ticket=",filledTicket);
@@ -713,21 +713,22 @@ bool ProtectionAttemptAllowed(ulong ticket){
  int n=ArraySize(protectionTickets);if(n<128){ArrayResize(protectionTickets,n+1);ArrayResize(protectionTryAt,n+1);protectionTickets[n]=ticket;protectionTryAt[n]=now;}
  return true;
 }
-// Only a completed broker M2 candle after this position opened can raise a stage.
-double ClosedTf2Quote(string symbol,long openedAt,bool useExecutableSide=false,bool buy=true){
+// Only a completed broker candle after this position opened can raise a stage.
+double ClosedLockQuote(string symbol,long openedAt,ENUM_TIMEFRAMES timeframe,bool useExecutableSide,bool buy){
  MqlRates closedBars[];
- if(CopyRates(symbol,PERIOD_M2,1,1,closedBars)!=1)return 0;
- long closedAt=(long)closedBars[0].time+120;
+ if(CopyRates(symbol,timeframe,1,1,closedBars)!=1)return 0;
+ long closedAt=(long)closedBars[0].time+PeriodSeconds(timeframe);
  if(closedAt>TimeCurrent() || closedAt<=openedAt || closedBars[0].close<=0)return 0;
  if(!useExecutableSide)return closedBars[0].close;
- // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the M2 candle for BTC.
+ // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the selected candle for BTC.
  static string cachedSymbol="";
  static long cachedClose=0;
+ static ENUM_TIMEFRAMES cachedTimeframe=PERIOD_CURRENT;
  static ulong retryAt=0;
  static MqlTick lastTick;
  ulong now=GetTickCount64();
- if(cachedSymbol!=symbol || cachedClose!=closedAt){
-  cachedSymbol=symbol;cachedClose=closedAt;retryAt=0;
+ if(cachedSymbol!=symbol || cachedClose!=closedAt || cachedTimeframe!=timeframe){
+  cachedSymbol=symbol;cachedClose=closedAt;cachedTimeframe=timeframe;retryAt=0;
   lastTick.bid=0;lastTick.ask=0;
  }
  if(lastTick.bid>0 && lastTick.ask>0)return buy?lastTick.bid:lastTick.ask;
@@ -756,6 +757,8 @@ void ManageLocalStepLock(){
   bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
   double lockTrigger=Val("tp3LockTrigger");
   bool candleLock=pineLock || btcCandleLock;
+  string lockTf=Get("executionTimeframe");
+  ENUM_TIMEFRAMES lockTimeframe=lockTf=="1"?PERIOD_M1:lockTf=="15"?PERIOD_M15:PERIOD_M2;
   bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
                    (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
   if(t1<=0 || !ordered)continue;
@@ -765,7 +768,7 @@ void ManageLocalStepLock(){
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
-  double decisionQuote=candleLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
+  double decisionQuote=candleLock?ClosedLockQuote(symbol,(long)PositionGetInteger(POSITION_TIME),lockTimeframe,btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
@@ -984,7 +987,7 @@ void Process(bool chartWorker){
  string actionReason[4];string actionType[4];double actionValue[4];
  for(int i=0;i<4;i++){actionType[i]=Get("a"+(string)i+"type");actionValue[i]=Val("a"+(string)i+"value");actionReason[i]=Get("a"+(string)i+"reason");}
  if(!ValidId(id)){armed=false;resumePending=false;return;}
- if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
+ if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
  !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;resumePending=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
  if(!directEntry && (long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
@@ -1022,6 +1025,39 @@ void Process(bool chartWorker){
   if(ok){ownerPod=commandPod;armed=true;resumePending=false;enabledSymbols=symbols;code="ARMED";}else{armed=false;resumePending=false;}
   if(!ok)Print("ZenCore SYSTEM_ON rejected: ",code);
   SaveState();
+ }
+ else if(type=="MANUAL_MARKET_ORDER"){
+  code=PermissionReason();
+  if(code=="READY")code=LeaseReason(commandPod,false);
+  if(code=="READY"){
+   if((c!="XAUUSD" && c!="BTCUSD") || symbol=="" || (side!="BUY" && side!="SELL"))code="MANUAL_ORDER_SYMBOL_INVALID";
+   else if(!SymbolSelect(symbol,true))code="MANUAL_ORDER_SYMBOL_INVALID";
+   else if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && PositionSelect(symbol))code="MANUAL_ORDER_NETTING_POSITION_EXISTS";
+   else{
+    double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
+    if(step<=0 || lot<MathMax(0.01,SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN)) ||
+       lot>MathMin(1.0,SymbolInfoDouble(symbol,SYMBOL_VOLUME_MAX)) ||
+       MathAbs(lot/step-MathRound(lot/step))>1e-7)code="MANUAL_ORDER_LOT_INVALID";
+    else if(!trade.SetTypeFillingBySymbol(symbol))code="MANUAL_ORDER_FILL_MODE_INVALID";
+    else{
+     MqlTick quote;
+     bool buy=side=="BUY";
+     double tickSize=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+     double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
+     if(!SymbolInfoTick(symbol,quote) || quote.bid<=0 || quote.ask<=0 ||
+        !MathIsValidNumber(sl) || sl<=0 || tickSize<=0 ||
+        MathAbs(sl-MathRound(sl/tickSize)*tickSize)>tickSize*1e-6 ||
+        (buy?sl>=quote.bid-distance:sl<=quote.ask+distance)){
+      code="MANUAL_ORDER_SL_INVALID";
+     }else{
+      trade.SetExpertMagicNumber(0);
+      bool sent=buy?trade.Buy(lot,symbol,0,sl,0,"ZenCore manual"):trade.Sell(lot,symbol,0,sl,0,"ZenCore manual");
+      ok=sent && BrokerDone() && trade.ResultVolume()>0;
+      code=ok?"MANUAL_ORDER_FILLED":"MANUAL_ORDER_RETCODE_"+(string)trade.ResultRetcode();
+     }
+    }
+   }
+  }
  }
  else if(type=="PLACE_SETUP"){
   if(!directEntry && symbol==""){MapSymbols();symbol=EntrySymbol(c);}
