@@ -302,7 +302,6 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
 .dashboard-settings-view #zcWorkspaceNav,
 .dashboard-settings-view .zc-menu-toggle,
 .dashboard-settings-view .settings-full-label,
-.dashboard-settings-view .tf-empty-note,
 .dashboard-settings-view .symbol-fieldset > p:not([id]),
 .dashboard-settings-view .symbol-fieldset > ol,
 .dashboard-settings-view .symbol-fieldset > small { display: none !important; }
@@ -317,9 +316,8 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
 }
 .dashboard-settings-view #settingsForm {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(190px, .42fr);
-  gap: 24px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
 }
 .dashboard-settings-view .settings-group {
   --section-accent: #6fe6d7;
@@ -369,8 +367,8 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
   border-radius: 10px;
   background: var(--field-surface, #121f2d);
 }
-.dashboard-settings-view #settingsError,
-.dashboard-settings-view .settings-group > .symbol-fieldset,
+.dashboard-settings-view .manual-exit-group > .symbol-fieldset,
+.dashboard-settings-view .sizing-group > .tf-empty-note,
 .dashboard-settings-view .sizing-group > .dual-capital,
 .dashboard-settings-view .sizing-group > .dual-trade-settings { grid-column: 1 / -1; }
 .dashboard-settings-view .dual-capital {
@@ -390,15 +388,18 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
   --field-line: #35516e;
   --field-surface: #142638;
 }
-.dashboard-settings-view .auto-strategy-field {
-  --field-accent: #cfcbff;
-  --field-line: #534d7e;
-  --field-surface: #201f39;
+.dashboard-settings-view .auto-pair-field,
+.dashboard-settings-view .schedule-field {
+  --field-accent: #ccd3fb;
+  --field-line: #464d73;
+  --field-surface: #171f36;
+  align-content: start;
+  align-self: stretch;
 }
-.dashboard-settings-view .auto-pair-field {
-  --field-accent: #a5d9ff;
-  --field-line: #405576;
-  --field-surface: #17243b;
+.dashboard-settings-view .auto-pair-field { gap: 14px; }
+.dashboard-settings-view .manual-exit-group .symbol-fieldset {
+  --field-line: #554638;
+  --field-surface: #171e29;
 }
 .dashboard-settings-view .manual-exit-group legend { display: none; }
 .dashboard-settings-view .dual-trade-settings {
@@ -437,7 +438,7 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
   margin: 0;
   font-size: 12px;
   line-height: 1.35;
-  letter-spacing: .03em;
+  letter-spacing: .015em;
 }
 body.dashboard-settings-view .settings-panel input[type="number"],
 .dashboard-settings-view .settings-panel select {
@@ -465,31 +466,51 @@ body.dashboard-settings-view .settings-panel input[type="number"],
   font-size: 13px;
 }
 .dashboard-settings-view #settingsForm .tf-setting-card p b { color: var(--field-accent, #edf4ff); }
-.dashboard-settings-view .settings-panel .risk-ack { margin: 0; }
-.dashboard-settings-view #settingsForm > .save-settings { margin: 0; }
-.dashboard-settings-view .symbol-fieldset > label:not(.risk-ack) {
-  display: grid;
-  gap: 7px;
-  color: #e3ebf6;
-  font-size: 13px;
+.dashboard-settings-view .settings-panel .risk-ack {
+  align-items: center;
+  margin: 0;
+  background: #101b28;
+  border-color: var(--field-line, #405167);
 }
-.dashboard-settings-view .schedule-field legend { color: #c2c6f1; }
-.dashboard-settings-view .schedule-field .risk-ack { margin-bottom: 12px; }
-.dashboard-settings-view #manualExitStatus { color: #ffda9f; align-self: center; }
-.dashboard-settings-view #manualLayerStatus { margin: 0; color: #c2d2e3; }
+.dashboard-settings-view .settings-panel .risk-ack span { color: #e3ebf6; font-size: 13px; }
+.dashboard-settings-view .settings-panel .risk-ack input { margin: 0; accent-color: var(--section-accent, #8ee6da); }
+.dashboard-settings-view .schedule-field legend { color: #dadcff; }
+.dashboard-settings-view .settings-panel .settings-help,
+.dashboard-settings-view .settings-panel #settingsForm .tf-empty-note {
+  margin: 0;
+  color: #b0bed1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dashboard-settings-view .trading-session-hours { gap: 8px; margin: 12px 0 0; }
+.dashboard-settings-view .trading-session-hours li {
+  padding: 8px 10px;
+  border: 1px solid #424b70;
+  border-radius: 8px;
+  background: #111a2e;
+}
+.dashboard-settings-view .trading-session-hours span { color: #b5c0df; }
+.dashboard-settings-view .trading-session-hours b { color: #edf0ff; }
+.dashboard-settings-view #manualExitStatus { color: #ffda9f; font-size: 13px; }
+.dashboard-settings-view #manualLayerStatus { margin: 0; color: #c2d2e3; font-size: 13px; }
+.dashboard-settings-view .manual-exit-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .dashboard-settings-view .manual-exit-group .symbol-fieldset {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr);
+  gap: 18px;
 }
-.dashboard-settings-view .manual-exit-group .tf-inputs {
+.dashboard-settings-view .manual-exit-levels {
+  padding-inline-start: 18px;
+  border-inline-start: 1px solid var(--field-line);
+}
+.dashboard-settings-view .manual-exit-levels .tf-inputs {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
+  gap: 8px;
 }
-.dashboard-settings-view .manual-exit-group .tf-inputs label {
+.dashboard-settings-view .manual-exit-levels .tf-inputs label {
   --field-line: #386455;
-  padding: 9px;
+  padding: 8px;
   border: 1px solid var(--field-line);
   border-radius: 8px;
   background: #122921;
@@ -497,7 +518,7 @@ body.dashboard-settings-view .settings-panel input[type="number"],
   font-size: 13px;
   font-weight: 650;
 }
-.dashboard-settings-view .manual-exit-group .tf-inputs label:has(#manualSl) {
+.dashboard-settings-view .manual-exit-levels .tf-inputs label:has(#manualSl) {
   --field-line: #784c54;
   background: #302029;
   color: #ffb9bc;
@@ -505,27 +526,33 @@ body.dashboard-settings-view .settings-panel input[type="number"],
 .dashboard-settings-view .settings-panel .save-settings { min-height: 44px; font-size: 13px; }
 .dashboard-settings-view #saveManualExitButton {
   margin: 0;
+  justify-self: end;
+  width: auto;
+  padding-inline: 16px;
   border: 1px solid #856238;
   background: #392d20;
   color: #ffdfac;
 }
+.dashboard-settings-view .settings-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #34455c;
+  border-radius: 12px;
+  background: #111d2e;
+}
+.dashboard-settings-view #settingsError { grid-column: 1 / -1; grid-row: 2; }
+.dashboard-settings-view #saveSettingsButton { width: auto; min-width: 195px; margin: 0; }
+.dashboard-settings-view #entryStrategyNotice { color: #ffda9f; font-size: 13px; }
 .dashboard-settings-view #manualExitError:empty,
 .dashboard-settings-view #manualExitSaveStatus:empty,
 .dashboard-settings-view #settingsError:empty { display: none; }
 
-@media (min-width: 621px) {
-  .dashboard-settings-view .manual-exit-group .symbol-fieldset {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .dashboard-settings-view .manual-exit-group .tf-inputs,
-  .dashboard-settings-view #manualExitSaveStatus,
-  .dashboard-settings-view #manualExitError { grid-column: 1 / -1; }
-  .dashboard-settings-view .manual-exit-group .risk-ack { align-self: end; }
-  .dashboard-settings-view #saveManualExitButton { grid-column: 2; }
-}
 @media (min-width: 840px) {
   .dashboard-settings-view .sizing-group {
-    grid-template-columns: minmax(145px, .68fr) repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(145px, 215px) repeat(2, minmax(0, 1fr));
   }
   .dashboard-settings-view .sizing-group > .dual-capital {
     grid-column: 1;
@@ -539,5 +566,14 @@ body.dashboard-settings-view .settings-panel input[type="number"],
   .dashboard-settings-view #settingsForm,
   .dashboard-settings-view .settings-group,
   .dashboard-settings-view .dual-trade-settings { grid-template-columns: minmax(0, 1fr); }
-  .dashboard-settings-view .manual-exit-group .tf-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-settings-view .manual-exit-group .symbol-fieldset,
+  .dashboard-settings-view .settings-actions { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-settings-view .manual-exit-levels {
+    padding: 14px 0 0;
+    border-inline-start: 0;
+    border-top: 1px solid var(--field-line);
+  }
+  .dashboard-settings-view .manual-exit-levels .tf-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-settings-view #saveManualExitButton,
+  .dashboard-settings-view #saveSettingsButton { width: 100%; min-width: 0; }
 }

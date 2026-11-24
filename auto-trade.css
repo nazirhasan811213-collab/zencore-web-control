@@ -98,4 +98,17 @@
 
 .mt5-symbol-fields select{width:100%;max-width:420px;min-height:42px;padding:0 11px;border:1px solid #244554;border-radius:9px;background:#06151f;color:#e8f8ff;color-scheme:dark}
 
-.auto-strategy-field small { color: #a7cae1; }
+.settings-help { color: #a7bbcf; font-size: 13px; }
+.trading-session-hours {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.trading-session-hours li { display: grid; gap: 3px; font-size: 13px; }
+.manual-exit-controls, .manual-exit-levels { display: grid; align-content: start; gap: 10px; min-width: 0; }
+.manual-exit-state p, .manual-exit-levels h4 { margin: 0; }
+.manual-exit-levels h4 { font-size: 15px; }
+.manual-pair-choice { display: grid; gap: 6px; }
+.manual-pair-choice select { width: 100%; min-width: 0; }
