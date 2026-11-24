@@ -244,12 +244,17 @@
   function renderSettings(state) {
     const manualCount=(state.positions||[]).filter(p=>p.origin==='MANUAL'&&(state.settings?.manualExit?.pairScope||'XAUUSD').split(',').includes(p.symbol)).length;
     setText('manualLayerStatus',state.connection?.online===false?'Layer aktif: data MT5 offline':`Layer aktif: ${manualCount} / 10${manualCount>=10?' • HAD DICAPAI — berhenti tambah entry':''}${manualCount>10?' • layer tambahan tetap dilindungi':''}`);
-    setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.settings?.manualExit?.enabled?(state.pod?.manualExitEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN'):(state.pod?.manualExitEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal'));
     const sync=state.manualExitSync;
-    if(sync?.status==='WAITING_EA')setText('manualExitStatus','TETAPAN DISIMPAN • MENUNGGU EA SERASI');
-    if(sync&&['PENDING','DELIVERED'].includes(sync.status))setText('manualExitStatus','TETAPAN MENUNGGU PENGESAHAN EA');
-    if(sync&&['REJECTED','FAILED','EXPIRED'].includes(sync.status))setText('manualExitStatus','TETAPAN GAGAL: '+(sync.code||sync.status));
-    if(state.connection?.online!==false&&state.settings?.manualExit?.enabled&&state.pod?.manualExitEnabled&&!['MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(state.pod?.manualExitVersion))setText('manualExitStatus','EA LAMA • KEMAS KINI EA 2.26 UNTUK STEP LOCK MANUAL');
+    const enabled=state.settings?.manualExit?.enabled;
+    const eaEnabled=state.pod?.manualExitEnabled;
+    let message=enabled?(eaEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN')
+      :(eaEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal');
+    if(state.connection?.online===false)message=enabled?'EA OFFLINE • AUTO EXIT BELUM DISAHKAN':'EA OFFLINE';
+    else if(sync?.status==='WAITING_EA')message='TETAPAN DISIMPAN • MENUNGGU EA SERASI';
+    else if(['PENDING','DELIVERED'].includes(sync?.status))message='TETAPAN MENUNGGU PENGESAHAN EA';
+    else if(['REJECTED','FAILED','EXPIRED'].includes(sync?.status))message='TETAPAN GAGAL: '+(sync.code||sync.status);
+    else if(enabled&&eaEnabled&&!['MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(state.pod?.manualExitVersion))message='EA LAMA • KEMAS KINI EA UNTUK STEP LOCK MANUAL';
+    setText('manualExitStatus',message);
     renderCashLayerHint(state);
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;

@@ -192,3 +192,31 @@ test('manual BTCUSD and both scopes wait for pair-capable EA and stale scopes ar
  assert.equal(command.payload.manualExit.pairScope,'BTCUSD');
  assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
 });
+
+test('manual exit resynchronises after compatible EA reconnects with stale state',async()=>{
+ let clock=at;
+ const {service,podToken,store}=await setup('step',()=>clock);
+ await service.saveManualExit(userId,{enabled:true,tp1:1.5,tp2:3,tp3:5,sl:3.5});
+ const {command:initial}=await service.nextCommand(podToken);
+ await service.acknowledgeCommand(podToken,initial.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
+ const report={accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
+  connectorVersion:'1.3.0-ea-local',manualExitVersion:'MANUAL_STEPLOCK_V4',manualExitCustomSupported:true,
+  terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,
+  demoExecutionUnlocked:true,manualExitEnabled:false,positions:[]};
+ await service.heartbeat(podToken,report);
+ assert.equal((await service.nextCommand(podToken)).command,null,'Give a fresh acknowledgement time to reach the heartbeat');
+ clock+=31000;
+ await service.heartbeat(podToken,{...report,terminalConnected:false});
+ assert.equal((await service.nextCommand(podToken)).command,null);
+ await Promise.all([service.heartbeat(podToken,report),service.heartbeat(podToken,report)]);
+ const {command}=await service.nextCommand(podToken);
+ assert.equal(command.type,'MANUAL_EXIT_CONFIG');
+ assert.equal(command.payload.manualExit.sl,3.5);
+ assert.equal(command.payload.manualExit.enabled,true);
+ assert.equal((await store.listRecentCommands(userId)).length,2);
+ assert.equal((await service.state(userId)).control.desiredState,'STOPPED');
+ await service.acknowledgeCommand(podToken,command.id,{status:'EXECUTED',code:'MANUAL_EXIT_ON'});
+ await service.heartbeat(podToken,{...report,manualExitEnabled:true});
+ assert.equal((await service.state(userId)).pod.manualExitEnabled,true);
+ assert.equal((await service.nextCommand(podToken)).command,null);
+});

@@ -912,6 +912,18 @@ function createAutoTradeService(options = {}) {
     return ['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(pod.manualExitVersion) ||
       (pod.manualExitVersion==='MANUAL_TF2_EXIT_V2' && (!config?.enabled||config.version!=='MANUAL_TF2_EXIT_V3'));
   }
+  function sameManualExit(saved,queued) {
+    return saved.enabled===queued.enabled &&
+      (!saved.enabled||['pairScope','tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>saved[k]===queued[k]));
+  }
+  async function restoreManualExit(pod,config,seenAt) {
+    const recent=await store.listRecentCommands(pod.userId,20);
+    const current=recent.find(c=>c.podId===pod.id && c.type==='MANUAL_EXIT_CONFIG' &&
+      sameManualExit(config,c.payload?.manualExit||{}));
+    if(current && (['PENDING','DELIVERED'].includes(current.status)||seenAt-current.createdAt<30000))return;
+    await requireNoMasterReset(pod.userId);
+    await queueManualExit(pod.userId,pod,config);
+  }
   async function queueManualExit(userId,pod,config) {
     const manualExit=config.enabled?config:Core.validateSettings({manualExit:{enabled:false}}).value.manualExit;
     return issueCommand({userId,podId:pod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit}});
@@ -1237,11 +1249,16 @@ function createAutoTradeService(options = {}) {
     const profile=await store.getProfile(pod.userId);
     const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
     const config=profile?.manualExit;
-    if(config&&accountAccessAllowed&&!supportsManualExit(pod,config)&&supportsManualExit(updated,config)&&
-       (config.enabled||updated.manualExitEnabled)){
+    if(config&&accountAccessAllowed&&supportsManualExit(updated,config)){
+      const becameCompatible=!supportsManualExit(pod,config)&&(config.enabled||updated.manualExitEnabled);
+      const needsRecovery=input.terminalConnected===true &&
+        typeof input.manualExitEnabled==='boolean' && config.enabled!==updated.manualExitEnabled &&
+        (!config.enabled||(updated.terminalTradeAllowed&&updated.accountTradeAllowed&&updated.expertTradeAllowed));
       try{
-        await requireNoMasterReset(pod.userId);
-        await queueManualExit(pod.userId,updated,config);
+        if(becameCompatible){
+          await requireNoMasterReset(pod.userId);
+          await queueManualExit(pod.userId,updated,config);
+        }else if(needsRecovery)await restoreManualExit(updated,config,seenAt);
       }catch(error){if(error.code!=='MASTER_RESET_PENDING')throw error;}
     }
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
@@ -1301,7 +1318,7 @@ function createAutoTradeService(options = {}) {
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
       if(queued.enabled && !supportsManualExit(await store.getPodForUser(command.userId),queued))return false;
-      return queued.enabled===current.enabled&&(!current.enabled||['pairScope','tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
+      return sameManualExit(current,queued);
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
       const [manualPod,profile]=await Promise.all([store.getPodForUser(command.userId),store.getProfile(command.userId)]);
