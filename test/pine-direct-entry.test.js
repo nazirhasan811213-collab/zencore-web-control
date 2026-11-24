@@ -27,22 +27,16 @@ for(const tf of ['1','15'])for(const side of ['BUY','SELL'])test(`Pine direct ${
  a.equal(D.decision({...m,entryAuthorizedAt:999}),null);
 });
 
-test('Low Risk preserves the chosen lot and layers and adds a cash exit policy to Pine Direct', () => {
- const m = event();
- const settings = {capitalUsd:500, lotPerLayer:.01, layers:8, symbols:['XAUUSD']};
- const normal = Core.buildSetupCommand(m, settings);
- const lowRisk = Core.buildSetupCommand(m, {...settings, entryExitStrategy:'LOW_RISK'});
- a.equal(normal.payload.analysisSnapshot.cashLayerPolicy, undefined);
- a.equal(lowRisk.payload.lotPerLayer, .01);
- a.equal(lowRisk.payload.layers, 8);
- a.equal(lowRisk.payload.totalLot, .08);
- a.equal(lowRisk.payload.risk.riskUsd, 16);
- a.equal(lowRisk.payload.analysisSnapshot.cashLayerPolicy, 'USD_TP050_SL200_V1');
- a.equal(Core.validateSettings({...settings, entryExitStrategy:'unsupported'}).ok, false);
+test('Retired Low Risk cannot build or save a new entry', () => {
+ const m=event(),settings={capitalUsd:500,lotPerLayer:.01,layers:8,symbols:['XAUUSD']};
+ const normal=Core.buildSetupCommand(m,settings);
+ a.equal(normal.payload.analysisSnapshot.cashLayerPolicy,undefined);
+ a.equal(normal.payload.layers,8);
+ a.equal(Core.buildSetupCommand(m,{...settings,entryExitStrategy:'LOW_RISK'}),null);
+ a.equal(Core.validateSettings({...settings,entryExitStrategy:'LOW_RISK'}).ok,false);
 });
 
-
-test('Pine Direct Low Risk is gated at dispatch and when the Connector takes the queued command', async () => {
+test('Pine Direct is gated at dispatch and when the Connector takes the queued command', async () => {
  const {MemoryAutoTradeStore}=require('../auto-trade-store');
  const {createAutoTradeService}=require('../auto-trade-service');
  const store=new MemoryAutoTradeStore(), userId='scheduled-trader';
@@ -54,12 +48,19 @@ test('Pine Direct Low Risk is gated at dispatch and when the Connector takes the
  await service.heartbeat(podToken,{accountFingerprint:'a'.repeat(64),accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',
   tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,
   demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],directEntryPolicy:D.POLICY,cashLayerPolicy:'USD_TP050_SL200_V1'});
- const settings={capitalUsd:500,lotPerLayer:.01,layers:8,symbols:['XAUUSD'],riskAcknowledged:true,entryExitStrategy:'LOW_RISK'};
+ const settings={capitalUsd:500,lotPerLayer:.01,layers:8,symbols:['XAUUSD'],riskAcknowledged:true};
  const save=enabled=>service.saveSettings(userId,{...settings,tradingSchedule:Core.malaysiaTradingSchedule(enabled,false)});
  const signal=()=>{const m=event();return {...m,entryAuthorizedAt:at,signalObservedAt:at,receivedAt:at,setupMeta:{...m.setupMeta,completedAt:at}};};
  await save(true);
  await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});
  a.equal((await service.dispatchMarkets([signal()])).queued,0);
+ at=sessionStart;
+ await store.saveSettings(userId,{entryExitStrategy:'LOW_RISK'});
+ a.equal((await service.state(userId)).control.canEnter,false);
+ a.equal((await service.dispatchMarkets([signal()])).queued,0,'old saved strategy does not silently switch to Normal');
+ await a.rejects(service.saveSettings(userId,{...settings,entryExitStrategy:'LOW_RISK'}),{code:'VALIDATION_ERROR'});
+ at=sessionStart-1000;
+ await store.saveSettings(userId,{entryExitStrategy:'NORMAL'});
  await store.saveSettings(userId,{tradingSchedule:Core.malaysiaTradingSchedule(false,false)});
  at++;
  a.equal((await service.dispatchMarkets([signal()])).queued,1);
@@ -71,6 +72,9 @@ test('Pine Direct Low Risk is gated at dispatch and when the Connector takes the
  const {command}=await service.nextCommand(podToken);
  a.equal(command.expiresAt,sessionStart+3*60*60*1000);
  a.equal(command.payload.layers,8);
+ const pending=[...store.commands.values()].flat().find(item=>item.id===command.id);
+ pending.payload.analysisSnapshot.cashLayerPolicy='USD_TP050_SL200_V1';
+ a.equal((await service.nextCommand(podToken)).command,null,'queued Low Risk orders cannot reach the Connector');
  at=command.expiresAt;
  a.equal((await service.nextCommand(podToken)).command,null,'expired setup cannot replay in a later session');
 });

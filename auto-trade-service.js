@@ -91,6 +91,8 @@ function buildCredentialEncryptionConfig(enabled, keyId, publicKeyPem) {
   };
 }
 
+const RETIRED_ENTRY_STRATEGY_MESSAGE = 'Entry dijeda. Simpan konfigurasi untuk menggunakan Normal Auto Trade.';
+
 function createAutoTradeService(options = {}) {
   const store = options.store;
   if (!store) throw new Error('Auto Trade store is required');
@@ -442,8 +444,7 @@ function createAutoTradeService(options = {}) {
     const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
     const strategyReady=profile?.strategyMode==='TF2_SCALPING'||!profile?.strategyMode||(!hostedAccount&&isLocalEa(pod)&&['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion));
     const exitPolicyReady = !(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING) || (!hostedAccount && isLocalEa(pod) && ['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion));
-    const cashLayerReady = !hostedAccount && isLocalEa(pod) && cashLayerPods.has(pod?.id) && directEntryPods.has(pod?.id);
-    const needsCashLayer = profile?.entryExitStrategy === 'LOW_RISK' && !cashLayerReady;
+    const retiredStrategy = profile?.entryExitStrategy === 'LOW_RISK';
     const settingsReady = !!profile && Core.validateSettings(profile).ok && !!profile.riskAcknowledgedAt;
     return {
       ok: true,
@@ -463,11 +464,10 @@ function createAutoTradeService(options = {}) {
         strategyReady,
         strategyReason: strategyReady?null:'TF15/Both memerlukan EA/Connector 1.2.',
         exitPolicyReady,
-        cashLayerReady,
-        cashLayerReason: needsCashLayer ? 'Low Risk memerlukan EA dan Connector serasi pada akaun MT5 USD hedging.' : null,
+        entryStrategyReason: retiredStrategy ? RETIRED_ENTRY_STRATEGY_MESSAGE : null,
         exitPolicyReason: exitPolicyReady ? null : 'Rule TF1 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
-        canEnter: entryAccessReady && !needsCashLayer && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: entryAccessReady && !needsCashLayer && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
+        canEnter: entryAccessReady && !retiredStrategy && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: entryAccessReady && !retiredStrategy && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
       manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
@@ -1029,8 +1029,8 @@ function createAutoTradeService(options = {}) {
       activeHostedAccount(userId)
     ]);
     if(!hostedAccount&&!connectionState(pod).ready)throw serviceError('POD_NOT_READY','Sambungan Connector/EA belum ready.',409);
-    if(profile?.entryExitStrategy==='LOW_RISK' && (hostedAccount || !isLocalEa(pod) || !cashLayerPods.has(pod?.id) || !directEntryPods.has(pod?.id)))
-      throw serviceError('CASH_LAYER_POLICY_UNAVAILABLE','Low Risk memerlukan EA dan Connector serasi pada akaun MT5 USD hedging.',409);
+    if(profile?.entryExitStrategy==='LOW_RISK')
+      throw serviceError('ENTRY_STRATEGY_RETIRED',RETIRED_ENTRY_STRATEGY_MESSAGE,409);
     if(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING &&
       (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion))) {
       throw serviceError('TF1_EA_UPGRADE_REQUIRED','Rule TF1 memerlukan EA/Connector 1.1 sebelum entry boleh dihidupkan.',409);
@@ -1206,7 +1206,6 @@ function createAutoTradeService(options = {}) {
 
   const directEntryPods=new Set();
   const fixedTf1Pods=new Map();
-  const cashLayerPods=new Set();
   const manualOrderPods=new Map();
   const manualCloseAllPods=new Map();
   const expandedEntryPods=new Set();
@@ -1247,7 +1246,6 @@ function createAutoTradeService(options = {}) {
     if(input.dualPairExecution===true)dualPairPods.add(pod.id);else dualPairPods.delete(pod.id);
     if(input.btcUsdChart===true)btcChartPods.add(pod.id);else btcChartPods.delete(pod.id);
     if(input.expandedEntryPolicy===true)expandedEntryPods.add(pod.id);else expandedEntryPods.delete(pod.id);
-    if(input.cashLayerPolicy==='USD_TP050_SL200_V1')cashLayerPods.add(pod.id);else cashLayerPods.delete(pod.id);
     if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V2')manualOrderPods.set(pod.id,updated.accountFingerprint);
     else manualOrderPods.delete(pod.id);
     if(input.manualCloseAllVersion==='ACCOUNT_POSITIONS_V1')manualCloseAllPods.set(pod.id,updated.accountFingerprint);
@@ -1361,6 +1359,9 @@ function createAutoTradeService(options = {}) {
     if(command.type!=='PLACE_SETUP')return true;
     if(['1','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='1'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
+    if (profile?.entryExitStrategy === 'LOW_RISK' || command.payload?.analysisSnapshot?.cashLayerPolicy) {
+      diagnostic.reason = 'ENTRY_STRATEGY_RETIRED'; return false;
+    }
     const entryWindow = Core.tradingWindow(profile?.tradingSchedule, now());
     if (!entryWindow.allowed) { diagnostic.reason = entryWindow.reason; return false; }
     if (entryWindow.validUntil !== null &&
@@ -1372,8 +1373,6 @@ function createAutoTradeService(options = {}) {
        !supportsSetupExit(await store.getPodForUser(command.userId),command.payload)){
       diagnostic.reason='EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED';return false;
     }
-    const lowRisk = command.payload?.analysisSnapshot?.cashLayerPolicy === 'USD_TP050_SL200_V1';
-    if (lowRisk !== (profile?.entryExitStrategy === 'LOW_RISK') || (lowRisk && (!PineDirect.isCommand(command) || !cashLayerPods.has(command.podId)))) return false;
     if(PineDirect.isCommand(command))return pairAllowed(profile,command.podId,command.payload.symbol)&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     // A queued signal may outlive a heartbeat that reports a fill. Recheck at
@@ -1695,6 +1694,10 @@ function createAutoTradeService(options = {}) {
       // Keep each account sequential; independent accounts share four workers.
       for (const profile of [candidate]) {
       if(options.entryAccessAllowed&&!await options.entryAccessAllowed(profile.userId)){for(const m of markets)await reportEntryBlock(profile,m,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');continue;}
+      if (profile.entryExitStrategy === 'LOW_RISK') {
+        for(const m of markets)await reportEntryBlock(profile,m,'ENTRY_STRATEGY_RETIRED');
+        continue;
+      }
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
       if (!entryWindow.allowed){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
       const [pod, positions, hostedAccount] = await Promise.all([
@@ -1775,9 +1778,8 @@ function createAutoTradeService(options = {}) {
         (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion)))continue;
       // Re-entry is an authenticated MT5 close transition, never a webhook flag.
       // It is opt-in by the new EA capability and scalping range feed marker.
-      const lowRisk = profile.entryExitStrategy === 'LOW_RISK';
       const cap=reentryCapability.get(profile.userId);
-      if(!lowRisk&&!['1','3'].includes(options.scalpingTimeframe)&&typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
+      if(!['1','3'].includes(options.scalpingTimeframe)&&typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol==='XAUUSD'&&(x.strategyMode||'TF2_SCALPING')==='TF2_SCALPING')){
         const market=markets.find(m=>m.symbol==='XAUUSD'&&String(m.timeframe)==='1');
         const closure=reentryTracker.ready(profile.userId,pod,market,now()),half=Reentry.halfSettings(profile);
@@ -1794,9 +1796,6 @@ function createAutoTradeService(options = {}) {
       }
       for (let market of Array.isArray(markets) ? markets : []) {
         const direct=PineDirect.isEvent(market);
-        if (lowRisk && (!direct || hostedAccount || !cashLayerPods.has(pod.id))) {
-          await reportEntryBlock(profile,market,'CASH_LAYER_POLICY_UNAVAILABLE');continue;
-        }
         if(direct&&(hostedAccount||!isLocalEa(pod)||!directEntryPods.has(pod.id))){await reportEntryBlock(profile,market,'EA_DIRECT_POLICY_UPGRADE_REQUIRED');continue;}
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(['1','3'].includes(options.scalpingTimeframe)&&(![options.scalpingTimeframe,'15'].includes(String(market.timeframe))||String(market.timeframe)==='1'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))continue;

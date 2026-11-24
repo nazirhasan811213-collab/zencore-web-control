@@ -78,9 +78,6 @@ for (const side of ['BUY','SELL']) test(`Fixed XAUUSD TF1 ${side} uses signed pl
  const Core=require('../auto-trade-core'),{MemoryAutoTradeStore}=require('../auto-trade-store');
  const {createAutoTradeService,tokenHash}=require('../auto-trade-service');
  const settings={capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],riskAcknowledged:true};
- const lowRisk=Core.buildSetupCommand(m,{...settings,entryExitStrategy:'LOW_RISK'});
- a.equal(lowRisk.payload.analysisSnapshot.cashLayerPolicy,'USD_TP050_SL200_V1');
- a.notEqual(lowRisk.payload.analysisSnapshot.exitLockVersion,S.FIXED_LOCK);
  const store=new MemoryAutoTradeStore(),token='zcpod_'+'z'.repeat(48),hash=tokenHash(token),user='fixed-'+side;
  const heartbeat={accountFingerprint:'a'.repeat(64),accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',
    tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,

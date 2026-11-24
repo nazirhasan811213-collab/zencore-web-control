@@ -129,7 +129,7 @@
     const tradingSchedule=malaysiaTradingSchedule(input.tradingSchedule?.enabled === true, input.tradingSchedule?.skipNews ?? (input.tradingSchedule?.enabled === true));
     const strategyMode = input.strategyMode || 'TF2_SCALPING';
     const entryExitStrategy = input.entryExitStrategy ?? 'NORMAL';
-    if (!['NORMAL','LOW_RISK'].includes(entryExitStrategy)) errors.entryExitStrategy = 'Pilih Normal atau Low Risk Auto Trade.';
+    if (entryExitStrategy !== 'NORMAL') errors.entryExitStrategy = 'Simpan konfigurasi untuk menggunakan Normal Auto Trade.';
     if (!STRATEGY_MODES.includes(strategyMode)) errors.strategyMode = 'Pilih TF1 Scalping, TF15 Intra atau Both.';
     const manualExit={version:'MANUAL_TF2_EXIT_V2',enabled:input.manualExit?.enabled===true,timeframeMinutes:2,
       tp1:2,tp2:4,tp3:6,sl:3,maxActiveLayers:10,limitAction:'WARN_ONLY'};
@@ -208,13 +208,11 @@
       blocksOrder: false,
       message: 'Menunggu Entry, SL dan spesifikasi broker untuk kira risiko sebenar.'
     };
-    const cashLayer = settings.value.entryExitStrategy === 'LOW_RISK';
-    if (!settings.ok || (!cashLayer && ([entry, sl, tickSize, tickValue].some(value => value === null) ||
-        tickSize <= 0 || tickValue <= 0 || entry === sl))) return pending;
+    if (!settings.ok || [entry, sl, tickSize, tickValue].some(value => value === null) ||
+        tickSize <= 0 || tickValue <= 0 || entry === sl) return pending;
 
-    const ticksToSl = cashLayer ? null : Math.abs(entry - sl) / tickSize;
-    const rawRisk = cashLayer ? settings.value.layers * 2 : ticksToSl * tickValue * settings.value.totalLot;
-    const riskUsd = cashLayer ? rawRisk : rawRisk * (1 + costBufferPct / 100);
+    const ticksToSl = Math.abs(entry - sl) / tickSize;
+    const riskUsd = ticksToSl * tickValue * settings.value.totalLot * (1 + costBufferPct / 100);
     const riskPercent = riskUsd / settings.value.capitalUsd * 100;
     let level = 'NORMAL';
     let message = 'Risiko dalam zon biasa.';
@@ -225,15 +223,14 @@
       level = 'CAUTION';
       message = 'Risiko melebihi 1%. Pastikan saiz ini memang disengajakan.';
     }
-    if (cashLayer) message += ' Anggaran SL kasar mengikut jumlah layer.';
     return {
       available: true,
       level,
       riskUsd: round(riskUsd),
       riskPercent: round(riskPercent),
       totalLot: settings.value.totalLot,
-      ticksToSl: cashLayer ? null : round(ticksToSl),
-      costBufferPct: cashLayer ? 0 : costBufferPct,
+      ticksToSl: round(ticksToSl),
+      costBufferPct,
       blocksOrder: false,
       message
     };
@@ -480,7 +477,7 @@
     // Never reuse a TF1/legacy signal for a TF10 account.
     if(!['1','3','15'].includes(tf)||(selected!=='BOTH'&&selected!==mode))return null;
     const decision = direct || Contract.createEntryDecision(market);
-    if (!validation.ok || !decision || (!direct && validation.value.entryExitStrategy === 'LOW_RISK')) return null;
+    if (!validation.ok || !decision) return null;
     const { snapshot } = decision;
     const symbol = snapshot.symbol;
     if (!direct && !validation.value.symbols.includes(symbol)) return null;
@@ -498,11 +495,7 @@
       notAfterMs: direct?(entryWindow.validUntil ?? Infinity):snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
-        analysisSnapshot: validation.value.entryExitStrategy === 'LOW_RISK'
-          ? {...snapshot,
-              exitLockVersion:snapshot.exitLockVersion==='TF1_XAU_FIXED_STEPLOCK_V1'?'PINE_STEPLOCK_150_TP3_PLUS3_V1':snapshot.exitLockVersion,
-              cashLayerPolicy:'USD_TP050_SL200_V1'}
-          : snapshot,
+        analysisSnapshot: snapshot,
         schemaVersion: snapshot.schemaVersion,
         strategy: snapshot.strategy,
         symbol,
