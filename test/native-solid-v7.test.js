@@ -54,7 +54,7 @@ for(const tf of ['1','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke 
 });
 test('Native SOLID cannot be cancelled by the removed HEMA entry filter; follow-up HEMA remains required',()=>{
  for(const tf of ['1','15']){
-  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'2':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
+  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'3':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
  }
 });
 for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{

@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.50"
- #property version "2.50"
+ #define ZENCORE_RELEASE "2.51"
+ #property version "2.51"
 #else
- #define ZENCORE_RELEASE "2.50"
- #property version "2.50"
+ #define ZENCORE_RELEASE "2.51"
+ #property version "2.51"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -824,25 +824,23 @@ void ManageLocalStepLock(){
   // Older TF1 Pine Direct fills lack a timeframe. Keep legacy risk files on M2.
   bool untaggedTf1=executionTf=="" && prefix==3 && Get("version")=="MT5_FILL_PLAN_V1" &&
                    (pineLock || Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1");
-  ENUM_TIMEFRAMES lockTimeframe=(fixedTf1 || executionTf=="1" || untaggedTf1)?PERIOD_M1:PERIOD_M2;
+  ENUM_TIMEFRAMES lockTimeframe=(executionTf=="1" || untaggedTf1)?PERIOD_M1:PERIOD_M2;
   bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
   double lockTrigger=Val("tp3LockTrigger");
-  bool candleLock=fixedTf1 || pineLock || btcCandleLock;
+  bool candleLock=pineLock || btcCandleLock;
   bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
                    (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
   if(t1<=0 || !ordered)continue;
   MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
   double quote=buy?tick.bid:tick.ask,target=0;
+  if(fixedTf1 && quote<=0)continue;
   if((pineLock || tf15Be) && planEntry>0)entry=planEntry;
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
   double decisionQuote=candleLock?ClosedStepLockQuote(symbol,lockTimeframe,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
-  if(fixedTf1 && decisionQuote>0){
-   double progress=(buy?1.0:-1.0)*(decisionQuote-entry);
-   observed=progress+1e-8>=9.0?4:progress+1e-8>=4.0?2:progress+1e-8>=2.5?1:0;
-  }
+  if(fixedTf1 && (buy?quote>=t3+3.0-1e-8:quote<=t3-3.0+1e-8))observed=4;
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
    if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;
@@ -861,7 +859,7 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if(candleLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
+  if((candleLock || fixedTf1) && stage>=4)target=t3;else if(stage==3)target=fixedTf1?t1:t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
   if(pineLock && target>0){
    // A Pine reference reached TP1 before this account filled. Never convert
    // that reference lock into a loss-making stop or a forced market close.
