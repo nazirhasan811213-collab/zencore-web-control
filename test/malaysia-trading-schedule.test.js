@@ -7,10 +7,10 @@ const my=(hours,minutes=0,seconds=0)=>Date.UTC(2026,9,5,hours-8,minutes,seconds)
 
 test('Malaysia active trader sessions have exact inclusive starts and exclusive ends',()=>{
  const trade=Core.malaysiaTradingSchedule(true,false);
- for(const [h,m,s,allowed] of [[7,59,59,false],[8,0,0,true],[11,29,59,true],[11,30,0,false],
- [13,29,59,false],[13,30,0,true],[16,29,59,true],[16,30,0,false],
- [19,59,59,false],[20,0,0,true],[23,29,59,true],[23,30,0,false],
- [0,0,0,false],[1,59,59,false],[2,0,0,true],[3,29,59,true],[3,30,0,false]])
+ for(const [h,m,s,allowed] of [[8,29,59,false],[8,30,0,true],[11,29,59,true],[11,30,0,false],
+ [14,29,59,false],[14,30,0,true],[16,59,59,true],[17,0,0,false],
+ [20,29,59,false],[20,30,0,true],[22,59,59,true],[23,0,0,false],
+ [0,0,0,false],[1,59,59,false],[2,0,0,true],[3,59,59,true],[4,0,0,false]])
  assert.equal(Core.tradingWindow(trade,my(h,m,s)).allowed,allowed,`${h}:${m}:${s}`);
  assert.equal(Core.tradingWindow(schedule,my(20,30)).reason,'NEWS_PAUSE');
  assert.equal(Core.tradingWindow(schedule,my(4)).reason,'OUTSIDE_SESSION');
@@ -19,9 +19,9 @@ test('Malaysia active trader sessions have exact inclusive starts and exclusive 
  assert.equal(Core.tradingWindow({enabled:true,start:'07:00',end:'03:00',skipNews:false},my(12)).allowed,false);
 });
 test('queued setup deadlines stop at each active session end or earlier news boundary',()=>{
- assert.equal(Core.tradingWindow(schedule,my(20,29,58)).validUntil,my(20,30));
+ assert.equal(Core.tradingWindow(schedule,my(21,29,58)).validUntil,my(21,30));
  const trade=Core.malaysiaTradingSchedule(true,false);
- for(const [h,m,endH,endM] of [[11,29,11,30],[16,29,16,30],[23,29,23,30],[3,29,3,30]])
+ for(const [h,m,endH,endM] of [[11,29,11,30],[16,59,17,0],[22,59,23,0],[3,59,4,0]])
  assert.equal(Core.tradingWindow(trade,my(h,m,58)).validUntil,my(endH,endM));
  assert.equal(Core.tradingWindow({enabled:false},my(4)).allowed,true);
  assert.equal(Core.tradingWindow(schedule,my(2)).reason,'NEWS_PAUSE');
@@ -48,10 +48,10 @@ test('dispatcher rejects news entries but continues position management',async()
  assert.deepEqual([...store.commands.values()].flat().map(c=>c.type),['MANAGE_POSITION']);
 });
 test('dispatcher expires signed entry before pause even when ordinary TTL is 15 seconds',async()=>{
- const at=my(20,29,58),{store,service,market}=await harness(at);
+ const at=my(21,29,58),{store,service,market}=await harness(at);
  assert.deepEqual(await service.dispatchMarkets([market]),{queued:1});
  const command=[...store.commands.values()].flat()[0];assert.equal(command.type,'PLACE_SETUP');
- assert.equal(command.expiresAt,my(20,30));assert.equal(JSON.parse(Buffer.from(command.signedEnvelope,'base64url')).expiresAt,my(20,30));
+ assert.equal(command.expiresAt,my(21,30));assert.equal(JSON.parse(Buffer.from(command.signedEnvelope,'base64url')).expiresAt,my(21,30));
 });
 test('per-account setting persists; old client updates retain enabled schedule',async()=>{
  const {store,service,userId}=await harness(my(10));
@@ -72,11 +72,11 @@ test('news choice is independent of overnight session and survives validation',(
  const trade=Core.malaysiaTradingSchedule(true,false);
  assert.equal(Core.tradingWindow(trade,my(20,30)).allowed,true);
  assert.equal(Core.tradingWindow(trade,my(4)).allowed,false);
- assert.equal(Core.tradingWindow(trade,my(20,29,58)).validUntil,my(23,30));
+ assert.equal(Core.tradingWindow(trade,my(22,59,58)).validUntil,my(23,0));
  const skip=Core.malaysiaTradingSchedule(false,true);
  assert.equal(Core.tradingWindow(skip,my(4)).allowed,true);
  assert.equal(Core.tradingWindow(skip,my(20,30)).allowed,false);
- assert.equal(Core.tradingWindow(skip,my(20,29,58)).validUntil,my(20,30));
+ assert.equal(Core.tradingWindow(skip,my(21,29,58)).validUntil,my(21,30));
  const settings={capitalUsd:100,lotPerLayer:.01,layers:1,symbols:['XAUUSD'],tradingSchedule:trade};
  assert.equal(Core.validateSettings(settings).value.tradingSchedule.skipNews,false);
  settings.tradingSchedule=skip;

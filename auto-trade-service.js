@@ -277,7 +277,8 @@ function createAutoTradeService(options = {}) {
     const createdAt = now();
     const unsigned = {
       id: crypto.randomUUID(), userId, podId, type, payload,
-      createdAt, expiresAt: (type==='MANUAL_EXIT_CONFIG'||PineDirect.isCommand({type,payload}))?PineDirect.NO_DEADLINE:Math.min(createdAt + Math.max(15_000, ttlMs), notAfterMs)
+      createdAt, expiresAt: type==='MANUAL_EXIT_CONFIG' ? PineDirect.NO_DEADLINE :
+        Math.min(PineDirect.isCommand({type,payload}) ? PineDirect.NO_DEADLINE : createdAt + Math.max(15_000, ttlMs), notAfterMs)
     };
     const command = {
       ...unsigned,
@@ -424,7 +425,7 @@ function createAutoTradeService(options = {}) {
       strategyMode: profile.strategyMode,
       entryExitStrategy: profile.entryExitStrategy || 'NORMAL',
       modeSettings: profile.modeSettings,
-      tradingSchedule: profile.tradingSchedule,
+      tradingSchedule: Core.malaysiaTradingSchedule(profile.tradingSchedule?.enabled === true, profile.tradingSchedule?.skipNews),
       strategyExitPolicies: profile.strategyExitPolicies,
       manualExit:profile.manualExit || {enabled:false},
       capitalUsd: profile.capitalUsd,
@@ -1360,6 +1361,12 @@ function createAutoTradeService(options = {}) {
     if(command.type!=='PLACE_SETUP')return true;
     if(['1','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='1'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
+    const entryWindow = Core.tradingWindow(profile?.tradingSchedule, now());
+    if (!entryWindow.allowed) { diagnostic.reason = entryWindow.reason; return false; }
+    if (entryWindow.validUntil !== null &&
+        Core.tradingWindow(profile?.tradingSchedule, command.createdAt).validUntil !== entryWindow.validUntil) {
+      diagnostic.reason = 'ENTRY_SESSION_CHANGED'; return false;
+    }
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
     if(command.payload?.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
        !supportsSetupExit(await store.getPodForUser(command.userId),command.payload)){
@@ -1689,7 +1696,7 @@ function createAutoTradeService(options = {}) {
       for (const profile of [candidate]) {
       if(options.entryAccessAllowed&&!await options.entryAccessAllowed(profile.userId)){for(const m of markets)await reportEntryBlock(profile,m,'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED');continue;}
       const entryWindow=Core.tradingWindow(profile.tradingSchedule,now());
-      if (!entryWindow.allowed&&!markets.some(PineDirect.isEvent)){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
+      if (!entryWindow.allowed){for(const m of markets)await reportEntryBlock(profile,m,entryWindow.reason);continue;}
       const [pod, positions, hostedAccount] = await Promise.all([
         store.getPodForUser(profile.userId),
         store.listPositions(profile.userId),
@@ -1791,7 +1798,6 @@ function createAutoTradeService(options = {}) {
           await reportEntryBlock(profile,market,'CASH_LAYER_POLICY_UNAVAILABLE');continue;
         }
         if(direct&&(hostedAccount||!isLocalEa(pod)||!directEntryPods.has(pod.id))){await reportEntryBlock(profile,market,'EA_DIRECT_POLICY_UPGRADE_REQUIRED');continue;}
-        if(!direct&&!entryWindow.allowed)continue;
         const symbol = Core.normaliseSymbol(market?.symbol);
         if(['1','3'].includes(options.scalpingTimeframe)&&(![options.scalpingTimeframe,'15'].includes(String(market.timeframe))||String(market.timeframe)==='1'&&market.strategyNormal?.entrySopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))continue;
         if (!direct&&(!market?.receivedAt || now() - market.receivedAt > require('./entry-data-age').maximumAge(market))) continue;

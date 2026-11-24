@@ -170,9 +170,10 @@
               <div class="settings-fields mt5-symbol-fields auto-pair-field"><label><span>PAIR AUTO TRADE</span><select id="tradeSymbols"><option value="XAUUSD">XAUUSD sahaja</option><option value="BTCUSD">BTCUSD sahaja</option><option value="XAUUSD,BTCUSD">XAUUSD + BTCUSD</option></select></label></div>
               <fieldset class="symbol-fieldset schedule-field">
                 <legend>WAKTU AKTIF TRADER (MALAYSIA)</legend>
-                <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox"><span class="settings-full-label">Gunakan waktu aktif trader: Asia 8:00–11:30 pagi; Euro 1:30–4:30 petang; US 8:00–11:30 malam dan 2:00–3:30 pagi.</span><span class="settings-compact-label">Guna jadual dagangan (MYT)</span></label>
+                <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox" aria-describedby="tradingSessionHours"><span>Guna jadual dagangan (MYT)</span></label>
+                <p id="tradingSessionHours"><small>2:00–4:00 pagi · 8:30–11:30 pagi · 2:30–5:00 petang · 8:30–11:00 malam</small></p>
                 <label><span>WAKTU NEWS</span><select id="newsTradingMode"><option value="trade">Trade waktu news</option><option value="skip">Skip waktu news</option></select></label>
-                <small>Jika pilih skip, rehat entry: 8:30–9:00 malam, 9:30–10:30 malam, 2:00–2:30 pagi. Posisi terbuka terus diurus oleh SL/TP dan SOP exit. Jam tetap setiap hari. Pilihan waktu dan news ini terpakai kepada aliran lama. Pine Direct ikut trigger Pine.</small>
+                <small>Jadual harian untuk entry Auto Trade. Posisi terbuka terus diurus. Jika pilih skip news, entry turut disekat pada 2:00–2:30 pagi, 8:30–9:00 malam dan 9:30–10:30 malam.</small>
               </fieldset>
             </section>
             <section class="settings-group manual-exit-group" aria-labelledby="autoManualTitle">
@@ -334,7 +335,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/setup-lifecycle.js?v=20261119-tf1-hema" defer></script><script src="/tf15-intraday.js?v=20261119-tf1-hema" defer></script><script src="/tf2-bar-close.js?v=20261119-tf1-hema" defer></script><script src="/tf2-ribbon-scalping.js?v=20261119-tf1-hema" defer></script><script src="/analysis-execution-contract.js?v=20261119-tf1-hema" defer></script>
-  <script src="/auto-trade-core.js?v=20261124.cash-layer" defer></script>
+  <script src="/auto-trade-core.js?v=20261125.myt-sessions" defer></script>
   <script src="/auto-trade.js?v=20261124.manual-exit-reconnect" defer></script>
   <script src="/viewer-mode.js?v=20261119-tf1-hema" defer></script>
 <script src="/workspace-shell.js?v=20261119-tf1-hema" defer></script>

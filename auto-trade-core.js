@@ -72,14 +72,14 @@
 
   const TRADE_SYMBOLS=Object.freeze(['XAUUSD']);
   const MALAYSIA_SESSIONS = Object.freeze([
-    {name:'ASIA',start:'08:00',end:'11:30',from:480,to:690},
-    {name:'EURO',start:'13:30',end:'16:30',from:810,to:990},
-    {name:'US',start:'20:00',end:'23:30',from:1200,to:1410},
-    {name:'US_LATE',start:'02:00',end:'03:30',from:120,to:210}
+    {name:'ASIA',start:'08:30',end:'11:30',from:510,to:690},
+    {name:'EURO',start:'14:30',end:'17:00',from:870,to:1020},
+    {name:'US',start:'20:30',end:'23:00',from:1230,to:1380},
+    {name:'US_LATE',start:'02:00',end:'04:00',from:120,to:240}
   ]);
   function malaysiaTradingSchedule(enabled = true, skipNews = enabled) {
     return {enabled: enabled === true, skipNews: skipNews === true, timeZone: 'Asia/Kuala_Lumpur',
-      version:'MYT_ACTIVE_SESSIONS_V1', sessions:MALAYSIA_SESSIONS.map(({name,start,end})=>({name,start,end})), newsPauseMinutes: 30,
+      version:'MYT_ACTIVE_SESSIONS_V2', sessions:MALAYSIA_SESSIONS.map(({name,start,end})=>({name,start,end})), newsPauseMinutes: 30,
       newsTimes: ['20:30', '21:30', '22:00', '02:00']};
   }
 
@@ -466,7 +466,10 @@
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
     const direct=typeof module==='object'&&module.exports?require('./pine-direct-entry').decision(market):null;
-    if (!direct && !tradingWindow(settings.tradingSchedule,at).allowed) return null;
+    const entryWindow = tradingWindow(settings.tradingSchedule,at);
+    if (!entryWindow.allowed) return null;
+    if (direct && entryWindow.validUntil !== null &&
+        tradingWindow(settings.tradingSchedule, direct.snapshot.entryAuthorizedAt).validUntil !== entryWindow.validUntil) return null;
     const observed=number(market.signalObservedAt);
     const modernEvent=['1','3','15'].includes(String(market.timeframe))&&market.feedChannel==='EXECUTION'&&market.entryEvent===true;
     if(!direct&&observed!==null&&(at-observed>(modernEvent?60000:30000)||observed>at+5000))return null;
@@ -492,7 +495,7 @@
     });
     return {
       signalKey: decision.signalKey,
-      notAfterMs: direct?Infinity:snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
+      notAfterMs: direct?(entryWindow.validUntil ?? Infinity):snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: validation.value.entryExitStrategy === 'LOW_RISK'
