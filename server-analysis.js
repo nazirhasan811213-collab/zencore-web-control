@@ -1441,6 +1441,11 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
       if (body === null) return;
       return sendJson(res,202,await autoTradeState.service.manualOrder(userId,body));
     }
+    if (req.method === 'POST' && pathname === '/api/auto-trade/manual-close-all') {
+      const body = await parseApiJson(req,res);
+      if (body === null) return;
+      return sendJson(res,202,await autoTradeState.service.manualCloseAll(userId,body));
+    }
     if (req.method === 'POST' && pathname === '/api/auto-trade/on') {
       const body = await parseApiJson(req, res);
       if (body === null) return;

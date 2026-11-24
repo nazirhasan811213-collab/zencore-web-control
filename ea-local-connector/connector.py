@@ -393,6 +393,8 @@ class Runner:
                     required = ('MANUAL_MARKET_ORDER_V2',) if fields.get('manualSlMode') else ('MANUAL_MARKET_ORDER_V1','MANUAL_MARKET_ORDER_V2')
                     if local.get('manualMarketOrderVersion') not in required:
                         raise ValueError('EA_MANUAL_ORDER_UPGRADE_REQUIRED')
+                if signed['type']=='MANUAL_CLOSE_ALL' and local.get('manualCloseAllVersion')!='ACCOUNT_POSITIONS_V1':
+                    raise ValueError('EA_CLOSE_ALL_UPGRADE_REQUIRED')
                 if fields.get('cashLayerPolicy') and local.get('cashLayerPolicy') != fields['cashLayerPolicy']:
                     raise ValueError('EA_CASH_LAYER_UPGRADE_REQUIRED')
                 force_reset=signed['type']=='SYSTEM_STOP' and signed.get('payload',{}).get('masterResetVersion')=='MASTER_RESET_FORCE_V2'

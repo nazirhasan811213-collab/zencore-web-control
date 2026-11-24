@@ -161,6 +161,7 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
 .quick-order input{width:72px}
 .quick-order button{font-size:.8rem;font-weight:700;cursor:pointer}
 .quick-order button[value=BUY]{background:#126245}.quick-order button[value=SELL]{background:#963544}
+.quick-order button[value=CLOSE_ALL],.quick-order-dialog button[data-side=CLOSE_ALL]{background:#7a3b1e}
 .quick-order button:disabled{opacity:.5;cursor:default}
 .quick-order output{width:100%;font-size:.75rem}
 .quick-order[hidden]{display:none}

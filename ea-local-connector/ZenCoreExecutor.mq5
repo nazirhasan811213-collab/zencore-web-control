@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.48"
- #property version "2.48"
+ #define ZENCORE_RELEASE "2.49"
+ #property version "2.49"
 #else
- #define ZENCORE_RELEASE "2.48"
- #property version "2.48"
+ #define ZENCORE_RELEASE "2.49"
+ #property version "2.49"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -314,7 +314,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("manualCloseAllVersion","ACCOUNT_POSITIONS_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -983,6 +983,27 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
  if(lockHandle!=INVALID_HANDLE && trans.type==TRADE_TRANSACTION_DEAL_ADD){ManageManual();Heartbeat();}
 }
 
+string CloseAccountPositions(){
+ if(!Permissions())return PermissionReason();
+ ulong tickets[];
+ int total=PositionsTotal();
+ for(int i=0;i<total;i++){
+  ulong ticket=PositionGetTicket(i);
+  if(ticket==0)continue;
+  int size=ArraySize(tickets);
+  ArrayResize(tickets,size+1);
+  tickets[size]=ticket;
+ }
+ for(int i=0;i<ArraySize(tickets);i++){
+  if(!Permissions())return PermissionReason();
+  if(!PositionSelectByTicket(tickets[i]))continue;
+  trade.SetExpertMagicNumber((ulong)PositionGetInteger(POSITION_MAGIC));
+  trade.SetTypeFillingBySymbol(PositionGetString(POSITION_SYMBOL));
+  trade.PositionClose(tickets[i]);
+ }
+ if(PositionsTotal()!=0)return "POSITIONS_REMAIN";
+ return total==0?"NO_OPEN_POSITIONS":"CLOSED_ALL";
+}
 string MasterResetIdle(){
  for(int k=PositionsTotal()-1;k>=0;k--){ulong ticket=PositionGetTicket(k);if(IsManaged(ticket))return "MASTER_RESET_POSITIONS_OPEN";}
  armed=false;resumePending=false;manualEnabled=false;manualSince=0;ownerPod="";enabledSymbols="";
@@ -1056,7 +1077,7 @@ void Process(bool chartWorker){
  string actionReason[4];string actionType[4];double actionValue[4];
  for(int i=0;i<4;i++){actionType[i]=Get("a"+(string)i+"type");actionValue[i]=Val("a"+(string)i+"value");actionReason[i]=Get("a"+(string)i+"reason");}
  if(!ValidId(id)){armed=false;resumePending=false;return;}
- if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
+ if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && type!="MANUAL_CLOSE_ALL" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
  !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;resumePending=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
  if(!directEntry && (long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
@@ -1148,6 +1169,7 @@ void Process(bool chartWorker){
   else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry,cashLayerMailbox);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
+ else if(type=="MANUAL_CLOSE_ALL"){code=CloseAccountPositions();ok=code=="CLOSED_ALL" || code=="NO_OPEN_POSITIONS";}
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;resumePending=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
  else if(type=="MANAGE_POSITION" && symbol!="" && actions>=1 && actions<=4 && Permissions()){
   ok=true;

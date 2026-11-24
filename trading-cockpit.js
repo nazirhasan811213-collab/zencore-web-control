@@ -155,41 +155,60 @@
   $('quickProfitCard').classList.toggle('loss',v.floating<0);
   set('overviewSeen',v.lastSeen?'Laporan terakhir MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':snapshotLabel);
  }
- const quickForm=$('quickOrder'),quickStatus=$('quickStatus');
+ const quickForm=$('quickOrder'),quickStatus=$('quickStatus'),quickCloseAll=$('quickCloseAll');
  const quickConfirm=$('quickConfirm'),quickConfirmSend=$('quickConfirmSend');
- let quickReady=false,quickPending=false,quickAccount='',draftOrder=null;
+ let quickReady=false,quickPending=false,quickAccount='',closeAllBinding=null,draftOrder=null;
+ function draftReady(order){
+  if(!order||quickPending||order.accountMask!==quickAccount)return false;
+  return order.side==='CLOSE_ALL'?!!closeAllBinding&&order.binding===closeAllBinding:quickReady;
+ }
  function updateQuickButtons(){
-  quickForm.querySelectorAll('button').forEach(b=>{b.disabled=!quickReady||quickPending;});
-  quickConfirmSend.disabled=!quickReady||quickPending||draftOrder?.accountMask!==quickAccount;
+  quickForm.querySelectorAll('button[type=submit]').forEach(b=>{b.disabled=!quickReady||quickPending;});
+  quickCloseAll.disabled=!quickAccount||!closeAllBinding||quickPending;
+  quickCloseAll.title=closeAllBinding?'':'Memerlukan sambungan MT5 dan EA / Connector yang menyokong CLOSE ALL.';
+  quickConfirmSend.disabled=!draftReady(draftOrder);
+ }
+ function confirmQuickOrder(order,details){
+  if(quickConfirm.open||!draftReady(order))return;
+  draftOrder=order;
+  $('quickConfirmTitle').textContent=order.side==='CLOSE_ALL'?'Sahkan CLOSE ALL':'Sahkan order MT5';
+  $('quickConfirmDetails').textContent=details;
+  quickConfirmSend.textContent=order.side==='CLOSE_ALL'?'TUTUP SEMUA POSISI':'HANTAR '+order.side;
+  quickConfirmSend.dataset.side=order.side;
+  quickConfirm.returnValue='';
+  updateQuickButtons();
+  quickConfirm.showModal();
  }
  quickForm.addEventListener('submit',e=>{
   e.preventDefault();
   const side=e.submitter?.value,symbol=$('quickPair').value,lot=Number($('quickLot').value);
-  if(!quickReady||quickPending||quickConfirm.open||!['BUY','SELL'].includes(side)||!quickForm.reportValidity())return;
-  draftOrder={side,symbol,lot,accountMask:quickAccount};
-  $('quickConfirmDetails').textContent=`${side} ${symbol} · ${lot} lot · MT5 ${quickAccount}. SL ikut tetapan Auto Trade.`;
-  quickConfirmSend.textContent='HANTAR '+side;
-  quickConfirmSend.dataset.side=side;
-  quickConfirm.returnValue='';
-  updateQuickButtons();
-  quickConfirm.showModal();
+  if(!['BUY','SELL'].includes(side)||!quickForm.reportValidity())return;
+  confirmQuickOrder({side,symbol,lot,accountMask:quickAccount},
+   `${side} ${symbol} · ${lot} lot · MT5 ${quickAccount}. SL ikut tetapan Auto Trade.`);
+ });
+ quickCloseAll.addEventListener('click',()=>{
+  confirmQuickOrder({side:'CLOSE_ALL',accountMask:quickAccount,binding:closeAllBinding},
+   `Tutup semua posisi terbuka pada MT5 ${quickAccount}, termasuk posisi manual dan Auto Trade. Pending order kekal aktif. Auto Trade boleh membuka posisi baharu.`);
  });
  quickConfirm.addEventListener('close',()=>{
   const order=draftOrder;
   draftOrder=null;
   if(quickConfirm.returnValue!=='send'||!order)return;
-  if(!quickReady||quickPending||order.accountMask!==quickAccount){
+  if(!draftReady(order)){
    quickStatus.textContent='Sambungan atau akaun MT5 berubah. Semak dashboard.';
    return;
   }
   submitQuickOrder(order);
  });
  async function submitQuickOrder(order){
+  const closing=order.side==='CLOSE_ALL';
+  const endpoint=closing?'/api/auto-trade/manual-close-all':'/api/auto-trade/manual-order';
+  const payload=closing?{confirmation:'CLOSE_ALL',binding:order.binding}:order;
   quickPending=true;
   updateQuickButtons();
   quickStatus.textContent='Menghantar ke MT5…';
   try{
-   const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({...order,requestId:crypto.randomUUID()}),signal:AbortSignal.timeout(8000)});
+   const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({...payload,requestId:crypto.randomUUID()}),signal:AbortSignal.timeout(8000)});
    const data=await r.json();
    if(r.status>=500)throw Error('Status penghantaran belum disahkan. Semak MT5 sebelum cuba lagi.');
    if(!r.ok)throw Error(data.error||'Arahan ditolak.');
@@ -206,9 +225,17 @@
      }
      if(response.ok)order=await response.json();
     }catch(_){/* A status check can be retried without submitting another order. */}
-    if(order?.status==='EXECUTED'){quickStatus.textContent='MT5 sahkan order dilaksanakan.';return;}
+    if(order?.status==='EXECUTED'){
+     quickStatus.textContent=closing
+      ?(order.code==='NO_OPEN_POSITIONS'?'Tiada posisi terbuka pada MT5.':'MT5 sahkan semua posisi ditutup.')
+      :'MT5 sahkan order dilaksanakan.';
+     return;
+    }
     if(['FAILED','REJECTED','CANCELLED','CANCELED'].includes(order?.status)){
-     quickStatus.textContent='Order tidak disahkan: '+(order.code||order.status);return;
+     quickStatus.textContent=closing
+      ?(order.code==='POSITIONS_REMAIN'?'Masih ada posisi terbuka. Semak MT5.':'CLOSE ALL tidak disahkan · '+(order.code||order.status))
+      :'Order tidak disahkan: '+(order.code||order.status);
+     return;
     }
     if(order?.status==='EXPIRED'){
      quickStatus.textContent='Tempoh arahan tamat tanpa pengesahan MT5. Semak posisi sebelum cuba lagi.';return;
@@ -232,6 +259,7 @@
   const wasReady=quickReady;
   quickReady=account?.manualOrderReady===true;
   quickAccount=account?.pod?.accountMask||'';
+  closeAllBinding=account?.manualCloseAllBinding||null;
   updateQuickButtons();
   if(!quickPending&&(wasReady!==quickReady||quickStatus.textContent==='Menyemak sambungan MT5…')) {
    quickStatus.textContent=quickReady?'MT5 '+quickAccount:'Sambungan MT5 untuk order belum tersedia.';

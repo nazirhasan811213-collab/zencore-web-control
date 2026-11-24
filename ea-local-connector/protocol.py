@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.48'
-CONNECTOR_BUILD = '2.1.48'
+EA_VERSION = '2.49'
+CONNECTOR_BUILD = '2.1.49'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -146,6 +146,9 @@ def command_fields(command, identity):
         for i,a in enumerate(payload['actions']):
             if a.get('type')!='CLOSE_PERCENT' or (a.get('reason'),a.get('percent')) not in (('CLOSE_SEPARUH',50),('EXIT_REMAINING',100)):raise ValueError('ACTION_REJECTED')
             fields[f'a{i}type']='CLOSE_PERCENT';fields[f'a{i}value']=a['percent'];fields[f'a{i}reason']=a['reason']
+    elif kind == 'MANUAL_CLOSE_ALL':
+        if not identity.get('eaSession') or payload.get('scope') != 'ALL_OPEN_POSITIONS':
+            raise ValueError('TYPE_REJECTED')
     elif kind == 'MANUAL_MARKET_ORDER':
         lot = number(payload['lot'])
         symbol, side, sl_mode = payload.get('symbol'), payload.get('side'), payload.get('slMode')
@@ -274,7 +277,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'manualCloseAllVersion':fields.get('manualCloseAllVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')

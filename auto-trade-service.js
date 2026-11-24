@@ -264,7 +264,7 @@ function createAutoTradeService(options = {}) {
     }
     const boundPod = await store.getPodForUser(userId);
     if (isLocalEa(boundPod) && boundPod.accountFingerprint) {
-      if (boundPod.id !== podId || (type === 'MANUAL_MARKET_ORDER' && payload.accountFingerprint !== boundPod.accountFingerprint)) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Pautan akaun berubah.', 409);
+      if (boundPod.id !== podId || (['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(type) && payload.accountFingerprint !== boundPod.accountFingerprint)) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Pautan akaun berubah.', 409);
       payload = {...payload, accountFingerprint: boundPod.accountFingerprint};
     }
     const createdAt = now();
@@ -463,6 +463,7 @@ function createAutoTradeService(options = {}) {
       },
       connection,
       manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
+      manualCloseAllBinding: manualCloseAllBinding(pod),
       manualExitSync:(()=>{if(profile?.manualExit?.enabled&&!supportsManualExit(pod,profile.manualExit))return {status:'WAITING_EA',code:null};const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
@@ -1198,6 +1199,7 @@ function createAutoTradeService(options = {}) {
   const directEntryPods=new Set();
   const cashLayerPods=new Set();
   const manualOrderPods=new Map();
+  const manualCloseAllPods=new Map();
   const expandedEntryPods=new Set();
   const btcChartPods=new Set();
   const dualPairPods=new Set();
@@ -1239,6 +1241,8 @@ function createAutoTradeService(options = {}) {
     if(input.cashLayerPolicy==='USD_TP050_SL200_V1')cashLayerPods.add(pod.id);else cashLayerPods.delete(pod.id);
     if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V2')manualOrderPods.set(pod.id,updated.accountFingerprint);
     else manualOrderPods.delete(pod.id);
+    if(input.manualCloseAllVersion==='ACCOUNT_POSITIONS_V1')manualCloseAllPods.set(pod.id,updated.accountFingerprint);
+    else manualCloseAllPods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
@@ -1333,6 +1337,11 @@ function createAutoTradeService(options = {}) {
       }
       return true;
     }
+    if(command.type==='MANUAL_CLOSE_ALL'){
+      const pod=await store.getPodForUser(command.userId);
+      return pod?.id===command.podId && pod.accountFingerprint===command.payload.accountFingerprint &&
+        manualCloseAllBinding(pod)===command.payload.binding;
+    }
     if(command.type==='MANUAL_MARKET_ORDER'){
       const pod=await store.getPodForUser(command.userId);
       return pod?.id===command.podId && pod.accountFingerprint===command.payload.accountFingerprint &&
@@ -1405,11 +1414,33 @@ function createAutoTradeService(options = {}) {
       (!options.entryAccessAllowed || await options.entryAccessAllowed(userId));
   }
 
+  function manualCloseAllBinding(pod) {
+    if (!isLocalEa(pod) || !pod.accountFingerprint || manualCloseAllPods.get(pod.id)!==pod.accountFingerprint ||
+        !connectionState(pod).ready) return null;
+    return crypto.createHash('sha256').update(pod.id+':'+pod.tokenHash+':'+pod.accountFingerprint).digest('hex');
+  }
+
+  async function manualCloseAll(userId, input = {}) {
+    const { requestId, binding } = input;
+    if (input.confirmation !== 'CLOSE_ALL' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId || '')) {
+      throw serviceError('CONFIRMATION_REQUIRED','Sahkan CLOSE ALL untuk menghantar arahan.');
+    }
+    const pod = await store.getPodForUser(userId);
+    const current = manualCloseAllBinding(pod);
+    if (!current || binding !== current) {
+      throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
+    }
+    const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_CLOSE_ALL',
+      payload:{scope:'ALL_OPEN_POSITIONS',accountFingerprint:pod.accountFingerprint,binding:current},
+      dedupeKey:'MANUAL_CLOSE_ALL:'+requestId,ttlMs:15000});
+    return {ok:true,commandId:issued.command.id};
+  }
+
   async function manualOrderStatus(userId,id) {
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id || '')) throw serviceError('INVALID_ID','ID arahan tidak sah.');
     const pod = await store.getPodForUser(userId);
     const command = pod && await store.getControlCommand(userId,pod.id,id);
-    if(command?.type !== 'MANUAL_MARKET_ORDER')throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
+    if(!['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(command?.type))throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
     return {ok:true,status:command.status,code:command.result?.code||null};
   }
 
@@ -1894,6 +1925,7 @@ function createAutoTradeService(options = {}) {
     saveManualExit,
     manualOrder,
     manualOrderStatus,
+    manualCloseAll,
     turnOn,
     stop,
     emergencyCloseAll,
