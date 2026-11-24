@@ -1068,6 +1068,9 @@ test('manual market orders require matching account, upgraded connector and uniq
   await assert.rejects(service.manualOrder(userId,{...input,lot:0.001}),{code:'MANUAL_ORDER_INVALID'});
   await service.saveManualExit(userId,{enabled:false,sl:3.5});
   const {commandId} = await service.manualOrder(userId,input);
+  const pending = service.manualOrderStatus(userId,commandId,'PENDING');
+  await assert.rejects(service.manualOrderStatus('wrong-user',commandId,'PENDING'),{code:'ORDER_NOT_FOUND'});
+
   assert.equal((await service.manualOrder(userId,input)).commandId,commandId);
   const pod = await store.getPodForUser(userId);
   const queued = (await store.listRecentCommands(userId)).find(c=>c.id===commandId);
@@ -1077,11 +1080,15 @@ test('manual market orders require matching account, upgraded connector and uniq
   });
   const {command} = await service.nextCommand(token);
   assert.equal(command.type,'MANUAL_MARKET_ORDER');
+  assert.equal((await pending).status,'DELIVERED');
+  const delivered=service.manualOrderStatus(userId,commandId,'DELIVERED');
   assert.equal(command.payload.slMode,'AUTO_TRADE_DISTANCE');
   assert.equal(command.payload.slDistance,3.5);
   assert.equal(command.payload.sl,undefined);
   assert.equal(command.payload.accountFingerprint,'a'.repeat(64));
   await service.acknowledgeCommand(token,commandId,{status:'EXECUTED',code:'MANUAL_ORDER_FILLED'});
+  assert.deepEqual(await delivered,{ok:true,status:'EXECUTED',code:'MANUAL_ORDER_FILLED'});
+
   assert.equal((await service.manualOrderStatus(userId,commandId)).status,'EXECUTED');
 });
 

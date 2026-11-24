@@ -5,6 +5,7 @@ const {cockpit}=require('../trading-cockpit-model');
  const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));let missing=false,missingGold=false;
  const manualOrders=[],closeRequests=[],autoRequests=[];
+ const seenManualStates=[];
  let effectiveState='STOPPED',rejectStop=true;
  const fakeCloseId="22222222-2222-4222-8222-222222222222";
  const fakeOrderId='11111111-1111-4111-8111-111111111111';
@@ -33,7 +34,12 @@ const {cockpit}=require('../trading-cockpit-model');
     manualOrders.push(route.request().postDataJSON());
     return route.fulfill({status:202,json:{ok:true,commandId:fakeOrderId}});
    }
-   const closing=new URL(route.request().url()).searchParams.get('id')===fakeCloseId;
+   const params=new URL(route.request().url()).searchParams;
+   const closing=params.get('id')===fakeCloseId;
+   if(!closing){
+    seenManualStates.push(params.get('after'));
+    if(seenManualStates.length===1)return route.fulfill({json:{ok:true,status:'DELIVERED',code:null}});
+   }
    return route.fulfill({json:{ok:true,status:'EXECUTED',code:closing?'CLOSED_ALL':'MANUAL_ORDER_FILLED'}});
   }
 
@@ -54,6 +60,7 @@ const {cockpit}=require('../trading-cockpit-model');
  await confirm.getByRole('button',{name:'HANTAR BUY',exact:true}).click();
  await page.getByText('MT5 sahkan order dilaksanakan.',{exact:true}).waitFor({state:'visible'});
  assert.equal(manualOrders.length,1);
+ assert.deepEqual(seenManualStates,['PENDING','DELIVERED']);
  const {requestId,...order}=manualOrders[0];
  assert.match(requestId,/^[a-f0-9-]{36}$/);
  assert.deepEqual(order,{side:'BUY',symbol:'XAUUSD',lot:.01,accountMask:'****5839'});

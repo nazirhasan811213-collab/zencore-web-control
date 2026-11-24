@@ -225,10 +225,12 @@
    const statusUrl='/api/auto-trade/manual-order?id='+encodeURIComponent(data.commandId);
    const deadline=Date.now()+25000;
    quickStatus.textContent='Arahan diterima ZenCore. Menunggu Connector…';
+   let lastStatus='PENDING';
    while(!stopped&&Date.now()<deadline){
     let order;
+    const started=Date.now();
     try{
-     const response=await fetch(statusUrl,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(3500)});
+     const response=await fetch(statusUrl+'&after='+lastStatus,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(3500)});
      if(response.status===401||response.status===403||response.status===404){
       quickStatus.textContent='Status order tidak dapat disemak. Semak MT5 sebelum cuba lagi.';
       return;
@@ -252,7 +254,12 @@
     }
     if(order?.status==='DELIVERED')quickStatus.textContent='Arahan dihantar ke Connector. Menunggu pengesahan MT5…';
     if(!order)quickStatus.textContent='Menyemak semula status order…';
-    await new Promise(resolve=>setTimeout(resolve,500));
+    if(!order||order.status===lastStatus){
+     // Back off only on a quick idle response (older servers or another open tab).
+     const wait=Math.max(0,500-(Date.now()-started));
+     if(wait)await new Promise(resolve=>setTimeout(resolve,wait));
+    }
+    lastStatus=order?.status==='DELIVERED'?'DELIVERED':'PENDING';
    }
    quickStatus.textContent='MT5 belum mengesahkan order. Semak posisi sebelum cuba lagi.';
   }catch(error){

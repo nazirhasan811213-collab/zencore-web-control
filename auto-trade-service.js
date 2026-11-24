@@ -244,19 +244,25 @@ function createAutoTradeService(options = {}) {
     };
   }
 
-  // Bounded, per-pod wake-up. The queue remains the source of truth.
+  // The durable queue is authoritative. Wake only the matching waiter after a write.
   const commandWaiters = new Map();
-  function prepareCommandWait(podId, waitMs) {
-    if (!(waitMs > 0) || commandWaiters.has(podId) || commandWaiters.size >= 256) return null;
+  const manualStatusWaiters = new Map();
+  function prepareWait(waiters, key, waitMs) {
+    if (!(waitMs > 0) || waiters.has(key) || waiters.size >= 256) return null;
     let wake;
     const ready = new Promise(resolve => { wake = resolve; });
-    const timer = setTimeout(() => wake(false), Math.min(waitMs, 500));
+    const timer = setTimeout(() => wake(false), waitMs);
     const notify = () => wake(true);
-    commandWaiters.set(podId, notify);
+    waiters.set(key, notify);
     return { ready, close() {
       clearTimeout(timer);
-      if (commandWaiters.get(podId) === notify) commandWaiters.delete(podId);
+      if (waiters.get(key) === notify) waiters.delete(key);
     }};
+  }
+  function wakeManualStatus(command) {
+    if (['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(command?.type)) {
+      manualStatusWaiters.get(command.id)?.();
+    }
   }
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs, notAfterMs = Infinity }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
@@ -1397,10 +1403,10 @@ function createAutoTradeService(options = {}) {
       throw serviceError('MANUAL_ORDER_INVALID','Semak pair, arah, lot (0.01–1.00).');
     }
     const pod = await store.getPodForUser(userId);
-    if (!await manualOrderAllowed(userId,pod) || pod.accountMask !== accountMask) {
+    const [allowed, profile] = await Promise.all([manualOrderAllowed(userId,pod),store.getProfile(userId)]);
+    if (!allowed || pod.accountMask !== accountMask) {
       throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
     }
-    const profile = await store.getProfile(userId);
     const slDistance = symbol === 'XAUUSD' ? Core.validateSettings({manualExit:profile?.manualExit}).value.manualExit.sl : null;
     const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_MARKET_ORDER',
       payload:{symbol,side,lot,slMode:symbol==='XAUUSD'?'AUTO_TRADE_DISTANCE':'MANUAL_BTC_ATR8_M2',slDistance,accountFingerprint:pod.accountFingerprint},
@@ -1449,18 +1455,31 @@ function createAutoTradeService(options = {}) {
     return {ok:true,commandId:issued.command.id};
   }
 
-  async function manualOrderStatus(userId,id) {
+  async function manualOrderStatus(userId,id,after) {
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id || '')) throw serviceError('INVALID_ID','ID arahan tidak sah.');
-    const pod = await store.getPodForUser(userId);
-    const command = pod && await store.getControlCommand(userId,pod.id,id);
-    if(!['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(command?.type))throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
-    return {ok:true,status:command.status,code:command.result?.code||null};
+    async function read() {
+      const pod = await store.getPodForUser(userId);
+      const command = pod && await store.getControlCommand(userId,pod.id,id);
+      if(!['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(command?.type))throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
+      return {ok:true,status:command.status,code:command.result?.code||null};
+    }
+    const status=await read();
+    if(!['PENDING','DELIVERED'].includes(after)||status.status!==after)return status;
+    const waiter=prepareWait(manualStatusWaiters,id,1200);
+    if(!waiter)return status;
+    try {
+      // An acknowledgement may arrive between the first read and subscription.
+      const current=await read();
+      if(current.status!==after)return current;
+      await waiter.ready;
+      return await read();
+    } finally {waiter.close();}
   }
 
   async function nextCommand(rawToken, waitMs = 0) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
-    const waiter = prepareCommandWait(pod.id, waitMs);
+    const waiter = prepareWait(commandWaiters, pod.id, Math.min(waitMs, 500));
     let command;
     try {
       command = await store.nextCommandForPod(pod.id, now());
@@ -1477,11 +1496,13 @@ function createAutoTradeService(options = {}) {
     if(!await queuedEntryIsCurrent(command, deliveryDiagnostic)){
       const reason = deliveryDiagnostic.reason || 'ENTRY_POLICY_CHANGED';
       await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED',message:reason});
+      wakeManualStatus(command);
       if(command.type==='SYSTEM_ON')await settleSystemOn(pod,command,'REJECTED',{code:reason});
       await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED',reason,...deliveryDiagnostic});
       console.warn('ZenCore entry delivery revoked:', JSON.stringify({commandId:command.id,symbol:command.payload?.symbol,reason,...deliveryDiagnostic}));
       return {ok:true,command:null,serverTime:now()};
     }
+    wakeManualStatus(command);
     if(command.type==='PLACE_SETUP'&&!entryDeliverySeen.has(command.id)){
       if(entryDeliverySeen.size>=1000)entryDeliverySeen.clear();entryDeliverySeen.add(command.id);
       await store.appendAudit(pod.userId,'ENTRY_DELIVERED',{commandId:command.id,timeframe:command.payload?.analysisSnapshot?.executionTimeframe,deliveredAt:now(),queueToDeliveryMs:Math.max(0,now()-command.createdAt),lifecycleState:'ORDER_SENT_TO_CONNECTOR'});
@@ -1527,6 +1548,8 @@ function createAutoTradeService(options = {}) {
     };
     const command = await store.ackCommand(pod.id, String(commandId || ''), status, result);
     if (!command) throw serviceError('COMMAND_NOT_FOUND', 'Arahan tidak dijumpai atau sudah diproses.', 404);
+
+    wakeManualStatus(command);
 
     // Connection readiness does not imply that the EA is armed.
     if (command.type === 'PLACE_SETUP' && status !== 'EXECUTED' && result.code === 'ENTRY_STOPPED') {

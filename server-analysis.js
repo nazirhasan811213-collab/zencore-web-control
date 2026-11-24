@@ -1387,8 +1387,8 @@ async function handleAutoTradeUserApi(req, res, pathname, session) {
       return sendJson(res, 200, autoTradeState.service.credentialEncryptionConfig());
     }
     if (req.method === 'GET' && pathname === '/api/auto-trade/manual-order') {
-      const id = new URL(req.url,'http://localhost').searchParams.get('id');
-      return sendJson(res,200,await autoTradeState.service.manualOrderStatus(userId,id));
+      const params = new URL(req.url,'http://localhost').searchParams;
+      return sendJson(res,200,await autoTradeState.service.manualOrderStatus(userId,params.get('id'),params.get('after')));
     }
     if (!requestOriginAllowed(req)) {
       return sendJson(res, 403, { ok: false, error: 'Permintaan tidak dibenarkan.' });
