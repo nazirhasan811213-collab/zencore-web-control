@@ -17,6 +17,7 @@ function publicProfile(row) {
     modeSettings: {...((row.execution_settings ?? row).modeSettings||{}),TF15_INTRA:(row.execution_settings ?? row).modeSettings?.TF15_INTRA||(row.execution_settings ?? row).modeSettings?.TF10_LONG},
     tradingSchedule: (row.execution_settings ?? row).tradingSchedule || {enabled:false},
     strategyExitPolicies: (row.execution_settings ?? row).strategyExitPolicies || {},
+    entryExitStrategy: (row.execution_settings ?? row).entryExitStrategy || 'NORMAL',
     manualExit: (row.execution_settings ?? row).manualExit || {enabled:false},
     userId: row.user_id || row.userId,
     capitalUsd: capital == null ? null : Number(capital),
@@ -415,7 +416,7 @@ class PostgresAutoTradeStore {
        RETURNING *`,
       [userId, settings.capitalUsd, settings.lotPerLayer, settings.layers,
         JSON.stringify(settings.symbols), settings.riskAcknowledgedAt ? new Date(settings.riskAcknowledgedAt) : null,
-        JSON.stringify({strategyMode: settings.strategyMode, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies, manualExit:settings.manualExit})]
+        JSON.stringify({strategyMode: settings.strategyMode, entryExitStrategy:settings.entryExitStrategy, modeSettings: settings.modeSettings, tradingSchedule: settings.tradingSchedule, strategyExitPolicies: settings.strategyExitPolicies, manualExit:settings.manualExit})]
     );
     return publicProfile(result.rows[0]);
   }
@@ -779,6 +780,7 @@ class PostgresAutoTradeStore {
         modeSettings: row.execution_settings?.modeSettings || {},
         tradingSchedule: row.execution_settings?.tradingSchedule || {enabled:false},
         strategyExitPolicies: row.execution_settings?.strategyExitPolicies || {},
+        entryExitStrategy: row.execution_settings?.entryExitStrategy || 'NORMAL',
         manualExit:row.execution_settings?.manualExit || {enabled:false},
         capitalUsd: Number(row.capital_usd),
         lotPerLayer: row.lot_per_layer == null ? null : Number(row.lot_per_layer),
@@ -1165,6 +1167,22 @@ class PostgresAutoTradeStore {
   }
 
   async replacePositions(userId, positions, now, expectedPod = null) {
+    if (expectedPod && !positions.length) {
+      // The common flat snapshot uses one statement, with the same binding
+      // lock as a populated snapshot and no window for a rotated token.
+      const result = await this.pool.query(
+        `WITH bound AS (
+           SELECT user_id FROM zencore_mt5_secure_pods
+           WHERE user_id = $1 AND id = $2 AND token_hash = $3 AND revoked_at IS NULL
+           FOR UPDATE
+         ), cleared AS (
+           DELETE FROM zencore_mt5_positions AS positions USING bound
+           WHERE positions.user_id = bound.user_id
+         ) SELECT EXISTS (SELECT 1 FROM bound) AS accepted`,
+        [userId, expectedPod.id, expectedPod.tokenHash]
+      );
+      return result.rows[0].accepted;
+    }
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -1176,11 +1194,12 @@ class PostgresAutoTradeStore {
       }
 
       await client.query(`DELETE FROM zencore_mt5_positions WHERE user_id = $1`, [userId]);
-      for (const position of positions) {
+      if (positions.length) {
         await client.query(
           `INSERT INTO zencore_mt5_positions (user_id, ticket, data, updated_at)
-           VALUES ($1, $2, $3::jsonb, $4)`,
-          [userId, position.ticket, JSON.stringify(position), new Date(now)]
+           SELECT $1, position->>'ticket', position, $3
+           FROM jsonb_array_elements($2::jsonb) AS snapshot(position)`,
+          [userId, JSON.stringify(positions), new Date(now)]
         );
       }
       await client.query('COMMIT'); return true;
@@ -1368,12 +1387,14 @@ class PostgresAutoTradeStore {
          ORDER BY CASE command_type
            WHEN 'EMERGENCY_CLOSE_ALL' THEN 0
            WHEN 'SYSTEM_STOP' THEN 1
+           WHEN 'MANUAL_CLOSE_ALL' THEN 1
            WHEN 'MANAGE_POSITION' THEN 2
            WHEN 'MANUAL_EXIT_ACTION' THEN 2
            WHEN 'MANUAL_EXIT_CONFIG' THEN 2
            WHEN 'SYSTEM_ON' THEN 3
-           WHEN 'PLACE_SETUP' THEN 4
-           ELSE 5 END,
+           WHEN 'MANUAL_MARKET_ORDER' THEN 4
+           WHEN 'PLACE_SETUP' THEN 5
+           ELSE 6 END,
            created_at ASC
          LIMIT 1 FOR UPDATE SKIP LOCKED`,
         [podId, new Date(now)]
@@ -2224,17 +2245,19 @@ class MemoryAutoTradeStore {
     const priority = {
       EMERGENCY_CLOSE_ALL: 0,
       SYSTEM_STOP: 1,
+      MANUAL_CLOSE_ALL: 1,
       MANAGE_POSITION: 2,
       MANUAL_EXIT_ACTION: 2,
       MANUAL_EXIT_CONFIG: 2,
       SYSTEM_ON: 3,
-      PLACE_SETUP: 4
+      MANUAL_MARKET_ORDER: 4,
+      PLACE_SETUP: 5
     };
     const row = rows
       .filter(item => ['PENDING', 'DELIVERED'].includes(item.status) && item.expiresAt > now &&
         (item.type !== 'PLACE_SETUP' || item.payload?.symbol === 'XAUUSD' || item.payload?.analysisSnapshot?.executionPolicy === 'PINE_DIRECT_FILL_GAP4_V1'))
       .sort((left, right) =>
-        (priority[left.type] ?? 5) - (priority[right.type] ?? 5) || left.createdAt - right.createdAt
+        (priority[left.type] ?? 6) - (priority[right.type] ?? 6) || left.createdAt - right.createdAt
       )[0];
     if (!row) return null;
     row.status = 'DELIVERED';

@@ -1,4 +1,5 @@
 const PineDirect=require('./pine-direct-entry');
+const {FIXED_LOCK}=require('./tf2-ribbon-scalping');
 const crypto = require('crypto');
 const Core = require('./auto-trade-core');
 const {rebasedManagement}=require('./live-entry-management');
@@ -243,19 +244,25 @@ function createAutoTradeService(options = {}) {
     };
   }
 
-  // Bounded, per-pod wake-up. The queue remains the source of truth.
+  // The durable queue is authoritative. Wake only the matching waiter after a write.
   const commandWaiters = new Map();
-  function prepareCommandWait(podId, waitMs) {
-    if (!(waitMs > 0) || commandWaiters.has(podId) || commandWaiters.size >= 256) return null;
+  const manualStatusWaiters = new Map();
+  function prepareWait(waiters, key, waitMs) {
+    if (!(waitMs > 0) || waiters.has(key) || waiters.size >= 256) return null;
     let wake;
     const ready = new Promise(resolve => { wake = resolve; });
-    const timer = setTimeout(() => wake(false), Math.min(waitMs, 500));
+    const timer = setTimeout(() => wake(false), waitMs);
     const notify = () => wake(true);
-    commandWaiters.set(podId, notify);
+    waiters.set(key, notify);
     return { ready, close() {
       clearTimeout(timer);
-      if (commandWaiters.get(podId) === notify) commandWaiters.delete(podId);
+      if (waiters.get(key) === notify) waiters.delete(key);
     }};
+  }
+  function wakeManualStatus(command) {
+    if (['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(command?.type)) {
+      manualStatusWaiters.get(command.id)?.();
+    }
   }
   async function issueCommand({ userId, podId, type, payload = {}, dedupeKey = null, ttlMs = commandTtlMs, notAfterMs = Infinity }) {
     if (!Core.COMMAND_TYPES.includes(type)) throw serviceError('INVALID_COMMAND', 'Jenis arahan tidak sah.');
@@ -264,7 +271,7 @@ function createAutoTradeService(options = {}) {
     }
     const boundPod = await store.getPodForUser(userId);
     if (isLocalEa(boundPod) && boundPod.accountFingerprint) {
-      if (boundPod.id !== podId || (type === 'MANUAL_MARKET_ORDER' && payload.accountFingerprint !== boundPod.accountFingerprint)) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Pautan akaun berubah.', 409);
+      if (boundPod.id !== podId || (['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(type) && payload.accountFingerprint !== boundPod.accountFingerprint)) throw serviceError('ACCOUNT_BINDING_CHANGED', 'Pautan akaun berubah.', 409);
       payload = {...payload, accountFingerprint: boundPod.accountFingerprint};
     }
     const createdAt = now();
@@ -403,7 +410,7 @@ function createAutoTradeService(options = {}) {
     if(isLocalEa(pod)&&positions.length){
       const plans=new Map();
       for(const position of positions){
-        if(position.origin==='MANUAL')continue;
+        if(position.origin==='MANUAL'||position.exitStage==='CASH_LAYER')continue;
         const mode=position.strategyMode||'TF2_SCALPING',key=position.symbol+'|'+mode;
         if(!plans.has(key))plans.set(key,await require('./pine-position-plan').resolve(store,userId,pod.id,positions,position.symbol,mode));
         const command=plans.get(key);
@@ -415,6 +422,7 @@ function createAutoTradeService(options = {}) {
     const connection = hostedAccount ? hostedConnectionState(hostedAccount) : podConnection;
     const settings = profile ? {
       strategyMode: profile.strategyMode,
+      entryExitStrategy: profile.entryExitStrategy || 'NORMAL',
       modeSettings: profile.modeSettings,
       tradingSchedule: profile.tradingSchedule,
       strategyExitPolicies: profile.strategyExitPolicies,
@@ -433,6 +441,8 @@ function createAutoTradeService(options = {}) {
     const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
     const strategyReady=profile?.strategyMode==='TF2_SCALPING'||!profile?.strategyMode||(!hostedAccount&&isLocalEa(pod)&&['1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion));
     const exitPolicyReady = !(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING) || (!hostedAccount && isLocalEa(pod) && ['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion));
+    const cashLayerReady = !hostedAccount && isLocalEa(pod) && cashLayerPods.has(pod?.id) && directEntryPods.has(pod?.id);
+    const needsCashLayer = profile?.entryExitStrategy === 'LOW_RISK' && !cashLayerReady;
     const settingsReady = !!profile && Core.validateSettings(profile).ok && !!profile.riskAcknowledgedAt;
     return {
       ok: true,
@@ -452,12 +462,15 @@ function createAutoTradeService(options = {}) {
         strategyReady,
         strategyReason: strategyReady?null:'TF15/Both memerlukan EA/Connector 1.2.',
         exitPolicyReady,
+        cashLayerReady,
+        cashLayerReason: needsCashLayer ? 'Low Risk memerlukan EA dan Connector serasi pada akaun MT5 USD hedging.' : null,
         exitPolicyReason: exitPolicyReady ? null : 'Rule TF1 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
-        canEnter: entryAccessReady && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: entryAccessReady && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
+        canEnter: entryAccessReady && !needsCashLayer && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: entryAccessReady && !needsCashLayer && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
       manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
+      manualCloseAllBinding: manualCloseAllBinding(pod),
       manualExitSync:(()=>{if(profile?.manualExit?.enabled&&!supportsManualExit(pod,profile.manualExit))return {status:'WAITING_EA',code:null};const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
@@ -907,6 +920,18 @@ function createAutoTradeService(options = {}) {
     return ['MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(pod.manualExitVersion) ||
       (pod.manualExitVersion==='MANUAL_TF2_EXIT_V2' && (!config?.enabled||config.version!=='MANUAL_TF2_EXIT_V3'));
   }
+  function sameManualExit(saved,queued) {
+    return saved.enabled===queued.enabled &&
+      (!saved.enabled||['pairScope','tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>saved[k]===queued[k]));
+  }
+  async function restoreManualExit(pod,config,seenAt) {
+    const recent=await store.listRecentCommands(pod.userId,20);
+    const current=recent.find(c=>c.podId===pod.id && c.type==='MANUAL_EXIT_CONFIG' &&
+      sameManualExit(config,c.payload?.manualExit||{}));
+    if(current && (['PENDING','DELIVERED'].includes(current.status)||seenAt-current.createdAt<30000))return;
+    await requireNoMasterReset(pod.userId);
+    await queueManualExit(pod.userId,pod,config);
+  }
   async function queueManualExit(userId,pod,config) {
     const manualExit=config.enabled?config:Core.validateSettings({manualExit:{enabled:false}}).value.manualExit;
     return issueCommand({userId,podId:pod.id,type:'MANUAL_EXIT_CONFIG',payload:{manualExit}});
@@ -941,6 +966,7 @@ function createAutoTradeService(options = {}) {
     const validation = Core.validateSettings({
       ...input,
       manualExit:input.manualExit ?? previous?.manualExit,
+      entryExitStrategy:input.entryExitStrategy ?? previous?.entryExitStrategy,
       tradingSchedule: input.tradingSchedule ?? previous?.tradingSchedule,
       strategyExitPolicies: previous?.strategyExitPolicies,
       symbols: localEa ? input.symbols : allowedDemoSymbols
@@ -1002,6 +1028,8 @@ function createAutoTradeService(options = {}) {
       activeHostedAccount(userId)
     ]);
     if(!hostedAccount&&!connectionState(pod).ready)throw serviceError('POD_NOT_READY','Sambungan Connector/EA belum ready.',409);
+    if(profile?.entryExitStrategy==='LOW_RISK' && (hostedAccount || !isLocalEa(pod) || !cashLayerPods.has(pod?.id) || !directEntryPods.has(pod?.id)))
+      throw serviceError('CASH_LAYER_POLICY_UNAVAILABLE','Low Risk memerlukan EA dan Connector serasi pada akaun MT5 USD hedging.',409);
     if(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING &&
       (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion))) {
       throw serviceError('TF1_EA_UPGRADE_REQUIRED','Rule TF1 memerlukan EA/Connector 1.1 sebelum entry boleh dihidupkan.',409);
@@ -1176,7 +1204,10 @@ function createAutoTradeService(options = {}) {
   }
 
   const directEntryPods=new Set();
+  const fixedTf1Pods=new Map();
+  const cashLayerPods=new Set();
   const manualOrderPods=new Map();
+  const manualCloseAllPods=new Map();
   const expandedEntryPods=new Set();
   const btcChartPods=new Set();
   const dualPairPods=new Set();
@@ -1187,16 +1218,55 @@ function createAutoTradeService(options = {}) {
       ? btcChartPods.has(podId)&&profile?.symbols?.includes(symbol)
       : !btcChartPods.has(podId)&&profile?.symbols?.includes(symbol);
   }
+  const positionNotificationQueues = new Map();
+  function queuePositionNotification(snapshot) {
+    const { podId } = snapshot;
+    let queue = positionNotificationQueues.get(podId);
+    if (!queue) {
+      queue = { pending: 0, done: Promise.resolve() };
+      positionNotificationQueues.set(podId, queue);
+    }
+    queue.pending++;
+    queue.done = queue.done.then(async () => {
+      try {
+        await options.onConfirmedPositions(snapshot);
+      } catch {
+        console.error('Position Telegram observation unavailable');
+      } finally {
+        if (--queue.pending === 0) positionNotificationQueues.delete(podId);
+      }
+    });
+    // Keep observations ordered and apply backpressure if Telegram processing falls behind.
+    return queue.pending >= 4 ? queue.done : null;
+  }
+
   async function heartbeat(rawToken,input={}){
+    const startedAt = performance.now();
     const pod=await authenticatePod(rawToken);
     if(!pod)throw serviceError('INVALID_POD_TOKEN','Secure Pod tidak dibenarkan.',401);
-    const previous=heartbeatChains.get(pod.id)||Promise.resolve();
-    const task=previous.catch(()=>{}).then(()=>heartbeatUnlocked(rawToken,input));
+    const previous=heartbeatChains.get(pod.id);
+    let workStartedAt;
+    const task=(previous || Promise.resolve()).catch(()=>{}).then(()=>{
+      workStartedAt = performance.now();
+      // A queued heartbeat may have been revoked or superseded while waiting.
+      return heartbeatUnlocked(previous ? null : pod, rawToken, input);
+    });
     heartbeatChains.set(pod.id,task);
-    try{return await task;}finally{if(heartbeatChains.get(pod.id)===task)heartbeatChains.delete(pod.id);}
+    try {
+      return await task;
+    } finally {
+      if(heartbeatChains.get(pod.id)===task)heartbeatChains.delete(pod.id);
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      if (elapsedMs >= 750) {
+        console.warn('ZenCore slow MT5 heartbeat:', JSON.stringify({
+          elapsedMs, beforeProcessingMs: Math.round(workStartedAt - startedAt),
+          positionCount: Array.isArray(input?.positions) ? input.positions.length : 0
+        }));
+      }
+    }
   }
-  async function heartbeatUnlocked(rawToken, input = {}) {
-    const pod = await authenticatePod(rawToken);
+  async function heartbeatUnlocked(authenticatedPod, rawToken, input = {}) {
+    const pod = authenticatedPod || await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
     const heartbeatValidation = Core.normaliseHeartbeat(input);
     if (!heartbeatValidation.ok) {
@@ -1215,8 +1285,13 @@ function createAutoTradeService(options = {}) {
     if(input.dualPairExecution===true)dualPairPods.add(pod.id);else dualPairPods.delete(pod.id);
     if(input.btcUsdChart===true)btcChartPods.add(pod.id);else btcChartPods.delete(pod.id);
     if(input.expandedEntryPolicy===true)expandedEntryPods.add(pod.id);else expandedEntryPods.delete(pod.id);
+    if(input.cashLayerPolicy==='USD_TP050_SL200_V1')cashLayerPods.add(pod.id);else cashLayerPods.delete(pod.id);
     if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V2')manualOrderPods.set(pod.id,updated.accountFingerprint);
     else manualOrderPods.delete(pod.id);
+    if(input.manualCloseAllVersion==='ACCOUNT_POSITIONS_V1')manualCloseAllPods.set(pod.id,updated.accountFingerprint);
+    else manualCloseAllPods.delete(pod.id);
+    if(input.tf1FixedExitVersion===FIXED_LOCK)fixedTf1Pods.set(pod.id,updated.accountFingerprint);
+    else fixedTf1Pods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
@@ -1224,20 +1299,27 @@ function createAutoTradeService(options = {}) {
       const newPositions=heartbeatValidation.value.positions.filter(p=>p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode&&!cycleBefore.some(old=>old.ticket===p.ticket));
       if(input.terminalConnected===true&&newPositions.length&&['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await store.appendAudit(pod.userId,'MT5_POSITION_OBSERVED',{timeframe:mode==='TF15_INTRA'?'15':options.scalpingTimeframe,observedAt:seenAt,layers:newPositions.length,lifecycleState:'POSITION_OPEN'});
     }
-    const profile=await store.getProfile(pod.userId);
-    const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
+    const [profile, accountAccessAllowed] = await Promise.all([
+      store.getProfile(pod.userId),
+      options.entryAccessAllowed ? options.entryAccessAllowed(pod.userId) : true
+    ]);
     const config=profile?.manualExit;
-    if(config&&accountAccessAllowed&&!supportsManualExit(pod,config)&&supportsManualExit(updated,config)&&
-       (config.enabled||updated.manualExitEnabled)){
+    if(config&&accountAccessAllowed&&supportsManualExit(updated,config)){
+      const becameCompatible=!supportsManualExit(pod,config)&&(config.enabled||updated.manualExitEnabled);
+      const needsRecovery=input.terminalConnected===true &&
+        typeof input.manualExitEnabled==='boolean' && config.enabled!==updated.manualExitEnabled &&
+        (!config.enabled||(updated.terminalTradeAllowed&&updated.accountTradeAllowed&&updated.expertTradeAllowed));
       try{
-        await requireNoMasterReset(pod.userId);
-        await queueManualExit(pod.userId,updated,config);
+        if(becameCompatible){
+          await requireNoMasterReset(pod.userId);
+          await queueManualExit(pod.userId,updated,config);
+        }else if(needsRecovery)await restoreManualExit(updated,config,seenAt);
       }catch(error){if(error.code!=='MASTER_RESET_PENDING')throw error;}
     }
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
     if(accountAccessAllowed&&isLocalEa(updated)&&input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&typeof options.onConfirmedPositions==='function'){
-      try{await options.onConfirmedPositions({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});}
-      catch(_){console.error('Position Telegram observation unavailable');}
+      const backpressure = queuePositionNotification({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});
+      if (backpressure) await backpressure;
     }
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
     if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
@@ -1291,7 +1373,7 @@ function createAutoTradeService(options = {}) {
     if(command.type==='MANUAL_EXIT_CONFIG'){
       const current=(await store.getProfile(command.userId))?.manualExit||{enabled:false},queued=command.payload?.manualExit||{};
       if(queued.enabled && !supportsManualExit(await store.getPodForUser(command.userId),queued))return false;
-      return queued.enabled===current.enabled&&(!current.enabled||['pairScope','tp1','tp2','tp3','sl','maxActiveLayers','limitAction'].every(k=>queued[k]===current[k]));
+      return sameManualExit(current,queued);
     }
     if(command.type==='MANUAL_EXIT_ACTION'){
       const [manualPod,profile]=await Promise.all([store.getPodForUser(command.userId),store.getProfile(command.userId)]);
@@ -1306,6 +1388,11 @@ function createAutoTradeService(options = {}) {
       }
       return true;
     }
+    if(command.type==='MANUAL_CLOSE_ALL'){
+      const pod=await store.getPodForUser(command.userId);
+      return pod?.id===command.podId && pod.accountFingerprint===command.payload.accountFingerprint &&
+        manualCloseAllBinding(pod)===command.payload.binding;
+    }
     if(command.type==='MANUAL_MARKET_ORDER'){
       const pod=await store.getPodForUser(command.userId);
       return pod?.id===command.podId && pod.accountFingerprint===command.payload.accountFingerprint &&
@@ -1315,6 +1402,12 @@ function createAutoTradeService(options = {}) {
     if(['1','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='1'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
+    if(command.payload?.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
+       !supportsSetupExit(await store.getPodForUser(command.userId),command.payload)){
+      diagnostic.reason='EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED';return false;
+    }
+    const lowRisk = command.payload?.analysisSnapshot?.cashLayerPolicy === 'USD_TP050_SL200_V1';
+    if (lowRisk !== (profile?.entryExitStrategy === 'LOW_RISK') || (lowRisk && (!PineDirect.isCommand(command) || !cashLayerPods.has(command.podId)))) return false;
     if(PineDirect.isCommand(command))return pairAllowed(profile,command.podId,command.payload.symbol)&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
     if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     // A queued signal may outlive a heartbeat that reports a fill. Recheck at
@@ -1351,15 +1444,20 @@ function createAutoTradeService(options = {}) {
       throw serviceError('MANUAL_ORDER_INVALID','Semak pair, arah, lot (0.01–1.00).');
     }
     const pod = await store.getPodForUser(userId);
-    if (!await manualOrderAllowed(userId,pod) || pod.accountMask !== accountMask) {
+    const [allowed, profile] = await Promise.all([manualOrderAllowed(userId,pod),store.getProfile(userId)]);
+    if (!allowed || pod.accountMask !== accountMask) {
       throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
     }
-    const profile = await store.getProfile(userId);
     const slDistance = symbol === 'XAUUSD' ? Core.validateSettings({manualExit:profile?.manualExit}).value.manualExit.sl : null;
     const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_MARKET_ORDER',
       payload:{symbol,side,lot,slMode:symbol==='XAUUSD'?'AUTO_TRADE_DISTANCE':'MANUAL_BTC_ATR8_M2',slDistance,accountFingerprint:pod.accountFingerprint},
       dedupeKey:'MANUAL_MARKET_ORDER:'+requestId,ttlMs:15000});
     return {ok:true,commandId:issued.command.id};
+  }
+
+  function supportsSetupExit(pod, payload) {
+    return payload.analysisSnapshot?.exitLockVersion!==FIXED_LOCK ||
+      (!!pod?.accountFingerprint && fixedTf1Pods.get(pod.id)===pod.accountFingerprint);
   }
 
   function supportsManualOrder(pod) {
@@ -1376,18 +1474,53 @@ function createAutoTradeService(options = {}) {
       (!options.entryAccessAllowed || await options.entryAccessAllowed(userId));
   }
 
-  async function manualOrderStatus(userId,id) {
-    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id || '')) throw serviceError('INVALID_ID','ID arahan tidak sah.');
+  function manualCloseAllBinding(pod) {
+    if (!isLocalEa(pod) || !pod.accountFingerprint || manualCloseAllPods.get(pod.id)!==pod.accountFingerprint ||
+        !connectionState(pod).ready) return null;
+    return crypto.createHash('sha256').update(pod.id+':'+pod.tokenHash+':'+pod.accountFingerprint).digest('hex');
+  }
+
+  async function manualCloseAll(userId, input = {}) {
+    const { requestId, binding } = input;
+    if (input.confirmation !== 'CLOSE_ALL' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId || '')) {
+      throw serviceError('CONFIRMATION_REQUIRED','Sahkan CLOSE ALL untuk menghantar arahan.');
+    }
     const pod = await store.getPodForUser(userId);
-    const command = pod && await store.getControlCommand(userId,pod.id,id);
-    if(command?.type !== 'MANUAL_MARKET_ORDER')throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
-    return {ok:true,status:command.status,code:command.result?.code||null};
+    const current = manualCloseAllBinding(pod);
+    if (!current || binding !== current) {
+      throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
+    }
+    const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_CLOSE_ALL',
+      payload:{scope:'ALL_OPEN_POSITIONS',accountFingerprint:pod.accountFingerprint,binding:current},
+      dedupeKey:'MANUAL_CLOSE_ALL:'+requestId,ttlMs:15000});
+    return {ok:true,commandId:issued.command.id};
+  }
+
+  async function manualOrderStatus(userId,id,after) {
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id || '')) throw serviceError('INVALID_ID','ID arahan tidak sah.');
+    async function read() {
+      const pod = await store.getPodForUser(userId);
+      const command = pod && await store.getControlCommand(userId,pod.id,id);
+      if(!['MANUAL_MARKET_ORDER','MANUAL_CLOSE_ALL'].includes(command?.type))throw serviceError('ORDER_NOT_FOUND','Arahan tidak ditemui. Semak MT5 sebelum cuba lagi.',404);
+      return {ok:true,status:command.status,code:command.result?.code||null};
+    }
+    const status=await read();
+    if(!['PENDING','DELIVERED'].includes(after)||status.status!==after)return status;
+    const waiter=prepareWait(manualStatusWaiters,id,1200);
+    if(!waiter)return status;
+    try {
+      // An acknowledgement may arrive between the first read and subscription.
+      const current=await read();
+      if(current.status!==after)return current;
+      await waiter.ready;
+      return await read();
+    } finally {waiter.close();}
   }
 
   async function nextCommand(rawToken, waitMs = 0) {
     const pod = await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
-    const waiter = prepareCommandWait(pod.id, waitMs);
+    const waiter = prepareWait(commandWaiters, pod.id, Math.min(waitMs, 500));
     let command;
     try {
       command = await store.nextCommandForPod(pod.id, now());
@@ -1404,11 +1537,13 @@ function createAutoTradeService(options = {}) {
     if(!await queuedEntryIsCurrent(command, deliveryDiagnostic)){
       const reason = deliveryDiagnostic.reason || 'ENTRY_POLICY_CHANGED';
       await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED',message:reason});
+      wakeManualStatus(command);
       if(command.type==='SYSTEM_ON')await settleSystemOn(pod,command,'REJECTED',{code:reason});
       await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED',reason,...deliveryDiagnostic});
       console.warn('ZenCore entry delivery revoked:', JSON.stringify({commandId:command.id,symbol:command.payload?.symbol,reason,...deliveryDiagnostic}));
       return {ok:true,command:null,serverTime:now()};
     }
+    wakeManualStatus(command);
     if(command.type==='PLACE_SETUP'&&!entryDeliverySeen.has(command.id)){
       if(entryDeliverySeen.size>=1000)entryDeliverySeen.clear();entryDeliverySeen.add(command.id);
       await store.appendAudit(pod.userId,'ENTRY_DELIVERED',{commandId:command.id,timeframe:command.payload?.analysisSnapshot?.executionTimeframe,deliveredAt:now(),queueToDeliveryMs:Math.max(0,now()-command.createdAt),lifecycleState:'ORDER_SENT_TO_CONNECTOR'});
@@ -1455,6 +1590,8 @@ function createAutoTradeService(options = {}) {
     const command = await store.ackCommand(pod.id, String(commandId || ''), status, result);
     if (!command) throw serviceError('COMMAND_NOT_FOUND', 'Arahan tidak dijumpai atau sudah diproses.', 404);
 
+    wakeManualStatus(command);
+
     // Connection readiness does not imply that the EA is armed.
     if (command.type === 'PLACE_SETUP' && status !== 'EXECUTED' && result.code === 'ENTRY_STOPPED') {
       await store.setControl(pod.userId, {
@@ -1479,6 +1616,10 @@ function createAutoTradeService(options = {}) {
     await store.appendAudit(pod.userId, 'COMMAND_ACKNOWLEDGED', {
       commandId: command.id, commandType: command.type, status, code: result.code, message: result.message,
       symbol:command.payload?.symbol,timeframe:command.payload?.analysisSnapshot?.executionTimeframe,
+      ...(command.type==='MANUAL_MARKET_ORDER'?{
+        commandQueuedAt:command.createdAt,commandDeliveredAt:command.deliveredAt,
+        mt5AcknowledgedAt:now(),queueToAckMs:Math.max(0,now()-command.createdAt)
+      }:{}),
       ...(command.type==='PLACE_SETUP'?{lifecycleState:status==='EXECUTED'?'MT5_ACKNOWLEDGED':'EA_REJECTED',
         sopCompletedAt:command.payload?.analysisSnapshot?.qualifiedAt||command.payload?.analysisSnapshot?.confirmationEvidence?.qualifiedAt,
         commandQueuedAt:command.createdAt,commandDeliveredAt:command.deliveredAt,
@@ -1668,8 +1809,9 @@ function createAutoTradeService(options = {}) {
         (hostedAccount || !isLocalEa(pod) || !['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod.connectorVersion)))continue;
       // Re-entry is an authenticated MT5 close transition, never a webhook flag.
       // It is opt-in by the new EA capability and scalping range feed marker.
+      const lowRisk = profile.entryExitStrategy === 'LOW_RISK';
       const cap=reentryCapability.get(profile.userId);
-      if(!['1','3'].includes(options.scalpingTimeframe)&&typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
+      if(!lowRisk&&!['1','3'].includes(options.scalpingTimeframe)&&typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol==='XAUUSD'&&(x.strategyMode||'TF2_SCALPING')==='TF2_SCALPING')){
         const market=markets.find(m=>m.symbol==='XAUUSD'&&String(m.timeframe)==='1');
         const closure=reentryTracker.ready(profile.userId,pod,market,now()),half=Reentry.halfSettings(profile);
@@ -1686,6 +1828,9 @@ function createAutoTradeService(options = {}) {
       }
       for (let market of Array.isArray(markets) ? markets : []) {
         const direct=PineDirect.isEvent(market);
+        if (lowRisk && (!direct || hostedAccount || !cashLayerPods.has(pod.id))) {
+          await reportEntryBlock(profile,market,'CASH_LAYER_POLICY_UNAVAILABLE');continue;
+        }
         if(direct&&(hostedAccount||!isLocalEa(pod)||!directEntryPods.has(pod.id))){await reportEntryBlock(profile,market,'EA_DIRECT_POLICY_UPGRADE_REQUIRED');continue;}
         if(!direct&&!entryWindow.allowed)continue;
         const symbol = Core.normaliseSymbol(market?.symbol);
@@ -1708,6 +1853,10 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || (!direct&&!isCurrent(market))){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
+        if(setup.payload.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
+           (hostedAccount||!supportsSetupExit(pod,setup.payload))){
+          await reportEntryBlock(profile,market,'EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED');continue;
+        }
         if(direct&&(symbol!=='XAUUSD'||setup.payload.layers>10)&&!expandedEntryPods.has(pod.id)){await reportEntryBlock(profile,market,'EA_DIRECT_POLICY_UPGRADE_REQUIRED');continue;}
         if((String(market.timeframe)==='3'||market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF1_RIBBON_V1')&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;
@@ -1857,6 +2006,7 @@ function createAutoTradeService(options = {}) {
     saveManualExit,
     manualOrder,
     manualOrderStatus,
+    manualCloseAll,
     turnOn,
     stop,
     emergencyCloseAll,

@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.44"
- #property version "2.44"
+ #define ZENCORE_RELEASE "2.51"
+ #property version "2.51"
 #else
- #define ZENCORE_RELEASE "2.44"
- #property version "2.44"
+ #define ZENCORE_RELEASE "2.51"
+ #property version "2.51"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -305,15 +305,20 @@ string ManualPair(string symbol){
 bool ValidManualPairScope(string scope){return scope=="XAUUSD" || scope=="BTCUSD" || scope=="XAUUSD,BTCUSD";}
 bool ManualPairSelected(string pair,string scope){return pair!="" && (scope==pair || scope=="XAUUSD,BTCUSD");}
 bool IsBtcUsdChart(){return registeredRole==CHART_BTCUSD;}
+bool CashLayerAccount(){
+ return AccountInfoString(ACCOUNT_CURRENCY)=="USD" &&
+        AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING;
+}
 bool Heartbeat(){
  if(lockHandle==INVALID_HANDLE)return false;
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("manualCloseAllVersion","ACCOUNT_POSITIONS_V1")+Row("tf1FixedExitVersion","TF1_XAU_FIXED_STEPLOCK_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
+ if(identity && CashLayerAccount())text+=Row("cashLayerPolicy","USD_TP050_SL200_V1");
  string goldChart=RegisteredChartSymbol("XAUUSD");
  if(goldChart!="")brokerSymbols[0]=goldChart;
  int count=0;
@@ -343,7 +348,10 @@ bool Heartbeat(){
   string comment=PositionGetString(POSITION_COMMENT);int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
   if(prefix>0){
    text+=Row(p+"setupId",StringSubstr(comment,prefix,20));
-   if(LoadOwnRisk(ticket)){
+   if(CashLayerPosition()){
+    text+=Row(p+"exitStage","CASH_LAYER")+Row(p+"activeTp",Num(PositionGetDouble(POSITION_TP)))+
+          Row(p+"initialSl",Num(PositionGetDouble(POSITION_SL)));
+   }else if(LoadOwnRisk(ticket)){
     text+=Row(p+"fillRiskVersion",Get("version"))+Row(p+"tp1",Get("tp1"))+Row(p+"tp2",Get("tp2"))+Row(p+"tp3",Get("tp3"));
     if(Get("sl")!="")text+=Row(p+"initialSl",Get("sl"));
    }
@@ -380,10 +388,17 @@ bool CloseTicket(ulong ticket,double volume){
  req.type_filling=(fill & SYMBOL_FILLING_FOK)!=0?ORDER_FILLING_FOK:ORDER_FILLING_IOC;
  return OrderSend(req,res) && (res.retcode==TRADE_RETCODE_DONE || res.retcode==TRADE_RETCODE_DONE_PARTIAL);
 }
-bool CloseGroup(string symbol,int percent,ulong scope=0,bool chartStop=false){
+bool CashLayerPosition(){
+ string comment=PositionGetString(POSITION_COMMENT);
+ int length=StringLen(comment);
+ return length>=3 && StringSubstr(comment,length-3)==":LR" &&
+        (StringFind(comment,"ZC:")==0 || StringFind(comment,"ZC15:")==0);
+}
+bool CloseGroup(string symbol,int percent,ulong scope=0,bool chartStop=false,bool preserveCashLayers=false){
  ulong tickets[];double total=0;
  for(int i=0;i<PositionsTotal();i++){
   ulong t=PositionGetTicket(i);if(!IsOwn(t) || (scope!=0 && (ulong)PositionGetInteger(POSITION_MAGIC)!=scope) || (symbol!="" && PositionGetString(POSITION_SYMBOL)!=symbol))continue;
+  if(preserveCashLayers && CashLayerPosition())continue;
   if(chartStop && LoadOwnRisk(t) && Get("version")=="MT5_FILL_PLAN_V1")continue;
   if(percent==50 && FileIsExist(channel+"\\half-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".done",FILE_COMMON))continue;
   int n=ArraySize(tickets);ArrayResize(tickets,n+1);tickets[n]=t;total+=PositionGetDouble(POSITION_VOLUME);
@@ -412,7 +427,7 @@ bool MoveGroup(string symbol,string kind,double target,ulong scope=0){
  bool ok=true;
  for(int i=0;i<PositionsTotal();i++){
   ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket) || (scope!=0 && (ulong)PositionGetInteger(POSITION_MAGIC)!=scope) || PositionGetString(POSITION_SYMBOL)!=symbol)continue;
-  if(LoadOwnRisk(ticket) && Get("version")=="MT5_FILL_PLAN_V1")continue; // Per-ticket locks are managed locally.
+  if(CashLayerPosition() || (LoadOwnRisk(ticket) && Get("version")=="MT5_FILL_PLAN_V1"))continue; // Per-ticket locks are managed locally.
   double old=PositionGetDouble(POSITION_SL),sl=Price(symbol,kind=="MOVE_SL_ENTRY"?PositionGetDouble(POSITION_PRICE_OPEN):target);
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if((ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC && LoadOwnRisk(ticket) && Get("exitLockVersion")=="PINE_STEPLOCK_150_TP3_PLUS3_V1"){
@@ -472,8 +487,29 @@ bool RetryableEntryRejection(uint code,ulong deal,ulong order){
   (code==TRADE_RETCODE_REQUOTE || code==TRADE_RETCODE_PRICE_CHANGED ||
    code==TRADE_RETCODE_PRICE_OFF || code==TRADE_RETCODE_TOO_MANY_REQUESTS);
 }
-bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion="",string executionTf="",bool directEntry=false){
+const double CASH_LAYER_TP=0.50;
+const double CASH_LAYER_SL=2.00;
+bool CashLayerLevels(string symbol,bool buy,double lot,double fill,double &sl,double &tp){
+ double tick=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+ if(tick<=0 || fill<=0 || lot<=0)return false;
+ ENUM_ORDER_TYPE type=buy?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
+ double sign=buy?1.0:-1.0;
+ double span=MathMin(100.0,MathFloor(fill/tick/2.0));
+ if(span<1)return false;
+ double loss=0,gain=0;
+ if(!OrderCalcProfit(type,symbol,lot,fill,fill-sign*span*tick,loss) || loss>=0 ||
+    !OrderCalcProfit(type,symbol,lot,fill,fill+sign*span*tick,gain) || gain<=0)return false;
+ double rawSl=(fill-sign*tick*span*CASH_LAYER_SL/-loss)/tick;
+ double rawTp=(fill+sign*tick*span*CASH_LAYER_TP/gain)/tick;
+ sl=Price(symbol,(buy?MathCeil(rawSl-1e-8):MathFloor(rawSl+1e-8))*tick);
+ tp=Price(symbol,(buy?MathCeil(rawTp-1e-8):MathFloor(rawTp+1e-8))*tick);
+ if(sl<=0 || tp<=0 || (buy?sl>=fill || tp<=fill:sl<=fill || tp>=fill))return false;
+ return OrderCalcProfit(type,symbol,lot,fill,sl,loss) && loss<0 && loss>=-CASH_LAYER_SL-1e-7 &&
+        OrderCalcProfit(type,symbol,lot,fill,tp,gain) && gain>=CASH_LAYER_TP-1e-7;
+}
+bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion="",string executionTf="",bool directEntry=false,bool cashLayer=false){
  lastEntryCode="ENTRY_REJECTED";
+ if(cashLayer && (!directEntry || tightTf2 || fillAnchor || !CashLayerAccount()))return RejectEntry("CASH_LAYER_ACCOUNT_OR_POLICY_UNSUPPORTED");
  if(!directEntry && c!="XAUUSD")return RejectEntry("SYMBOL_REJECTED");
  if(strategyMode!="TF2_SCALPING" && strategyMode!="TF15_INTRA")return RejectEntry("STRATEGY_MODE_INVALID");
  if(strategyMode=="TF15_INTRA" && tightTf2)return RejectEntry("TIMEFRAME_POLICY_MISMATCH");
@@ -495,17 +531,20 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
   if(c=="XAUUSD")brokerSymbols[0]=symbol;
  }
  if(symbol=="")return RejectEntry("MT5_SYMBOL_UNRESOLVED");
- if(!directEntry && !VolumeValid(symbol,lot))return RejectEntry("VOLUME_INVALID");
+ if((!directEntry || cashLayer) && !VolumeValid(symbol,lot))return RejectEntry("VOLUME_INVALID");
  if(side!="BUY" && side!="SELL")return RejectEntry("SIDE_REJECTED");
  bool buy=side=="BUY";
  bool guardedTf2=strategyMode=="TF2_SCALPING" && (executionTf=="1" || executionTf=="2") && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
  bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
- bool fillPlan=directEntry || guardedTf2 || fillTf15;
- bool btcPip=ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
+ bool fixedTf1=exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V1";
+ if(fixedTf1 && (c!="XAUUSD" || executionTf!="1" || strategyMode!="TF2_SCALPING" || cashLayer || fillAnchor || tightTf2))
+  return RejectEntry("EXIT_POLICY_REJECTED");
+ bool fillPlan=directEntry || guardedTf2 || fillTf15 || fixedTf1;
+ bool btcPip=!cashLayer && ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
  if(btcPip)exitLockVersion="BTC_TF2_PIP_STEPLOCK_V1";
 
  const double guardRisk=4.0;
- double stopDistance=btcPip?30*BTC_TF2_PIP:directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
+ double stopDistance=fixedTf1?3.0:btcPip?30*BTC_TF2_PIP:directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
  double entryTickSize=fillPlan?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
@@ -513,6 +552,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(entry<=0 || ((directEntry || !guardedTf2) && (sl<=0 || (buy?sl>=entry:sl<=entry))) || !(buy?(entry<tp1 && tp1<tp2 && tp2<tp3):(entry>tp1 && tp1>tp2 && tp2>tp3)))return RejectEntry("ENTRY_PLAN_INVALID");
  bool netting=AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING;
  string orderComment=(strategyMode=="TF15_INTRA"?"ZC15:":"ZC:")+StringSubstr(id,0,20);
+ if(cashLayer)orderComment+=":LR";
  long netPositionId=0;
  double netVolume=0,netEntry=0;
  if(netting && PositionSelect(symbol))return RejectEntry("NETTING_POSITION_CONFLICT");
@@ -531,7 +571,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  double distance=SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(symbol,SYMBOL_POINT);
  if(tightTf2 && !WriteAtomic("tf2-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("openedServerAt",(string)TimeCurrent())+Row("tp1",Num(tp1))+Row("side",side)+Row("touched","0")))return RejectEntry("RISK_FILE_WRITE_FAILED");
  // Store chart targets locally so StepLock survives a TradingView/feed outage.
- if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
+ if(!fillPlan && !WriteAtomic("risk-"+StringSubstr(id,0,20)+".tsv",Row("symbol",symbol)+Row("side",side)+Row("entry",Num(entry))+Row("executionTimeframe",executionTf)+Row("exitLockVersion",exitLockVersion)+Row("tp1",Num(tp1))+Row("tp2",Num(tp2))+Row("tp3",Num(tp3))))return RejectEntry("RISK_FILE_WRITE_FAILED");
  for(int i=0;i<layers;i++){
   int quoteRetries=0,brokerRetries=0;
   while(true){
@@ -547,9 +587,11 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     double quote=buy?tick.ask:tick.bid;
     if(directEntry && !PineEntryGapAllowed(c,quote,entry))return RejectEntry(i>0?"PARTIAL_PINE_ENTRY_GAP_4USD":"PINE_ENTRY_GAP_4USD");
     if(!directEntry && guardedTf2 && !Tf2EntryPriceAllowed(buy,quote,tp1))return RejectEntry(i>0?"TF2_PARTIAL_ENTRY_PAST_TP1":"TF2_ENTRY_PAST_TP1");
-    sl=Price(symbol,ExecutionStop(buy,quote,stopDistance,entryTickSize));
-    double quoteRisk=buy?quote-sl:sl-quote;
-    if(sl<=0 || quoteRisk<=0 || quoteRisk>stopDistance+1e-8)return RejectEntry("EXECUTION_SL_INVALID");
+    if(!cashLayer){
+     sl=Price(symbol,ExecutionStop(buy,quote,stopDistance,entryTickSize));
+     double quoteRisk=buy?quote-sl:sl-quote;
+     if(sl<=0 || quoteRisk<=0 || quoteRisk>stopDistance+1e-8)return RejectEntry("EXECUTION_SL_INVALID");
+    }
    }
    // No TP3 broker close: EXIT-STEPLOCK moves SL at TP3; Analysis owns close decisions.
    if(btcPip){
@@ -558,6 +600,11 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
      return RejectEntry(i>0?"SETUP_PARTIAL":"BTC_PIP_TARGET_INVALID");
    }
    double initialSl=fillAnchor?Price(symbol,(buy?tick.ask:tick.bid)+(buy?-1:1)*.75*riskAtr):sl;
+   double initialTp=0;
+   if(cashLayer && !CashLayerLevels(symbol,buy,lot,buy?tick.ask:tick.bid,initialSl,initialTp))
+    return RejectEntry(i>0?"SETUP_PARTIAL":"CASH_LAYER_LEVELS_UNAVAILABLE");
+   if(cashLayer && (buy?initialTp<=tick.bid+distance:initialTp>=tick.ask-distance))
+    return RejectEntry(i>0?"SETUP_PARTIAL":"CASH_LAYER_BROKER_DISTANCE");
    if(netting){
     bool hasPosition=PositionSelect(symbol);
     if((hasPosition && (!directEntry || netPositionId==0 ||
@@ -575,9 +622,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    }
    // Check the stop sent to the broker. For later netting layers this is
    // the position's existing stop, which can be valid even if the new quote-based stop is too close.
-   if((!guardedTf2 || fillAnchor) && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))
-    return RejectEntry("BROKER_STOP_DISTANCE");
-   bool sent=buy?trade.Buy(lot,symbol,0,initialSl,0,orderComment):trade.Sell(lot,symbol,0,initialSl,0,orderComment);
+   if((cashLayer || !guardedTf2 || fillAnchor) && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))
+    return RejectEntry(cashLayer?(i>0?"SETUP_PARTIAL":"CASH_LAYER_BROKER_DISTANCE"):"BROKER_STOP_DISTANCE");
+   bool sent=buy?trade.Buy(lot,symbol,0,initialSl,initialTp,orderComment):trade.Sell(lot,symbol,0,initialSl,initialTp,orderComment);
    if(sent && BrokerDone() && trade.ResultVolume()>0)break;
    uint retcode=trade.ResultRetcode();
    if(!directEntry || trade.ResultVolume()>0 ||
@@ -607,6 +654,19 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     if(!CloseTicket(filledTicket,filledVolume))Print("ZenCore FILL_GAP_CLOSE_PENDING ticket=",filledTicket);
     return RejectEntry("FILL_PINE_ENTRY_GAP_4USD");
    }
+   if(cashLayer){
+    double cashSl=0,cashTp=0,volume=PositionGetDouble(POSITION_VOLUME);
+    bool protectedLayer=CashLayerPosition() && CashLayerLevels(symbol,buy,volume,fill,cashSl,cashTp);
+    if(protectedLayer && (MathAbs(cashSl-currentSl)>1e-8 || MathAbs(cashTp-PositionGetDouble(POSITION_TP))>1e-8))
+     protectedLayer=trade.PositionModify(filledTicket,cashSl,cashTp) && BrokerDone();
+    if(!protectedLayer){
+     if(!CloseTicket(filledTicket,volume))Print("ZenCore CASH_LAYER_CLOSE_PENDING ticket=",filledTicket);
+     return RejectEntry(i>0?"SETUP_PARTIAL":"CASH_LAYER_PROTECTION_FAILED");
+    }
+    PulseEntryHeartbeat(lastPulse);
+    if(partial)return RejectEntry("SETUP_PARTIAL");
+    continue;
+   }
    double safeSl=Price(symbol,ExecutionStop(buy,fill,stopDistance,entryTickSize));
    double t1=0,t2=0,t3=0,lockTrigger=0;
    bool targetsReady=true;
@@ -626,7 +686,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
     stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
-   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
+   if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("executionTimeframe",executionTf)+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
    if(!protectedFill){
     if(addingNetLayer && stopChanged && !(trade.PositionModify(filledTicket,currentSl,0) && BrokerDone()))
      Print("ZenCore PRIOR_STOP_RESTORE_PENDING ticket=",filledTicket);
@@ -667,7 +727,7 @@ void ManageTf2Timeout(){
  for(int i=PositionsTotal()-1;i>=0;i--){
   ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket))continue;
   string comment=PositionGetString(POSITION_COMMENT),symbol=PositionGetString(POSITION_SYMBOL);
-  if(StringFind(comment,"ZC:")!=0)continue;
+  if(CashLayerPosition() || StringFind(comment,"ZC:")!=0)continue;
   string suffix=StringSubstr(comment,3),name="tf2-"+suffix+".tsv";
   if(StringFind(processed,"|"+suffix+"|")>=0)continue;processed+=suffix+"|";
   if(!ReadFields(name) || Get("symbol")!=symbol || Get("touched")=="1")continue;
@@ -713,21 +773,22 @@ bool ProtectionAttemptAllowed(ulong ticket){
  int n=ArraySize(protectionTickets);if(n<128){ArrayResize(protectionTickets,n+1);ArrayResize(protectionTryAt,n+1);protectionTickets[n]=ticket;protectionTryAt[n]=now;}
  return true;
 }
-// Only a completed broker M2 candle after this position opened can raise a stage.
-double ClosedTf2Quote(string symbol,long openedAt,bool useExecutableSide=false,bool buy=true){
+// Use the last completed broker candle for the position's execution timeframe.
+double ClosedStepLockQuote(string symbol,ENUM_TIMEFRAMES timeframe,long openedAt,bool useExecutableSide,bool buy){
  MqlRates closedBars[];
- if(CopyRates(symbol,PERIOD_M2,1,1,closedBars)!=1)return 0;
- long closedAt=(long)closedBars[0].time+120;
+ if(CopyRates(symbol,timeframe,1,1,closedBars)!=1)return 0;
+ long closedAt=(long)closedBars[0].time+PeriodSeconds(timeframe);
  if(closedAt>TimeCurrent() || closedAt<=openedAt || closedBars[0].close<=0)return 0;
  if(!useExecutableSide)return closedBars[0].close;
- // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the M2 candle for BTC.
+ // Chart closes may be Bid prices. Use the actual last Bid/Ask tick of the candle for BTC.
  static string cachedSymbol="";
  static long cachedClose=0;
+ static ENUM_TIMEFRAMES cachedTimeframe=PERIOD_CURRENT;
  static ulong retryAt=0;
  static MqlTick lastTick;
  ulong now=GetTickCount64();
- if(cachedSymbol!=symbol || cachedClose!=closedAt){
-  cachedSymbol=symbol;cachedClose=closedAt;retryAt=0;
+ if(cachedSymbol!=symbol || cachedClose!=closedAt || cachedTimeframe!=timeframe){
+  cachedSymbol=symbol;cachedClose=closedAt;cachedTimeframe=timeframe;retryAt=0;
   lastTick.bid=0;lastTick.ask=0;
  }
  if(lastTick.bid>0 && lastTick.ask>0)return buy?lastTick.bid:lastTick.ask;
@@ -741,18 +802,29 @@ double ClosedTf2Quote(string symbol,long openedAt,bool useExecutableSide=false,b
 }
 void ManageLocalStepLock(){
  if(!Permissions())return;
- for(int i=0;i<PositionsTotal();i++){
+ for(int i=PositionsTotal()-1;i>=0;i--){
   ulong ticket=PositionGetTicket(i);if(!IsOwn(ticket))continue;
+  if(CashLayerPosition()){
+   double profit=PositionGetDouble(POSITION_PROFIT);
+   if(profit>=CASH_LAYER_TP || profit<=-CASH_LAYER_SL)CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME));
+   continue;
+  }
   string comment=PositionGetString(POSITION_COMMENT),symbol=PositionGetString(POSITION_SYMBOL);
   int prefix=StringFind(comment,"ZC15:")==0?5:StringFind(comment,"ZC:")==0?3:0;
   if(prefix==0 || !LoadOwnRisk(ticket))continue;
   bool fillAnchor=Get("version")=="FILL_PRICE_ATR_V1";
   bool pineLock=Get("exitLockVersion")=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
+  bool fixedTf1=Get("exitLockVersion")=="TF1_XAU_FIXED_STEPLOCK_V1";
   bool tf15Be=prefix==5 && Get("exitLockVersion")=="PINE_STEPLOCK_BE_TF15_V1";double planEntry=Val("entry");
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
   bool btcCandleLock=Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1" || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V2";
+  string executionTf=Get("executionTimeframe");
+  // Older TF1 Pine Direct fills lack a timeframe. Keep legacy risk files on M2.
+  bool untaggedTf1=executionTf=="" && prefix==3 && Get("version")=="MT5_FILL_PLAN_V1" &&
+                   (pineLock || Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1");
+  ENUM_TIMEFRAMES lockTimeframe=(executionTf=="1" || untaggedTf1)?PERIOD_M1:PERIOD_M2;
   bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
   double lockTrigger=Val("tp3LockTrigger");
   bool candleLock=pineLock || btcCandleLock;
@@ -761,12 +833,14 @@ void ManageLocalStepLock(){
   if(t1<=0 || !ordered)continue;
   MqlTick tick;if(!SymbolInfoTick(symbol,tick))continue;
   double quote=buy?tick.bid:tick.ask,target=0;
+  if(fixedTf1 && quote<=0)continue;
   if((pineLock || tf15Be) && planEntry>0)entry=planEntry;
   string stageFile="lock-"+(string)PositionGetInteger(POSITION_IDENTIFIER)+".tsv";
   int stage=0;
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
-  double decisionQuote=candleLock?ClosedTf2Quote(symbol,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
+  double decisionQuote=candleLock?ClosedStepLockQuote(symbol,lockTimeframe,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
+  if(fixedTf1 && (buy?quote>=t3+3.0-1e-8:quote<=t3-3.0+1e-8))observed=4;
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
    if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;
@@ -785,7 +859,7 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if(candleLock && stage>=4)target=t3;else if(stage==3)target=t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
+  if((candleLock || fixedTf1) && stage>=4)target=t3;else if(stage==3)target=fixedTf1?t1:t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
   if(pineLock && target>0){
    // A Pine reference reached TP1 before this account filled. Never convert
    // that reference lock into a loss-making stop or a forced market close.
@@ -915,6 +989,27 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
  if(lockHandle!=INVALID_HANDLE && trans.type==TRADE_TRANSACTION_DEAL_ADD){ManageManual();Heartbeat();}
 }
 
+string CloseAccountPositions(){
+ if(!Permissions())return PermissionReason();
+ ulong tickets[];
+ int total=PositionsTotal();
+ for(int i=0;i<total;i++){
+  ulong ticket=PositionGetTicket(i);
+  if(ticket==0)continue;
+  int size=ArraySize(tickets);
+  ArrayResize(tickets,size+1);
+  tickets[size]=ticket;
+ }
+ for(int i=0;i<ArraySize(tickets);i++){
+  if(!Permissions())return PermissionReason();
+  if(!PositionSelectByTicket(tickets[i]))continue;
+  trade.SetExpertMagicNumber((ulong)PositionGetInteger(POSITION_MAGIC));
+  trade.SetTypeFillingBySymbol(PositionGetString(POSITION_SYMBOL));
+  trade.PositionClose(tickets[i]);
+ }
+ if(PositionsTotal()!=0)return "POSITIONS_REMAIN";
+ return total==0?"NO_OPEN_POSITIONS":"CLOSED_ALL";
+}
 string MasterResetIdle(){
  for(int k=PositionsTotal()-1;k>=0;k--){ulong ticket=PositionGetTicket(k);if(IsManaged(ticket))return "MASTER_RESET_POSITIONS_OPEN";}
  armed=false;resumePending=false;manualEnabled=false;manualSince=0;ownerPod="";enabledSymbols="";
@@ -952,6 +1047,9 @@ void Process(bool chartWorker){
  string masterResetVersion=Get("masterResetVersion"),masterResetScope=Get("masterResetScope");
  processingStarted=GetTickCount64();
  string id=Get("id"),type=Get("type"),c=Get("symbol"),commandPod=Get("podId");
+ bool cashLayerMailbox=type=="PLACE_CASH_SETUP";
+ string cashPolicy=Get("cashLayerPolicy");
+ if(cashLayerMailbox)type="PLACE_SETUP";
  bool sessionMatches=Get("eaSession")==eaSession && commandPod!="";
  string strategyMode=Get("strategyMode");if(strategyMode=="")strategyMode="TF2_SCALPING";
  ulong scope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
@@ -985,7 +1083,7 @@ void Process(bool chartWorker){
  string actionReason[4];string actionType[4];double actionValue[4];
  for(int i=0;i<4;i++){actionType[i]=Get("a"+(string)i+"type");actionValue[i]=Val("a"+(string)i+"value");actionReason[i]=Get("a"+(string)i+"reason");}
  if(!ValidId(id)){armed=false;resumePending=false;return;}
- if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
+ if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && type!="MANUAL_CLOSE_ALL" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
  !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;resumePending=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
  if(!directEntry && (long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
@@ -1073,15 +1171,17 @@ void Process(bool chartWorker){
   string executionTf=Get("executionTimeframe");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="1" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
-  else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry);
+  else if(cashLayerMailbox ? cashPolicy!="USD_TP050_SL200_V1" : cashPolicy!=""){lastEntryCode="CASH_LAYER_POLICY_UNSUPPORTED";}
+  else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry,cashLayerMailbox);
   code=ok?"SETUP_OPENED":lastEntryCode;
  }
+ else if(type=="MANUAL_CLOSE_ALL"){code=CloseAccountPositions();ok=code=="CLOSED_ALL" || code=="NO_OPEN_POSITIONS";}
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;resumePending=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
  else if(type=="MANAGE_POSITION" && symbol!="" && actions>=1 && actions<=4 && Permissions()){
   ok=true;
   for(int i=0;i<actions;i++){
    bool done=false;
-   if(actionType[i]=="CLOSE_PERCENT" && (actionValue[i]==50 || actionValue[i]==100))done=CloseGroup(symbol,(int)actionValue[i],scope,actionReason[i]=="EXIT_SL");
+   if(actionType[i]=="CLOSE_PERCENT" && (actionValue[i]==50 || actionValue[i]==100))done=CloseGroup(symbol,(int)actionValue[i],scope,actionReason[i]=="EXIT_SL",true);
    else if(actionType[i]=="MOVE_SL_ENTRY" || actionType[i]=="MOVE_SL_TP1" || actionType[i]=="MOVE_SL_TP2")done=MoveGroup(symbol,actionType[i],actionValue[i],scope);
    if(!done)ok=false;
   }

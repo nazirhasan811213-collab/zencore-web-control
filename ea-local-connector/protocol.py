@@ -10,8 +10,9 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.44'
-CONNECTOR_BUILD = '2.1.44'
+TF1_FIXED_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V1'
+EA_VERSION = '2.51'
+CONNECTOR_BUILD = '2.1.52'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -146,6 +147,9 @@ def command_fields(command, identity):
         for i,a in enumerate(payload['actions']):
             if a.get('type')!='CLOSE_PERCENT' or (a.get('reason'),a.get('percent')) not in (('CLOSE_SEPARUH',50),('EXIT_REMAINING',100)):raise ValueError('ACTION_REJECTED')
             fields[f'a{i}type']='CLOSE_PERCENT';fields[f'a{i}value']=a['percent'];fields[f'a{i}reason']=a['reason']
+    elif kind == 'MANUAL_CLOSE_ALL':
+        if not identity.get('eaSession') or payload.get('scope') != 'ALL_OPEN_POSITIONS':
+            raise ValueError('TYPE_REJECTED')
     elif kind == 'MANUAL_MARKET_ORDER':
         lot = number(payload['lot'])
         symbol, side, sl_mode = payload.get('symbol'), payload.get('side'), payload.get('slMode')
@@ -192,11 +196,27 @@ def command_fields(command, identity):
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
-                    if not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
+                    fixed_exit = snap.get('exitLockVersion') == TF1_FIXED_EXIT
+                    if fixed_exit:
+                        if symbol != 'XAUUSD' or execution_tf != '1' or mode != 'TF2_SCALPING':
+                            raise ValueError('EXIT_POLICY_REJECTED')
+                        sign = 1 if payload['side'] == 'BUY' else -1
+                        entry = float(number(payload['entry']))
+                        for key, distance in (('sl',-3),('tp1',2.5),('tp2',4),('tp3',6)):
+                            if abs(float(number(payload[key]))-(entry+sign*distance)) > 1e-6:
+                                raise ValueError('ANALYSIS_PRICE_MISMATCH')
+                    if not fixed_exit and not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
                 if snap.get('maxEntryGap')!=4 or execution_tf not in ('1','2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
                 fields['executionPolicy']='PINE_DIRECT_FILL_GAP4_V1'
+            cash_policy = snap.get('cashLayerPolicy')
+            if cash_policy is not None:
+                if cash_policy != 'USD_TP050_SL200_V1' or fields.get('executionPolicy') != 'PINE_DIRECT_FILL_GAP4_V1':
+                    raise ValueError('CASH_LAYER_POLICY_REJECTED')
+                # A chart running older MQL ignores the distinct local command type.
+                fields['type'] = 'PLACE_CASH_SETUP'
+                fields['cashLayerPolicy'] = cash_policy
             fields['side'] = payload['side']
             fields['slPolicy']='EXACT_ANALYSIS_V2'
             for key in ('entry','sl','tp1','tp2','tp3'): fields[key] = number(payload[key])
@@ -267,7 +287,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'manualCloseAllVersion':fields.get('manualCloseAllVersion'), 'tf1FixedExitVersion':fields.get('tf1FixedExitVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
@@ -283,7 +303,8 @@ def heartbeat(fields, selected_identity, now_ms=None):
         position['positionId']=fields.get(prefix+'positionId',position['ticket'])
         position['setupId']=fields.get(prefix+'setupId')
         position['fillRiskVersion']=fields.get(prefix+'fillRiskVersion')
-        for key in ('tp1','tp2','tp3','initialSl'):
+        if fields.get(prefix+'exitStage')=='CASH_LAYER': position['exitStage']='CASH_LAYER'
+        for key in ('tp1','tp2','tp3','initialSl','activeTp'):
             if prefix+key in fields: position[key]=float(fields[prefix+key])
         for key in ('volume','entry','currentPrice','activeSl','profitUsd','openedAt'):
             position[key] = float(fields[prefix+key])

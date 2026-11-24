@@ -11,7 +11,8 @@ function allow(row,batch,now=Date.now()){
  if(action==='CLOSE_50_NOW')return stage==='WAIT_YELLOW'&&row[50]===true&&row[52]===50;
  if(['EXIT_ALL','EXIT_REMAINING','EXIT_SL'].includes(action))return stage==='CLOSED'&&row[52]===0;
  return ['HOLD','WAIT_OPPOSITE_YELLOW','IDLE'].includes(action)&&Number.isFinite(row[24])&&row[24]>0&&
- row[59]===true&&['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150','MOVE_SL_TP1','MOVE_SL_TP2','MOVE_SL_TP3'].includes(row[58]);
+ row[59]===true&&(['MOVE_SL_ENTRY_PLUS_050','MOVE_SL_ENTRY_PLUS_150','MOVE_SL_TP1','MOVE_SL_TP2','MOVE_SL_TP3'].includes(row[58])||
+ row[58]==='MOVE_SL_ENTRY'&&meta.exitLockVersion===require('./tf2-ribbon-scalping').FIXED_LOCK);
 }
 function block(row,batch){
  const versioned=String(batch?.timeframe)==='1'&&batch.feedUpdateVersion==='SPLIT_CHANNEL_BOOTSTRAP_V2'&&['TF1_SOLID_RIBBON_V1'].includes(row?.[66]?.entryRuleVersion);

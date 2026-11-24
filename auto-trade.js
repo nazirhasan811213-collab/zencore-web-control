@@ -185,7 +185,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', executionError(control.lastError) || control.exitPolicyReason || control.strategyReason || (effective==='ARMING' ? stateCopy(effective) : null) || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar waktu aktif trader Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', executionError(control.lastError) || control.cashLayerReason || control.exitPolicyReason || control.strategyReason || (effective==='ARMING' ? stateCopy(effective) : null) || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar waktu aktif trader Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));
@@ -244,12 +244,18 @@
   function renderSettings(state) {
     const manualCount=(state.positions||[]).filter(p=>p.origin==='MANUAL'&&(state.settings?.manualExit?.pairScope||'XAUUSD').split(',').includes(p.symbol)).length;
     setText('manualLayerStatus',state.connection?.online===false?'Layer aktif: data MT5 offline':`Layer aktif: ${manualCount} / 10${manualCount>=10?' • HAD DICAPAI — berhenti tambah entry':''}${manualCount>10?' • layer tambahan tetap dilindungi':''}`);
-    setText('manualExitStatus',state.connection?.online===false?'EA OFFLINE':state.settings?.manualExit?.enabled?(state.pod?.manualExitEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN'):(state.pod?.manualExitEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal'));
     const sync=state.manualExitSync;
-    if(sync?.status==='WAITING_EA')setText('manualExitStatus','TETAPAN DISIMPAN • MENUNGGU EA SERASI');
-    if(sync&&['PENDING','DELIVERED'].includes(sync.status))setText('manualExitStatus','TETAPAN MENUNGGU PENGESAHAN EA');
-    if(sync&&['REJECTED','FAILED','EXPIRED'].includes(sync.status))setText('manualExitStatus','TETAPAN GAGAL: '+(sync.code||sync.status));
-    if(state.connection?.online!==false&&state.settings?.manualExit?.enabled&&state.pod?.manualExitEnabled&&!['MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(state.pod?.manualExitVersion))setText('manualExitStatus','EA LAMA • KEMAS KINI EA 2.26 UNTUK STEP LOCK MANUAL');
+    const enabled=state.settings?.manualExit?.enabled;
+    const eaEnabled=state.pod?.manualExitEnabled;
+    let message=enabled?(eaEnabled?'EA AUTO EXIT ON':'MENUNGGU EA AKTIFKAN')
+      :(eaEnabled?'MENUNGGU EA MATIKAN':'AUTO EXIT OFF • SL/TP broker sedia ada kekal');
+    if(state.connection?.online===false)message=enabled?'EA OFFLINE • AUTO EXIT BELUM DISAHKAN':'EA OFFLINE';
+    else if(sync?.status==='WAITING_EA')message='TETAPAN DISIMPAN • MENUNGGU EA SERASI';
+    else if(['PENDING','DELIVERED'].includes(sync?.status))message='TETAPAN MENUNGGU PENGESAHAN EA';
+    else if(['REJECTED','FAILED','EXPIRED'].includes(sync?.status))message='TETAPAN GAGAL: '+(sync.code||sync.status);
+    else if(enabled&&eaEnabled&&!['MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'].includes(state.pod?.manualExitVersion))message='EA LAMA • KEMAS KINI EA UNTUK STEP LOCK MANUAL';
+    setText('manualExitStatus',message);
+    renderCashLayerHint(state);
     const settings = state.settings;
     if (!settings || settingsHydrated || settingsDirty) return;
     hydrateModeDraft(settings);
@@ -258,6 +264,7 @@
     byId('manualExitPair').value=settings.manualExit?.pairScope||'XAUUSD';
     for(const k of ['tp1','tp2','tp3','sl'])byId('manual'+k[0].toUpperCase()+k.slice(1)).value=settings.manualExit?.[k] ?? ({tp1:2,tp2:4,tp3:6,sl:3})[k];
     byId('riskAcknowledged').checked = !!settings.riskAcknowledgedAt;
+    byId('entryExitStrategy').value = settings.entryExitStrategy || 'NORMAL';
     byId('tradingScheduleEnabled').checked = settings.tradingSchedule?.enabled === true;
     byId('newsTradingMode').value = (settings.tradingSchedule?.skipNews ?? (settings.tradingSchedule?.enabled === true)) ? 'skip' : 'trade';
     settingsHydrated = true;
@@ -289,13 +296,14 @@
     }
     tbody.innerHTML = positions.map(position => {
       const pnl = Number(position.profitUsd || 0);
+      const cashLayer = position.exitStage === 'CASH_LAYER';
       return `<tr>
         <td><b>${escape(position.symbol)}</b><small>#${escape(position.ticket)}</small></td>
-        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'1'))}</small></td>
+        <td class="${position.side === 'BUY' ? 'buy' : 'sell'}"><b>${escape(position.side)}</b><small>${escape(cashLayer ? 'LOW RISK' : position.exitPlan?.entryKind || (position.origin==='MANUAL'?'MANUAL':'ENTRY'))} · TF${escape(position.exitPlan?.timeframe || (position.strategyMode==='TF15_INTRA'?'15':'1'))}</small></td>
         <td><b>${escape(position.volume)}</b><small>lot</small></td>
         <td><b>${escape(price(position.entry, position.symbol))} → ${escape(price(position.currentPrice, position.symbol))}</b><small>${escape(timeText(position.openedAt))}</small></td>
         <td><b>${escape(price(position.activeSl, position.symbol))}</b><small>Initial ${escape(price(position.exitPlan?.sl ?? position.initialSl, position.symbol))}</small></td>
-        <td><b>${escape(String(position.slLock || 'INITIAL').replaceAll('_', ' '))}</b><small>${position.exitPlan ? `Entry pelan ${escape(price(position.exitPlan.entry,position.symbol))}<br>TP1 ${escape(price(position.exitPlan.tp1,position.symbol))}<br>TP2 ${escape(price(position.exitPlan.tp2,position.symbol))}<br>TP3 ${escape(price(position.exitPlan.tp3,position.symbol))}` : escape(String(position.exitStage || 'HOLD').replaceAll('_', ' '))}</small></td>
+        <td>${cashLayer ? `<b>TP ${escape(price(position.activeTp, position.symbol))}</b><small>+USD 0.50 per layer</small>` : `<b>${escape(String(position.slLock || 'INITIAL').replaceAll('_', ' '))}</b><small>${position.exitPlan ? `Entry pelan ${escape(price(position.exitPlan.entry,position.symbol))}<br>TP1 ${escape(price(position.exitPlan.tp1,position.symbol))}<br>TP2 ${escape(price(position.exitPlan.tp2,position.symbol))}<br>TP3 ${escape(price(position.exitPlan.tp3,position.symbol))}` : escape(String(position.exitStage || 'HOLD').replaceAll('_', ' '))}</small>`}</td>
         <td class="${pnl >= 0 ? 'positive' : 'negative'}"><b>${escape(money(pnl))}</b><small>live snapshot</small></td>
       </tr>`;
     }).join('');
@@ -303,7 +311,7 @@
 
   function auditDescription(item) {
     const detail = item.detail || {};
-    const blockReasons={WAIT_MT5_CLOSE_CONFIRMATION:'Belum ada pengesahan kitaran posisi MT5 ditutup selepas order terakhir',ENTRY_EVENT_EXPIRED:'Event dah luput — tunggu pullback + momentum baharu',WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE:'Posisi dah kosong — tunggu pullback dan momentum kuat',WAIT_NEW_SOLID_AFTER_CLOSE:'Tunggu SOLID baharu selepas posisi close',POSITION_STILL_OPEN:'Posisi strategi ini masih terbuka',CONNECTION_NOT_READY:'Sambungan MT5 belum READY',WAIT_EXECUTION_EVENT:'SOP/chart sahaja — belum ada event execution',SOP_OR_SETUP_NOT_CURRENT:'SOP atau identiti setup semasa belum sah',OUTSIDE_SESSION:'Di luar waktu trade pilihan',NEWS_PAUSE:'Trade dihentikan ikut pilihan news',EXECUTION_ROLLOUT_LOCKED:'Execution dikunci oleh pelayan'};
+    const blockReasons={WAIT_MT5_CLOSE_CONFIRMATION:'Belum ada pengesahan kitaran posisi MT5 ditutup selepas order terakhir',ENTRY_EVENT_EXPIRED:'Event dah luput — tunggu pullback + momentum baharu',WAIT_PULLBACK_MOMENTUM_AFTER_CLOSE:'Posisi dah kosong — tunggu pullback dan momentum kuat',WAIT_NEW_SOLID_AFTER_CLOSE:'Tunggu SOLID baharu selepas posisi close',POSITION_STILL_OPEN:'Posisi strategi ini masih terbuka',CONNECTION_NOT_READY:'Sambungan MT5 belum READY',CASH_LAYER_POLICY_UNAVAILABLE:'Low Risk menunggu signal Pine Direct dan EA serasi pada akaun USD hedging',WAIT_EXECUTION_EVENT:'SOP/chart sahaja — belum ada event execution',SOP_OR_SETUP_NOT_CURRENT:'SOP atau identiti setup semasa belum sah',OUTSIDE_SESSION:'Di luar waktu trade pilihan',NEWS_PAUSE:'Trade dihentikan ikut pilihan news',EXECUTION_ROLLOUT_LOCKED:'Execution dikunci oleh pelayan'};
     const descriptions = {
       SECURE_POD_PROVISIONED: 'Secure Pod DEMO disediakan.',
       PAIRING_CODE_CREATED: `Kod pairing sekali guna dijana untuk ${ownershipDescription(detail.ownershipMode)}.`,
@@ -405,6 +413,7 @@
     const active=Object.values(modeDraft).flatMap(mode=>Object.values(mode)).find(group=>group.enabled);
     return {
       strategyMode: 'BOTH', modeSettings: modeDraft,
+      entryExitStrategy: byId('entryExitStrategy').value,
       manualExit:{enabled:byId('manualExitEnabled').checked,pairScope:byId('manualExitPair').value,...Object.fromEntries(['tp1','tp2','tp3','sl'].map(k=>[k,byId('manual'+k[0].toUpperCase()+k.slice(1)).value]))},
       tradingSchedule: Core.malaysiaTradingSchedule(byId('tradingScheduleEnabled').checked, byId('newsTradingMode').value === 'skip'),
       capitalUsd: byId('capitalUsd').value,
@@ -414,9 +423,18 @@
     };
   }
 
+  function renderCashLayerHint(state = currentState) {
+    const hint = byId('cashLayerHint');
+    hint.hidden = byId('entryExitStrategy').value !== 'LOW_RISK';
+    hint.textContent = 'Setiap layer · TP +USD 0.50 · SL −USD 2.00' +
+      (state?.control?.cashLayerReady ? '' : ' · Perlu EA dan Connector serasi pada akaun MT5 USD hedging');
+  }
+
   function updateRiskPreview() {
     if (!Core) return;
     const input = selectedSettings();
+    const cashLayer = input.entryExitStrategy === 'LOW_RISK';
+    renderCashLayerHint();
     const validation = Core.validateSettings(input);
     const fxSettings = Core.effectiveSettings(validation.value, 'EURUSD');
     setText('fxTotalLotPreview', fxSettings.totalLot == null ? '—' : fxSettings.totalLot.toFixed(3));
@@ -452,9 +470,9 @@
     setText('riskPercent', risk.available ? `${risk.riskPercent.toFixed(2)}%` : '—');
     setText('riskUsd', risk.available ? money(risk.riskUsd) : 'Tunggu setup aktif');
     setText('riskEntry', price(plan?.entry, symbol));
-    setText('riskSl', price(plan?.sl, symbol));
+    setText('riskSl', cashLayer ? 'USD 2.00 per layer' : price(plan?.sl, symbol));
     setText('riskMessage', risk.message);
-    const recommendation = Core.recommendPositionSizes({
+    const recommendation = cashLayer ? {message:'Low Risk menggunakan lot dan layer yang diisi.'} : Core.recommendPositionSizes({
       capitalUsd: input.capitalUsd,
       preferredLayers: effective.layers,
       entry: plan?.entry,

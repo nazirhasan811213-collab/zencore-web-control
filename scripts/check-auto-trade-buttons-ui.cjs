@@ -27,6 +27,10 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
    else throw Error('Unexpected mutation '+p);
    return r.fulfill({json:state()});
   }
+  if(p==='/auto-trade'&&new URL(r.request().url()).searchParams.get('view')==='dashboard-settings'){
+   const body=fs.readFileSync('auto-trade.html','utf8').replace('<body>','<body class="dashboard-settings-view">');
+   return r.fulfill({body,contentType:'text/html'});
+  }
   const file=p==='/auto-trade'?'auto-trade.html':p.slice(1);
   if(/^[\w.-]+\.(html|css|js)$/.test(file)&&fs.existsSync(file))return r.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html'});
   return r.fulfill({json:{ok:true,markets:[],commands:[]}});
@@ -77,6 +81,37 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
   await page.locator('#manualExitEnabled').uncheck();
   await page.locator('#manualExitSaveStatus').filter({hasText:/Tetapan tersimpan/}).waitFor();
   a.equal(calls.filter(x=>x.p.endsWith('/manual-exit')).at(-1).body.enabled,false);
+  await page.goto('http://localhost/auto-trade?view=dashboard-settings');
+  await page.locator('#capitalUsd').waitFor({state:'visible'});
+  await page.waitForFunction(()=>document.querySelector('#capitalUsd').value==='900');
+  const box=id=>page.locator('#'+id).boundingBox();
+  for(const width of [1280,768,360,320]){
+   await page.setViewportSize({width,height:1000});
+   const modal=await box('capitalUsd'),layer=await box('layers'),lot=await box('lotPerLayer');
+   const tf1=await box('tf1Heading'),tf15=await box('tf15Heading'),pair=await box('tradeSymbols');
+   a.ok(modal.y<layer.y && layer.x<lot.x, 'Modal, layer and lot appear in that order');
+   a.ok(pair.y>tf1.y && pair.y>tf15.y, 'Pair and strategy are below the top settings');
+   const groups=await page.locator('.settings-group').evaluateAll(sections=>sections.map(section=>{
+    const rect=section.getBoundingClientRect(),style=getComputedStyle(section);
+    return {heading:section.querySelector('h3').textContent,top:rect.top,bottom:rect.bottom,line:style.borderTopWidth,accent:style.getPropertyValue('--section-accent').trim()};
+   }));
+   a.deepEqual(groups.map(x=>x.heading),['Modal, layer dan saiz lot','Strategi dan pair Auto Trade','Entry Manual · Auto Exit']);
+   a.equal(new Set(groups.map(x=>x.accent)).size,3, 'Each section has a distinct accent');
+   for(let i=1;i<groups.length;i++){
+    a.ok(groups[i].top-groups[i-1].bottom>=24);
+    a.equal(groups[i].line,'1px');
+   }
+   for(const id of ['manualSl','manualTp1','manualTp2','manualTp3'])a.ok((await box(id)).y>groups[2].top);
+
+   if(width>=840)a.ok(modal.x<tf1.x && tf1.x<tf15.x);
+   if(width<=620){
+    a.ok(tf1.y<tf15.y);
+    const sl=await box('manualSl'),tp1=await box('manualTp1'),tp2=await box('manualTp2');
+    a.ok(sl.y===tp1.y&&tp2.y>sl.y,'Manual SL/TP uses two columns on mobile');
+   }
+   a.ok(modal.height>=42 && layer.height>=42 && lot.height>=42);
+   a.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  }
   a.deepEqual(errors,[]);
   console.log('Auto Trade buttons passed: cancel, rejection/retry, ON, STOP, mocked close, diagnostics failure/missing checks, all settings preserved. No live API or broker orders.');
  }finally{await browser.close();}

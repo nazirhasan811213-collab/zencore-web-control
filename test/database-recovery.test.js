@@ -28,6 +28,18 @@ test('startup waits through maintenance failures then initializes once', async (
   assert.ok(errors.every(x => x.retry));
 });
 
+test('startup retries after a PostgreSQL deadlock with the running instance', async () => {
+  let attempts = 0;
+  const waits = [];
+  const result = await initializeWithRetry(async () => {
+    if (++attempts === 1) throw Object.assign(new Error('deadlock detected'), {code:'40P01'});
+    return 'ready';
+  }, {wait:async ms => waits.push(ms)});
+  assert.equal(result, 'ready');
+  assert.equal(attempts, 2);
+  assert.deepEqual(waits, [5000]);
+});
+
 test('configuration and credential errors stop retries and remain unready', async () => {
   for (const code of ['28P01','42P01']) {
     let attempts=0;

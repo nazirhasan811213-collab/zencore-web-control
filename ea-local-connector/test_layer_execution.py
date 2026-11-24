@@ -33,13 +33,20 @@ using uint = unsigned int;
 #define ZENCORE_SPLIT_ROLE 0
 enum {ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
-      POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_VOLUME,
+      POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_TP, POSITION_VOLUME,
       SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_STOPS_LEVEL, SYMBOL_POINT,
       DEAL_POSITION_ID, DEAL_PRICE, TRADE_RETCODE_REQUOTE,
       TRADE_RETCODE_PRICE_CHANGED, TRADE_RETCODE_PRICE_OFF,
       TRADE_RETCODE_TOO_MANY_REQUESTS, TRADE_RETCODE_TIMEOUT};
 const ulong MAGIC=100, MAGIC15=150;
+enum ENUM_ORDER_TYPE {ORDER_TYPE_BUY, ORDER_TYPE_SELL};
 bool armed=true, netting=false, slip=false;
+double minimumStop=0;
+bool CashLayerAccount(){return !netting;}
+bool OrderCalcProfit(ENUM_ORDER_TYPE type,string,double lot,double open,double close,double &profit){
+ profit=(type==ORDER_TYPE_BUY?1:-1)*(close-open)*100*lot;
+ return true;
+}
 string enabledSymbols="XAUUSD", ownerPod="pod", lastEntryCode, brokerSymbols[9], _Symbol="GOLD.pro";
 int calls=0, selected=-1, rejectAt=-1, partialAt=-1;
 double quoteOffset=0;
@@ -59,7 +66,7 @@ void Sleep(int ms){now+=ms;}
 bool Heartbeat(){longestPulseGap=std::max(longestPulseGap,now-lastPulse);lastPulse=now;return true;}
 double lastDeal=0;
 string lastRisk;
-struct Position { long id; ulong magic; bool buy; double volume, entry, sl; };
+struct Position { long id; ulong magic; bool buy; double volume, entry, sl, tp; string comment; };
 std::vector<Position> positions;
 bool RejectEntry(string code){lastEntryCode=code;return false;}
 int StringFind(string s,string q){return s.find(q)==string::npos?-1:int(s.find(q));}
@@ -81,15 +88,16 @@ long PositionGetInteger(int key){
 string PositionGetString(int){return _Symbol;}
 double PositionGetDouble(int key){
  const auto &p=positions.at(selected);
- return key==POSITION_PRICE_OPEN?p.entry:key==POSITION_SL?p.sl:p.volume;
+ return key==POSITION_PRICE_OPEN?p.entry:key==POSITION_SL?p.sl:key==POSITION_TP?p.tp:p.volume;
 }
+bool CashLayerPosition(){return positions.at(selected).comment.find(":LR")!=string::npos;}
 bool IsOwn(ulong ticket){
  selected=int(ticket)-1;
  auto m=positions.at(selected).magic;
  return m==MAGIC||m==MAGIC15;
 }
 double SymbolInfoDouble(string,int){return .01;}
-long SymbolInfoInteger(string,int){return 0;}
+long SymbolInfoInteger(string,int){return minimumStop;}
 double Price(string,double p){return std::round(p*100)/100;}
 struct MqlTick{double bid,ask;};
 bool SymbolInfoTick(string,MqlTick &q){if(missingQuotes-->0)return false;q={4000+quoteOffset,4000.10+quoteOffset};return true;}
@@ -110,7 +118,7 @@ struct Trade{
  ulong deal=0, order=0;
  void SetExpertMagicNumber(ulong m){magic=m;}
  void SetTypeFillingBySymbol(string){}
- bool Send(bool buy,double v,double sl){
+ bool Send(bool buy,double v,double sl,double tp,string comment){
   assert(std::abs(v-.01)<1e-8);
   now+=brokerDelay;
   ++sends; retcode=0; deal=0; order=0; volume=0;
@@ -128,25 +136,25 @@ struct Trade{
    auto &p=positions.back();
    p.entry=(p.entry*p.volume+lastDeal*v)/(p.volume+v);
    p.volume+=v;p.sl=sl;
-  }else positions.push_back({calls,magic,buy,v,lastDeal,sl});
+  }else positions.push_back({calls,magic,buy,v,lastDeal,sl,tp,comment});
   return true;
  }
- bool Buy(double v,string symbol,double,double sl,double,string){assert(symbol==_Symbol);return Send(true,v,sl);}
- bool Sell(double v,string symbol,double,double sl,double,string){assert(symbol==_Symbol);return Send(false,v,sl);}
+ bool Buy(double v,string symbol,double,double sl,double tp,string comment){assert(symbol==_Symbol);return Send(true,v,sl,tp,comment);}
+ bool Sell(double v,string symbol,double,double sl,double tp,string comment){assert(symbol==_Symbol);return Send(false,v,sl,tp,comment);}
  double ResultVolume(){return volume;}
  double ResultPrice(){return lastDeal;}
  ulong ResultDeal(){return deal;}
  ulong ResultOrder(){return order;}
  uint ResultRetcode(){return retcode;}
- bool PositionModify(ulong t,double sl,double){positions.at(t-1).sl=sl;return true;}
+ bool PositionModify(ulong t,double sl,double tp){auto &p=positions.at(t-1);p.sl=sl;p.tp=tp;return true;}
 } trade;
 '''
         checks = r'''
-bool Run(bool buy,int layers,string symbol="XAUUSD"){
+bool Run(bool buy,int layers,string symbol="XAUUSD",bool cashLayer=false){
  int sign=buy?1:-1;
  return Entry("XAUUSD",symbol,buy?"BUY":"SELL",.01,layers,4000,
   4000-sign*2,4000+sign,4000+sign*2,4000+sign*3,"setup",false,
-  "TF2_SCALPING",false,0,"MT5_FILL_STEPLOCK","2",true);
+  "TF2_SCALPING",false,0,"MT5_FILL_STEPLOCK","2",true,cashLayer);
 }
 int main(){
  for(bool merged:{false,true})for(bool buy:{false,true})for(int layers:{12,50,75}){
@@ -222,6 +230,22 @@ int main(){
    assert(lastRisk.find("tp"+std::to_string(i+1)+"="+Num(targets[i]))!=string::npos);
   }
  }
+ _Symbol="GOLD.pro";
+ netting=false;
+ for(bool buy:{false,true}){
+  positions.clear();calls=0;sends=0;lastRisk.clear();
+  assert(Run(buy,8,"XAUUSD",true)&&calls==8&&PositionsTotal()==8&&lastRisk.empty());
+  for(const auto &p:positions){
+   assert(p.volume==.01&&p.comment=="ZC:setup:LR");
+   const double sign=buy?1:-1;
+   assert(std::abs(sign*(p.sl-p.entry)+2)<1e-8);
+   assert(std::abs(sign*(p.tp-p.entry)-.50)<1e-8);
+  }
+ }
+ netting=true;positions.clear();calls=0;sends=0;
+ assert(!Run(true,8,"XAUUSD",true)&&sends==0&&lastEntryCode=="CASH_LAYER_ACCOUNT_OR_POLICY_UNSUPPORTED");
+ netting=false;minimumStop=100;
+ assert(!Run(true,8,"XAUUSD",true)&&sends==0&&lastEntryCode=="CASH_LAYER_BROKER_DISTANCE");
  double a,b,c,d;
  assert(BtcPipTargets(_Symbol,true,64000,a,b,c,d));
  assert(a==64150 && b==64250 && c==64400 && d==64700.01);

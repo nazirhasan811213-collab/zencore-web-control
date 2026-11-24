@@ -1,14 +1,15 @@
-ZENCORE CONNECTOR 2.1.44 / EA 2.44
+ZENCORE CONNECTOR 2.1.48 / EA 2.48
 
 1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
-2. Jalankan ZenCoreSetup-2.1.44.exe dan buka ZenCore Connector.
+2. Jalankan ZenCoreSetup-2.1.48.exe dan buka ZenCore Connector.
 3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
-4. Tekan Pasang / kemas kini EA 2.44. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.44 dan ENTRY_CHART_READY dalam Experts.
+4. Tekan Pasang / kemas kini EA 2.48. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.48 dan ENTRY_CHART_READY dalam Experts.
 5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
 
-Pine Native V7 TF2/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
-BTCUSD Auto Entry TF2: 1 pip = 10 unit harga. Jarak dari fill MT5: SL 30 pip, TP1 15 pip, TP2 25 pip, TP3 40 pip. StepLock ikut candle M2 tutup: melepasi TP1 -> SL ke fill; TP2 -> SL ke TP1; TP3 -> SL ke TP2; melepasi 70 pip -> SL ke TP3.
+Pine Native V7 TF1/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
+BTCUSD Auto Entry TF1: 1 pip = 10 unit harga. Jarak dari fill MT5: SL 30 pip, TP1 15 pip, TP2 25 pip, TP3 40 pip. StepLock ikut candle M1 tutup: melepasi TP1 -> SL ke fill; TP2 -> SL ke TP1; TP3 -> SL ke TP2; melepasi 70 pip -> SL ke TP3.
 BTCUSD: tiada had beza harga Pine dengan harga MT5 sebelum order atau selepas fill.
+Normal XAUUSD TF1: StepLock ikut candle M1 MT5 yang sudah tutup.
 Pair lain: beza mutlak harga Ask/Bid dengan entry pelan Pine >= USD4 menyekat entry.
 SL dan setiap TP bermula daripada harga fill sebenar setiap posisi, dengan jarak pelan Pine.
 Setiap event hanya sekali; arahan pendua tidak membuka order baharu.
@@ -33,3 +34,5 @@ BTCUSD manual: SL dan TP1/2/3 gunakan ATR(8) M2 daripada candle MT5 terakhir yan
 
 
 TF1 BAHARU: Pasang Pine ZenCore_TF1_SOP_V7 pada chart 1 minit untuk XAUUSD dan BTCUSD. Cipta semula alert Execution dan Dashboard; alert lama tidak dikemas kini secara automatik. BUY wajib HEMA hijau, SELL wajib HEMA merah. TF15 kekal berasingan.
+
+Low Risk Auto Trade: akaun MT5 USD hedging. Setiap layer menggunakan lot pilihan pengguna dan mendapat TP kasar USD 0.50 dan SL kasar USD 2.00. Semak status EA di dashboard sebelum aktifkan.

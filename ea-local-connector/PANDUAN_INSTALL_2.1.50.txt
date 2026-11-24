@@ -1,0 +1,42 @@
+ZENCORE CONNECTOR 2.1.50 / EA 2.50
+
+1. Tutup aplikasi Connector lama sahaja. Jangan reset pautan akaun.
+2. Jalankan ZenCoreSetup-2.1.50.exe dan buka ZenCore Connector.
+3. Gunakan pautan akaun sedia ada. Pilih folder MT5 yang betul.
+4. Tekan Pasang / kemas kini EA 2.50. Pasang semula EA pada setiap carta yang digunakan supaya semua carta menjalankan versi ini. Semak EA_READY version=2.50 dan ENTRY_CHART_READY dalam Experts.
+5. Semak sambungan web dan tetapan ON/OFF sebelum menggunakan auto trade.
+
+Pine Native V7 TF1/TF15 -> EA. Entry tidak luput berdasarkan umur signal.
+BTCUSD Auto Entry TF1: 1 pip = 10 unit harga. Jarak dari fill MT5: SL 30 pip, TP1 15 pip, TP2 25 pip, TP3 40 pip. StepLock ikut candle M1 tutup: melepasi TP1 -> SL ke fill; TP2 -> SL ke TP1; TP3 -> SL ke TP2; melepasi 70 pip -> SL ke TP3.
+BTCUSD: tiada had beza harga Pine dengan harga MT5 sebelum order atau selepas fill.
+Normal XAUUSD TF1: StepLock ikut candle M1 MT5 yang sudah tutup.
+Pair lain: beza mutlak harga Ask/Bid dengan entry pelan Pine >= USD4 menyekat entry.
+SL dan setiap TP bermula daripada harga fill sebenar setiap posisi, dengan jarak pelan Pine.
+Setiap event hanya sekali; arahan pendua tidak membuka order baharu.
+EA menghantar satu order bagi setiap layer. Akaun netting menggabungkan fill setup yang sama.
+Bagi pair dengan had harga Pine, jika fill broker melepasi had, EA cuba tutup posisi dan melaporkan kejadian.
+
+Pakej ini tidak mengandungi password atau pautan akaun pengguna.
+
+Auto Exit manual: OFF menghentikan pengurusan EA; SL/TP broker sedia ada kekal. Tick/untick di web dihantar terus. Simpan TP/SL Manual untuk tetapan posisi baharu.
+
+Pine Direct menggunakan simbol carta MT5 tempat EA dipasang. EA menunggu harga Bid/Ask sehingga 4 saat.
+
+ENTRY MANUAL AUTO EXIT: TP1 -> SL entry; TP2 -> SL TP1; TP3 -> SL TP2; 2.00 (XAUUSD) atau 1× ATR (BTCUSD) melepasi TP3 -> SL TP3. TP broker dikosongkan pada posisi diambil alih. Tiada exit daripada signal Pine untuk mod manual ini.
+
+Pemulihan rangkaian: Connector cuba semula selepas gangguan sementara.
+
+Pilih XAUUSD, BTCUSD atau kedua-duanya dalam Auto Trade. Untuk kedua-dua pair, pasang EA pada dua carta dalam terminal MT5 yang sama. Satu Connector bagi terminal itu. Buat alert Pine berasingan bagi setiap pair dan timeframe yang digunakan.
+
+Inputs EA: pada carta Bitcoin pilih EntryChartRole = CHART_BTCUSD. Pada carta Gold pilih CHART_XAUUSD. EA membuka order pada simbol carta tersebut.
+
+BTCUSD manual: SL dan TP1/2/3 gunakan ATR(8) M2 daripada candle MT5 terakhir yang tutup sebelum entry. Jarak SL/TP1/TP2/TP3 ialah 1/1/2/3× ATR.
+
+
+TF1 BAHARU: Pasang Pine ZenCore_TF1_SOP_V7 pada chart 1 minit untuk XAUUSD dan BTCUSD. Cipta semula alert Execution dan Dashboard; alert lama tidak dikemas kini secara automatik. BUY wajib HEMA hijau, SELL wajib HEMA merah. TF15 kekal berasingan.
+
+Low Risk Auto Trade: akaun MT5 USD hedging. Setiap layer menggunakan lot pilihan pengguna dan mendapat TP kasar USD 0.50 dan SL kasar USD 2.00. Semak status EA di dashboard sebelum aktifkan.
+
+Dashboard CLOSE ALL memerlukan EA 2.50 dan Connector 2.1.50.
+
+XAUUSD TF1 Normal: SL 3.00, TP1 2.50, TP2 4.00, TP3 6.00. Gunakan alert Pine V7.2.

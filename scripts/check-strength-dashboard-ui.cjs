@@ -4,16 +4,112 @@ const {cockpit}=require('../trading-cockpit-model');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.ZENCORE_QA_CHROMIUM||undefined}),page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));let missing=false,missingGold=false;
+ const manualOrders=[],closeRequests=[],autoRequests=[];
+ const seenManualStates=[];
+ let effectiveState='STOPPED',rejectStop=true;
+ const fakeCloseId="22222222-2222-4222-8222-222222222222";
+ const fakeOrderId='11111111-1111-4111-8111-111111111111';
  function payload(){const now=Date.now();const gold=[1,15].map(tf=>({symbol:'XAUUSD',timeframe:String(tf),receivedAt:now,signalObservedAt:now,price:4100,open:4099,high:4101,low:4098,close:4100,hema20:4100,hema40:4099,ema9:4100,ema20:4099,ema50:4098,waveTrend1:10,waveTrend2:5,rsi:missing?undefined:58,chopIndex:55,relativeVolume:1.2,atr:2,strategyNormal:{tf:tf+'m',state:'WAIT',solid:true,side:'BUY',plan:{entry:4100,sl:4096,tp1:4101.5,tp2:4102.5,tp3:4103.5},sop:{atrReference:2,mtfScore:1,forecast:'CHOPPY',marketPower:65,advisor:{trend:'Sideways',momentum:'Mula perlahan',proTip:'Tunggu arah jelas.',mtfSummary:'TF1 dan TF15 masih bercampur.',aiCoach:'[NASIHAT]: Tunggu candle tutup.'}}}}));const bitcoin=gold.map(m=>({...m,symbol:'BTCUSD',price:m.timeframe==='1'?63711.98:63720, strategyNormal:{...m.strategyNormal,side:'SELL',plan:{entry:m.timeframe==='1'?63759.36:63900,sl:64050,tp1:63620,tp2:63500,tp3:63400}}}));return cockpit([...(missingGold?[]:gold),...bitcoin],now);}
  await page.route('**/*',route=>{const path=new URL(route.request().url()).pathname;
   if(path==='/app'){const html=fs.readFileSync('home.html','utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');return route.fulfill({body:html+'<script>window.EventSource=undefined;</script><script src="/dashboard-live-core.js"></script><script src="/trading-cockpit.js"></script>',contentType:'text/html'});}
   if(path==='/api/trading-cockpit')return route.fulfill({json:payload()});
+  if(path==='/api/auto-trade/state'||['/api/auto-trade/on','/api/auto-trade/stop'].includes(path)){
+   if(path!=='/api/auto-trade/state'){
+    assert.equal(route.request().method(),'POST');
+    autoRequests.push([path,route.request().postDataJSON()]);
+    if(path.endsWith('/stop')&&rejectStop)return route.fulfill({status:503,json:{error:'STOP belum diterima dalam ujian.'}});
+    effectiveState=path.endsWith('/on')?'ON':'STOPPED';
+   }
+   const now=Date.now();
+   return route.fulfill({json:{manualOrderReady:true,manualCloseAllBinding:'bound-account',generatedAt:now,pod:{accountMask:'****5839',lastSeenAt:now,tradeMode:'DEMO'},
+    control:{effectiveState,canTurnOn:true,canEnter:effectiveState==='ON'},positions:[],connection:{connected:true,online:true}}});
+  }
+  if(path==='/api/auto-trade/manual-close-all'){
+   assert.equal(route.request().method(),'POST');
+   closeRequests.push(route.request().postDataJSON());
+   return route.fulfill({status:202,json:{ok:true,commandId:fakeCloseId}});
+  }
+  if(path==='/api/auto-trade/manual-order'){
+   if(route.request().method()==='POST'){
+    manualOrders.push(route.request().postDataJSON());
+    return route.fulfill({status:202,json:{ok:true,commandId:fakeOrderId}});
+   }
+   const params=new URL(route.request().url()).searchParams;
+   const closing=params.get('id')===fakeCloseId;
+   if(!closing){
+    seenManualStates.push(params.get('after'));
+    if(seenManualStates.length===1)return route.fulfill({json:{ok:true,status:'DELIVERED',code:null}});
+   }
+   return route.fulfill({json:{ok:true,status:'EXECUTED',code:closing?'CLOSED_ALL':'MANUAL_ORDER_FILLED'}});
+  }
+
   if(path==='/auth/me')return route.fulfill({json:{user:{displayName:'UI Test'}}});
   if(path.startsWith('/api/')||path==='/ready')return route.fulfill({json:{ok:true}});
   if(/^\/[a-z0-9-]+\.(js|css)$/i.test(path)&&fs.existsSync('.'+path))return route.fulfill({body:fs.readFileSync('.'+path),contentType:path.endsWith('.js')?'application/javascript':'text/css'});
   return route.fulfill({body:''});
  });
  await page.goto('http://localhost/app');
+ const buy=page.getByRole('button',{name:'BUY',exact:true});
+ const confirm=page.getByRole('dialog',{name:'Sahkan order MT5'});
+ await buy.click();
+ await confirm.waitFor({state:'visible'});
+ assert.match(await confirm.innerText(),/BUY XAUUSD · 0.01 lot · MT5 \*{4}5839/);
+ await confirm.getByRole('button',{name:'BATAL',exact:true}).click();
+ assert.equal(manualOrders.length,0);
+ await buy.click();
+ await confirm.getByRole('button',{name:'HANTAR BUY',exact:true}).click();
+ await page.getByText('MT5 sahkan order dilaksanakan.',{exact:true}).waitFor({state:'visible'});
+ assert.equal(manualOrders.length,1);
+ assert.deepEqual(seenManualStates,['PENDING','DELIVERED']);
+ const {requestId,...order}=manualOrders[0];
+ assert.match(requestId,/^[a-f0-9-]{36}$/);
+ assert.deepEqual(order,{side:'BUY',symbol:'XAUUSD',lot:.01,accountMask:'****5839'});
+ const closeAll=page.getByRole('button',{name:'CLOSE ALL',exact:true});
+ const closeConfirm=page.getByRole('dialog',{name:'Sahkan CLOSE ALL'});
+ await page.locator('#quickLot').fill('');
+ await closeAll.click();
+ assert.match(await closeConfirm.innerText(),/MT5 \*{4}5839.*posisi manual dan Auto Trade/);
+ await closeConfirm.getByRole('button',{name:'BATAL',exact:true}).click();
+ assert.equal(closeRequests.length,0);
+ await closeAll.click();
+ await closeConfirm.getByRole('button',{name:'TUTUP SEMUA POSISI',exact:true}).click();
+ await page.getByText('MT5 sahkan semua posisi ditutup.',{exact:true}).waitFor({state:'visible'});
+ assert.equal(closeRequests.length,1);
+ const {requestId:closeRequestId,...closePayload}=closeRequests[0];
+ assert.match(closeRequestId,/^[a-f0-9-]{36}$/);
+ assert.deepEqual(closePayload,{confirmation:'CLOSE_ALL',binding:'bound-account'});
+
+
+ const auto=page.getByRole('region',{name:'Kawalan Auto Trade'});
+ const on=auto.getByRole('button',{name:'ON SISTEM',exact:true});
+ const stop=auto.getByRole('button',{name:'STOP ENTRY',exact:true});
+ assert.equal(await stop.isEnabled(),false);
+ await on.click();
+ const onDialog=page.getByRole('dialog',{name:'Hidupkan Auto Trade'});
+ await onDialog.getByRole('button',{name:'BATAL',exact:true}).click();
+ assert.equal(autoRequests.length,0);
+ await on.click();
+ await onDialog.getByLabel('AKTIFKAN DEMO').fill('WRONG');
+ await onDialog.getByRole('button',{name:'ON SISTEM',exact:true}).click();
+ await onDialog.getByText('Taip AKTIFKAN DEMO untuk meneruskan.').waitFor();
+ assert.equal(autoRequests.length,0);
+ await onDialog.getByLabel('AKTIFKAN DEMO').fill('AKTIFKAN DEMO');
+ await onDialog.getByRole('button',{name:'ON SISTEM',exact:true}).click();
+ await auto.getByText('ON',{exact:true}).waitFor();
+ assert.deepEqual(autoRequests,[['/api/auto-trade/on',{confirmation:'AKTIFKAN DEMO'}]]);
+ assert.equal(await on.isEnabled(),false);
+ const stopDialog=page.getByRole('dialog',{name:'Hentikan entry baharu'});
+ await stop.click();
+ await stopDialog.getByRole('button',{name:'BATAL',exact:true}).click();
+ assert.equal(autoRequests.length,1);
+ await stop.click();
+ await stopDialog.getByRole('button',{name:'STOP ENTRY',exact:true}).click();
+ await stopDialog.getByText('STOP belum diterima dalam ujian.').waitFor();
+ rejectStop=false;
+ await stopDialog.getByRole('button',{name:'STOP ENTRY',exact:true}).click();
+ await auto.getByText('STOPPED',{exact:true}).waitFor();
+ assert.equal(await stop.isEnabled(),false);
+
  const gold=page.locator('[data-pair="XAUUSD"]'),btc=page.locator('[data-pair="BTCUSD"]');
  await page.waitForFunction(()=>/^\d+%$/.test(document.querySelector('[data-pair="XAUUSD"] [data-field="strengthScore"]').textContent));
  assert.ok(await gold.locator('[data-field="strengthScore"]').evaluate(node=>parseFloat(getComputedStyle(node).fontSize)>=32));
@@ -25,24 +121,13 @@ const {cockpit}=require('../trading-cockpit-model');
  assert.equal(await gold.getByRole('combobox').inputValue(),'1');
  assert.equal(await btc.locator('[data-field="strengthTf"]').innerText(),'TF15');
  assert.equal(await btc.locator('[data-field="analysis"]').getAttribute('href'),'/analysis?pair=BTCUSD&tf=15');
- const summaryRows=page.locator('#marketGrid details');
- assert.equal(await summaryRows.count(),4);
- assert.equal(await page.locator('#marketGrid details[open]').count(),0);
- const firstRow=summaryRows.first();
- await firstRow.locator('summary').click();
- assert.match(await firstRow.innerText(),/Sideways/);
- assert.match(await firstRow.innerText(),/Mula perlahan/);
- assert.match(await firstRow.innerText(),/Panduan ZenCore\s+Tunggu arah jelas/);
- assert.match(await firstRow.innerText(),/Rumusan AI\s+TF1 dan TF15 masih bercampur/);
- assert.match(await firstRow.innerText(),/Nasihat\s+Tunggu candle tutup/);
- await page.getByRole('button',{name:'TF15',exact:true}).click();
- assert.equal(await page.locator('#marketGrid details:visible').count(),2);
- await page.getByRole('button',{name:'Semua TF',exact:true}).click();
- assert.equal(await page.locator('#marketGrid details:visible').count(),4);
+ assert.equal(await page.getByRole('heading',{name:'Ringkasan market',exact:true}).count(),0);
+ assert.equal(await page.locator('#dashboardAutoSettingsFrame').count(),1);
+ await page.locator('#chartPair').selectOption('BTCUSD');
+ await page.getByRole('button',{name:'TF15 Intra',exact:true}).click();
+ assert.match(await page.locator('#liveTfSummary').innerText(),/BTCUSD · TF15/);
  missing=true;
  await page.waitForFunction(()=>/Input Pine belum lengkap: rsi/.test(document.querySelector('[data-pair="XAUUSD"] [data-field="strength"]').textContent));
- assert.equal(await firstRow.getAttribute('open'),'');
- await firstRow.locator('summary').click();
  assert.equal(await gold.locator('[data-field="strengthScore"]').innerText(),'—');
  missingGold=true;
  await page.waitForFunction(()=>document.querySelector('[data-pair="XAUUSD"] [data-field="quoteStatus"]').textContent==='DATA LAMA');
@@ -56,9 +141,6 @@ const {cockpit}=require('../trading-cockpit-model');
   await page.setViewportSize({width,height:844});
   const mobileGold=await gold.boundingBox(),mobileBtc=await btc.boundingBox();
   assert.ok(mobileBtc.y>=mobileGold.y+mobileGold.height);
-  const [first,second]=await Promise.all([summaryRows.nth(0).boundingBox(),summaryRows.nth(1).boundingBox()]);
-  assert.ok(second.y>=first.y+first.height);
-  assert.ok(first.height<=80,'Pair/TF header plus the short market metrics line stays compact on mobile');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  }
  if(process.env.ZENCORE_DASHBOARD_PREVIEW){await page.setViewportSize({width:390,height:844});await page.screenshot({path:process.env.ZENCORE_DASHBOARD_PREVIEW});}

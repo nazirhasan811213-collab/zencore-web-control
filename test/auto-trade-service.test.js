@@ -1068,13 +1068,59 @@ test('manual market orders require matching account, upgraded connector and uniq
   await assert.rejects(service.manualOrder(userId,{...input,lot:0.001}),{code:'MANUAL_ORDER_INVALID'});
   await service.saveManualExit(userId,{enabled:false,sl:3.5});
   const {commandId} = await service.manualOrder(userId,input);
+  const pending = service.manualOrderStatus(userId,commandId,'PENDING');
+  await assert.rejects(service.manualOrderStatus('wrong-user',commandId,'PENDING'),{code:'ORDER_NOT_FOUND'});
+
   assert.equal((await service.manualOrder(userId,input)).commandId,commandId);
+  const pod = await store.getPodForUser(userId);
+  const queued = (await store.listRecentCommands(userId)).find(c=>c.id===commandId);
+  await store.createCommand({
+    id:crypto.randomUUID(), userId, podId:pod.id, type:'PLACE_SETUP', payload:{symbol:'XAUUSD'},
+    createdAt:queued.createdAt-1000, expiresAt:queued.expiresAt
+  });
   const {command} = await service.nextCommand(token);
   assert.equal(command.type,'MANUAL_MARKET_ORDER');
+  assert.equal((await pending).status,'DELIVERED');
+  const delivered=service.manualOrderStatus(userId,commandId,'DELIVERED');
   assert.equal(command.payload.slMode,'AUTO_TRADE_DISTANCE');
   assert.equal(command.payload.slDistance,3.5);
   assert.equal(command.payload.sl,undefined);
   assert.equal(command.payload.accountFingerprint,'a'.repeat(64));
   await service.acknowledgeCommand(token,commandId,{status:'EXECUTED',code:'MANUAL_ORDER_FILLED'});
+  assert.deepEqual(await delivered,{ok:true,status:'EXECUTED',code:'MANUAL_ORDER_FILLED'});
+
   assert.equal((await service.manualOrderStatus(userId,commandId)).status,'EXECUTED');
+});
+
+test('dashboard Close All is account-bound, deduplicated and leaves Auto Trade state intact', async () => {
+  const { store, service, userId, token } = await setup();
+  const heartbeat = {
+    accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
+    terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,
+    accountFingerprint:'a'.repeat(64),connectorVersion:'1.3.0-ea-local',terminalBuild:'5000',
+    symbolSpecs:[{symbol:'XAUUSD',tickSize:0.01,tickValue:1,volumeMin:0.01,volumeMax:100,volumeStep:0.01}],positions:[]
+  };
+  const input={confirmation:'CLOSE_ALL',requestId:crypto.randomUUID()};
+  await service.heartbeat(token,heartbeat);
+  assert.equal((await service.state(userId)).manualCloseAllBinding,null);
+  await assert.rejects(service.manualCloseAll(userId,input),{code:'MT5_NOT_READY'});
+  await service.heartbeat(token,{...heartbeat,manualCloseAllVersion:'ACCOUNT_POSITIONS_V1'});
+  input.binding=(await service.state(userId)).manualCloseAllBinding;
+  assert.match(input.binding,/^[a-f0-9]{64}$/);
+  await assert.rejects(service.manualCloseAll(userId,{...input,confirmation:''}),{code:'CONFIRMATION_REQUIRED'});
+  await assert.rejects(service.manualCloseAll(userId,{...input,binding:'old'}),{code:'MT5_NOT_READY'});
+  await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});
+  const {commandId}=await service.manualCloseAll(userId,input);
+  assert.equal((await service.manualCloseAll(userId,input)).commandId,commandId);
+  const {command}=await service.nextCommand(token);
+  assert.equal(command.type,'MANUAL_CLOSE_ALL');
+  assert.equal(command.payload.accountFingerprint,heartbeat.accountFingerprint);
+  assert.equal(command.payload.scope,'ALL_OPEN_POSITIONS');
+  await service.acknowledgeCommand(token,commandId,{status:'FAILED',code:'POSITIONS_REMAIN'});
+  assert.deepEqual(await service.manualOrderStatus(userId,commandId),{ok:true,status:'FAILED',code:'POSITIONS_REMAIN'});
+  assert.equal((await store.getProfile(userId)).desiredState,'ON');
+  const queued=await service.manualCloseAll(userId,{...input,requestId:crypto.randomUUID()});
+  await service.heartbeat(token,heartbeat);
+  assert.equal((await service.nextCommand(token)).command,null);
+  assert.equal((await service.manualOrderStatus(userId,queued.commandId)).status,'REJECTED');
 });
