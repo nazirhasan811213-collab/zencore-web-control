@@ -146,11 +146,14 @@
   const v=Live.accountOverview(a),set=(id,value)=>{if($(id))$(id).textContent=value;};
   set('overviewAccount',v.account);set('overviewServer',v.server);set('overviewPositions',v.count??'—');
   set('overviewModes',v.count===null?'Menunggu laporan MT5':`TF1: ${v.tf1} • TF15: ${v.tf15}`);
-  set('overviewLot',v.lot===null?'Menunggu snapshot MT5':v.lot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3})+' total lot');
+  const snapshotLabel={FRESH:'Snapshot MT5',DELAYED:'Snapshot MT5 · '+v.ageSeconds+'s lalu',
+    STALE:'Snapshot MT5 tamat tempoh',UNAVAILABLE:'Status MT5 tidak tersedia',WAITING:'Menunggu snapshot MT5'}[v.snapshotStatus];
+  set('overviewLot',v.lot===null?snapshotLabel:v.lot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3})+' total lot');
   set('overviewFloating',v.floating===null?'—':'USD '+v.floating.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  set('overviewFloatingSource',snapshotLabel);
   $('quickProfitCard').classList.toggle('profit',v.floating>0);
   $('quickProfitCard').classList.toggle('loss',v.floating<0);
-  set('overviewSeen',v.lastSeen?'Laporan MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':'Data belum disahkan / tidak segar');
+  set('overviewSeen',v.lastSeen?'Laporan terakhir MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':snapshotLabel);
  }
  const quickForm=$('quickOrder'),quickStatus=$('quickStatus');
  let quickReady=false,quickPending=false,quickAccount='';

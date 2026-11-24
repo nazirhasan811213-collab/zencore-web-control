@@ -62,12 +62,18 @@
    'Forecast '+forecast+' • Skor '+(score!==null&&score>=0&&score<=100?score+'/100':'—')];
  }
  function accountOverview(a,now=Date.now()){
-  const last=a?.pod?.lastSeenAt??a?.hostedAccount?.lastSeenAt;
-  const live=Number.isFinite(last)&&now-last>=-5000&&now-last<=15000&&a?.connection?.online===true&&Array.isArray(a.positions);
-  const positions=live?a.positions:null;
+  const account=a?.hostedAccount??a?.pod;
+  const last=account?.lastSeenAt;
+  const serverNow=Number.isFinite(a?.generatedAt)?a.generatedAt:now;
+  const age=Number.isFinite(last)&&last>0?serverNow-last:null;
+  const recent=age!==null&&age>=-5000&&age<=30000&&a?.connection?.online===true;
+  const positions=recent&&Array.isArray(a.positions)?a.positions:null;
+  const snapshotStatus=positions?(age<=15000?'FRESH':'DELAYED'):!a?'UNAVAILABLE':
+   age!==null&&!recent?'STALE':'WAITING';
   const sum=key=>positions&&positions.every(p=>typeof p[key]==='number'&&Number.isFinite(p[key]))?positions.reduce((n,p)=>n+p[key],0):null;
-  return {account:a?.pod?.accountMask||a?.hostedAccount?.accountMask||'—',server:a?.pod?.serverMask||a?.hostedAccount?.serverMask||'Belum dipautkan',
-   count:positions?positions.length:null,lot:sum('volume'),floating:sum('profitUsd'),lastSeen:live?last:null,
+  return {account:account?.accountMask||'—',server:account?.serverMask||'Belum dipautkan',
+   count:positions?positions.length:null,lot:sum('volume'),floating:sum('profitUsd'),lastSeen:age===null?null:last,
+   ageSeconds:age===null?null:Math.max(0,Math.floor(age/1000)),snapshotStatus,
    tf1:positions?positions.filter(p=>(p.strategyMode||'TF2_SCALPING')==='TF2_SCALPING').length:null,
    tf15:positions?positions.filter(p=>p.strategyMode==='TF15_INTRA').length:null};
  }

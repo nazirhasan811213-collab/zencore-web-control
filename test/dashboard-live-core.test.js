@@ -38,8 +38,15 @@ test('dashboard account summary requires a fresh MT5 snapshot and never invents 
  const a={pod:{accountMask:'****1234',serverMask:'****Demo',lastSeenAt:now},connection:{online:true},positions:[{strategyMode:'TF2_SCALPING',volume:.01,profitUsd:2},{strategyMode:'TF15_INTRA',volume:.02,profitUsd:-1}]};
  let v=accountOverview(a,now);assert.equal(v.account,'****1234');assert.equal(v.count,2);assert.equal(v.tf1,1);assert.equal(v.tf15,1);assert.equal(v.floating,1);assert.equal(v.lot,.03);
  v=accountOverview({...a,positions:[]},now);assert.equal(v.count,0);assert.equal(v.floating,0);
- for(const changed of [{...a,pod:{...a.pod,lastSeenAt:now-16000}},{...a,connection:{online:false}},{...a,positions:undefined},null]){v=accountOverview(changed,now);assert.equal(v.count,null);assert.equal(v.floating,null);}
+ for(const changed of [{...a,pod:{...a.pod,lastSeenAt:now-31000}},{...a,connection:{online:false}},{...a,positions:undefined},null]){v=accountOverview(changed,now);assert.equal(v.count,null);assert.equal(v.floating,null);}
  v=accountOverview({...a,positions:[{volume:.01}]},now);assert.equal(v.count,1);assert.equal(v.floating,null);
+ const delayed={...a,generatedAt:now,pod:{...a.pod,lastSeenAt:now-20000},positions:[]};
+ v=accountOverview(delayed,now+60000);
+ assert.equal(v.snapshotStatus,'DELAYED');assert.equal(v.ageSeconds,20);
+ assert.equal(v.count,0);assert.equal(v.floating,0);
+ v=accountOverview({...delayed,generatedAt:now+11000},now-60000);
+ assert.equal(v.snapshotStatus,'STALE');assert.equal(v.count,null);assert.equal(v.floating,null);
+
 });
 
  test('Telegram-style Pine analysis uses actual fields and clears stale or missing readings',()=>{
