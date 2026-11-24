@@ -1178,11 +1178,12 @@ class PostgresAutoTradeStore {
       }
 
       await client.query(`DELETE FROM zencore_mt5_positions WHERE user_id = $1`, [userId]);
-      for (const position of positions) {
+      if (positions.length) {
         await client.query(
           `INSERT INTO zencore_mt5_positions (user_id, ticket, data, updated_at)
-           VALUES ($1, $2, $3::jsonb, $4)`,
-          [userId, position.ticket, JSON.stringify(position), new Date(now)]
+           SELECT $1, position->>'ticket', position, $3
+           FROM jsonb_array_elements($2::jsonb) AS snapshot(position)`,
+          [userId, JSON.stringify(positions), new Date(now)]
         );
       }
       await client.query('COMMIT'); return true;

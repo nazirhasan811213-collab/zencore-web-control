@@ -1218,16 +1218,55 @@ function createAutoTradeService(options = {}) {
       ? btcChartPods.has(podId)&&profile?.symbols?.includes(symbol)
       : !btcChartPods.has(podId)&&profile?.symbols?.includes(symbol);
   }
+  const positionNotificationQueues = new Map();
+  function queuePositionNotification(snapshot) {
+    const { podId } = snapshot;
+    let queue = positionNotificationQueues.get(podId);
+    if (!queue) {
+      queue = { pending: 0, done: Promise.resolve() };
+      positionNotificationQueues.set(podId, queue);
+    }
+    queue.pending++;
+    queue.done = queue.done.then(async () => {
+      try {
+        await options.onConfirmedPositions(snapshot);
+      } catch {
+        console.error('Position Telegram observation unavailable');
+      } finally {
+        if (--queue.pending === 0) positionNotificationQueues.delete(podId);
+      }
+    });
+    // Keep observations ordered and apply backpressure if Telegram processing falls behind.
+    return queue.pending >= 4 ? queue.done : null;
+  }
+
   async function heartbeat(rawToken,input={}){
+    const startedAt = performance.now();
     const pod=await authenticatePod(rawToken);
     if(!pod)throw serviceError('INVALID_POD_TOKEN','Secure Pod tidak dibenarkan.',401);
-    const previous=heartbeatChains.get(pod.id)||Promise.resolve();
-    const task=previous.catch(()=>{}).then(()=>heartbeatUnlocked(rawToken,input));
+    const previous=heartbeatChains.get(pod.id);
+    let workStartedAt;
+    const task=(previous || Promise.resolve()).catch(()=>{}).then(()=>{
+      workStartedAt = performance.now();
+      // A queued heartbeat may have been revoked or superseded while waiting.
+      return heartbeatUnlocked(previous ? null : pod, rawToken, input);
+    });
     heartbeatChains.set(pod.id,task);
-    try{return await task;}finally{if(heartbeatChains.get(pod.id)===task)heartbeatChains.delete(pod.id);}
+    try {
+      return await task;
+    } finally {
+      if(heartbeatChains.get(pod.id)===task)heartbeatChains.delete(pod.id);
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      if (elapsedMs >= 750) {
+        console.warn('ZenCore slow MT5 heartbeat:', JSON.stringify({
+          elapsedMs, beforeProcessingMs: Math.round(workStartedAt - startedAt),
+          positionCount: Array.isArray(input?.positions) ? input.positions.length : 0
+        }));
+      }
+    }
   }
-  async function heartbeatUnlocked(rawToken, input = {}) {
-    const pod = await authenticatePod(rawToken);
+  async function heartbeatUnlocked(authenticatedPod, rawToken, input = {}) {
+    const pod = authenticatedPod || await authenticatePod(rawToken);
     if (!pod) throw serviceError('INVALID_POD_TOKEN', 'Secure Pod tidak dibenarkan.', 401);
     const heartbeatValidation = Core.normaliseHeartbeat(input);
     if (!heartbeatValidation.ok) {
@@ -1260,8 +1299,10 @@ function createAutoTradeService(options = {}) {
       const newPositions=heartbeatValidation.value.positions.filter(p=>p.origin!=='MANUAL'&&(p.strategyMode||'TF2_SCALPING')===mode&&!cycleBefore.some(old=>old.ticket===p.ticket));
       if(input.terminalConnected===true&&newPositions.length&&['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await store.appendAudit(pod.userId,'MT5_POSITION_OBSERVED',{timeframe:mode==='TF15_INTRA'?'15':options.scalpingTimeframe,observedAt:seenAt,layers:newPositions.length,lifecycleState:'POSITION_OPEN'});
     }
-    const profile=await store.getProfile(pod.userId);
-    const accountAccessAllowed=!options.entryAccessAllowed||await options.entryAccessAllowed(pod.userId);
+    const [profile, accountAccessAllowed] = await Promise.all([
+      store.getProfile(pod.userId),
+      options.entryAccessAllowed ? options.entryAccessAllowed(pod.userId) : true
+    ]);
     const config=profile?.manualExit;
     if(config&&accountAccessAllowed&&supportsManualExit(updated,config)){
       const becameCompatible=!supportsManualExit(pod,config)&&(config.enabled||updated.manualExitEnabled);
@@ -1277,8 +1318,8 @@ function createAutoTradeService(options = {}) {
     }
     const fullSnapshot=Array.isArray(input.positions)&&input.positions.length===heartbeatValidation.value.positions.length&&input.positions.length<=50;
     if(accountAccessAllowed&&isLocalEa(updated)&&input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&typeof options.onConfirmedPositions==='function'){
-      try{await options.onConfirmedPositions({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});}
-      catch(_){console.error('Position Telegram observation unavailable');}
+      const backpressure = queuePositionNotification({userId:pod.userId,podId:pod.id,accountFingerprint:updated.accountFingerprint,positions:heartbeatValidation.value.positions,observedAt:seenAt});
+      if (backpressure) await backpressure;
     }
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
     if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
