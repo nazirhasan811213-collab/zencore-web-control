@@ -27,7 +27,17 @@
  function state(v){return !fresh(v)?'WAITING':ready(v)?'SOLID '+v.market.strategyNormal.side:v.displayState==='READY'?'WAIT CONFIRMATION':(v.displayState||v.market?.strategyNormal?.state||'WATCH').replaceAll('_',' ');}
  function tone(v){return ready(v)?v.market.strategyNormal.side==='BUY'?'buy':'sell':'';}
  function dot(id,live){$(id).classList.toggle('live',live);}
- async function api(path){const r=await fetch(path,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}if(!r.ok)throw Error('UNAVAILABLE');return r.json();}
+ async function api(path,body){
+  const options={credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(8000)};
+  if(body){options.method='POST';options.body=JSON.stringify(body);options.headers['Content-Type']='application/json';}
+  const r=await fetch(path,options);
+  if(r.status===401){stopped=true;location.replace('/login');throw Error('SESSION');}
+  if(!r.ok){
+   const data=body?await r.json().catch(()=>null):null;
+   throw Error(data?.error||'UNAVAILABLE');
+  }
+  return r.json();
+ }
  function views(){
   return symbols.flatMap(symbol=>[1,15].map(timeframe=>{
    const view=payload?.pairs?.find(p=>p.symbol===symbol)?.views?.find(v=>Number(v.timeframe)===timeframe);
@@ -251,10 +261,88 @@
   }
   finally{quickPending=false;updateQuickButtons();}
  }
+ const autoCard=$('quickAutoTrade'),autoDialog=$('quickAutoDialog');
+ const autoOn=$('quickAutoOn'),autoStop=$('quickAutoStop'),autoSend=$('quickAutoSend');
+ const autoCancel=$('quickAutoCancel'),autoError=$('quickAutoError'),autoConfirmation=$('quickAutoConfirmation');
+ let autoAccount=null,autoAction=null,autoPending=false,autoPaused=false,autoRevision=0;
+ function canChangeAuto(action){
+  const c=autoAccount?.control,s=c?.effectiveState;
+  if(autoPending||autoAccount?.viewerMode||!s)return false;
+  return action==='on'?c.canTurnOn===true&&!['ON','ARMING','STOPPING','EMERGENCY_CLOSING'].includes(s):
+   !['UNPROVISIONED','STOPPED','STOPPING','EMERGENCY_CLOSING'].includes(s);
+ }
+ function renderAutoControls(){
+  const c=autoAccount?.control,s=c?.effectiveState;
+  autoCard.hidden=autoAccount?.viewerMode===true;
+  const shown=s==='ON'&&autoPaused?'PAUSED':s;
+  autoCard.dataset.state=shown||'';
+  $('quickAutoState').textContent=shown?.replaceAll('_',' ')||'SEMAK STATUS';
+  $('quickAutoNote').textContent=c?.lastError||({
+   ON:c?.canEnter?'Setup READY boleh dihantar ke MT5.':'Entry baharu disekat buat masa ini.',
+   PAUSED:'Penghantaran entry sedang dijeda.',
+   ARMING:'Menunggu pengesahan ON daripada MT5.',
+   STOPPING:'Menunggu pengesahan STOP daripada MT5.',
+   STOPPED:'Entry baharu dihentikan.',
+   UNPROVISIONED:'Sambungkan akaun MT5 dahulu.'
+  }[shown]||'Status sistem belum tersedia.');
+  autoOn.disabled=!canChangeAuto('on');
+  autoStop.disabled=!canChangeAuto('stop');
+ }
+ function openAutoDialog(action){
+  if(!canChangeAuto(action))return;
+  const on=action==='on',pod=autoAccount.pod,phrase='AKTIFKAN '+(pod?.tradeMode==='REAL'?'REAL':'DEMO');
+  autoAction={action,phrase,mask:pod?.accountMask,mode:pod?.tradeMode};
+  $('quickAutoDialogTitle').textContent=on?'Hidupkan Auto Trade':'Hentikan entry baharu';
+  $('quickAutoDialogNote').textContent=on
+   ?'Taip frasa pengesahan untuk benarkan entry Auto Trade'+(pod?.accountMask?' pada MT5 '+pod.accountMask:'.')
+   :'Posisi terbuka akan terus diurus oleh sistem exit.';
+  $('quickAutoPhrase').textContent=phrase;
+  $('quickAutoConfirmLabel').hidden=!on;
+  autoConfirmation.value='';
+  autoConfirmation.required=on;
+  autoError.textContent='';
+  autoSend.textContent=on?'ON SISTEM':'STOP ENTRY';
+  autoDialog.showModal();
+ }
+ autoOn.addEventListener('click',()=>openAutoDialog('on'));
+ autoStop.addEventListener('click',()=>openAutoDialog('stop'));
+ autoCancel.addEventListener('click',()=>autoDialog.close());
+ autoDialog.addEventListener('cancel',e=>{if(autoPending)e.preventDefault();});
+ $('quickAutoForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const draft=autoAction,pod=autoAccount?.pod;
+  if(!draft||autoPending)return;
+  if(!canChangeAuto(draft.action)||draft.mask!==pod?.accountMask||draft.mode!==pod?.tradeMode){
+   autoError.textContent='Status sistem atau akaun MT5 berubah. Buka semula pengesahan.';
+   return;
+  }
+  const turningOn=draft.action==='on';
+  const confirmation=autoConfirmation.value.trim().toUpperCase();
+  if(turningOn&&confirmation!==draft.phrase){autoError.textContent='Taip '+draft.phrase+' untuk meneruskan.';return;}
+  autoPending=true;
+  autoRevision++;
+  autoSend.disabled=autoCancel.disabled=autoConfirmation.disabled=true;
+  autoError.textContent='';
+  renderAutoControls();
+  try{
+   autoAccount=await api('/api/auto-trade/'+draft.action,turningOn?{confirmation}:{});
+   autoDialog.close();
+  }catch(error){
+   autoError.textContent=error.name==='TimeoutError'||error.name==='TypeError'||error.message==='UNAVAILABLE'
+    ?'Arahan belum disahkan. Semak status sistem sebelum cuba lagi.':error.message;
+  }finally{
+   autoRevision++;
+   autoPending=false;
+   autoSend.disabled=autoCancel.disabled=autoConfirmation.disabled=false;
+   renderAutoControls();
+  }
+ });
  async function connections(){
   if(stopped)return;
   const otherStatus=Promise.allSettled([api('/api/analysis-alerts/settings'),api('/ready')]);
+  const revision=autoRevision;
   const account=await api('/api/auto-trade/state').catch(()=>null);
+  if(!autoPending&&revision===autoRevision){autoAccount=account;renderAutoControls();}
   quickForm.hidden=account?.viewerMode===true;
   const wasReady=quickReady;
   quickReady=account?.manualOrderReady===true;
@@ -270,6 +358,7 @@
   const [alerts,health]=await otherStatus;
   const state=account?.control?.effectiveState||'STOPPED';
   const paused=health.status==='fulfilled'?health.value?.autoEntry?.signalsPaused:null;
+  if(paused!==null&&paused!==undefined){autoPaused=paused;renderAutoControls();}
   $('tradeState').textContent=!account?'STATUS BELUM ADA':paused===true?'PAUSED':state==='ON'&&paused===null?'ON • SEMAK STATUS':state.replaceAll('_',' ');
   dot('tradeDot',!!account&&state==='ON'&&paused===false);
   const p=alerts.status==='fulfilled'?alerts.value.settings:null;

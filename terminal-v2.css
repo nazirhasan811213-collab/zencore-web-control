@@ -195,6 +195,54 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
   margin: 0;
   align-content: center;
 }
+.quick-auto-trade {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  width: 248px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #334259;
+  border-radius: 10px;
+  background: #121e30;
+}
+.quick-auto-trade[hidden], #quickAutoConfirmLabel[hidden], #quickAutoError:empty { display: none; }
+.quick-auto-trade h2 { margin: 0; color: #eef6ff; font-size: .85rem; }
+.quick-auto-state {
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid #334259;
+  border-radius: 7px;
+  background: #111b2b;
+}
+.quick-auto-state strong { color: #c6daf3; font-size: .9rem; }
+.quick-auto-state small { color: #b4c6df; font-size: .72rem; line-height: 1.4; }
+.quick-auto-trade[data-state="ON"] .quick-auto-state { background: #102b26; border-color: #26654f; }
+.quick-auto-trade[data-state="ON"] strong { color: #7bedbc; }
+.quick-auto-trade[data-state="PAUSED"] strong,
+.quick-auto-trade[data-state="ARMING"] strong,
+.quick-auto-trade[data-state="STOPPING"] strong { color: #ffd18f; }
+.quick-auto-trade[data-state="ERROR"] strong { color: #ffb6be; }
+.quick-auto-actions { display: grid; gap: 7px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.quick-auto-actions button {
+  min-height: 34px;
+  padding: 4px 7px;
+  border: 1px solid #49627d;
+  border-radius: 6px;
+  background: #1a2c44;
+  color: #ebf3ff;
+  font-family: inherit;
+  font-size: .72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+#quickAutoOn { border-color: #36795d; background: #164333; }
+#quickAutoStop { border-color: #8b6246; background: #493222; }
+.quick-auto-actions button:disabled { opacity: .48; cursor: default; }
+#quickAutoConfirmLabel { display: grid; gap: 7px; margin-bottom: 12px; }
+#quickAutoConfirmation { min-height: 40px; padding: 8px; border: 1px solid #40516a; border-radius: 6px; background: #0b1727; color: inherit; font: inherit; }
+#quickAutoError { color: #ffb6be; }
 .quick-mt5-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
