@@ -1167,6 +1167,22 @@ class PostgresAutoTradeStore {
   }
 
   async replacePositions(userId, positions, now, expectedPod = null) {
+    if (expectedPod && !positions.length) {
+      // The common flat snapshot uses one statement, with the same binding
+      // lock as a populated snapshot and no window for a rotated token.
+      const result = await this.pool.query(
+        `WITH bound AS (
+           SELECT user_id FROM zencore_mt5_secure_pods
+           WHERE user_id = $1 AND id = $2 AND token_hash = $3 AND revoked_at IS NULL
+           FOR UPDATE
+         ), cleared AS (
+           DELETE FROM zencore_mt5_positions AS positions USING bound
+           WHERE positions.user_id = bound.user_id
+         ) SELECT EXISTS (SELECT 1 FROM bound) AS accepted`,
+        [userId, expectedPod.id, expectedPod.tokenHash]
+      );
+      return result.rows[0].accepted;
+    }
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
