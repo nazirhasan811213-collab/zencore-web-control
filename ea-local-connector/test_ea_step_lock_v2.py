@@ -15,13 +15,22 @@ CPP=r'''
 using string=std::string;
 using ulong=unsigned long;
 constexpr int POSITION_MAGIC=1,POSITION_TYPE=2,POSITION_PRICE_OPEN=3,POSITION_SL=4,POSITION_TP=5,POSITION_VOLUME=6,POSITION_IDENTIFIER=7,POSITION_COMMENT=8,POSITION_SYMBOL=9;
-constexpr int POSITION_TIME=15,PERIOD_M2=2,POSITION_TYPE_BUY=0,SYMBOL_TRADE_STOPS_LEVEL=10,SYMBOL_TRADE_FREEZE_LEVEL=11,SYMBOL_POINT=12,SYMBOL_VOLUME_STEP=13,FILE_COMMON=14,COPY_TICKS_INFO=16,POSITION_PROFIT=17;
+enum ENUM_TIMEFRAMES {PERIOD_CURRENT=0,PERIOD_M1=1,PERIOD_M2=2};
+int PeriodSeconds(ENUM_TIMEFRAMES tf){return tf*60;}
+constexpr int POSITION_TIME=15,POSITION_TYPE_BUY=0,SYMBOL_TRADE_STOPS_LEVEL=10,SYMBOL_TRADE_FREEZE_LEVEL=11,SYMBOL_POINT=12,SYMBOL_VOLUME_STEP=13,FILE_COMMON=14,COPY_TICKS_INFO=16,POSITION_PROFIT=17;
 string channel="test";
 struct MqlTick {double bid,ask;};
 struct MqlRates {long time;double close;};
 double closedQuote=100,closeBid=0,closeAsk=0;long closedTime=200,openedTime=0;int historyCount=1;
+double closedM1=0;
+ENUM_TIMEFRAMES requestedTimeframe=PERIOD_CURRENT;
 long TimeCurrent(){return closedTime+120;}
-int CopyRates(const string&,int,int,int,std::vector<MqlRates>& rows){rows={{closedTime,closedQuote}};return historyCount;}
+int CopyRates(const string&,ENUM_TIMEFRAMES tf,int start,int count,std::vector<MqlRates>& rows){
+ assert(start==1&&count==1);
+ requestedTimeframe=tf;
+ rows={{closedTime,tf==PERIOD_M1?closedM1:closedQuote}};
+ return historyCount;
+}
 int CopyTicksRange(const string&,std::vector<MqlTick>& out,int,ulong,ulong){out={{closeBid,closeAsk}};return 1;}
 bool allowed=true,owned=true,closed=false,failModify=false,cashLayer=false;
 double positionProfit=0;
@@ -103,7 +112,7 @@ int main(){
 
   for(const string version:{"BTC_TF2_CASH_STEPLOCK_V2","BTC_TF2_PIP_STEPLOCK_V1"}){
   files.clear();protectionTickets.clear();protectionTryAt.clear();closed=false;oldSl=100-sign;
-  files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("exitLockVersion",version)+Row("tp1",std::to_string(100+1.5*sign))+Row("tp2",std::to_string(100+2.5*sign))+Row("tp3",std::to_string(100+3.5*sign))+Row("tp3LockTrigger",std::to_string(100+6.51*sign));
+  files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("executionTimeframe","2")+Row("exitLockVersion",version)+Row("tp1",std::to_string(100+1.5*sign))+Row("tp2",std::to_string(100+2.5*sign))+Row("tp3",std::to_string(100+3.5*sign))+Row("tp3LockTrigger",std::to_string(100+6.51*sign));
   auto nextCashBar=[&](double gross){
    closedTime+=120;clockMs+=1000;closedQuote=100+sign*7;
    // The executable side of this close can differ from the chart price.
@@ -124,6 +133,31 @@ int main(){
   }
 
  }
+ // TF1 uses the completed M1 even when the completed M2 missed the target.
+ for(int sign:{1,-1}){
+  side=sign==1?POSITION_TYPE_BUY:1;
+  for(const string tf:{"1","","2"}){
+   files.clear();protectionTickets.clear();protectionTryAt.clear();closed=false;oldSl=100-sign*4;
+   quote=100+sign*2;closedM1=100+sign*1.7;closedQuote=100+sign;
+   files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+
+    Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("executionTimeframe",tf)+
+    Row("exitLockVersion","PINE_STEPLOCK_150_TP3_PLUS3_V1")+Row("tp1",std::to_string(100+sign*1.5))+
+    Row("tp2",std::to_string(100+sign*2.5))+Row("tp3",std::to_string(100+sign*3.5));
+   ManageLocalStepLock();
+   assert(requestedTimeframe==(tf=="2"?PERIOD_M2:PERIOD_M1));
+   assert(oldSl==(tf=="2"?100-sign*4:100+sign*1.5));
+  }
+ }
+ // BTC with the TF1 candle policy still bases a short lock on the last Ask, not the chart Bid.
+ files.clear();protectionTickets.clear();protectionTryAt.clear();side=1;closed=false;oldSl=104;quote=97;
+ closedM1=98;closeBid=98.4;closeAsk=98.7;closedTime+=120;
+ files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+Row("side","SELL")+
+  Row("entry","100")+Row("executionTimeframe","1")+Row("exitLockVersion","BTC_TF2_PIP_STEPLOCK_V1")+
+  Row("tp1","98.5")+Row("tp2","97.5")+Row("tp3","96.5");
+ ManageLocalStepLock();assert(requestedTimeframe==PERIOD_M1&&oldSl==104);
+ closeAsk=98.4;closedTime+=60;clockMs+=1000;
+ ManageLocalStepLock();assert(oldSl==100);
+
  cashLayer=true;owned=true;allowed=true;oldSl=98;positionVolume=.01;
  for(double profit:{.49,-1.99,.50,-2.00}){
   closed=false;positionProfit=profit;
