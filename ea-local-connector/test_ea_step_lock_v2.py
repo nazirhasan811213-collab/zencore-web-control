@@ -148,6 +148,27 @@ int main(){
    assert(oldSl==(tf=="2"?100-sign*4:100+sign*1.5));
   }
  }
+ // Fixed XAUUSD setup uses the actual fill and never locks at +1.50.
+ for(int sign:{1,-1}){
+  side=sign==1?POSITION_TYPE_BUY:1;
+  files.clear();protectionTickets.clear();protectionTryAt.clear();closed=false;oldSl=100-sign*3;
+  files["fill-risk-77.tsv"]=Row("version","MT5_FILL_PLAN_V1")+Row("symbol","XAUUSD")+
+   Row("side",sign==1?"BUY":"SELL")+Row("entry","100")+Row("executionTimeframe","1")+
+   Row("exitLockVersion","TF1_XAU_FIXED_STEPLOCK_V1")+Row("tp1",std::to_string(100+sign*2.5))+
+   Row("tp2",std::to_string(100+sign*4))+Row("tp3",std::to_string(100+sign*6));
+  auto nextFixedBar=[&](double progress){
+   closedTime+=60;clockMs+=1000;closedM1=100+sign*progress;closedQuote=100;
+   quote=100+sign*10;ManageLocalStepLock();assert(requestedTimeframe==PERIOD_M1 && !closed);
+  };
+  nextFixedBar(1.5);assert(oldSl==100-sign*3);
+  nextFixedBar(2.49);assert(oldSl==100-sign*3);
+  nextFixedBar(2.5);assert(oldSl==100);
+  nextFixedBar(4);assert(oldSl==100+sign*2.5);
+  nextFixedBar(6);assert(oldSl==100+sign*2.5);
+  nextFixedBar(8.99);assert(oldSl==100+sign*2.5);
+  nextFixedBar(9);assert(oldSl==100+sign*6);
+  nextFixedBar(7);assert(oldSl==100+sign*6);
+ }
  // BTC with the TF1 candle policy still bases a short lock on the last Ask, not the chart Bid.
  files.clear();protectionTickets.clear();protectionTryAt.clear();side=1;closed=false;oldSl=104;quote=97;
  closedM1=98;closeBid=98.4;closeAsk=98.7;closedTime+=120;

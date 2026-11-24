@@ -10,8 +10,9 @@ import time
 from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
-EA_VERSION = '2.49'
-CONNECTOR_BUILD = '2.1.49'
+TF1_FIXED_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V1'
+EA_VERSION = '2.50'
+CONNECTOR_BUILD = '2.1.50'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -195,7 +196,16 @@ def command_fields(command, identity):
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
-                    if not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
+                    fixed_exit = snap.get('exitLockVersion') == TF1_FIXED_EXIT
+                    if fixed_exit:
+                        if symbol != 'XAUUSD' or execution_tf != '1' or mode != 'TF2_SCALPING':
+                            raise ValueError('EXIT_POLICY_REJECTED')
+                        sign = 1 if payload['side'] == 'BUY' else -1
+                        entry = float(number(payload['entry']))
+                        for key, distance in (('sl',-3),('tp1',2.5),('tp2',4),('tp3',6)):
+                            if abs(float(number(payload[key]))-(entry+sign*distance)) > 1e-6:
+                                raise ValueError('ANALYSIS_PRICE_MISMATCH')
+                    if not fixed_exit and not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
                 if snap.get('maxEntryGap')!=4 or execution_tf not in ('1','2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
@@ -277,7 +287,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'manualCloseAllVersion':fields.get('manualCloseAllVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'manualCloseAllVersion':fields.get('manualCloseAllVersion'), 'tf1FixedExitVersion':fields.get('tf1FixedExitVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')

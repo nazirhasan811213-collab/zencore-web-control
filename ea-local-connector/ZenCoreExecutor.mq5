@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.49"
- #property version "2.49"
+ #define ZENCORE_RELEASE "2.50"
+ #property version "2.50"
 #else
- #define ZENCORE_RELEASE "2.49"
- #property version "2.49"
+ #define ZENCORE_RELEASE "2.50"
+ #property version "2.50"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -314,7 +314,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("manualCloseAllVersion","ACCOUNT_POSITIONS_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("manualCloseAllVersion","ACCOUNT_POSITIONS_V1")+Row("tf1FixedExitVersion","TF1_XAU_FIXED_STEPLOCK_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -536,12 +536,15 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  bool buy=side=="BUY";
  bool guardedTf2=strategyMode=="TF2_SCALPING" && (executionTf=="1" || executionTf=="2") && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
  bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
- bool fillPlan=directEntry || guardedTf2 || fillTf15;
+ bool fixedTf1=exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V1";
+ if(fixedTf1 && (c!="XAUUSD" || executionTf!="1" || strategyMode!="TF2_SCALPING" || cashLayer || fillAnchor || tightTf2))
+  return RejectEntry("EXIT_POLICY_REJECTED");
+ bool fillPlan=directEntry || guardedTf2 || fillTf15 || fixedTf1;
  bool btcPip=!cashLayer && ZENCORE_SPLIT_ROLE==0 && directEntry && c=="BTCUSD" && strategyMode=="TF2_SCALPING";
  if(btcPip)exitLockVersion="BTC_TF2_PIP_STEPLOCK_V1";
 
  const double guardRisk=4.0;
- double stopDistance=btcPip?30*BTC_TF2_PIP:directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
+ double stopDistance=fixedTf1?3.0:btcPip?30*BTC_TF2_PIP:directEntry?MathAbs(entry-sl):guardedTf2?guardRisk:MathAbs(entry-sl);
  double entryTickSize=fillPlan?SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE):0;
  if(fillAnchor && (strategyMode!="TF2_SCALPING" || tightTf2 || !MathIsValidNumber(riskAtr) || riskAtr<=0))return RejectEntry("FILL_RISK_REJECTED");
  // Per-position targets require hedging; netting merges the layers/fill prices.
@@ -811,6 +814,7 @@ void ManageLocalStepLock(){
   if(prefix==0 || !LoadOwnRisk(ticket))continue;
   bool fillAnchor=Get("version")=="FILL_PRICE_ATR_V1";
   bool pineLock=Get("exitLockVersion")=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
+  bool fixedTf1=Get("exitLockVersion")=="TF1_XAU_FIXED_STEPLOCK_V1";
   bool tf15Be=prefix==5 && Get("exitLockVersion")=="PINE_STEPLOCK_BE_TF15_V1";double planEntry=Val("entry");
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
@@ -820,10 +824,10 @@ void ManageLocalStepLock(){
   // Older TF1 Pine Direct fills lack a timeframe. Keep legacy risk files on M2.
   bool untaggedTf1=executionTf=="" && prefix==3 && Get("version")=="MT5_FILL_PLAN_V1" &&
                    (pineLock || Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1");
-  ENUM_TIMEFRAMES lockTimeframe=(executionTf=="1" || untaggedTf1)?PERIOD_M1:PERIOD_M2;
+  ENUM_TIMEFRAMES lockTimeframe=(fixedTf1 || executionTf=="1" || untaggedTf1)?PERIOD_M1:PERIOD_M2;
   bool cashTargets=btcCandleLock || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V1";
   double lockTrigger=Val("tp3LockTrigger");
-  bool candleLock=pineLock || btcCandleLock;
+  bool candleLock=fixedTf1 || pineLock || btcCandleLock;
   bool ordered=buy?(cashTargets?t1<=t2 && t2<=t3:t1<t2 && t2<t3):
                    (cashTargets?t1>=t2 && t2>=t3:t1>t2 && t2>t3);
   if(t1<=0 || !ordered)continue;
@@ -835,6 +839,10 @@ void ManageLocalStepLock(){
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
   double decisionQuote=candleLock?ClosedStepLockQuote(symbol,lockTimeframe,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
+  if(fixedTf1 && decisionQuote>0){
+   double progress=(buy?1.0:-1.0)*(decisionQuote-entry);
+   observed=progress+1e-8>=9.0?4:progress+1e-8>=4.0?2:progress+1e-8>=2.5?1:0;
+  }
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
    if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;

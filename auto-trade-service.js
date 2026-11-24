@@ -1,4 +1,5 @@
 const PineDirect=require('./pine-direct-entry');
+const {FIXED_LOCK}=require('./tf2-ribbon-scalping');
 const crypto = require('crypto');
 const Core = require('./auto-trade-core');
 const {rebasedManagement}=require('./live-entry-management');
@@ -1197,6 +1198,7 @@ function createAutoTradeService(options = {}) {
   }
 
   const directEntryPods=new Set();
+  const fixedTf1Pods=new Map();
   const cashLayerPods=new Set();
   const manualOrderPods=new Map();
   const manualCloseAllPods=new Map();
@@ -1243,6 +1245,8 @@ function createAutoTradeService(options = {}) {
     else manualOrderPods.delete(pod.id);
     if(input.manualCloseAllVersion==='ACCOUNT_POSITIONS_V1')manualCloseAllPods.set(pod.id,updated.accountFingerprint);
     else manualCloseAllPods.delete(pod.id);
+    if(input.tf1FixedExitVersion===FIXED_LOCK)fixedTf1Pods.set(pod.id,updated.accountFingerprint);
+    else fixedTf1Pods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
@@ -1351,6 +1355,10 @@ function createAutoTradeService(options = {}) {
     if(['1','3'].includes(options.scalpingTimeframe)&&command.payload?.strategyMode!=='TF15_INTRA'&&(command.payload?.analysisSnapshot?.executionTimeframe!==options.scalpingTimeframe||options.scalpingTimeframe==='1'&&command.payload?.analysisSnapshot?.analysisSopVersion!=='NORMAL_20261001_TF1_RIBBON_V1'))return false;
     const profile=await store.getProfile(command.userId);
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
+    if(command.payload?.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
+       !supportsSetupExit(await store.getPodForUser(command.userId),command.payload)){
+      diagnostic.reason='EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED';return false;
+    }
     const lowRisk = command.payload?.analysisSnapshot?.cashLayerPolicy === 'USD_TP050_SL200_V1';
     if (lowRisk !== (profile?.entryExitStrategy === 'LOW_RISK') || (lowRisk && (!PineDirect.isCommand(command) || !cashLayerPods.has(command.podId)))) return false;
     if(PineDirect.isCommand(command))return pairAllowed(profile,command.podId,command.payload.symbol)&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
@@ -1398,6 +1406,11 @@ function createAutoTradeService(options = {}) {
       payload:{symbol,side,lot,slMode:symbol==='XAUUSD'?'AUTO_TRADE_DISTANCE':'MANUAL_BTC_ATR8_M2',slDistance,accountFingerprint:pod.accountFingerprint},
       dedupeKey:'MANUAL_MARKET_ORDER:'+requestId,ttlMs:15000});
     return {ok:true,commandId:issued.command.id};
+  }
+
+  function supportsSetupExit(pod, payload) {
+    return payload.analysisSnapshot?.exitLockVersion!==FIXED_LOCK ||
+      (!!pod?.accountFingerprint && fixedTf1Pods.get(pod.id)===pod.accountFingerprint);
   }
 
   function supportsManualOrder(pod) {
@@ -1776,6 +1789,10 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || (!direct&&!isCurrent(market))){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
+        if(setup.payload.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
+           (hostedAccount||!supportsSetupExit(pod,setup.payload))){
+          await reportEntryBlock(profile,market,'EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED');continue;
+        }
         if(direct&&(symbol!=='XAUUSD'||setup.payload.layers>10)&&!expandedEntryPods.has(pod.id)){await reportEntryBlock(profile,market,'EA_DIRECT_POLICY_UPGRADE_REQUIRED');continue;}
         if((String(market.timeframe)==='3'||market.strategyNormal?.entrySopVersion==='NORMAL_20261001_TF1_RIBBON_V1')&&(hostedAccount||!isLocalEa(pod)))continue;
         if(setup.payload.analysisSnapshot?.entryAnchor==='LIVE_SIGNAL_PRICE_V1'&&(hostedAccount||!isLocalEa(pod)))continue;

@@ -496,7 +496,9 @@
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: validation.value.entryExitStrategy === 'LOW_RISK'
-          ? {...snapshot, cashLayerPolicy:'USD_TP050_SL200_V1'}
+          ? {...snapshot,
+              exitLockVersion:snapshot.exitLockVersion==='TF1_XAU_FIXED_STEPLOCK_V1'?'PINE_STEPLOCK_150_TP3_PLUS3_V1':snapshot.exitLockVersion,
+              cashLayerPolicy:'USD_TP050_SL200_V1'}
           : snapshot,
         schemaVersion: snapshot.schemaVersion,
         strategy: snapshot.strategy,

@@ -52,9 +52,9 @@ for(const tf of ['1','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke 
  const first=d.onMarket(m);await d.onMarket({...m,feedChannel:'DASHBOARD',signalObservedAt:f.now+1,entryEvent:false,strategyNormal:{...m.strategyNormal,state:'WAIT',plan:null}});
  a.equal(d.getLatestMarket('XAUUSD',tf),m);release();await first;a.equal(valid,true);a.equal(batches.length,1);
 });
-test('V7.1 native SOLID cannot be cancelled by the removed HEMA entry filter; follow-up HEMA remains required',()=>{
+test('Native SOLID cannot be cancelled by the removed HEMA entry filter; follow-up HEMA remains required',()=>{
  for(const tf of ['1','15']){
-  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7.1`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
+  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'2':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
  }
 });
 for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{
@@ -62,4 +62,43 @@ for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial
  a.ok(d);const payload={...d.snapshot,side,analysisSnapshot:d.snapshot};a.equal(check({payload},m,f.now).ok,true);
  const follow={...m,strategyNormal:{...m.strategyNormal,sop:{...m.strategyNormal.sop,cycleKind:'FOLLOWUP'}}};a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,cycleKind:'FOLLOWUP'}}},follow,f.now).reason,'TF1_HOLD_CANDLE_DIRECTION');
  a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,entryAuthorizedAt:f.now-61000}}},m,f.now).reason,'ENTRY_EVENT_EXPIRED');
+});
+
+for (const side of ['BUY','SELL']) test(`Fixed XAUUSD TF1 ${side} uses signed plan levels and requires its EA capability`,async()=>{
+ const {f,ingest,sign}=native('1',side);
+ const S=require('../tf2-ribbon-scalping'),D=require('../pine-direct-entry');
+ Object.assign(f.row,{23:4100-sign*3,24:4100-sign*3,25:4100+sign*2.5,26:4100+sign*4,27:4100+sign*6});
+ Object.assign(f.row[66],{riskPlanVersion:S.FIXED_RISK,exitLockVersion:S.FIXED_LOCK,planMode:'Fixed Distance'});
+ const m=ingest(),plan={entry:4100,sl:4100-sign*3,tp1:4100+sign*2.5,tp2:4100+sign*4,tp3:4100+sign*6};
+ a.equal(m.strategyNormal.state,'READY',m.strategyNormal.reason);
+ for(const key of Object.keys(plan))a.equal(m.strategyNormal.plan[key],plan[key]);
+ a.equal(D.decision(m).snapshot.exitLockVersion,S.FIXED_LOCK);
+ a.equal(D.decision({...m,tp1:4100+sign*1.5}),null);
+
+ const Core=require('../auto-trade-core'),{MemoryAutoTradeStore}=require('../auto-trade-store');
+ const {createAutoTradeService,tokenHash}=require('../auto-trade-service');
+ const settings={capitalUsd:1000,lotPerLayer:.01,layers:2,symbols:['XAUUSD'],riskAcknowledged:true};
+ const lowRisk=Core.buildSetupCommand(m,{...settings,entryExitStrategy:'LOW_RISK'});
+ a.equal(lowRisk.payload.analysisSnapshot.cashLayerPolicy,'USD_TP050_SL200_V1');
+ a.notEqual(lowRisk.payload.analysisSnapshot.exitLockVersion,S.FIXED_LOCK);
+ const store=new MemoryAutoTradeStore(),token='zcpod_'+'z'.repeat(48),hash=tokenHash(token),user='fixed-'+side;
+ const heartbeat={accountFingerprint:'a'.repeat(64),accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',
+   tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,
+   demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],symbolSpecs:[],directEntryPolicy:'PINE_DIRECT_FILL_GAP4_V1'};
+ const pod={...heartbeat,id:'pod-'+side,userId:user,tokenHash:hash,ownershipMode:'TRADER_OWNED_EA_LOCAL',lastSeenAt:f.now};
+ store.podsByUser.set(user,pod);store.podsByToken.set(hash,pod);
+ const svc=createAutoTradeService({store,now:()=>f.now,scalpingTimeframe:'1',localEaExecutionUserIds:[user],
+   allowedDemoSymbols:Core.TRADE_SYMBOLS,commandSigningKey:'a-test-signing-key-longer-than-thirty-two-bytes'});
+ await svc.saveSettings(user,settings);await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
+ await svc.heartbeat(token,heartbeat);
+ a.equal((await svc.dispatchMarkets([m])).queued,0);
+ await svc.heartbeat(token,{...heartbeat,tf1FixedExitVersion:S.FIXED_LOCK});
+ a.equal((await svc.dispatchMarkets([m])).queued,1);
+ const {command}=await svc.nextCommand(token);
+ a.equal(command.payload.analysisSnapshot.exitLockVersion,S.FIXED_LOCK);
+ a.equal(require('../pine-position-plan').valid(command),true);
+ const cp=require('child_process').spawnSync('python',['-c',"import json,sys;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify(command),encoding:'utf8'});
+ a.equal(cp.status,0,cp.stderr);const fields=JSON.parse(cp.stdout);
+ a.equal(fields.exitLockVersion,S.FIXED_LOCK);
+ for(const key of Object.keys(plan))a.equal(Number(fields[key]),plan[key]);
 });
