@@ -243,6 +243,7 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
 .dashboard-settings-panel iframe { display: block; width: 100%; min-height: 130px; border: 0; }
 
 .settings-compact-label { display: none; }
+.settings-group { display: contents; }
 body.zc-workspace.dashboard-settings-view { padding: 0; }
 .dashboard-settings-view .autotrade-shell { min-height: 0; padding: 0; }
 .dashboard-settings-view .autotrade-wrap { width: 100%; margin: 0; }
@@ -272,12 +273,28 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
   gap: 12px;
   align-items: start;
 }
-.dashboard-settings-view #settingsForm > .dual-capital,
-.dashboard-settings-view #settingsForm > .dual-trade-settings,
-.dashboard-settings-view #settingsError { grid-column: 1 / -1; }
-.dashboard-settings-view #settingsForm > .settings-fields { grid-template-columns: minmax(0, 1fr); }
-.dashboard-settings-view #settingsForm > .settings-fields,
-.dashboard-settings-view #settingsForm > .symbol-fieldset,
+.dashboard-settings-view .settings-group {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+.dashboard-settings-view .settings-group + .settings-group {
+  border-top: 1px solid #334259;
+  margin-top: 6px;
+  padding-top: 18px;
+}
+.dashboard-settings-view .settings-group-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #eaf7ff;
+  font-size: 15px;
+}
+.dashboard-settings-view .settings-group > .settings-fields { grid-template-columns: minmax(0, 1fr); }
+.dashboard-settings-view .settings-group > .settings-fields,
+.dashboard-settings-view .settings-group > .symbol-fieldset,
 .dashboard-settings-view .tf-setting-card {
   min-width: 0;
   margin: 0;
@@ -286,10 +303,15 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
   border-radius: 10px;
   background: #111b2a;
 }
-.dashboard-settings-view #settingsForm > .dual-capital {
+.dashboard-settings-view #settingsError,
+.dashboard-settings-view .settings-group > .symbol-fieldset,
+.dashboard-settings-view .sizing-group > .dual-capital,
+.dashboard-settings-view .sizing-group > .dual-trade-settings { grid-column: 1 / -1; }
+.dashboard-settings-view .sizing-group > .dual-capital {
   border-color: #30616d;
   background: #10232e;
 }
+.dashboard-settings-view .manual-exit-group legend { display: none; }
 .dashboard-settings-view .dual-trade-settings {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
@@ -356,23 +378,35 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
 .dashboard-settings-view #manualExitSaveStatus:empty,
 .dashboard-settings-view #settingsError:empty { display: none; }
 
+@media (min-width: 621px) {
+  .dashboard-settings-view .manual-exit-group .symbol-fieldset {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 8px 12px;
+  }
+  .dashboard-settings-view .manual-exit-group .symbol-fieldset > .tf-inputs,
+  .dashboard-settings-view #manualExitSaveStatus,
+  .dashboard-settings-view #manualExitError { grid-column: 1 / -1; }
+  .dashboard-settings-view .manual-exit-group .risk-ack { align-self: end; margin: 0; }
+  .dashboard-settings-view #saveManualExitButton { grid-column: 2; margin: 0; }
+}
+
 @media (min-width: 840px) {
-  .dashboard-settings-view #settingsForm {
+  .dashboard-settings-view .sizing-group {
     grid-template-columns: minmax(145px, .68fr) repeat(2, minmax(0, 1fr));
   }
-  .dashboard-settings-view #settingsForm > .dual-capital {
+  .dashboard-settings-view .sizing-group > .dual-capital {
     grid-column: 1;
     align-self: stretch;
     align-content: start;
   }
-  .dashboard-settings-view #settingsForm > .dual-trade-settings { grid-column: 2 / -1; }
-  .dashboard-settings-view #settingsForm > .auto-strategy-field { grid-column: 2 / -1; }
-  .dashboard-settings-view #settingsForm > .symbol-fieldset:first-of-type,
-  .dashboard-settings-view #settingsForm > .risk-ack { grid-column: 1 / 3; }
+  .dashboard-settings-view .sizing-group > .dual-trade-settings { grid-column: 2 / -1; }
 }
 
 @media (max-width: 620px) {
   .dashboard-v3 > .dashboard-settings-panel { padding: 10px; }
   .dashboard-settings-view #settingsForm,
+  .dashboard-settings-view .settings-group,
   .dashboard-settings-view .dual-trade-settings { grid-template-columns: minmax(0, 1fr); }
 }

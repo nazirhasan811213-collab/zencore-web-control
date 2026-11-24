@@ -91,6 +91,17 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
    const tf1=await box('tf1Heading'),tf15=await box('tf15Heading'),pair=await box('tradeSymbols');
    a.ok(modal.y<layer.y && layer.x<lot.x, 'Modal, layer and lot appear in that order');
    a.ok(pair.y>tf1.y && pair.y>tf15.y, 'Pair and strategy are below the top settings');
+   const groups=await page.locator('.settings-group').evaluateAll(sections=>sections.map(section=>{
+    const rect=section.getBoundingClientRect(),style=getComputedStyle(section);
+    return {heading:section.querySelector('h3').textContent,top:rect.top,bottom:rect.bottom,line:style.borderTopWidth};
+   }));
+   a.deepEqual(groups.map(x=>x.heading),['Modal, layer dan saiz lot','Strategi dan pair Auto Trade','Entry Manual · Auto Exit']);
+   for(let i=1;i<groups.length;i++){
+    a.ok(groups[i].top-groups[i-1].bottom>=12);
+    a.equal(groups[i].line,'1px');
+   }
+   for(const id of ['manualSl','manualTp1','manualTp2','manualTp3'])a.ok((await box(id)).y>groups[2].top);
+
    if(width>=840)a.ok(modal.x<tf1.x && tf1.x<tf15.x);
    if(width<=620)a.ok(tf1.y<tf15.y);
    a.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
