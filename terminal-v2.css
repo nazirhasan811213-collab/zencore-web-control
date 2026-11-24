@@ -259,42 +259,93 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
 .dashboard-settings-view .symbol-fieldset > small { display: none !important; }
 .dashboard-settings-view .settings-compact-label { display: inline; }
 .dashboard-settings-view .configuration-grid { grid-template-columns: minmax(0, 1fr); margin: 0; }
-.dashboard-settings-view .settings-panel { padding: 12px; }
+.dashboard-settings-view .settings-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .dashboard-settings-view #settingsForm {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: start;
 }
-.dashboard-settings-view #settingsForm > .auto-strategy-field,
+.dashboard-settings-view #settingsForm > .dual-capital,
 .dashboard-settings-view #settingsForm > .dual-trade-settings,
-.dashboard-settings-view #settingsForm > .risk-ack,
 .dashboard-settings-view #settingsError { grid-column: 1 / -1; }
 .dashboard-settings-view #settingsForm > .settings-fields { grid-template-columns: minmax(0, 1fr); }
-.dashboard-settings-view #settingsForm > .symbol-fieldset {
+.dashboard-settings-view #settingsForm > .settings-fields,
+.dashboard-settings-view #settingsForm > .symbol-fieldset,
+.dashboard-settings-view .tf-setting-card {
   min-width: 0;
   margin: 0;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid #334259;
-  border-radius: 8px;
+  border-radius: 10px;
+  background: #111b2a;
+}
+.dashboard-settings-view #settingsForm > .dual-capital {
+  border-color: #30616d;
+  background: #10232e;
 }
 .dashboard-settings-view .dual-trade-settings {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   gap: 12px;
 }
+.dashboard-settings-view .tf-setting-card {
+  border-color: #30616d;
+  background: #10232e;
+}
+.dashboard-settings-view .tf-setting-card header { gap: 6px; }
+.dashboard-settings-view .tf-setting-card h3 { font-size: 15px; }
+.dashboard-settings-view .tf-setting-card header strong {
+  font-size: 10px;
+  letter-spacing: .04em;
+  color: #b6d4df;
+}
+.dashboard-settings-view .tf-setting-card h4 {
+  font-size: 12px;
+  margin: 10px 0 0;
+}
 .dashboard-settings-view .settings-panel .tf-inputs { margin-top: 8px; gap: 8px; }
+.dashboard-settings-view .settings-panel .tf-inputs label span,
+.dashboard-settings-view .settings-panel .dual-capital label > span {
+  font-size: 11px;
+  letter-spacing: .03em;
+}
 .dashboard-settings-view .settings-panel .tf-inputs input,
 .dashboard-settings-view .settings-panel .dual-capital input {
   height: 36px;
   min-height: 36px;
-  font-size: 15px;
+  width: 100%;
   padding: 5px 8px;
+  font-size: 14px;
 }
-.dashboard-settings-view .tf-setting-card h3 { font-size: 16px; }
-.dashboard-settings-view .tf-setting-card h4,
-.dashboard-settings-view .tf-setting-card p { margin: 6px 0 0; }
-.dashboard-settings-view .settings-panel .mt5-symbol-fields { margin: 0; }
-.dashboard-settings-view .settings-panel .risk-ack { margin: 8px 0; }
+.dashboard-settings-view #settingsForm .tf-setting-card p {
+  margin: 6px 0 0;
+  color: #b6d4df;
+  font-size: 12px;
+}
+.dashboard-settings-view #settingsForm .tf-setting-card p b { color: #eaf7ff; }
+.dashboard-settings-view .settings-panel select {
+  width: 100%;
+  max-width: none;
+  min-height: 36px;
+}
+.dashboard-settings-view .settings-panel .risk-ack { margin: 0 0 8px; }
+.dashboard-settings-view #settingsForm > .risk-ack {
+  align-self: center;
+  margin: 0;
+}
+.dashboard-settings-view #settingsForm > .save-settings { margin: 0; }
+.dashboard-settings-view .symbol-fieldset > label:not(.risk-ack) {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
 .dashboard-settings-view .symbol-fieldset #manualLayerStatus { margin: 4px 0; }
 .dashboard-settings-view .symbol-fieldset .tf-inputs {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -302,9 +353,24 @@ body.zc-workspace.dashboard-settings-view { padding: 0; }
 }
 .dashboard-settings-view .settings-panel .save-settings { min-height: 38px; font-size: 13px; }
 .dashboard-settings-view #manualExitError:empty,
-.dashboard-settings-view #manualExitSaveStatus:empty { display: none; }
-.dashboard-settings-view .tf-setting-card { min-width: 0; padding: 12px; }
+.dashboard-settings-view #manualExitSaveStatus:empty,
 .dashboard-settings-view #settingsError:empty { display: none; }
+
+@media (min-width: 840px) {
+  .dashboard-settings-view #settingsForm {
+    grid-template-columns: minmax(145px, .68fr) repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-settings-view #settingsForm > .dual-capital {
+    grid-column: 1;
+    align-self: stretch;
+    align-content: start;
+  }
+  .dashboard-settings-view #settingsForm > .dual-trade-settings { grid-column: 2 / -1; }
+  .dashboard-settings-view #settingsForm > .auto-strategy-field { grid-column: 2 / -1; }
+  .dashboard-settings-view #settingsForm > .symbol-fieldset:first-of-type,
+  .dashboard-settings-view #settingsForm > .risk-ack { grid-column: 1 / 3; }
+}
+
 @media (max-width: 620px) {
   .dashboard-v3 > .dashboard-settings-panel { padding: 10px; }
   .dashboard-settings-view #settingsForm,
