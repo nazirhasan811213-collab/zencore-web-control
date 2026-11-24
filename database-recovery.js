@@ -4,7 +4,7 @@ function safeCode(error) {
 }
 function transient(error) {
   return /^(08|53|57P0)/.test(String(error?.code || '')) ||
-    ['ECONNRESET','ECONNREFUSED','ETIMEDOUT','EPIPE','ENOTFOUND','EAI_AGAIN'].includes(error?.code) ||
+    ['40P01','ECONNRESET','ECONNREFUSED','ETIMEDOUT','EPIPE','ENOTFOUND','EAI_AGAIN'].includes(error?.code) ||
     /connection (terminated|timeout)|connection.*timed out|timeout exceeded when trying to connect/i.test(String(error?.message || ''));
 }
 function guardPool(pool, label, log = console.error) {
