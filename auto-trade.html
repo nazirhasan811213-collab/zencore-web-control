@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/viewer-mode.css?v=1.1">
 <link rel="stylesheet" href="/workspace-shell.css?v=36.0">
 <link rel="stylesheet" href="/zencore-motion.css?v=1.0">
-<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"><link rel="stylesheet" href="/terminal-v2.css?v=20261124.autotrade-sections"><link rel="stylesheet" href="/zencore-desk-theme.css?v=20261111.1"></head>
+<link rel="stylesheet" href="/ui-refresh.css?v=20261005.1"><link rel="stylesheet" href="/terminal-v2.css?v=20261124.autotrade-polish"><link rel="stylesheet" href="/zencore-desk-theme.css?v=20261111.1"></head>
 <body>
   <main class="portal-shell autotrade-shell">
     <div class="portal-wrap autotrade-wrap">
@@ -167,8 +167,8 @@
                 <label><span>STRATEGI AUTO TRADE</span><select id="entryExitStrategy" name="entryExitStrategy" aria-describedby="cashLayerHint"><option value="NORMAL">Normal Auto Trade</option><option value="LOW_RISK">Low Risk Auto Trade</option></select></label>
                 <small id="cashLayerHint" hidden>Setiap layer · TP +USD 0.50 · SL −USD 2.00</small>
               </div>
-              <div class="settings-fields mt5-symbol-fields"><label><span>PAIR AUTO TRADE</span><select id="tradeSymbols"><option value="XAUUSD">XAUUSD sahaja</option><option value="BTCUSD">BTCUSD sahaja</option><option value="XAUUSD,BTCUSD">XAUUSD + BTCUSD</option></select></label></div>
-              <fieldset class="symbol-fieldset">
+              <div class="settings-fields mt5-symbol-fields auto-pair-field"><label><span>PAIR AUTO TRADE</span><select id="tradeSymbols"><option value="XAUUSD">XAUUSD sahaja</option><option value="BTCUSD">BTCUSD sahaja</option><option value="XAUUSD,BTCUSD">XAUUSD + BTCUSD</option></select></label></div>
+              <fieldset class="symbol-fieldset schedule-field">
                 <legend>WAKTU AKTIF TRADER (MALAYSIA)</legend>
                 <label class="risk-ack"><input id="tradingScheduleEnabled" type="checkbox"><span class="settings-full-label">Gunakan waktu aktif trader: Asia 8:00–11:30 pagi; Euro 1:30–4:30 petang; US 8:00–11:30 malam dan 2:00–3:30 pagi.</span><span class="settings-compact-label">Guna jadual dagangan (MYT)</span></label>
                 <label><span>WAKTU NEWS</span><select id="newsTradingMode"><option value="trade">Trade waktu news</option><option value="skip">Skip waktu news</option></select></label>

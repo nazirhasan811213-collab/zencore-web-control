@@ -93,17 +93,23 @@ const {chromium}=require('playwright'),fs=require('node:fs'),a=require('node:ass
    a.ok(pair.y>tf1.y && pair.y>tf15.y, 'Pair and strategy are below the top settings');
    const groups=await page.locator('.settings-group').evaluateAll(sections=>sections.map(section=>{
     const rect=section.getBoundingClientRect(),style=getComputedStyle(section);
-    return {heading:section.querySelector('h3').textContent,top:rect.top,bottom:rect.bottom,line:style.borderTopWidth};
+    return {heading:section.querySelector('h3').textContent,top:rect.top,bottom:rect.bottom,line:style.borderTopWidth,accent:style.getPropertyValue('--section-accent').trim()};
    }));
    a.deepEqual(groups.map(x=>x.heading),['Modal, layer dan saiz lot','Strategi dan pair Auto Trade','Entry Manual · Auto Exit']);
+   a.equal(new Set(groups.map(x=>x.accent)).size,3, 'Each section has a distinct accent');
    for(let i=1;i<groups.length;i++){
-    a.ok(groups[i].top-groups[i-1].bottom>=12);
+    a.ok(groups[i].top-groups[i-1].bottom>=24);
     a.equal(groups[i].line,'1px');
    }
    for(const id of ['manualSl','manualTp1','manualTp2','manualTp3'])a.ok((await box(id)).y>groups[2].top);
 
    if(width>=840)a.ok(modal.x<tf1.x && tf1.x<tf15.x);
-   if(width<=620)a.ok(tf1.y<tf15.y);
+   if(width<=620){
+    a.ok(tf1.y<tf15.y);
+    const sl=await box('manualSl'),tp1=await box('manualTp1'),tp2=await box('manualTp2');
+    a.ok(sl.y===tp1.y&&tp2.y>sl.y,'Manual SL/TP uses two columns on mobile');
+   }
+   a.ok(modal.height>=42 && layer.height>=42 && lot.height>=42);
    a.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
   a.deepEqual(errors,[]);
