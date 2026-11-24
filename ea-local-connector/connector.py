@@ -119,6 +119,7 @@ def network_cause(error):
     if isinstance(error, (ConnectionResetError, ConnectionAbortedError, http.client.RemoteDisconnected, http.client.IncompleteRead)):
         return 'CONNECTION_INTERRUPTED'
     if isinstance(error, ConnectionRefusedError): return 'CONNECTION_REFUSED'
+    if isinstance(error, http.client.HTTPException): return 'HTTP_RESPONSE_INTERRUPTED'
     return 'TRANSPORT'
 
 class Api:
@@ -138,7 +139,7 @@ class Api:
             # The command long poll waits up to 500 ms on the server.
             timeout = 4 if stage != 'CLOUD_REQUEST' else 10
             with self.opener.open(req, timeout=timeout) as result:
-                value = json.loads(result.read(200000))
+                raw = result.read(200000)
         except urllib.error.HTTPError as error:
             if error.code in TRANSIENT_HTTP_STATUS:
                 error.close()
@@ -147,8 +148,15 @@ class Api:
             except Exception: code = 'HTTP_'+str(error.code)
             finally: error.close()
             raise RuntimeError(code) from None
-        except (OSError, http.client.IncompleteRead) as error:
+        except (OSError, http.client.HTTPException) as error:
             raise ConnectionRequestError('NETWORK_UNAVAILABLE', stage, network_cause(error)) from None
+        try:
+            value = json.loads(raw)
+            if not isinstance(value, dict): raise ValueError('Expected response object')
+        except ValueError:
+            # An interrupted or intermediary response does not revoke the saved link
+            # and can never grant or extend a lease.
+            raise ConnectionRequestError('NETWORK_UNAVAILABLE', stage, 'INVALID_RESPONSE') from None
         if value.get('ok') is False: raise RuntimeError(value.get('code','REQUEST_REJECTED'))
         return value
 
@@ -300,6 +308,8 @@ def reconnect_delay(failures, code):
     # Spread retries across VPS slots and give rate-limited requests more time.
     if code == 'HTTP_429':
         cap = min(10, 2**min(failures, 4))
+    elif code == 'NETWORK_UNAVAILABLE' and failures == 1:
+        cap = .35
     else:
         cap = 1 if failures <= 1 else 2
     return cap * random.uniform(.8, 1.0)
@@ -366,7 +376,7 @@ class Runner:
         if self.stop.is_set(): return
         # Poll commands quickly without multiplying database heartbeat writes.
         if time.monotonic()>=self.next_heartbeat:
-            if not self.renew_lease(local): return
+            if not self.renew_lease(local, due_only=True): return
 
         if (self.channel/'command.tsv').exists():
             self.status('Menunggu pengesahan EA — tiada order dihantar semula.')
@@ -465,9 +475,11 @@ class Runner:
         self.lease_request_error=error if isinstance(error, ConnectionRequestError) else None
         self.lease_error=self.connection_health(raw,self.lease_request_error)
         self.status(connection_label(self.lease_error,self.lease_request_error)+' — Menyambung semula ke ZenCore.')
-    def renew_lease(self, local=None, api=None):
+    def renew_lease(self, local=None, api=None, *, due_only=False):
         with self.lease_lock:
-            if self.stop.is_set() or time.monotonic()<self.lease_retry_at:return False
+            now=time.monotonic()
+            if self.stop.is_set() or now<self.lease_retry_at:return False
+            if due_only and now<self.next_heartbeat:return True
             try:
                 local=read_fields(self.channel/'heartbeat.tsv')
                 heartbeat(local,self.config)
@@ -540,6 +552,7 @@ class Runner:
             threading.Thread(target=self.monitor_broker_metadata,daemon=True).start()
         while not self.stop.is_set():
             delay=.5
+            heartbeat_due=self.next_heartbeat
             try:
                 self.command_fetch_seconds=0
                 self.cycle()
@@ -547,9 +560,14 @@ class Runner:
                 self.failure_count=0
                 if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'),self.lease_request_error)
             except Exception as error:
-                if str(error) not in TRANSIENT_NETWORK_ERRORS:
-                    self.invalidate_lease()
-                self.next_heartbeat=0
+                with self.lease_lock:
+                    if str(error) not in TRANSIENT_NETWORK_ERRORS:
+                        self.invalidate_lease()
+                        self.next_heartbeat=0
+                    elif self.next_heartbeat==heartbeat_due:
+                        # Refresh before resuming if the independent heartbeat did
+                        # not already recover while the command channel was failing.
+                        self.next_heartbeat=0
                 self.failure_count+=1
                 raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
                 # Even with no local EA heartbeat, a web reset must release the
