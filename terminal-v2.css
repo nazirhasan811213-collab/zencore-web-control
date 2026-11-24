@@ -164,6 +164,16 @@ body:has(.dashboard-v3){background:#090f1b!important;color:#edf3ff;color-scheme:
 .quick-order button:disabled{opacity:.5;cursor:default}
 .quick-order output{width:100%;font-size:.75rem}
 .quick-order[hidden]{display:none}
+.quick-order-dialog{width:min(390px,calc(100% - 32px));padding:20px;border:1px solid #40516a;border-radius:10px;background:#121e30;color:#edf3ff}
+.quick-order-dialog::backdrop{background:#060e1bc2}
+.quick-order-dialog h2{margin:0;font-size:1.15rem}
+.quick-order-dialog p{margin:12px 0 20px;line-height:1.5}
+.quick-order-dialog form>div{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.quick-order-dialog button{min-height:40px;padding:6px 13px;border:1px solid #40516a;border-radius:5px;background:#182942;color:inherit;font:inherit;cursor:pointer}
+.quick-order-dialog button[data-side=BUY]{background:#126245}
+.quick-order-dialog button[data-side=SELL]{background:#963544}
+.quick-order-dialog button:disabled{opacity:.5;cursor:default}
+
 @media(max-width:600px){.quick-order{margin-left:0}}
 
 /* Dashboard header trading controls and broker snapshot */

@@ -156,20 +156,40 @@
   set('overviewSeen',v.lastSeen?'Laporan terakhir MT5 '+new Date(v.lastSeen).toLocaleTimeString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'})+' MYT':snapshotLabel);
  }
  const quickForm=$('quickOrder'),quickStatus=$('quickStatus');
- let quickReady=false,quickPending=false,quickAccount='';
+ const quickConfirm=$('quickConfirm'),quickConfirmSend=$('quickConfirmSend');
+ let quickReady=false,quickPending=false,quickAccount='',draftOrder=null;
  function updateQuickButtons(){
   quickForm.querySelectorAll('button').forEach(b=>{b.disabled=!quickReady||quickPending;});
+  quickConfirmSend.disabled=!quickReady||quickPending||draftOrder?.accountMask!==quickAccount;
  }
- quickForm.addEventListener('submit',async e=>{
+ quickForm.addEventListener('submit',e=>{
   e.preventDefault();
   const side=e.submitter?.value,symbol=$('quickPair').value,lot=Number($('quickLot').value);
-  if(!quickReady||quickPending||!['BUY','SELL'].includes(side)||!quickForm.reportValidity())return;
-  if(!window.confirm(`Hantar market order ${side} ${symbol}, ${lot} lot ke MT5 (${quickAccount})? SL ikut tetapan Auto Trade.`))return;
+  if(!quickReady||quickPending||quickConfirm.open||!['BUY','SELL'].includes(side)||!quickForm.reportValidity())return;
+  draftOrder={side,symbol,lot,accountMask:quickAccount};
+  $('quickConfirmDetails').textContent=`${side} ${symbol} · ${lot} lot · MT5 ${quickAccount}. SL ikut tetapan Auto Trade.`;
+  quickConfirmSend.textContent='HANTAR '+side;
+  quickConfirmSend.dataset.side=side;
+  quickConfirm.returnValue='';
+  updateQuickButtons();
+  quickConfirm.showModal();
+ });
+ quickConfirm.addEventListener('close',()=>{
+  const order=draftOrder;
+  draftOrder=null;
+  if(quickConfirm.returnValue!=='send'||!order)return;
+  if(!quickReady||quickPending||order.accountMask!==quickAccount){
+   quickStatus.textContent='Sambungan atau akaun MT5 berubah. Semak dashboard.';
+   return;
+  }
+  submitQuickOrder(order);
+ });
+ async function submitQuickOrder(order){
   quickPending=true;
   updateQuickButtons();
   quickStatus.textContent='Menghantar ke MT5…';
   try{
-   const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({side,symbol,lot,requestId:crypto.randomUUID(),accountMask:quickAccount}),signal:AbortSignal.timeout(8000)});
+   const r=await fetch('/api/auto-trade/manual-order',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({...order,requestId:crypto.randomUUID()}),signal:AbortSignal.timeout(8000)});
    const data=await r.json();
    if(r.status>=500)throw Error('Status penghantaran belum disahkan. Semak MT5 sebelum cuba lagi.');
    if(!r.ok)throw Error(data.error||'Arahan ditolak.');
@@ -203,9 +223,11 @@
     ?'Status penghantaran belum disahkan. Semak MT5 sebelum cuba lagi.':error.message;
   }
   finally{quickPending=false;updateQuickButtons();}
- });
- async function connections(){if(stopped)return;const results=await Promise.allSettled([api('/api/auto-trade/state'),api('/api/analysis-alerts/settings'),api('/ready')]);
-  const account=results[0].status==='fulfilled'?results[0].value:null;
+ }
+ async function connections(){
+  if(stopped)return;
+  const otherStatus=Promise.allSettled([api('/api/analysis-alerts/settings'),api('/ready')]);
+  const account=await api('/api/auto-trade/state').catch(()=>null);
   quickForm.hidden=account?.viewerMode===true;
   const wasReady=quickReady;
   quickReady=account?.manualOrderReady===true;
@@ -214,8 +236,19 @@
   if(!quickPending&&(wasReady!==quickReady||quickStatus.textContent==='Menyemak sambungan MT5…')) {
    quickStatus.textContent=quickReady?'MT5 '+quickAccount:'Sambungan MT5 untuk order belum tersedia.';
   }
-  if(results[0].status==='fulfilled'){const a=results[0].value;renderAccount(a);$('mt5State').textContent=a.connection?.label||'BELUM CONNECT';dot('mt5Dot',a.connection?.connected===true||a.connection?.state==='CONNECTED');const state=a.control?.effectiveState||'STOPPED';const paused=results[2]?.status==='fulfilled'?results[2].value?.autoEntry?.signalsPaused:null;$('tradeState').textContent=paused===true?'PAUSED':state==='ON'&&paused===null?'ON • SEMAK STATUS':state.replaceAll('_',' ');dot('tradeDot',state==='ON'&&paused===false);}else{renderAccount(null);$('mt5State').textContent='STATUS BELUM ADA';$('tradeState').textContent='STATUS BELUM ADA';dot('mt5Dot',false);dot('tradeDot',false);}
-  if(results[1].status==='fulfilled'){const p=results[1].value.settings||{};const enabled=p.verified&&p.telegramEnabled&&p.telegramAvailable;$('telegramState').textContent=enabled?'AKTIF':p.telegramAvailable?'BELUM DIAKTIFKAN':'BELUM ADA';dot('telegramDot',!!enabled);}else{$('telegramState').textContent='STATUS BELUM ADA';dot('telegramDot',false);}if(!stopped)setTimeout(connections,5000);
+  renderAccount(account);
+  $('mt5State').textContent=account?.connection?.label||'STATUS BELUM ADA';
+  dot('mt5Dot',account?.connection?.connected===true||account?.connection?.state==='CONNECTED');
+  const [alerts,health]=await otherStatus;
+  const state=account?.control?.effectiveState||'STOPPED';
+  const paused=health.status==='fulfilled'?health.value?.autoEntry?.signalsPaused:null;
+  $('tradeState').textContent=!account?'STATUS BELUM ADA':paused===true?'PAUSED':state==='ON'&&paused===null?'ON • SEMAK STATUS':state.replaceAll('_',' ');
+  dot('tradeDot',!!account&&state==='ON'&&paused===false);
+  const p=alerts.status==='fulfilled'?alerts.value.settings:null;
+  const enabled=p?.verified&&p.telegramEnabled&&p.telegramAvailable;
+  $('telegramState').textContent=enabled?'AKTIF':p?.telegramAvailable?'BELUM DIAKTIFKAN':p?'BELUM ADA':'STATUS BELUM ADA';
+  dot('telegramDot',!!enabled);
+  if(!stopped)setTimeout(connections,5000);
  }
  api('/auth/me').then(j=>{$('welcomeName').textContent=j.user?.displayName||'Trader';}).catch(()=>{});
  $('logoutButton').onclick=async()=>{$('logoutButton').disabled=true;try{await fetch('/auth/logout',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});}finally{location.replace('/login');}};
