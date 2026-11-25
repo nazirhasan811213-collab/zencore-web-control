@@ -65,6 +65,12 @@ class ModuleOneLeaseTests(unittest.TestCase):
     with self.assertRaises(RuntimeError):runner.renew_lease(api=BrokenApi())
     self.assertFalse(runner.renew_lease(api=BrokenApi()))
    self.assertEqual(calls,[1]);self.assertEqual(runner.desired_state,'STOPPED');self.assertEqual(runner.lease_error,'HTTP_429')
+ def test_scheduled_refresh_skips_heartbeat_already_renewed_by_other_worker(self):
+  with tempfile.TemporaryDirectory() as folder:
+   runner=self.make_runner(folder);runner.next_heartbeat=102
+   with patch('connector.time.monotonic',return_value=100),patch.object(runner.api,'request') as request:
+    self.assertTrue(runner.renew_lease(due_only=True))
+   request.assert_not_called()
  def test_successful_recovery_clears_lease_error_and_restores_verified_state(self):
   with tempfile.TemporaryDirectory() as folder:
    runner=self.make_runner(folder);runner.lease_failure_count=3;runner.lease_retry_at=99;runner.lease_error='HTTP_503'

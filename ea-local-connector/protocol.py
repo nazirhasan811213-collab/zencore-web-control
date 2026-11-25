@@ -11,8 +11,18 @@ from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
 TF1_FIXED_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V1'
-EA_VERSION = '2.51'
-CONNECTOR_BUILD = '2.1.51'
+TF1_FIVE_TARGETS_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V2'
+TF1_FIXED_EXIT_TARGETS = {
+    TF1_FIXED_EXIT: (2.5, 4, 6),
+    TF1_FIVE_TARGETS_EXIT: (1.5, 2.5, 4),
+}
+
+def supports_tf1_fixed_exit(capability, requested):
+    return (requested not in TF1_FIXED_EXIT_TARGETS or capability == requested or
+            (requested == TF1_FIXED_EXIT and capability == TF1_FIVE_TARGETS_EXIT))
+
+EA_VERSION = '2.52'
+CONNECTOR_BUILD = '2.1.53'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -196,16 +206,16 @@ def command_fields(command, identity):
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
-                    fixed_exit = snap.get('exitLockVersion') == TF1_FIXED_EXIT
-                    if fixed_exit:
+                    fixed_targets = TF1_FIXED_EXIT_TARGETS.get(snap.get('exitLockVersion'))
+                    if fixed_targets:
                         if symbol != 'XAUUSD' or execution_tf != '1' or mode != 'TF2_SCALPING':
                             raise ValueError('EXIT_POLICY_REJECTED')
                         sign = 1 if payload['side'] == 'BUY' else -1
                         entry = float(number(payload['entry']))
-                        for key, distance in (('sl',-3),('tp1',2.5),('tp2',4),('tp3',6)):
+                        for key, distance in zip(('sl','tp1','tp2','tp3'), (-3,*fixed_targets)):
                             if abs(float(number(payload[key]))-(entry+sign*distance)) > 1e-6:
                                 raise ValueError('ANALYSIS_PRICE_MISMATCH')
-                    if not fixed_exit and not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
+                    if not fixed_targets and not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
                 if snap.get('maxEntryGap')!=4 or execution_tf not in ('1','2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
