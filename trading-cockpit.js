@@ -168,14 +168,15 @@
  const quickForm=$('quickOrder'),quickStatus=$('quickStatus'),quickCloseAll=$('quickCloseAll');
  const quickConfirm=$('quickConfirm'),quickConfirmSend=$('quickConfirmSend');
  let quickReady=false,quickPending=false,quickAccount='',closeAllBinding=null,draftOrder=null;
+ let closeAllUnavailableReason='Menyemak sambungan MT5 untuk Close All…';
  function draftReady(order){
   if(!order||quickPending||order.accountMask!==quickAccount)return false;
   return order.side==='CLOSE_ALL'?!!closeAllBinding&&order.binding===closeAllBinding:quickReady;
  }
  function updateQuickButtons(){
   quickForm.querySelectorAll('button[type=submit]').forEach(b=>{b.disabled=!quickReady||quickPending;});
-  quickCloseAll.disabled=!quickAccount||!closeAllBinding||quickPending;
-  quickCloseAll.title=closeAllBinding?'':'Memerlukan sambungan MT5 dan EA / Connector yang menyokong CLOSE ALL.';
+  quickCloseAll.disabled=quickPending;
+  quickCloseAll.title=closeAllUnavailableReason || 'Tutup semua posisi terbuka pada akaun MT5 ini';
   quickConfirmSend.disabled=!draftReady(draftOrder);
  }
  function confirmQuickOrder(order,details){
@@ -197,6 +198,10 @@
    `${side} ${symbol} · ${lot} lot · MT5 ${quickAccount}. SL ikut tetapan Auto Trade.`);
  });
  quickCloseAll.addEventListener('click',()=>{
+  if(!quickAccount||!closeAllBinding){
+   quickStatus.textContent=closeAllUnavailableReason || 'Sambungan MT5 untuk Close All belum tersedia.';
+   return;
+  }
   confirmQuickOrder({side:'CLOSE_ALL',accountMask:quickAccount,binding:closeAllBinding},
    `Tutup semua posisi terbuka pada MT5 ${quickAccount}, termasuk posisi manual dan Auto Trade. Pending order kekal aktif. Auto Trade boleh membuka posisi baharu.`);
  });
@@ -353,12 +358,13 @@
   const account=await api('/api/auto-trade/state').catch(()=>null);
   if(!autoPending&&revision===autoRevision){autoAccount=account;renderAutoControls();}
   quickForm.hidden=account?.viewerMode===true;
-  const wasReady=quickReady, couldClose=!!closeAllBinding;
+  const wasReady=quickReady, couldClose=!!closeAllBinding, previousCloseReason=closeAllUnavailableReason;
   quickReady=account?.manualOrderReady===true;
   quickAccount=account?.pod?.accountMask||'';
   closeAllBinding=account?.manualCloseAllBinding||null;
+  closeAllUnavailableReason=closeAllBinding?null:(account?.manualCloseAllUnavailableReason || 'Sambungan MT5 untuk Close All belum tersedia.');
   updateQuickButtons();
-  if(!quickPending&&(wasReady!==quickReady||couldClose!==!!closeAllBinding||quickStatus.textContent==='Menyemak sambungan MT5…')) {
+  if(!quickPending&&(wasReady!==quickReady||couldClose!==!!closeAllBinding||previousCloseReason!==closeAllUnavailableReason||quickStatus.textContent==='Menyemak sambungan MT5…')) {
    quickStatus.textContent=quickReady?'MT5 '+quickAccount:closeAllBinding
     ?'MT5 '+quickAccount+' · Close All tersedia'
     :'Sambungan MT5 untuk order belum tersedia.';

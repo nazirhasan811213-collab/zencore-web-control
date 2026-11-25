@@ -446,6 +446,7 @@ function createAutoTradeService(options = {}) {
     const exitPolicyReady = !(profile?.strategyMode!=='TF15_INTRA' && profile?.strategyExitPolicies?.TF2_SCALPING) || (!hostedAccount && isLocalEa(pod) && ['1.1.0-ea-local','1.2.0-ea-local','1.3.0-ea-local','1.4.0-ea-local'].includes(pod?.connectorVersion));
     const retiredStrategy = profile?.entryExitStrategy === 'LOW_RISK';
     const settingsReady = !!profile && Core.validateSettings(profile).ok && !!profile.riskAcknowledgedAt;
+    const closeAll = manualCloseAllState(pod);
     return {
       ok: true,
       mode: hostedAccount?.tradeMode || pod?.tradeMode || 'UNPAIRED',
@@ -471,7 +472,8 @@ function createAutoTradeService(options = {}) {
       },
       connection,
       manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
-      manualCloseAllBinding: manualCloseAllBinding(pod),
+      manualCloseAllBinding: closeAll.binding,
+      manualCloseAllUnavailableReason: closeAll.reason,
       manualExitSync:(()=>{if(profile?.manualExit?.enabled&&!supportsManualExit(pod,profile.manualExit))return {status:'WAITING_EA',code:null};const c=recentCommands.find(c=>c.type==='MANUAL_EXIT_CONFIG'&&c.podId===pod?.id);return c?{status:c.status,code:c.result?.code||null,settings:c.payload?.manualExit}:null;})(),
       pod: pod ? {
         label: pod.label,
@@ -1352,7 +1354,7 @@ function createAutoTradeService(options = {}) {
     if(command.type==='MANUAL_CLOSE_ALL'){
       const pod=await store.getPodForUser(command.userId);
       if (pod?.id !== command.podId || pod?.accountFingerprint !== command.payload.accountFingerprint ||
-          manualCloseAllBinding(pod) !== command.payload.binding) {
+          manualCloseAllState(pod).binding !== command.payload.binding) {
         diagnostic.reason = 'MT5_CLOSE_ALL_NOT_READY';
         return false;
       }
@@ -1446,13 +1448,25 @@ function createAutoTradeService(options = {}) {
       (!options.entryAccessAllowed || await options.entryAccessAllowed(userId));
   }
 
-  function manualCloseAllBinding(pod) {
-    if (!isLocalEa(pod) || !pod.accountFingerprint || !pod.lastSeenAt || now() - pod.lastSeenAt > 30_000 ||
-        !pod.terminalTradeAllowed || !pod.accountTradeAllowed || !pod.expertTradeAllowed) return null;
+  function manualCloseAllState(pod) {
+    if (!isLocalEa(pod) || !pod.accountFingerprint) {
+      return { binding: null, reason: 'Pautkan akaun MT5 melalui Auto Trade untuk guna Close All.' };
+    }
+    if (!pod.lastSeenAt || now() - pod.lastSeenAt > 30_000) {
+      return { binding: null, reason: 'MT5 atau Connector terputus. Sambungkan semula untuk guna Close All.' };
+    }
+    if (!pod.terminalTradeAllowed || !pod.accountTradeAllowed || !pod.expertTradeAllowed) {
+      return { binding: null, reason: 'Semak Algo Trading dan kebenaran EA pada akaun MT5 untuk guna Close All.' };
+    }
     const binding = manualCloseAllPods.get(pod.id);
-    if (binding?.accountFingerprint !== pod.accountFingerprint || !binding.tokenHash) return null;
+    if (binding?.accountFingerprint !== pod.accountFingerprint || !binding.tokenHash) {
+      return { binding: null, reason: 'Sambungan MT5 belum mengesahkan sokongan Close All. Semak versi EA dan Connector.' };
+    }
     // Closing positions uses the linked MT5 account's permissions, independently of entry rollout.
-    return crypto.createHash('sha256').update(`${pod.id}:${binding.tokenHash}:${pod.accountFingerprint}`).digest('hex');
+    return {
+      binding: crypto.createHash('sha256').update(`${pod.id}:${binding.tokenHash}:${pod.accountFingerprint}`).digest('hex'),
+      reason: null
+    };
   }
 
   async function manualCloseAll(userId, input = {}) {
@@ -1461,9 +1475,9 @@ function createAutoTradeService(options = {}) {
       throw serviceError('CONFIRMATION_REQUIRED','Sahkan CLOSE ALL untuk menghantar arahan.');
     }
     const pod = await store.getPodForUser(userId);
-    const current = manualCloseAllBinding(pod);
+    const { binding: current, reason } = manualCloseAllState(pod);
     if (!current || binding !== current) {
-      throw serviceError('MT5_NOT_READY','Sambungan atau akaun MT5 berubah. Semak dashboard.',409);
+      throw serviceError('MT5_NOT_READY',reason || 'Pautan akaun MT5 berubah. Semak dashboard.',409);
     }
     const issued = await issueCommand({userId,podId:pod.id,type:'MANUAL_CLOSE_ALL',
       payload:{scope:'ALL_OPEN_POSITIONS',accountFingerprint:pod.accountFingerprint,binding:current},
