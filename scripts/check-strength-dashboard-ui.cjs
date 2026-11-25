@@ -6,7 +6,7 @@ const {cockpit}=require('../trading-cockpit-model');
  page.on('pageerror',e=>errors.push(e.message));let missing=false,missingGold=false;
  const manualOrders=[],closeRequests=[],autoRequests=[];
  const seenManualStates=[];
- let effectiveState='STOPPED',rejectStop=true;
+ let effectiveState='STOPPED',rejectStop=true,manualOrderReady=true;
  const fakeCloseId="22222222-2222-4222-8222-222222222222";
  const fakeOrderId='11111111-1111-4111-8111-111111111111';
  function payload(){const now=Date.now();const gold=[1,15].map(tf=>({symbol:'XAUUSD',timeframe:String(tf),receivedAt:now,signalObservedAt:now,price:4100,open:4099,high:4101,low:4098,close:4100,hema20:4100,hema40:4099,ema9:4100,ema20:4099,ema50:4098,waveTrend1:10,waveTrend2:5,rsi:missing?undefined:58,chopIndex:55,relativeVolume:1.2,atr:2,strategyNormal:{tf:tf+'m',state:'WAIT',solid:true,side:'BUY',plan:{entry:4100,sl:4096,tp1:4101.5,tp2:4102.5,tp3:4103.5},sop:{atrReference:2,mtfScore:1,forecast:'CHOPPY',marketPower:65,advisor:{trend:'Sideways',momentum:'Mula perlahan',proTip:'Tunggu arah jelas.',mtfSummary:'TF1 dan TF15 masih bercampur.',aiCoach:'[NASIHAT]: Tunggu candle tutup.'}}}}));const bitcoin=gold.map(m=>({...m,symbol:'BTCUSD',price:m.timeframe==='1'?63711.98:63720, strategyNormal:{...m.strategyNormal,side:'SELL',plan:{entry:m.timeframe==='1'?63759.36:63900,sl:64050,tp1:63620,tp2:63500,tp3:63400}}}));return cockpit([...(missingGold?[]:gold),...bitcoin],now);}
@@ -21,7 +21,7 @@ const {cockpit}=require('../trading-cockpit-model');
     effectiveState=path.endsWith('/on')?'ON':'STOPPED';
    }
    const now=Date.now();
-   return route.fulfill({json:{manualOrderReady:true,manualCloseAllBinding:'bound-account',generatedAt:now,pod:{accountMask:'****5839',lastSeenAt:now,tradeMode:'DEMO'},
+   return route.fulfill({json:{manualOrderReady,manualCloseAllBinding:'bound-account',generatedAt:now,pod:{accountMask:'****5839',lastSeenAt:now,tradeMode:'DEMO'},
     control:{effectiveState,canTurnOn:true,canEnter:effectiveState==='ON'},positions:[],connection:{connected:true,online:true}}});
   }
   if(path==='/api/auto-trade/manual-close-all'){
@@ -64,7 +64,11 @@ const {cockpit}=require('../trading-cockpit-model');
  const {requestId,...order}=manualOrders[0];
  assert.match(requestId,/^[a-f0-9-]{36}$/);
  assert.deepEqual(order,{side:'BUY',symbol:'XAUUSD',lot:.01,accountMask:'****5839'});
+ manualOrderReady=false;
+ await page.getByText('MT5 ****5839 · Close All tersedia',{exact:true}).waitFor();
+ assert.equal(await buy.isEnabled(),false);
  const closeAll=page.getByRole('button',{name:'CLOSE ALL',exact:true});
+ assert.equal(await closeAll.isEnabled(),true);
  const closeConfirm=page.getByRole('dialog',{name:'Sahkan CLOSE ALL'});
  await page.locator('#quickLot').fill('');
  await closeAll.click();

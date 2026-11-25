@@ -245,7 +245,9 @@
     }
     if(['FAILED','REJECTED','CANCELLED','CANCELED'].includes(order?.status)){
      quickStatus.textContent=closing
-      ?(order.code==='POSITIONS_REMAIN'?'Masih ada posisi terbuka. Semak MT5.':'CLOSE ALL tidak disahkan · '+(order.code||order.status))
+      ?(order.code==='POSITIONS_REMAIN'?'Masih ada posisi terbuka. Semak MT5.':
+        order.code==='MT5_CLOSE_ALL_NOT_READY'?'Sambungan atau akaun MT5 berubah. Semak dashboard.':
+        'CLOSE ALL tidak disahkan · '+(order.code||order.status))
       :'Order tidak disahkan: '+(order.code||order.status);
      return;
     }
@@ -351,13 +353,15 @@
   const account=await api('/api/auto-trade/state').catch(()=>null);
   if(!autoPending&&revision===autoRevision){autoAccount=account;renderAutoControls();}
   quickForm.hidden=account?.viewerMode===true;
-  const wasReady=quickReady;
+  const wasReady=quickReady, couldClose=!!closeAllBinding;
   quickReady=account?.manualOrderReady===true;
   quickAccount=account?.pod?.accountMask||'';
   closeAllBinding=account?.manualCloseAllBinding||null;
   updateQuickButtons();
-  if(!quickPending&&(wasReady!==quickReady||quickStatus.textContent==='Menyemak sambungan MT5…')) {
-   quickStatus.textContent=quickReady?'MT5 '+quickAccount:'Sambungan MT5 untuk order belum tersedia.';
+  if(!quickPending&&(wasReady!==quickReady||couldClose!==!!closeAllBinding||quickStatus.textContent==='Menyemak sambungan MT5…')) {
+   quickStatus.textContent=quickReady?'MT5 '+quickAccount:closeAllBinding
+    ?'MT5 '+quickAccount+' · Close All tersedia'
+    :'Sambungan MT5 untuk order belum tersedia.';
   }
   renderAccount(account);
   $('mt5State').textContent=account?.connection?.label||'STATUS BELUM ADA';

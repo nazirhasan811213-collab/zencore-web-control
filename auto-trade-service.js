@@ -1248,8 +1248,11 @@ function createAutoTradeService(options = {}) {
     if(input.expandedEntryPolicy===true)expandedEntryPods.add(pod.id);else expandedEntryPods.delete(pod.id);
     if(input.manualMarketOrderVersion==='MANUAL_MARKET_ORDER_V2')manualOrderPods.set(pod.id,updated.accountFingerprint);
     else manualOrderPods.delete(pod.id);
-    if(input.manualCloseAllVersion==='ACCOUNT_POSITIONS_V1')manualCloseAllPods.set(pod.id,updated.accountFingerprint);
-    else manualCloseAllPods.delete(pod.id);
+    if (input.manualCloseAllVersion === 'ACCOUNT_POSITIONS_V1' && input.terminalConnected === true) {
+      manualCloseAllPods.set(pod.id, { accountFingerprint: updated.accountFingerprint, tokenHash: pod.tokenHash });
+    } else {
+      manualCloseAllPods.delete(pod.id);
+    }
     if(input.tf1FixedExitVersion===FIXED_LOCK)fixedTf1Pods.set(pod.id,updated.accountFingerprint);
     else fixedTf1Pods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
@@ -1348,8 +1351,12 @@ function createAutoTradeService(options = {}) {
     }
     if(command.type==='MANUAL_CLOSE_ALL'){
       const pod=await store.getPodForUser(command.userId);
-      return pod?.id===command.podId && pod.accountFingerprint===command.payload.accountFingerprint &&
-        manualCloseAllBinding(pod)===command.payload.binding;
+      if (pod?.id !== command.podId || pod?.accountFingerprint !== command.payload.accountFingerprint ||
+          manualCloseAllBinding(pod) !== command.payload.binding) {
+        diagnostic.reason = 'MT5_CLOSE_ALL_NOT_READY';
+        return false;
+      }
+      return true;
     }
     if(command.type==='MANUAL_MARKET_ORDER'){
       const pod=await store.getPodForUser(command.userId);
@@ -1440,9 +1447,12 @@ function createAutoTradeService(options = {}) {
   }
 
   function manualCloseAllBinding(pod) {
-    if (!isLocalEa(pod) || !pod.accountFingerprint || manualCloseAllPods.get(pod.id)!==pod.accountFingerprint ||
-        !connectionState(pod).ready) return null;
-    return crypto.createHash('sha256').update(pod.id+':'+pod.tokenHash+':'+pod.accountFingerprint).digest('hex');
+    if (!isLocalEa(pod) || !pod.accountFingerprint || !pod.lastSeenAt || now() - pod.lastSeenAt > 30_000 ||
+        !pod.terminalTradeAllowed || !pod.accountTradeAllowed || !pod.expertTradeAllowed) return null;
+    const binding = manualCloseAllPods.get(pod.id);
+    if (binding?.accountFingerprint !== pod.accountFingerprint || !binding.tokenHash) return null;
+    // Closing positions uses the linked MT5 account's permissions, independently of entry rollout.
+    return crypto.createHash('sha256').update(`${pod.id}:${binding.tokenHash}:${pod.accountFingerprint}`).digest('hex');
   }
 
   async function manualCloseAll(userId, input = {}) {
@@ -1501,10 +1511,11 @@ function createAutoTradeService(options = {}) {
     const deliveryDiagnostic = {};
     if(!await queuedEntryIsCurrent(command, deliveryDiagnostic)){
       const reason = deliveryDiagnostic.reason || 'ENTRY_POLICY_CHANGED';
-      await store.ackCommand(pod.id,command.id,'REJECTED',{code:'ENTRY_CONFIRMATION_CHANGED',message:reason});
+      const code = command.type === 'MANUAL_CLOSE_ALL' ? 'MT5_CLOSE_ALL_NOT_READY' : 'ENTRY_CONFIRMATION_CHANGED';
+      await store.ackCommand(pod.id,command.id,'REJECTED',{code,message:reason});
       wakeManualStatus(command);
       if(command.type==='SYSTEM_ON')await settleSystemOn(pod,command,'REJECTED',{code:reason});
-      await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code:'ENTRY_CONFIRMATION_CHANGED',reason,...deliveryDiagnostic});
+      await store.appendAudit(pod.userId,'ENTRY_REVOKED',{symbol:command.payload?.symbol,code,reason,...deliveryDiagnostic});
       console.warn('ZenCore entry delivery revoked:', JSON.stringify({commandId:command.id,symbol:command.payload?.symbol,reason,...deliveryDiagnostic}));
       return {ok:true,command:null,serverTime:now()};
     }

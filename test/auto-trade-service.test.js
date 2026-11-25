@@ -8,7 +8,7 @@ const { createAutoTradeService } = require('../auto-trade-service');
 const SIGNING_KEY = 'test-signing-key-that-is-longer-than-thirty-two-bytes';
 const LEGACY_WINDOWS_CONNECTOR = '1.4.0-demo-execution';
 
-async function setup() {
+async function setup(options = {}) {
   let currentTime = 1_790_000_000_000;
   const store = new MemoryAutoTradeStore();
   const service = createAutoTradeService({
@@ -17,7 +17,8 @@ async function setup() {
     allowDemoExecution: true,
     requiredDemoConnectorVersion: LEGACY_WINDOWS_CONNECTOR,
     allowedDemoOwnershipModes: ['INTERNAL_DEMO','TRADER_OWNED_EA_LOCAL'],
-    now: () => currentTime
+    now: () => currentTime,
+    ...options
   });
   const userId = '11111111-1111-4111-8111-111111111111';
   const paired = await service.connectLocalEa(userId);
@@ -1096,6 +1097,7 @@ test('dashboard Close All is account-bound, deduplicated and leaves Auto Trade s
   const { store, service, userId, token } = await setup();
   const heartbeat = {
     accountMask:'****1234',serverMask:'****Demo',brokerMask:'****Stellar',tradeMode:'DEMO',
+    terminalConnected:true,
     terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,demoExecutionUnlocked:true,
     accountFingerprint:'a'.repeat(64),connectorVersion:'1.3.0-ea-local',terminalBuild:'5000',
     symbolSpecs:[{symbol:'XAUUSD',tickSize:0.01,tickValue:1,volumeMin:0.01,volumeMax:100,volumeStep:0.01}],positions:[]
@@ -1123,4 +1125,41 @@ test('dashboard Close All is account-bound, deduplicated and leaves Auto Trade s
   await service.heartbeat(token,heartbeat);
   assert.equal((await service.nextCommand(token)).command,null);
   assert.equal((await service.manualOrderStatus(userId,queued.commandId)).status,'REJECTED');
+});
+
+
+test('dashboard Close All reaches a connected MT5 account with only Auto Trade positions while entries are locked', async () => {
+  const { service, store, token, userId, advance } = await setup({allowDemoExecution:false,entryAccessAllowed:async()=>false});
+  const heartbeat = {
+    accountMask:'****1234', serverMask:'****Demo', brokerMask:'****Stellar', tradeMode:'DEMO',
+    terminalConnected:true, terminalTradeAllowed:true, accountTradeAllowed:true, expertTradeAllowed:true,
+    accountFingerprint:'b'.repeat(64), connectorVersion:'1.4.0-ea-local', manualCloseAllVersion:'ACCOUNT_POSITIONS_V1',
+    positions:[{ticket:'123',symbol:'XAUUSD',side:'BUY',volume:0.01,entry:2600,origin:'ZENCORE',strategyMode:'TF2_SCALPING'}]
+  };
+  await service.heartbeat(token,heartbeat);
+  const state = await service.state(userId);
+  assert.equal(state.positions.length,1);
+  assert.equal(state.positions[0].origin,'ZENCORE');
+  assert.equal(state.control.desiredState,'STOPPED');
+  assert.equal(state.connection.ready,false);
+  assert.equal(state.manualOrderReady,false);
+  const request = () => ({confirmation:'CLOSE_ALL',binding:state.manualCloseAllBinding,requestId:crypto.randomUUID()});
+  const {commandId}=await service.manualCloseAll(userId,request());
+  const {command}=await service.nextCommand(token);
+  assert.equal(command.id,commandId);
+  assert.equal(command.payload.scope,'ALL_OPEN_POSITIONS');
+  await service.acknowledgeCommand(token,commandId,{status:'EXECUTED',code:'CLOSED_ALL'});
+  assert.equal((await service.manualOrderStatus(userId,commandId)).code,'CLOSED_ALL');
+  assert.equal((await store.getProfile(userId)).desiredState,'STOPPED');
+
+  const queued=await service.manualCloseAll(userId,request());
+  await service.heartbeat(token,{...heartbeat,terminalConnected:false});
+  assert.equal((await service.nextCommand(token)).command,null);
+  assert.deepEqual(await service.manualOrderStatus(userId,queued.commandId),{ok:true,status:'REJECTED',code:'MT5_CLOSE_ALL_NOT_READY'});
+  await assert.rejects(service.manualCloseAll(userId,request()),{code:'MT5_NOT_READY'});
+  await service.heartbeat(token,{...heartbeat,terminalTradeAllowed:false});
+  await assert.rejects(service.manualCloseAll(userId,request()),{code:'MT5_NOT_READY'});
+  await service.heartbeat(token,heartbeat);
+  advance(31_000);
+  await assert.rejects(service.manualCloseAll(userId,request()),{code:'MT5_NOT_READY'});
 });
