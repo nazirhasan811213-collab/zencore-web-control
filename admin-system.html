@@ -28,10 +28,17 @@
       </header>
 
       <section class="mg-hero ops-hero">
-        <div><span class="mg-kicker">ZENCORE PLATFORM</span><h2>Control operasi tanpa membuka execution secara tidak sengaja.</h2><p>Admin boleh buka/tutup pendaftaran client. Gate MT5 execution kekal read-only di sini dan hanya berubah melalui controlled rollout.</p></div>
+        <div><span class="mg-kicker">ZENCORE PLATFORM</span><h2>Kawalan operasi ZenCore</h2><p>Urus pendaftaran dan hentikan entry Auto Trade untuk semua pengguna.</p></div>
         <div class="mg-system"><span>SAFETY MODE</span><b id="systemSafety">CHECKING...</b><small>Execution is independently gated</small></div>
       </section>
 
+    <section class="mg-panel" aria-labelledby="auto-entry-global-title">
+      <h2 id="auto-entry-global-title">Auto Trade semua pengguna</h2>
+      <p id="globalAutoEntryStatus" role="status">Memuatkan status…</p>
+      <p>STOP menyekat entry automatik baharu. Pengurusan posisi terbuka dan order manual kekal tersedia.</p>
+      <button id="globalAutoEntryButton" type="button" disabled>STOP semua Auto Trade</button>
+      <p id="globalAutoEntryResult" role="status"></p>
+    </section>
       <section class="system-grid">
         <article class="mg-panel system-card">
           <div class="system-card-head"><div><span class="mg-kicker">CLIENT ONBOARDING</span><h2>Client Registration</h2></div><span id="registrationBadge" class="status-pill">—</span></div>
@@ -61,5 +68,6 @@
   </div>
   <script src="/admin-ops.js?v=20261119-tf1-hema" defer></script>
 <script src="/workspace-shell.js?v=20261119-tf1-hema" defer></script>
+  <script src="/admin-auto-entry.js?v=1" defer></script>
 </body>
 </html>

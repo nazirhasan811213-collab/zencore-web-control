@@ -14,6 +14,13 @@
       <h1>System Owner</h1>
       <a href="/admin">Kembali ke Panel Admin</a>
     </header>
+    <section class="registration-card owner-card" aria-labelledby="auto-entry-global-title">
+      <h2 id="auto-entry-global-title">Auto Trade semua pengguna</h2>
+      <p id="globalAutoEntryStatus" role="status">Memuatkan status…</p>
+      <p>STOP menyekat entry automatik baharu. Pengurusan posisi terbuka dan order manual kekal tersedia.</p>
+      <button id="globalAutoEntryButton" type="button" disabled>STOP semua Auto Trade</button>
+      <p id="globalAutoEntryResult" role="status"></p>
+    </section>
     <section class="registration-card owner-card" aria-labelledby="roles-title">
       <h2 id="roles-title">Peranan akaun</h2>
       <form id="account-search" role="search" class="owner-search">
@@ -93,5 +100,6 @@
     </form>
   </dialog>
   <script src="/system-owner-panel.js?v=20261119-tf1-hema" defer></script>
+  <script src="/admin-auto-entry.js?v=1" defer></script>
 </body>
 </html>

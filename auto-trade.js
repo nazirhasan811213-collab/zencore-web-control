@@ -185,7 +185,7 @@
     const card = byId('masterState');
     if (card) card.className = `master-state ${tone}`;
     setText('masterStateText', effective.replaceAll('_', ' '));
-    setText('masterStateCopy', executionError(control.lastError) || control.entryStrategyReason || control.exitPolicyReason || control.strategyReason || (effective==='ARMING' ? stateCopy(effective) : null) || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar waktu aktif trader Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
+    setText('masterStateCopy', (control.globalAutoEntryPaused ? 'Admin menghentikan entry Auto Trade untuk semua pengguna.' : null) || executionError(control.lastError) || control.entryStrategyReason || control.exitPolicyReason || control.strategyReason || (effective==='ARMING' ? stateCopy(effective) : null) || (control.tradingWindow?.allowed === false ? (control.tradingWindow.reason === 'NEWS_PAUSE' ? 'Rehat news — entry baharu disekat; posisi terus diurus.' : 'Di luar waktu aktif trader Malaysia; posisi terus diurus.') : null) || (control.executionRolloutUnlocked === false
       ? 'Connection-only rollout. Pairing dan monitoring dibenarkan; execution masih dikunci.'
       : stateCopy(effective)));
     setText('summarySystem', effective.replaceAll('_', ' '));
@@ -199,7 +199,7 @@
     const stopButton = byId('stopButton');
     const emergencyButton = byId('emergencyButton');
     if (onButton) onButton.disabled = !control.canTurnOn || ['ON', 'ARMING'].includes(effective);
-    if (stopButton) stopButton.disabled = ['UNPROVISIONED', 'STOPPED', 'STOPPING'].includes(effective);
+    if (stopButton) stopButton.disabled = !(control.globalAutoEntryPaused && control.desiredState === 'ON') && ['UNPROVISIONED', 'STOPPED', 'STOPPING'].includes(effective);
     if (emergencyButton) emergencyButton.disabled = !(state.pod || state.hostedAccount) ||
       !(state.positions || []).length || effective === 'EMERGENCY_CLOSING';
   }

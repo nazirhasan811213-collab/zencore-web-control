@@ -110,3 +110,52 @@ test('Pine follow-up queues only without an open same-strategy position and rech
  a.equal((await service.dispatchMarkets([signal()])).queued,1);
  a.equal((await service.nextCommand(podToken)).command.payload.layers,8);
 });
+
+test('global stop blocks Pine dispatch, queued delivery and EA entry leases without disabling manual actions', async () => {
+ const {MemoryAutoTradeStore}=require('../auto-trade-store');
+ const {createAutoTradeService}=require('../auto-trade-service');
+ const store=new MemoryAutoTradeStore(),userId='global-stop-trader';
+ let at=Date.UTC(2026,10,11,1,0),gate={paused:false,changedAt:0};
+ const service=createAutoTradeService({store,allowLocalEaDemoExecution:true,
+  getAutoEntryPause:async()=>gate,commandSigningKey:'global-stop-test-key-longer-than-thirty-two',now:()=>at});
+ const {podToken}=await service.connectLocalEa(userId);
+ const heartbeat={accountFingerprint:'a'.repeat(64),accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',
+  tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,
+  demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],directEntryPolicy:D.POLICY,
+  manualMarketOrderVersion:'MANUAL_MARKET_ORDER_V2',manualCloseAllVersion:'ACCOUNT_POSITIONS_V1'};
+ await service.heartbeat(podToken,heartbeat);
+ await service.saveSettings(userId,{capitalUsd:500,lotPerLayer:.01,layers:8,symbols:['XAUUSD'],riskAcknowledged:true,
+  tradingSchedule:Core.malaysiaTradingSchedule(false,false)});
+ await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});
+ const signal=(stamp=at)=> {
+  const m=event();
+  return {...m,entryAuthorizedAt:stamp,signalObservedAt:stamp,receivedAt:stamp,
+   setupMeta:{...m.setupMeta,completedAt:stamp}};
+ };
+ a.equal((await service.dispatchMarkets([signal()])).queued,1);
+ gate={paused:true,changedAt:++at};
+ a.equal((await service.heartbeat(podToken,heartbeat)).desiredState,'STOPPED');
+ a.equal((await service.nextCommand(podToken)).command,null);
+ a.equal((await service.dispatchMarkets([signal()])).queued,0);
+ await a.rejects(()=>service.turnOn(userId,{confirmation:'AKTIFKAN DEMO'}),{code:'GLOBAL_ENTRY_PAUSED'});
+ const state=await service.state(userId);
+ a.equal(state.control.canEnter,false);
+ a.equal(state.control.canTurnOn,false);
+ a.equal(state.manualOrderReady,true);
+ a.ok(state.manualCloseAllBinding);
+ a.equal((await store.getProfile(userId)).desiredState,'ON');
+ const prior=at;
+ gate={paused:false,changedAt:++at};
+ a.equal((await service.dispatchMarkets([signal(prior)])).queued,0);
+ {
+  at++;
+  a.equal((await service.dispatchMarkets([signal()])).queued,1);
+  gate={paused:true,changedAt:++at};
+  gate={paused:false,changedAt:++at};
+  a.equal((await service.nextCommand(podToken)).command,null);
+ }
+ a.equal((await service.heartbeat(podToken,heartbeat)).desiredState,'ON');
+ at++;
+ a.equal((await service.dispatchMarkets([signal()])).queued,1);
+ a.equal((await service.nextCommand(podToken)).command.type,'PLACE_SETUP');
+});

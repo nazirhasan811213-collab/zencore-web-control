@@ -91,6 +91,17 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     assert.equal((await request('/api/admin/system/registration', {
       cookie: admin, method: 'PATCH', data: { enabled: false, password: 'NeverLogThis' }
     })).status, 200);
+    const globalEntry = '/api/admin/system/auto-entry';
+    const patchGlobal = (cookie, paused, origin) => request(globalEntry, { cookie, method:'PATCH', data:{paused}, origin });
+    assert.equal((await request(globalEntry)).status,401);
+    assert.equal((await patchGlobal(client,true)).status,403);
+    assert.equal((await patchGlobal(admin,true,'https://untrusted.test')).status,403);
+    assert.equal((await patchGlobal(admin,'true')).status,400);
+    assert.equal((await (await patchGlobal(admin,true)).json()).paused,true);
+    assert.equal((await (await request(globalEntry,{cookie:owner})).json()).paused,true);
+    assert.equal((await (await patchGlobal(owner,false)).json()).paused,false);
+    assert.match(await (await request('/admin/system',{cookie:admin})).text(),/globalAutoEntryButton/);
+    assert.match(await (await request('/admin/owner',{cookie:owner})).text(),/globalAutoEntryButton/);
     const remove = admins + '/' + adminId + '/revoke';
     assert.equal((await request(remove, { cookie: owner, data: { ownerPassword } })).status, 200);
     assert.equal((await request('/auth/me', { cookie: admin })).status, 401);
@@ -104,6 +115,7 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     const raw = await audit.text();
     assert.ok(![ownerPassword, adminPassword, 'NeverLogThis'].some(password => raw.includes(password)));
     const { events } = JSON.parse(raw);
+    assert.equal(events.filter(e => e.action==='system/auto-entry'&&e.status===200).length,2);
     assert.ok(events.some(event => event.action === 'system/registration' && event.actorEmail === adminEmail && event.status === 200));
     assert.ok(events.some(event => event.action === 'auth/login' && event.actorEmail === adminEmail));
     assert.ok(events.some(event => event.action === 'admin/revoke' && event.target === adminEmail));

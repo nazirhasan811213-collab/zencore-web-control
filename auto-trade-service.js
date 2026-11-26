@@ -98,6 +98,19 @@ function createAutoTradeService(options = {}) {
   if (!store) throw new Error('Auto Trade store is required');
   const signingKey = String(options.commandSigningKey || '');
   if (Buffer.byteLength(signingKey) < 32) throw new Error('ZENCORE_COMMAND_SIGNING_KEY must be at least 32 bytes.');
+  async function autoEntryPause() {
+    try {
+      return await options.getAutoEntryPause?.() || { paused: false, changedAt: 0 };
+    } catch (error) {
+      console.error('ZenCore global Auto Trade setting unavailable', error.code || 'UNKNOWN');
+      return { paused: true, changedAt: 0 };
+    }
+  }
+
+  function entryPausedByEnvironment() {
+    return /^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'');
+  }
+
   const allowDemoExecution = options.allowDemoExecution === true;
   const allowLocalEaExecution = options.allowLocalEaExecution === true;
   const allowLocalEaDemoExecution = options.allowLocalEaDemoExecution === true;
@@ -439,6 +452,7 @@ function createAutoTradeService(options = {}) {
       riskAcknowledgedAt: profile.riskAcknowledgedAt
     } : null;
     const entryAccessReady=!options.entryAccessAllowed||await options.entryAccessAllowed(userId);
+    const globalAutoEntryPaused = (await autoEntryPause()).paused;
     const effectiveState = !pod && !hostedAccount ? 'UNPROVISIONED' : (profile?.effectiveState || 'STOPPED');
     const desiredState = profile?.desiredState || 'STOPPED';
     const entryWindow=Core.tradingWindow(profile?.tradingSchedule,now());
@@ -454,7 +468,8 @@ function createAutoTradeService(options = {}) {
       realAccountTransport: 'TRADER_OWNED_EA_LOCAL',
       control: {
         desiredState,
-        effectiveState,
+        effectiveState: globalAutoEntryPaused && desiredState === 'ON' ? 'STOPPED' : effectiveState,
+        globalAutoEntryPaused,
         executionRolloutUnlocked: allowDemoExecution,
         executionSymbols: allowedDemoSymbols,
         requiredConnectorVersion: allowDemoExecution ? (isLocalEa(pod) ? (pod.tradeMode === 'REAL' ? '1.3.0-ea-local' : LOCAL_EA_VERSION) : requiredDemoConnectorVersion) : null,
@@ -467,8 +482,8 @@ function createAutoTradeService(options = {}) {
         exitPolicyReady,
         entryStrategyReason: retiredStrategy ? RETIRED_ENTRY_STRATEGY_MESSAGE : null,
         exitPolicyReason: exitPolicyReady ? null : 'Rule TF1 memerlukan EA/Connector 1.1; entry menunggu kemas kini.',
-        canEnter: entryAccessReady && !retiredStrategy && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
-        canTurnOn: entryAccessReady && !retiredStrategy && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
+        canEnter: !globalAutoEntryPaused && entryAccessReady && !retiredStrategy && exitPolicyReady && entryWindow.allowed && strategyReady && executionAllowed(userId,pod) && desiredState === 'ON' && effectiveState === 'ON' && connection.ready,
+        canTurnOn: !globalAutoEntryPaused && entryAccessReady && !retiredStrategy && exitPolicyReady && strategyReady && executionAllowed(userId,pod) && settingsReady && connection.ready
       },
       connection,
       manualOrderReady: entryAccessReady && manualOrderConnectionReady(userId,pod),
@@ -1010,6 +1025,9 @@ function createAutoTradeService(options = {}) {
   }
 
   async function turnOn(userId, input = {}) {
+    if ((await autoEntryPause()).paused || entryPausedByEnvironment()) {
+      throw serviceError('GLOBAL_ENTRY_PAUSED', 'Auto Trade dihentikan untuk semua pengguna.', 409);
+    }
     await requireNoMasterReset(userId);
     if(options.entryAccessAllowed&&!await options.entryAccessAllowed(userId))throw serviceError('ACCOUNT_NOT_LIVE','Akaun belum live. Lengkapkan serahan admin dan profil dahulu.',403);
     const allowDemoExecution = executionAllowed(userId, await store.getPodForUser(userId));
@@ -1285,9 +1303,10 @@ function createAutoTradeService(options = {}) {
       catch(_){console.error('Position Telegram observation unavailable');}
     }
     if(input.terminalConnected===true&&fullSnapshot&&input.positions.length<50&&['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod))await entryCycleReset.observe(pod.userId,pod.id,cycleBefore,heartbeatValidation.value.positions,seenAt);
+    const globalAutoEntryPaused = (await autoEntryPause()).paused;
     if(accountAccessAllowed&&input.reentryVersion===Reentry.VERSION&&input.fillRiskVersion===Reentry.FILL&&input.terminalConnected===true&&
       fullSnapshot&&connectionState(updated).ready&&profile?.desiredState==='ON'&&executionAllowed(pod.userId,updated)&&
-      !/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')){
+      !globalAutoEntryPaused&&!entryPausedByEnvironment()){
       reentryCapability.set(pod.userId,{podId:pod.id,at:seenAt});
       const latest=await store.latestSetupForMode(pod.userId,'XAUUSD','TF2_SCALPING');
       reentryTracker.observe(pod.userId,updated,heartbeatValidation.value.positions,latest,seenAt);
@@ -1295,7 +1314,8 @@ function createAutoTradeService(options = {}) {
     return {
       ok: true,
       podState: connectionState(updated),
-      desiredState: accountAccessAllowed&&executionAllowed(pod.userId,pod)&&!/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
+      desiredState: !globalAutoEntryPaused&&accountAccessAllowed&&executionAllowed(pod.userId,pod)&&!entryPausedByEnvironment()?((await store.getProfile(pod.userId))?.desiredState||'STOPPED'):'STOPPED',
+      globalAutoEntryPaused,
       entryBlockedReason: !accountAccessAllowed?'ACCOUNT_ACCESS_EXPIRED_OR_DISABLED':/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'')?'GLOBAL_ENTRY_PAUSED':executionAllowed(pod.userId,pod)?null:'EXECUTION_ROLLOUT_LOCKED',
       serverTime: seenAt
     };
@@ -1308,7 +1328,14 @@ function createAutoTradeService(options = {}) {
     }
     if(command.payload?.bindingEpochHash){const expected=await store.findPodByTokenHash(command.payload.bindingEpochHash);if(!expected||expected.id!==command.podId||expected.userId!==command.userId){diagnostic.reason='ACCOUNT_BINDING_CHANGED';return false;}}
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&options.entryAccessAllowed&&!await options.entryAccessAllowed(command.userId)){diagnostic.accountAccess='ACCOUNT_EXPIRED_OR_DISABLED';return false;}
-    if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&/^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||''))return false;
+    if (['SYSTEM_ON','PLACE_SETUP'].includes(command.type)) {
+      const pause = await autoEntryPause();
+      if (pause.paused || entryPausedByEnvironment()) { diagnostic.reason='GLOBAL_ENTRY_PAUSED'; return false; }
+      const signalAt=command.payload?.analysisSnapshot?.entryAuthorizedAt??command.payload?.analysisSnapshot?.signalObservedAt??command.createdAt;
+      if (pause.changedAt && (command.createdAt<=pause.changedAt || signalAt<=pause.changedAt)) {
+        diagnostic.reason='ENTRY_BEFORE_GLOBAL_RESUME'; return false;
+      }
+    }
     if(['SYSTEM_ON','PLACE_SETUP'].includes(command.type)&&!executionAllowed(command.userId,await store.getPodForUser(command.userId)))return false;
     if(command.type==='MANAGE_POSITION'&&command.payload?.analysisSnapshot?.entryAnchor==='PINE_SETUP_PLAN_V1'){
       const p=command.payload,s=p.analysisSnapshot,positions=await store.listPositions(command.userId);
@@ -1716,7 +1743,9 @@ function createAutoTradeService(options = {}) {
     await store.appendAudit(profile.userId,'ENTRY_BLOCKED',{symbol:market.symbol,timeframe:String(market.timeframe),setupKey:market.setupKey,entryEvent:market.entryEvent===true,entryAuthorizedAt:market.entryAuthorizedAt||null,reason,lifecycleState:market.strategyNormal?.lifecycleState||null,analysisReason:market.strategyNormal?.reason||null,...extra});
   }
   async function dispatchMarkets(markets = [], isCurrent = () => true) {
-    const profiles = (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
+    const pause = await autoEntryPause();
+    const entriesPaused = pause.paused || entryPausedByEnvironment();
+    const profiles = !entriesPaused && (allowDemoExecution || allowLocalEaExecution || allowLocalEaDemoExecution || localEaExecutionUserIds.size || localEaDemoExecutionUserIds.size) ? await store.listOnProfiles() : [];
     let queued = 0;
     const entryDispatchErrors = await require('./profile-dispatch-pool').dispatchProfiles(profiles, async candidate => {
       // Keep each account sequential; independent accounts share four workers.
@@ -1809,7 +1838,8 @@ function createAutoTradeService(options = {}) {
       const cap=reentryCapability.get(profile.userId);
       if(!['1','3'].includes(options.scalpingTimeframe)&&typeof options.getLatestMarket==='function'&&!hostedAccount&&isLocalEa(pod)&&cap?.podId===pod.id&&now()-cap.at<=15000&&
         !positions.some(x=>x.origin!=='MANUAL'&&x.symbol==='XAUUSD'&&(x.strategyMode||'TF2_SCALPING')==='TF2_SCALPING')){
-        const market=markets.find(m=>m.symbol==='XAUUSD'&&String(m.timeframe)==='1');
+        const market=markets.find(m=>m.symbol==='XAUUSD'&&String(m.timeframe)==='1'&&
+          (!pause.changedAt || (m.entryAuthorizedAt??m.signalObservedAt??m.receivedAt)>pause.changedAt));
         const closure=reentryTracker.ready(profile.userId,pod,market,now()),half=Reentry.halfSettings(profile);
         if(closure&&half&&isCurrent(market)){
           const setup=Reentry.annotate(Core.buildSetupCommand(Reentry.marketForReentry(market,closure),half,pod.symbolSpecs?.XAUUSD,now()),closure,market.strategyNormal.sop.atrReference);
@@ -1823,6 +1853,7 @@ function createAutoTradeService(options = {}) {
         }
       }
       for (let market of Array.isArray(markets) ? markets : []) {
+        if(pause.changedAt && !((market.entryAuthorizedAt??market.signalObservedAt??market.receivedAt)>pause.changedAt))continue;
         const direct=PineDirect.isEvent(market);
         if(direct&&(hostedAccount||!isLocalEa(pod)||!directEntryPods.has(pod.id))){await reportEntryBlock(profile,market,'EA_DIRECT_POLICY_UPGRADE_REQUIRED');continue;}
         const symbol = Core.normaliseSymbol(market?.symbol);

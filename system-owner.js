@@ -14,7 +14,7 @@ function adminActivityPath(path) {
   const known = new Set([
     '/api/admin/vps/resolve', '/api/admin/telegram/send', '/api/admin/telegram/preview',
     '/api/admin/monitoring/notifications', '/api/admin/user-trade-monitor',
-    '/api/admin/system/registration', '/api/admin/ibs'
+    '/api/admin/system/registration', '/api/admin/system/auto-entry', '/api/admin/ibs'
   ]);
   return known.has(path) ? { action: path.slice('/api/admin/'.length) } : { action: 'admin-api' };
 }

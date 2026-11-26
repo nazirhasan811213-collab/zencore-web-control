@@ -250,6 +250,24 @@ class PostgresAuthStore {
   }
 
 
+  async getAutoEntryPause() {
+    const result = await this.pool.query(
+      "SELECT setting_value, updated_at FROM zencore_system_settings WHERE setting_key='auto_entry_paused'"
+    );
+    const row = result.rows[0];
+    return { paused: row?.setting_value === true, changedAt: row ? new Date(row.updated_at).getTime() : 0 };
+  }
+
+  async setAutoEntryPause(paused) {
+    await this.pool.query(
+      `INSERT INTO zencore_system_settings(setting_key,setting_value) VALUES('auto_entry_paused',$1::jsonb)
+       ON CONFLICT(setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=clock_timestamp()
+       WHERE zencore_system_settings.setting_value IS DISTINCT FROM EXCLUDED.setting_value`,
+      [JSON.stringify(paused)]
+    );
+    return this.getAutoEntryPause();
+  }
+
   async getTradeMonitorSettings() {
     const r=await this.pool.query("SELECT setting_value FROM zencore_system_settings WHERE setting_key='user_trade_monitor'");
     return r.rows[0]?.setting_value || require('./admin-user-trade-service').defaults();
@@ -1161,6 +1179,15 @@ class MemoryAuthStore {
 
   async init() {}
 
+
+  async getAutoEntryPause() { return this.autoEntryPause || { paused: false, changedAt: 0 }; }
+
+  async setAutoEntryPause(paused) {
+    if (paused !== (await this.getAutoEntryPause()).paused) {
+      this.autoEntryPause = { paused, changedAt: Date.now() };
+    }
+    return this.getAutoEntryPause();
+  }
 
   async getTradeMonitorSettings() { return this.tradeMonitorSettings || require('./admin-user-trade-service').defaults(); }
   async setTradeMonitorSettings(value) { this.tradeMonitorSettings=JSON.parse(JSON.stringify(value)); return value; }

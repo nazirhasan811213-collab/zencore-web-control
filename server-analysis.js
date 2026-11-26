@@ -265,6 +265,7 @@ if (AUTH_ENABLED) {
       console.log(`ZenCore local EA demo-only scoped gate: ${localEaDemoExecutionUserIds.length} account(s)`);
       autoTradeState.service = createAutoTradeService({
         store: autoStore,
+        getAutoEntryPause: () => store.getAutoEntryPause(),
         scalpingTimeframe: '1',
         onConfirmedPositions: snapshot=>positionTelegram?.observe(snapshot),
         viewerAccount:async userId=>(await authState.store.findUserByIdForLogin(userId))?.role==='viewer',
@@ -597,7 +598,8 @@ async function effectiveRegistrationSetting() {
 async function handleManagementApi(req, res, pathname, session) {
   if (!authState.ready || !authState.service) return authUnavailable(res);
   try {
-    if (pathname.startsWith('/api/admin/') && systemRole(session.user) === 'system_admin' &&
+    if (pathname.startsWith('/api/admin/') && (systemRole(session.user) === 'system_admin' ||
+        (pathname === '/api/admin/system/auto-entry' && systemRole(session.user) === 'owner')) &&
         ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
       const { action, target } = adminActivityPath(pathname);
       const auditId = await authState.store.beginAdminActivity(session.user, action, target);
@@ -665,6 +667,18 @@ async function handleManagementApi(req, res, pathname, session) {
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'Admin access required.' });
+      }
+      if (pathname === '/api/admin/system/auto-entry') {
+        res.setHeader('Cache-Control', 'no-store');
+        if (!systemRole(session.user)) return sendJson(res,403,{ok:false,error:'Admin atau Owner aktif diperlukan.'});
+        const environmentPaused = /^(1|true|yes|on)$/i.test(process.env.ZENCORE_ENTRY_SIGNALS_PAUSED||'');
+        if (req.method === 'GET') return sendJson(res,200,{ok:true,...await authState.store.getAutoEntryPause(),environmentPaused});
+        if (req.method !== 'PATCH') return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
+        if (!requestOriginAllowed(req)) return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
+        const body = await parseApiJson(req,res);
+        if (body === null && res.headersSent) return;
+        if (typeof body?.paused !== 'boolean') return sendJson(res,400,{ok:false,error:'Pilihan STOP atau sambung diperlukan.'});
+        return sendJson(res,200,{ok:true,...await authState.store.setAutoEntryPause(body.paused),environmentPaused});
       }
       if(pathname==='/api/admin/vps/resolve'&&req.method==='POST'){
         if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
@@ -1793,6 +1807,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/account.js') return sendAuthAsset(res, 'account.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/client-connections.js') return sendAuthAsset(res, 'client-connections.js', 'application/javascript; charset=utf-8');
   if(req.method==='GET'&&['/admin-telegram.js','/admin-telegram.css'].includes(pathname))return sendAuthAsset(res,pathname.slice(1),pathname.endsWith('.js')?'application/javascript; charset=utf-8':'text/css; charset=utf-8');
+  if (req.method === 'GET' && pathname === '/admin-auto-entry.js') return sendAuthAsset(res, 'admin-auto-entry.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/admin-ops.js') return sendAuthAsset(res, 'admin-ops.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/auth.js') return sendAuthAsset(res, 'auth.js', 'application/javascript; charset=utf-8');
   if (req.method === 'GET' && pathname === '/home.css') return sendAuthAsset(res, 'home.css', 'text/css; charset=utf-8');
