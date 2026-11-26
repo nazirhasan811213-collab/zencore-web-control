@@ -2,10 +2,10 @@
 import hashlib,json,os,queue,sys,tempfile,threading,time,webbrowser
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk,filedialog,messagebox,simpledialog
-from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
+from tkinter import ttk,filedialog,messagebox
+from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,discover_mt5_folders,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.39'
+VERSION='1.1.40'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def compiled_ea_payload():
@@ -258,14 +258,16 @@ class Manager:
 class App:
     def __init__(self,root,test_mode=False):
         self.root=root;self.events=queue.Queue();self.busy=set();self.options={};self.choices={};self.states={};self.buttons={};self.logins={};self.install_buttons={};self.web_buttons={};self.reset_buttons={};self.switch_buttons={};self.login_entries={};self.test_mode=test_mode
+        self.available={};self.scan_busy=False;self.scan_results=queue.Queue()
         self.manager=Manager(status=lambda n,s:self.events.put((n,s)))
         root.title('ZenCore VPS Manager '+VERSION+' • Connector '+CONNECTOR_BUILD+' • 10 MT5');root.geometry(str(min(1380,max(960,root.winfo_screenwidth()-60)))+'x'+str(min(780,max(600,root.winfo_screenheight()-80))));root.minsize(900,600);root.configure(bg='#091823')
         style=ttk.Style();style.theme_use('clam');style.configure('TFrame',background='#091823');style.configure('TLabel',background='#091823',foreground='#e5f3f8');style.configure('TButton',padding=7);style.configure('TCombobox',padding=5)
         main=ttk.Frame(root,padding=20);main.pack(fill='both',expand=True)
         ttk.Label(main,text='ZENCORE  |  VPS CONNECTOR MANAGER',font=('Segoe UI',20,'bold')).pack(anchor='w')
         ttk.Label(main,text='1 aplikasi • 10 pautan berasingan • Pasang EA '+EA_VERSION+' pada satu chart di setiap terminal MT5.').pack(anchor='w',pady=(6,15))
-        top=ttk.Frame(main);top.pack(fill='x');self.admin_login=tk.StringVar();ttk.Label(top,text='ID Admin:').pack(side='left');ttk.Entry(top,textvariable=self.admin_login,width=28).pack(side='left',padx=5);ttk.Label(top,text='Password Admin:').pack(side='left');self.password=tk.StringVar();ttk.Entry(top,textvariable=self.password,show='*',width=22).pack(side='left',padx=8);ttk.Button(top,text='Sahkan Admin',command=self.login_admin).pack(side='left',padx=5);ttk.Button(top,text='Cari semua MT5',command=self.scan).pack(side='right')
+        top=ttk.Frame(main);top.pack(fill='x');self.admin_login=tk.StringVar();ttk.Label(top,text='ID Admin:').pack(side='left');ttk.Entry(top,textvariable=self.admin_login,width=28).pack(side='left',padx=5);ttk.Label(top,text='Password Admin:').pack(side='left');self.password=tk.StringVar();ttk.Entry(top,textvariable=self.password,show='*',width=22).pack(side='left',padx=8);ttk.Button(top,text='Sahkan Admin',command=self.login_admin).pack(side='left',padx=5);self.scan_button=ttk.Button(top,text='Cari semua MT5',command=self.scan);self.scan_button.pack(side='right')
         self.admin_status=tk.StringVar(value='Login admin dahulu. User kekal terkunci sehingga admin membuka serahan.');ttk.Label(main,textvariable=self.admin_status).pack(anchor='w',pady=5)
+        self.scan_status=tk.StringVar(value='Klik Cari semua MT5 untuk menyemak terminal dan akaun.');ttk.Label(main,textvariable=self.scan_status,wraplength=850).pack(anchor='w',pady=(0,4))
         table=ttk.Frame(main);table.pack(fill='both',expand=True,pady=12)
         canvas=tk.Canvas(table,background='#091823',highlightthickness=0);xs=ttk.Scrollbar(table,orient='horizontal',command=canvas.xview);ys=ttk.Scrollbar(table,orient='vertical',command=canvas.yview)
         xs.pack(side='bottom',fill='x');ys.pack(side='right',fill='y');canvas.pack(side='left',fill='both',expand=True);canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
@@ -289,7 +291,7 @@ class App:
         ttk.Label(main,text='Jangan pautkan akaun MT5 yang sama kepada dua ID. EA menolak pertukaran akaun atau sesi yang tidak sepadan.').pack(anchor='w',pady=4)
         root.protocol('WM_DELETE_WINDOW',self.close)
         if not test_mode:
-            self.scan();threading.Thread(target=self.manager.restore,daemon=True).start();root.after(150,self.pump)
+            self.scan();threading.Thread(target=self.manager.restore,daemon=True).start();root.after(150,self.pump);root.after(5000,self.refresh_mt5)
     def login_admin(self):
         if getattr(self,'admin_login_busy',False):return
         login=self.admin_login.get().strip();password=self.password.get();self.password.set('')
@@ -330,20 +332,81 @@ class App:
             if result.get('brokerCloseConfirmed') is False:text='POSISI BROKER BELUM DISAHKAN TUTUP. '+text
             self.events.put((n,text))
         self.task(n,perform)
-    def scan(self):
-        found=self.manager.discover();identities={str(x['channel']):x['identity'] for x in found};self.available={}
-        for item in found:
+    def refresh_mt5(self):
+        self.scan(quiet=True)
+        self.root.after(5000,self.refresh_mt5)
+
+    def scan(self,quiet=False):
+        if self.scan_busy:return
+        self.scan_busy=True
+        if not quiet:
+            self.scan_button.configure(state='disabled')
+            self.scan_status.set('Sedang mencari terminal dan akaun MT5...')
+        def work():
+            try:
+                accounts=self.manager.discover()
+                folders=discover_mt5_folders()
+                self.scan_results.put((accounts,folders))
+            except (OSError,ValueError):
+                self.scan_results.put(None)
+        threading.Thread(target=work,daemon=True).start()
+
+    def show_scan(self,result):
+        self.scan_busy=False
+        self.scan_button.configure(state='normal')
+        if result is None:
+            self.scan_status.set('Carian MT5 gagal membaca folder. Semak akses Windows dan cuba lagi.')
+            return
+        accounts,folders=result
+        self.available={}
+        account_folders={}
+        for item in accounts:
+            identity=item['identity']
+            folder=identity.get('terminalDataPath')
+            folder_key=os.path.normcase(str(Path(folder).resolve())) if folder else None
             label=item['label']
-            if label in self.available:label+=' • '+Path(item['channel']).name
+            if folder_key:label+=' • '+Path(folder_key).name[-8:]
+            base_label=label
+            suffix=2
+            while label in self.available:
+                label=f'{base_label} • {suffix}'
+                suffix+=1
             self.available[label]=item['channel']
-        for n,c in self.options.items():c['values']=list(self.available)
-        with self.manager.lock:configs=dict(self.manager.configs)
-        for n,folder in self.manager.folders.items():
-            if n in configs:continue
-            matches=[label for label,channel in self.available.items() if identities[channel].get('terminalDataPath') and Path(identities[channel]['terminalDataPath']).resolve()==Path(folder).resolve()]
-            if len(matches)==1:self.choices[n].set(matches[0]);self.states[n].set('EA ditemui pada folder slot ini. Klik 2 Sambung EA.')
-        for n,cfg in configs.items():
-            label=cfg['tradeMode']+' • ****'+cfg['account'][-4:]+' • '+cfg['server'];self.choices[n].set(label);self.logins[n].set(cfg['zenCoreLogin']);self.login_entries[n].configure(state='readonly')
+            account_folders[label]=folder_key
+        with self.manager.lock:
+            configs=dict(self.manager.configs)
+            saved_folders=dict(self.manager.folders)
+            reserved={**self.manager.pending,**configs}
+        detected={os.path.normcase(str(item['folder'].resolve())) for item in folders}
+        detected.update(folder for folder in account_folders.values() if folder)
+        detected.update(os.path.normcase(str(Path(folder).resolve())) for folder in saved_folders.values())
+        if accounts:
+            self.scan_status.set(f"{len(accounts)} akaun EA dikesan • {len(detected)} terminal dikenal pasti. Pilih akaun pada slot kosong.")
+        elif detected:
+            self.scan_status.set(f"{len(detected)} terminal dikesan • tiada akaun EA sedia. Klik 1 Pasang EA, buka MT5, log masuk dan lampirkan EA pada carta.")
+        else:
+            self.scan_status.set('Tiada terminal MT5 dikesan untuk pengguna Windows ini. Buka MT5 atau pilih folder data melalui 1 Pasang EA.')
+        for n,combo in self.options.items():
+            if n in self.busy:continue
+            cfg=configs.get(n)
+            if cfg:
+                label=next((name for name,channel in self.available.items() if channel==cfg['channel']),None)
+                if label is None:label=cfg['tradeMode']+' • ****'+cfg['account'][-4:]+' • '+cfg['server']
+                combo['values']=(label,)
+                self.choices[n].set(label)
+                self.logins[n].set(cfg['zenCoreLogin'])
+                self.login_entries[n].configure(state='readonly')
+                continue
+            assigned={value.get('channel') for slot,value in reserved.items() if slot!=n}
+            saved=saved_folders.get(n)
+            folder_key=os.path.normcase(str(Path(saved).resolve())) if saved else None
+            choices=[label for label,channel in self.available.items()
+                     if channel not in assigned and (not folder_key or account_folders[label]==folder_key)]
+            combo['values']=choices
+            if self.choices[n].get() not in choices:self.choices[n].set('')
+            if folder_key and len(choices)==1:
+                self.choices[n].set(choices[0])
+
     def task(self,n,fn,stage="LINK"):
         if n in self.busy:return
         self.busy.add(n)
@@ -354,7 +417,7 @@ class App:
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'ADMIN_REQUIRED','ADMIN_LOGIN_REQUIRED','ADMIN_SETUP_REQUIRED','MT5_FOLDER_ACCOUNT_MISMATCH','PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.39.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.40.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
@@ -377,19 +440,17 @@ class App:
     def install(self,n):
         if n in self.busy:return
         title='Pasang EA • Slot '+str(n)
-        preferred=simpledialog.askstring(title,
-            'Tampal alamat daripada MT5 > File > Open Data Folder.\n'
-            'Biarkan kosong untuk pilih folder daripada senarai.',
-            initialvalue=self.manager.folders.get(n,''),parent=self.root)
-        if preferred is None:return
-        selection=choose_mt5_install(self.root,title,preferred,require_editor=False)
+        selection=choose_mt5_install(self.root,title,None,require_editor=False)
         if not selection:return
         folder,editor=selection
         def perform():
             self.manager.install(n,folder,editor)
-            self.events.put((n,'EA dipasang. Dalam MT5 ini: Navigator > Refresh > attach ZenCoreExecutor pada satu chart. Kemudian Cari semua MT5 dan Pautkan.'))
+            self.events.put((n,'EA dipasang. Buka MT5 dan lampirkan ZenCoreExecutor pada carta. Akaun akan muncul selepas EA mula menghantar status.'))
         self.task(n,perform,stage='INSTALL')
     def pump(self):
+        try:result=self.scan_results.get_nowait()
+        except queue.Empty:pass
+        else:self.show_scan(result)
         for _ in range(150):
             try:n,s=self.events.get_nowait()
             except queue.Empty:break
@@ -426,6 +487,17 @@ def main():
         app.events.put((2,'PAUSED'));app.pump()
         assert app.logins[2].get()=='restored@example.test'
         assert str(app.login_entries[2].cget('state'))=='readonly'
+        app.manager.configs.clear()
+        folder=Path(tempfile.gettempdir())/'Broker-MT5'
+        app.show_scan(([],[{'folder':folder}]))
+        assert '1 terminal dikesan' in app.scan_status.get()
+        app.manager.folders[1]=folder
+        found={'channel':'account-a','label':'DEMO • ****1234 • Broker','identity':{'terminalDataPath':str(folder)}}
+        app.show_scan(([found],[{'folder':folder}]))
+        assert app.choices[1].get() in app.available
+        assert not app.choices[3].get()
+        app.show_scan(([],[]))
+        assert not app.choices[1].get()
         from unittest.mock import patch
         with patch.object(app,'install') as install, patch('webbrowser.open') as browser:
             for slot,button in app.install_buttons.items():
