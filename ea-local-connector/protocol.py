@@ -12,17 +12,24 @@ from pathlib import Path
 VERSION = '1.4.0-ea-local'
 TF1_FIXED_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V1'
 TF1_FIVE_TARGETS_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V2'
+TF1_FIVE_TARGETS_V3_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V3'
+TF1_FIVE_TARGETS_V4_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V4'
+TF1_FIVE_TARGETS_V5_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V5'
 TF1_FIXED_EXIT_TARGETS = {
     TF1_FIXED_EXIT: (2.5, 4, 6),
     TF1_FIVE_TARGETS_EXIT: (1.5, 2.5, 4),
+    TF1_FIVE_TARGETS_V3_EXIT: (1.5, 3.5, 4.5),
+    TF1_FIVE_TARGETS_V4_EXIT: (1.5, 3.5, 4.5),
+    TF1_FIVE_TARGETS_V5_EXIT: (1.5, 3, 4.5),
 }
 
 def supports_tf1_fixed_exit(capability, requested):
-    return (requested not in TF1_FIXED_EXIT_TARGETS or capability == requested or
-            (requested == TF1_FIXED_EXIT and capability == TF1_FIVE_TARGETS_EXIT))
+    versions = tuple(TF1_FIXED_EXIT_TARGETS)
+    return (requested not in versions or
+            (capability in versions and versions.index(capability) >= versions.index(requested)))
 
-EA_VERSION = '2.52'
-CONNECTOR_BUILD = '2.1.53'
+EA_VERSION = '2.55'
+CONNECTOR_BUILD = '2.1.56'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'

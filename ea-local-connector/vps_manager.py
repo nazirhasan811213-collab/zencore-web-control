@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 from connector import Runner,Api,dpapi,COMMON,INSTALL,RESOURCE,reset_connector_data,RESET_MESSAGES,resolve_mt5_folder,choose_mt5_install,install_error_message,BASE
 from protocol import heartbeat,read_fields,atomic_write,EA_VERSION,CONNECTOR_BUILD
-VERSION='1.1.36'
+VERSION='1.1.39'
 ROOT=Path(os.environ.get('LOCALAPPDATA','.'))/'ZenCore'/'VPSConnector'
 
 def compiled_ea_payload():
@@ -140,8 +140,11 @@ class Manager:
     def reserved(self,slot,channel):
         target=str(Path(channel).resolve())
         return any(n!=slot and c.get('channel') and str(Path(c['channel']).resolve())==target for n,c in {**self.configs,**self.pending}.items())
-    def pair(self,slot,channel,password,login=None):
-        slot_number(slot);channel=Path(channel);login=(login or ('ZCuser '+str(slot))).strip()
+    def pair(self,slot,channel,password,login):
+        slot_number(slot)
+        channel=Path(channel)
+        login=login.strip()
+        if not login or len(login)>254:raise ValueError('ZENCORE_LOGIN_REQUIRED')
         with self.lock:
             if slot in self.configs or slot in self.pending or slot in self.installing:raise RuntimeError('PROFILE_ALREADY_PAIRED')
             if self.reserved(slot,channel):raise RuntimeError('MT5_ALREADY_ASSIGNED')
@@ -267,11 +270,11 @@ class App:
         canvas=tk.Canvas(table,background='#091823',highlightthickness=0);xs=ttk.Scrollbar(table,orient='horizontal',command=canvas.xview);ys=ttk.Scrollbar(table,orient='vertical',command=canvas.yview)
         xs.pack(side='bottom',fill='x');ys.pack(side='right',fill='y');canvas.pack(side='left',fill='both',expand=True);canvas.configure(xscrollcommand=xs.set,yscrollcommand=ys.set)
         grid=ttk.Frame(canvas);canvas.create_window((0,0),window=grid,anchor='nw');grid.bind('<Configure>',lambda _:canvas.configure(scrollregion=canvas.bbox('all')));grid.columnconfigure(1,weight=1);grid.columnconfigure(4,weight=2)
-        for col,title in enumerate(['Slot / ID ZenCore','Akaun MT5 / Server','Pautan','EA / Reset','Status']):ttk.Label(grid,text=title,font=('Segoe UI',10,'bold')).grid(row=0,column=col,sticky='w',padx=5,pady=8)
+        for col,title in enumerate(['Slot / ID atau e-mel ZenCore','Akaun MT5 / Server','Pautan','EA / Reset','Status']):ttk.Label(grid,text=title,font=('Segoe UI',10,'bold')).grid(row=0,column=col,sticky='w',padx=5,pady=8)
         for n in range(1,11):
-            login=tk.StringVar(value='ZCuser '+str(n));self.logins[n]=login
+            login=tk.StringVar();self.logins[n]=login
             cell=ttk.Frame(grid);cell.grid(row=n,column=0,sticky='w',padx=5,pady=10)
-            ttk.Label(cell,text=str(n),width=2).pack(side='left');entry=ttk.Entry(cell,textvariable=login,width=20);entry.pack(side='left');self.login_entries[n]=entry
+            ttk.Label(cell,text=str(n),width=2).pack(side='left');entry=ttk.Entry(cell,textvariable=login,width=28);entry.pack(side='left');self.login_entries[n]=entry
             value=tk.StringVar();self.choices[n]=value;combo=ttk.Combobox(grid,textvariable=value,state='readonly',width=40);combo.grid(row=n,column=1,sticky='ew',padx=5);self.options[n]=combo
             b=ttk.Button(grid,text='2 Sambung EA',command=lambda k=n:self.action(k));b.grid(row=n,column=2,padx=4);self.buttons[n]=b
             tools=ttk.Frame(grid);tools.grid(row=n,column=3,padx=4)
@@ -293,7 +296,7 @@ class App:
         if not login or not password:self.admin_status.set('Isi ID dan password admin.');return
         self.admin_login_busy=True;self.admin_status.set('Mengesahkan admin...')
         def work():
-            try:self.manager.login_admin(login,password);self.events.put((0,'ADMIN DISAHKAN — pilih ID client pada setiap slot.'))
+            try:self.manager.login_admin(login,password);self.events.put((0,'ADMIN DISAHKAN — isi ID atau e-mel ZenCore pada slot yang dipilih.'))
             except Exception:self.events.put((0,'Login admin gagal. Semak ID, password dan status admin.'))
             finally:self.admin_login_busy=False
         threading.Thread(target=work,daemon=True).start()
@@ -351,7 +354,7 @@ class App:
             except Exception as e:
                 code=str(e) if isinstance(e,(RuntimeError,ValueError)) else 'CONNECTION_FAILED'
                 safe={'ADMIN_REQUIRED','ADMIN_LOGIN_REQUIRED','ADMIN_SETUP_REQUIRED','MT5_FOLDER_ACCOUNT_MISMATCH','PROFILE_RESET_PENDING','ZENCORE_USER_ALREADY_ASSIGNED','PROFILE_ALREADY_PAIRED','MT5_ALREADY_ASSIGNED','ZENCORE_USER_MISMATCH','EA_SESSION_CHANGED','EA_OFFLINE','ACCOUNT_CHANGED','OLD_CONNECTOR_ACTIVE','STOP_BEFORE_PAIRING','LINK_RESET_WAIT','CONNECTOR_STOP_PENDING','INVALID_CREDENTIALS','ACCOUNT_DISABLED','ACCOUNT_EXPIRED','CHANNEL_BINDING_INVALID'}
-                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.36.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
+                self.events.put((n,('Fail ZenCoreExecutor.ex5 tiada atau rosak dalam pakej Manager. Jalankan ZenCoreVPSSetup-1.1.39.exe semula.' if str(e)=='VPS_EA_PACKAGE_MISSING' else install_error_message(e)) if stage=='INSTALL' else RESET_MESSAGES.get(code,code if code in safe else 'PAUTAN GAGAL — semak login, EA dan sambungan')))
             finally:self.events.put((n,None))
         threading.Thread(target=run,daemon=True).start()
     def action(self,n):
@@ -362,7 +365,7 @@ class App:
             return
         channel=self.available.get(self.choices[n].get());password='';login=self.logins[n].get().strip()
         if not self.manager.admin_api:self.states[n].set('Sahkan Admin dahulu.');return
-        if not channel or not login:self.states[n].set('Pilih akaun MT5 dan ID client.');return
+        if not channel or not login:self.states[n].set('Pilih akaun MT5 dan isi ID atau e-mel ZenCore client.');return
         self.task(n,lambda:self.manager.pair(n,channel,password,login))
     def reset(self,n):
         if n in self.busy:return
@@ -397,7 +400,10 @@ class App:
             else:self.states[n].set(s[:180])
             for buttons in (self.install_buttons,self.web_buttons):buttons[n].configure(state='disabled' if n in self.busy else 'normal')
             self.reset_buttons[n].configure(state='disabled' if n in self.busy else 'normal');self.switch_buttons[n].configure(state='disabled' if n in self.busy else 'normal')
-            cfg=self.manager.configs.get(n);self.login_entries[n].configure(state='readonly' if cfg or n in self.busy else 'normal');self.buttons[n].configure(text='Sambung' if cfg and cfg.get('paused') else 'Henti' if cfg else '2 Sambung EA',state='disabled' if n in self.busy else 'normal')
+            cfg=self.manager.configs.get(n)
+            if cfg:self.logins[n].set(cfg['zenCoreLogin'])
+            self.login_entries[n].configure(state='readonly' if cfg or n in self.busy else 'normal')
+            self.buttons[n].configure(text='Sambung' if cfg and cfg.get('paused') else 'Henti' if cfg else '2 Sambung EA',state='disabled' if n in self.busy else 'normal')
         self.root.after(150,self.pump)
     def close(self):
         if not messagebox.askyesno('Tutup Manager?','Semua 10 sambungan akan berhenti. SL broker yang sudah dipasang kekal aktif. Teruskan?'):return
@@ -414,6 +420,12 @@ def main():
             installed=install_ea(folder)/'ZenCoreExecutor.ex5'
             assert installed.read_bytes()==payload
         root=tk.Tk();app=App(root,test_mode=True);root.update();assert len(app.states)==10 and len(app.reset_buttons)==10 and len(app.logins)==10
+        assert all(not value.get() for value in app.logins.values())
+        app.login_entries[10].insert(0,'trader.custom@example.test');assert app.logins[10].get()=='trader.custom@example.test'
+        app.manager.configs[2]={'zenCoreLogin':'restored@example.test','paused':True}
+        app.events.put((2,'PAUSED'));app.pump()
+        assert app.logins[2].get()=='restored@example.test'
+        assert str(app.login_entries[2].cget('state'))=='readonly'
         from unittest.mock import patch
         with patch.object(app,'install') as install, patch('webbrowser.open') as browser:
             for slot,button in app.install_buttons.items():
