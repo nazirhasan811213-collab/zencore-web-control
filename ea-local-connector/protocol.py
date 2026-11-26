@@ -28,8 +28,8 @@ def supports_tf1_fixed_exit(capability, requested):
     return (requested not in versions or
             (capability in versions and versions.index(capability) >= versions.index(requested)))
 
-EA_VERSION = '2.55'
-CONNECTOR_BUILD = '2.1.56'
+EA_VERSION = '2.56'
+CONNECTOR_BUILD = '2.1.57'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'

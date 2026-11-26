@@ -1,11 +1,11 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.55"
- #property version "2.55"
+ #define ZENCORE_RELEASE "2.56"
+ #property version "2.56"
 #else
- #define ZENCORE_RELEASE "2.55"
- #property version "2.55"
+ #define ZENCORE_RELEASE "2.56"
+ #property version "2.56"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
@@ -624,6 +624,15 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    // the position's existing stop, which can be valid even if the new quote-based stop is too close.
    if((cashLayer || !guardedTf2 || fillAnchor) && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))
     return RejectEntry(cashLayer?(i>0?"SETUP_PARTIAL":"CASH_LAYER_BROKER_DISTANCE"):"BROKER_STOP_DISTANCE");
+   if(directEntry && !netting){
+    // Only layers from this command can coexist within a strategy and symbol.
+    for(int j=PositionsTotal()-1;j>=0;j--){
+     ulong existing=PositionGetTicket(j);
+     if(IsOwn(existing) && (ulong)PositionGetInteger(POSITION_MAGIC)==entryScope &&
+        PositionGetString(POSITION_SYMBOL)==symbol && (i==0 || PositionGetString(POSITION_COMMENT)!=orderComment))
+      return RejectEntry(i>0?"SETUP_PARTIAL":"SETUP_POSITION_EXISTS");
+    }
+   }
    bool sent=buy?trade.Buy(lot,symbol,0,initialSl,initialTp,orderComment):trade.Sell(lot,symbol,0,initialSl,initialTp,orderComment);
    if(sent && BrokerDone() && trade.ResultVolume()>0)break;
    uint retcode=trade.ResultRetcode();

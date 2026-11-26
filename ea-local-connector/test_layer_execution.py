@@ -33,7 +33,7 @@ using uint = unsigned int;
 #define ZENCORE_SPLIT_ROLE 0
 enum {ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
-      POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_TP, POSITION_VOLUME,
+      POSITION_SYMBOL, POSITION_COMMENT, POSITION_PRICE_OPEN, POSITION_SL, POSITION_TP, POSITION_VOLUME,
       SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_STOPS_LEVEL, SYMBOL_POINT,
       DEAL_POSITION_ID, DEAL_PRICE, TRADE_RETCODE_REQUOTE,
       TRADE_RETCODE_PRICE_CHANGED, TRADE_RETCODE_PRICE_OFF,
@@ -85,7 +85,7 @@ long PositionGetInteger(int key){
  if(key==POSITION_MAGIC)return p.magic;
  return p.buy?POSITION_TYPE_BUY:-1;
 }
-string PositionGetString(int){return _Symbol;}
+string PositionGetString(int key){return key==POSITION_COMMENT?positions.at(selected).comment:_Symbol;}
 double PositionGetDouble(int key){
  const auto &p=positions.at(selected);
  return key==POSITION_PRICE_OPEN?p.entry:key==POSITION_SL?p.sl:key==POSITION_TP?p.tp:p.volume;
@@ -169,6 +169,13 @@ int main(){
   }
   assert(std::abs(sum-layers*.01)<1e-8);
   assert(lastRisk.find("tp1="+Num(Price("XAUUSD",positions.back().entry+(buy?1:-1))))!=string::npos);
+ }
+ for(bool buy:{false,true}){
+  netting=false;calls=0;
+  positions={{99,MAGIC,true,.10,4000,3998,0,"ZC:previous-setup"}};
+  assert(!Run(buy,8)&&calls==0&&PositionsTotal()==1&&lastEntryCode=="SETUP_POSITION_EXISTS");
+  positions.clear();
+  assert(Run(buy,8)&&calls==8&&PositionsTotal()==8);
  }
  netting=true;calls=0;positions={{99,0,true,.10,4000,3998}};
  assert(!Run(true,12)&&calls==0&&lastEntryCode=="NETTING_POSITION_CONFLICT");
