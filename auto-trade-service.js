@@ -1,5 +1,5 @@
 const PineDirect=require('./pine-direct-entry');
-const {FIXED_LOCK}=require('./tf2-ribbon-scalping');
+const {supportsFixedLock,isFixedLock}=require('./tf2-ribbon-scalping');
 const crypto = require('crypto');
 const Core = require('./auto-trade-core');
 const {rebasedManagement}=require('./live-entry-management');
@@ -1255,7 +1255,7 @@ function createAutoTradeService(options = {}) {
     } else {
       manualCloseAllPods.delete(pod.id);
     }
-    if(input.tf1FixedExitVersion===FIXED_LOCK)fixedTf1Pods.set(pod.id,updated.accountFingerprint);
+    if(isFixedLock(input.tf1FixedExitVersion))fixedTf1Pods.set(pod.id,{accountFingerprint:updated.accountFingerprint,version:input.tf1FixedExitVersion});
     else fixedTf1Pods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
@@ -1378,12 +1378,10 @@ function createAutoTradeService(options = {}) {
       diagnostic.reason = 'ENTRY_SESSION_CHANGED'; return false;
     }
     const mode=command.payload?.strategyMode||'TF2_SCALPING';
-    if(command.payload?.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
+    if(isFixedLock(command.payload?.analysisSnapshot?.exitLockVersion) &&
        !supportsSetupExit(await store.getPodForUser(command.userId),command.payload)){
       diagnostic.reason='EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED';return false;
     }
-    if(PineDirect.isCommand(command))return pairAllowed(profile,command.podId,command.payload.symbol)&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
-    if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     // A queued signal may outlive a heartbeat that reports a fill. Recheck at
     // delivery as well as dispatch; every layer of this TF must be closed.
     const deliveryPositions=await store.listPositions(command.userId);
@@ -1392,6 +1390,8 @@ function createAutoTradeService(options = {}) {
       strategyNormal:{sop:{entryPolicyVersion:command.payload?.analysisSnapshot?.entryPolicyVersion}}},deliveryPositions)){
       Object.assign(diagnostic,{ok:false,reason:'POSITION_STILL_OPEN'});return false;
     }
+    if(PineDirect.isCommand(command))return pairAllowed(profile,command.podId,command.payload.symbol)&&((command.payload.symbol==='XAUUSD'&&command.payload.layers<=10)||expandedEntryPods.has(command.podId))&&directEntryPods.has(command.podId)&&profile?.desiredState==='ON'&&Core.effectiveSettings({...profile,strategyMode:mode},command.payload.symbol).enabled;
+    if(profile?.modeSettings?.[mode]?.gold?.enabled===false)return false;
     if(typeof options.getLatestMarket!=='function')return command.payload?.reentry?false:true;
     const p=command.payload||{},snap=p.analysisSnapshot||{},tf=snap.analysisSopVersion==='NORMAL_20261001_TF3_RIBBON_V1'?'3':p.strategyMode==='TF15_INTRA'?'15':'1';
     const m=options.getLatestMarket(p.symbol,tf),n=m?.strategyNormal;
@@ -1430,8 +1430,11 @@ function createAutoTradeService(options = {}) {
   }
 
   function supportsSetupExit(pod, payload) {
-    return payload.analysisSnapshot?.exitLockVersion!==FIXED_LOCK ||
-      (!!pod?.accountFingerprint && fixedTf1Pods.get(pod.id)===pod.accountFingerprint);
+    const requested=payload.analysisSnapshot?.exitLockVersion;
+    if(!isFixedLock(requested))return true;
+    const capability=fixedTf1Pods.get(pod?.id);
+    return !!pod?.accountFingerprint && capability?.accountFingerprint===pod.accountFingerprint &&
+      supportsFixedLock(capability.version,requested);
   }
 
   function supportsManualOrder(pod) {
@@ -1830,7 +1833,11 @@ function createAutoTradeService(options = {}) {
           continue;
         }
         if (!allowedDemoSymbols.includes(symbol) && !(options.allowMt5Symbols && direct))continue;
-        if(!direct&&!Core.permitsPositionEntry(market,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
+        const positionScope=direct?{
+          symbol,timeframe:market.timeframe,
+          strategyNormal:{sop:{entryPolicyVersion:market.setupMeta?.entryPolicyVersion}}
+        }:market;
+        if(!Core.permitsPositionEntry(positionScope,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
         const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
         const cycle=direct?{allowed:true}:await entryCycleReset.check(profile.userId,pod?.id,market);
         if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
@@ -1842,7 +1849,7 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || (!direct&&!isCurrent(market))){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
-        if(setup.payload.analysisSnapshot?.exitLockVersion===FIXED_LOCK &&
+        if(isFixedLock(setup.payload.analysisSnapshot?.exitLockVersion) &&
            (hostedAccount||!supportsSetupExit(pod,setup.payload))){
           await reportEntryBlock(profile,market,'EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED');continue;
         }

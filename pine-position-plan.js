@@ -3,12 +3,12 @@
 const VERSIONS=['NORMAL_20261001_TF2_RIBBON_V1','NORMAL_20261001_TF1_RIBBON_V1','NORMAL_20261001_TF3_RIBBON_V1','NORMAL_20261001_TF15_RIBBON_V1'];
 const ANCHOR='PINE_SETUP_PLAN_V1';
 const PineDirect=require('./pine-direct-entry');
-const {FIXED_LOCK,fixedPlanPass}=require('./tf2-ribbon-scalping');
+const {isFixedLock,fixedPlanPass}=require('./tf2-ribbon-scalping');
 function valid(command){
  const p=command?.payload,s=p?.analysisSnapshot,sign=p?.side==='BUY'?1:p?.side==='SELL'?-1:0;
  return command?.type==='PLACE_SETUP'&&VERSIONS.includes(s?.analysisSopVersion)&&
   (s.exitLockVersion==='PINE_STEPLOCK_150_TP3_PLUS3_V1'||
-   (s.exitLockVersion===FIXED_LOCK&&p.symbol==='XAUUSD'&&s.executionTimeframe==='1'&&fixedPlanPass(p.side,p))||
+   (isFixedLock(s.exitLockVersion)&&p.symbol==='XAUUSD'&&s.executionTimeframe==='1'&&fixedPlanPass(p.side,p,s.exitLockVersion))||
    (s.exitLockVersion==='MT5_FILL_STEPLOCK'&&PineDirect.isCommand(command)&&p.symbol===s.symbol&&s.entryAnchor==='MT5_FILL_PLAN_V1')||(s.exitLockVersion==='PINE_STEPLOCK_BE_TF15_V1'&&s.analysisSopVersion==='NORMAL_20261001_TF15_RIBBON_V1'&&s.executionTimeframe==='15'&&p.strategyMode==='TF15_INTRA'))&&sign!==0&&
   ['entry','sl','tp1','tp2','tp3'].every(k=>Number.isFinite(p[k])&&p[k]>0&&p[k]===s[k])&&
   sign*(p.entry-p.sl)>0&&sign*(p.tp1-p.entry)>0&&sign*(p.tp2-p.tp1)>0&&sign*(p.tp3-p.tp2)>0;
@@ -42,8 +42,8 @@ function management(market,positions,command,at){
  const chartClose=freshExit&&(market.nativeChartExitAll===true&&market.feedChannel==='EXECUTION'||market.setupKey===s.setupKey&&(['CLOSE_50_NOW','EXIT_ALL','EXIT_REMAINING'].includes(source.action)||!fillAnchored&&source.action==='EXIT_SL'));
  const confirmedChartClose=chartClose&&market.feedChannel==='EXECUTION'&&market.confirmed===true&&(market.nativeChartExitAll===true||source.confirmedChartClose===true);
  const pm={confirmedChartClose,action:chartClose?'EXIT_ALL':'HOLD',slMoveTriggered:false,entryAnchor:ANCHOR,entryCommandId:command.id,reason:chartClose?'Chart Close → CLOSE ALL setup aktif':'Exit ikut pelan '+(s.cycleKind==='FOLLOWUP'?'RE-ENTRY':'ENTRY')};
- // Fixed TF1 stops advance only in MT5 using its closed M1 candles.
- if(!chartClose&&!fillAnchored&&s.exitLockVersion!==FIXED_LOCK){
+ // Fixed TF1 stops are managed per fill using MT5 quotes.
+ if(!chartClose&&!fillAnchored&&!isFixedLock(s.exitLockVersion)){
   const sign=p.side==='BUY'?1:-1,quotes=own.map(x=>x.currentPrice);
   if(quotes.some(x=>!Number.isFinite(x)||x<=0))return null;
   const quote=sign>0?Math.min(...quotes):Math.max(...quotes),hit=t=>sign*(quote-t)>=0;

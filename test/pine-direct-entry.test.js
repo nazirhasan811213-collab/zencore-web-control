@@ -78,3 +78,35 @@ test('Pine Direct is gated at dispatch and when the Connector takes the queued c
  at=command.expiresAt;
  a.equal((await service.nextCommand(podToken)).command,null,'expired setup cannot replay in a later session');
 });
+
+test('Pine follow-up queues only without an open same-strategy position and rechecks before delivery', async () => {
+ const {MemoryAutoTradeStore}=require('../auto-trade-store');
+ const {createAutoTradeService}=require('../auto-trade-service');
+ const store=new MemoryAutoTradeStore(),userId='followup-trader';
+ let at=Date.UTC(2026,10,11,1,0);
+ const service=createAutoTradeService({store,allowLocalEaDemoExecution:true,
+  commandSigningKey:'overlap-test-signing-key-longer-than-thirty-two',now:()=>at});
+ const {podToken}=await service.connectLocalEa(userId);
+ await service.heartbeat(podToken,{accountFingerprint:'a'.repeat(64),accountMask:'****1234',serverMask:'****Demo',brokerMask:'****MT5',
+  tradeMode:'DEMO',terminalConnected:true,terminalTradeAllowed:true,accountTradeAllowed:true,expertTradeAllowed:true,
+  demoExecutionUnlocked:true,connectorVersion:'1.4.0-ea-local',positions:[],directEntryPolicy:D.POLICY});
+ await service.saveSettings(userId,{capitalUsd:500,lotPerLayer:.01,layers:8,symbols:['XAUUSD'],riskAcknowledged:true,
+  tradingSchedule:Core.malaysiaTradingSchedule(false,false)});
+ await store.setControl(userId,{desiredState:'ON',effectiveState:'ON'});
+ const signal=()=> {
+  const m=event('1','SELL');
+  return {...m,entryAuthorizedAt:at,signalObservedAt:at,receivedAt:at,
+   setupMeta:{...m.setupMeta,completedAt:at,cycleKind:'FOLLOWUP'}};
+ };
+ const remainingLayer={ticket:'last-layer',symbol:'XAUUSD',side:'BUY',origin:'ZENCORE',strategyMode:'TF2_SCALPING'};
+ const tf15Layer={...remainingLayer,ticket:'tf15',strategyMode:'TF15_INTRA'};
+ await store.replacePositions(userId,[remainingLayer],at);
+ a.equal((await service.dispatchMarkets([signal()])).queued,0);
+ await store.replacePositions(userId,[tf15Layer],at);
+ a.equal((await service.dispatchMarkets([signal()])).queued,1);
+ await store.replacePositions(userId,[tf15Layer,remainingLayer],at);
+ a.equal((await service.nextCommand(podToken)).command,null);
+ await store.replacePositions(userId,[tf15Layer],++at);
+ a.equal((await service.dispatchMarkets([signal()])).queued,1);
+ a.equal((await service.nextCommand(podToken)).command.payload.layers,8);
+});

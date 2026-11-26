@@ -54,7 +54,7 @@ for(const tf of ['1','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke 
 });
 test('Native SOLID cannot be cancelled by the removed HEMA entry filter; follow-up HEMA remains required',()=>{
  for(const tf of ['1','15']){
-  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'3':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
+  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'7':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
  }
 });
 for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{
@@ -64,16 +64,23 @@ for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial
  a.equal(check({payload:{...payload,analysisSnapshot:{...d.snapshot,entryAuthorizedAt:f.now-61000}}},m,f.now).reason,'ENTRY_EVENT_EXPIRED');
 });
 
-for (const side of ['BUY','SELL']) test(`Fixed XAUUSD TF1 ${side} uses signed plan levels and requires its EA capability`,async()=>{
+for (const version of [1,2,3,4,5]) for (const side of ['BUY','SELL']) test(`Fixed XAUUSD TF1 ${side} ${version} uses signed plan levels and requires its EA capability`,async()=>{
  const {f,ingest,sign}=native('1',side);
  const S=require('../tf2-ribbon-scalping'),D=require('../pine-direct-entry');
- Object.assign(f.row,{23:4100-sign*3,24:4100-sign*3,25:4100+sign*2.5,26:4100+sign*4,27:4100+sign*6});
- Object.assign(f.row[66],{riskPlanVersion:S.FIXED_RISK,exitLockVersion:S.FIXED_LOCK,planMode:'Fixed Distance'});
- const m=ingest(),plan={entry:4100,sl:4100-sign*3,tp1:4100+sign*2.5,tp2:4100+sign*4,tp3:4100+sign*6};
+ const [lock,risk,d1,d2,d3]=[
+  [S.FIXED_LOCK,S.FIXED_RISK,2.5,4,6],
+  [S.FIVE_TARGETS_LOCK,S.FIVE_TARGETS_RISK,1.5,2.5,4],
+  [S.FIVE_TARGETS_V3_LOCK,S.FIVE_TARGETS_V3_RISK,1.5,3.5,4.5],
+  [S.FIVE_TARGETS_V4_LOCK,S.FIVE_TARGETS_V4_RISK,1.5,3.5,4.5],
+  [S.FIVE_TARGETS_V5_LOCK,S.FIVE_TARGETS_V5_RISK,1.5,3,4.5],
+ ][version-1];
+ Object.assign(f.row,{23:4100-sign*3,24:4100-sign*3,25:4100+sign*d1,26:4100+sign*d2,27:4100+sign*d3});
+ Object.assign(f.row[66],{riskPlanVersion:risk,exitLockVersion:lock,planMode:'Fixed Distance'});
+ const m=ingest(),plan={entry:4100,sl:4100-sign*3,tp1:4100+sign*d1,tp2:4100+sign*d2,tp3:4100+sign*d3};
  a.equal(m.strategyNormal.state,'READY',m.strategyNormal.reason);
  for(const key of Object.keys(plan))a.equal(m.strategyNormal.plan[key],plan[key]);
- a.equal(D.decision(m).snapshot.exitLockVersion,S.FIXED_LOCK);
- a.equal(D.decision({...m,tp1:4100+sign*1.5}),null);
+ a.equal(D.decision(m).snapshot.exitLockVersion,lock);
+ a.equal(D.decision({...m,tp1:4100+sign*1.6}),null);
 
  const Core=require('../auto-trade-core'),{MemoryAutoTradeStore}=require('../auto-trade-store');
  const {createAutoTradeService,tokenHash}=require('../auto-trade-service');
@@ -89,13 +96,17 @@ for (const side of ['BUY','SELL']) test(`Fixed XAUUSD TF1 ${side} uses signed pl
  await svc.saveSettings(user,settings);await store.setControl(user,{desiredState:'ON',effectiveState:'ON'});
  await svc.heartbeat(token,heartbeat);
  a.equal((await svc.dispatchMarkets([m])).queued,0);
- await svc.heartbeat(token,{...heartbeat,tf1FixedExitVersion:S.FIXED_LOCK});
+ if(version>1){
+  await svc.heartbeat(token,{...heartbeat,tf1FixedExitVersion:[S.FIXED_LOCK,S.FIVE_TARGETS_LOCK,S.FIVE_TARGETS_V3_LOCK,S.FIVE_TARGETS_V4_LOCK][version-2]});
+  a.equal((await svc.dispatchMarkets([m])).queued,0);
+ }
+ await svc.heartbeat(token,{...heartbeat,tf1FixedExitVersion:S.FIVE_TARGETS_V5_LOCK});
  a.equal((await svc.dispatchMarkets([m])).queued,1);
  const {command}=await svc.nextCommand(token);
- a.equal(command.payload.analysisSnapshot.exitLockVersion,S.FIXED_LOCK);
+ a.equal(command.payload.analysisSnapshot.exitLockVersion,lock);
  a.equal(require('../pine-position-plan').valid(command),true);
  const cp=require('child_process').spawnSync('python',['-c',"import json,sys;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps(command_fields(json.load(sys.stdin),{'account':'123','server':'TEST','tradeMode':'DEMO'})))"],{input:JSON.stringify(command),encoding:'utf8'});
  a.equal(cp.status,0,cp.stderr);const fields=JSON.parse(cp.stdout);
- a.equal(fields.exitLockVersion,S.FIXED_LOCK);
+ a.equal(fields.exitLockVersion,lock);
  for(const key of Object.keys(plan))a.equal(Number(fields[key]),plan[key]);
 });
