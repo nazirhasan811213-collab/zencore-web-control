@@ -159,3 +159,54 @@ test('global stop blocks Pine dispatch, queued delivery and EA entry leases with
  a.equal((await service.dispatchMarkets([signal()])).queued,1);
  a.equal((await service.nextCommand(podToken)).command.type,'PLACE_SETUP');
 });
+
+test('XAUUSD M1 SOLID retest accepts a later confirmed touch at the original SOLID only', () => {
+ const {SOLID_RETEST_LOCK,SOLID_RETEST_RISK}=require('../tf2-ribbon-scalping');
+ const at=120001,settings={capitalUsd:500,lotPerLayer:.01,layers:1,symbols:['XAUUSD']};
+ for(const side of ['BUY','SELL']){
+  const sign=side==='BUY'?1:-1,base=event('1',side),entry=3568.50;
+  const m={...base,confirmed:true,time:60000,low:3568.45,high:3571.06,
+   entryAuthorizedAt:at,signalObservedAt:at,receivedAt:at,normal3Entry:entry,
+   initialSl:entry-sign*3,tp1:entry+sign*1.5,tp2:entry+sign*3,tp3:entry+sign*4.5,
+   setupMeta:{...base.setupMeta,completedAt:at,sourceEntry:entry,solidRetestSopClose:60000,
+    riskPlanVersion:SOLID_RETEST_RISK,exitLockVersion:SOLID_RETEST_LOCK}};
+  a.equal(D.decision(m).snapshot.entry,entry);
+  a.equal(Core.buildSetupCommand(m,settings,null,at).notAfterMs,at+60000);
+  a.equal(D.decision({...m,low:3568.51}),null);
+  a.equal(D.decision({...m,time:0}),null);
+  a.equal(D.decision({...m,confirmed:false}),null);
+  a.equal(D.decision({...m,setupMeta:{...m.setupMeta,sourceEntry:3571.06}}),null);
+ }
+});
+
+test('staged XAUUSD commands share a candle identity, expire, and require opposite confirmation outcomes',()=>{
+ const bar=120000, closeAt=bar+60000;
+ const settings={capitalUsd:500,lotPerLayer:.01,layers:8,symbols:['XAUUSD']};
+ for(const side of ['BUY','SELL']){
+  const base=event('1',side),sign=side==='BUY'?1:-1,entry=3568.5;
+  const signal=phase=>{
+   const at=phase==='EARLY'?bar+20000:closeAt+100;
+   return {...base,time:bar,entryEvent:false,confirmed:phase!=='EARLY',open:entry,close:entry+sign,
+    signalObservedAt:at,receivedAt:at,setupMeta:{...base.setupMeta,sourceEntry:entry,
+     nativeSolid:{barTime:bar,pulse:true},solidSplit:{phase,bar,side,entry}}};
+  };
+  const early=signal('EARLY'), confirm=signal('CONFIRM'), abort=signal('ABORT');
+  const commands=[early,confirm,abort].map(m=>Core.buildSetupCommand(m,settings,null,m.signalObservedAt));
+  a.equal(commands[0].notAfterMs,closeAt);
+  a.equal(commands[1].notAfterMs,closeAt+15000);
+  a.equal(commands[0].payload.analysisSnapshot.setupKey,commands[1].payload.analysisSnapshot.setupKey);
+  a.equal(new Set(commands.map(c=>c.signalKey)).size,3);
+  a.equal(Core.buildSetupCommand(early,settings,null,closeAt),null);
+  a.equal(Core.buildSetupCommand(confirm,settings,null,closeAt+15000),null);
+  a.equal(D.decision({...confirm,open:confirm.close}),null);
+  a.equal(D.decision({...confirm,time:bar+60000}),null);
+  a.equal(D.decision({...early,confirmed:true}),null);
+  a.ok(D.decision({...abort,close:entry-sign,hema20:base.hema40}));
+  const cp=require('node:child_process').spawnSync('python3',['-c',
+    "import json,sys;sys.path.insert(0,'ea-local-connector');from protocol import command_fields;print(json.dumps([command_fields(c,{'account':'123','server':'TEST'}) for c in json.load(sys.stdin)]))"],
+   {input:JSON.stringify(commands.map(c=>({type:'PLACE_SETUP',id:'test',expiresAt:c.notAfterMs,payload:c.payload}))),encoding:'utf8'});
+  a.equal(cp.status,0,cp.stderr);
+  a.deepEqual(JSON.parse(cp.stdout).map(c=>[c.type,c.solidSplitPhase,c.solidSplitBar]),[
+   ['PLACE_SOLID_SPLIT','EARLY',bar],['PLACE_SOLID_SPLIT','CONFIRM',bar],['PLACE_SOLID_SPLIT','ABORT',bar]]);
+ }
+});

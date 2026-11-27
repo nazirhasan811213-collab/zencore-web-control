@@ -27,7 +27,7 @@ class VpsManagerTests(unittest.TestCase):
     def channel(self,n):
         f=local_heartbeat();f['account']=str(810000+n);f['writtenAt']=str(int(time.time()*1000));p=expected_channel(self.common,f);p.mkdir(exist_ok=True);atomic_write(p/'heartbeat.tsv',encode_fields(f));return p
     def test_ten_profiles_pair_and_resume_independently_without_turning_trade_on(self):
-        for n in range(1,11):self.manager.pair(n,self.channel(n),'bootstrap-secret')
+        for n in range(1,11):self.manager.pair(n,self.channel(n),'bootstrap-secret','ZCuser '+str(n))
         self.assertEqual(len(self.manager.configs),10);self.assertEqual(len(self.manager.runners),10)
         for n,c in self.manager.configs.items():
             self.assertEqual(c['account'],str(810000+n));self.assertEqual(c['zenCoreLogin'],'ZCuser '+str(n));self.assertNotIn('password',c)
@@ -39,8 +39,8 @@ class VpsManagerTests(unittest.TestCase):
             other.restore();self.assertEqual(len(other.configs),10);self.assertEqual(len(other.runners),9);self.assertNotIn(3,other.runners);other.start(3);self.assertEqual(len(other.runners),10)
         finally:other.close()
     def test_duplicate_channel_rejected_before_login_and_account_change_cannot_rebind(self):
-        p=self.channel(1);self.manager.pair(1,p,'secret');before=len(self.calls)
-        with self.assertRaisesRegex(RuntimeError,'MT5_ALREADY_ASSIGNED'):self.manager.pair(2,p,'secret')
+        p=self.channel(1);self.manager.pair(1,p,'secret','ZCuser '+str(1));before=len(self.calls)
+        with self.assertRaisesRegex(RuntimeError,'MT5_ALREADY_ASSIGNED'):self.manager.pair(2,p,'secret','ZCuser '+str(2))
         self.assertEqual(len(self.calls),before)
         self.assertEqual(self.manager.configs[1]['account'],'810001')
         cfg=dict(self.manager.configs[1]);cfg['channel']=str(self.root/'elsewhere')
@@ -54,14 +54,14 @@ class VpsManagerTests(unittest.TestCase):
         class WrongApi:
             def request(self,*args):return {'user':{'id':'other','role':'client','email':'zcuser2@managed.zencore.invalid'}}
         self.manager.api_factory=WrongApi
-        with self.assertRaisesRegex(RuntimeError,'ZENCORE_USER_MISMATCH'):self.manager.pair(1,self.channel(1),'secret')
+        with self.assertRaisesRegex(RuntimeError,'ZENCORE_USER_MISMATCH'):self.manager.pair(1,self.channel(1),'secret','ZCuser '+str(1))
         self.assertFalse(self.manager.configs);self.assertFalse(self.manager.pending)
         for value in [0,11,True,'1']:
             with self.assertRaises(ValueError):slot_number(value)
         self.assertNotEqual(self.vault.path(1),self.vault.path(2))
 
     def test_reset_one_slot_then_pair_new_client_and_new_mt5_keeps_others_running(self):
-        old=self.channel(1);self.manager.pair(1,old,'secret');self.manager.pair(2,self.channel(2),'secret')
+        old=self.channel(1);self.manager.pair(1,old,'secret','ZCuser 1');self.manager.pair(2,self.channel(2),'secret','ZCuser '+str(2))
         (old/'connector-health.json').write_text('old-client')
         (old/'risk-old.tsv').write_text('broker-protection')
         self.manager.reset(1)
@@ -75,14 +75,14 @@ class VpsManagerTests(unittest.TestCase):
         self.assertEqual(self.calls[-2][1]['email'],'ZCuser 11')
         self.assertFalse(any(p.endswith('/on') or p.endswith('/reset-link') for p,_ in self.calls))
     def test_reset_with_open_positions_preserves_link_paused_and_retryable(self):
-        old=self.channel(1);self.manager.pair(1,old,'secret')
+        old=self.channel(1);self.manager.pair(1,old,'secret','ZCuser 1')
         atomic_write(old/'heartbeat.tsv',encode_fields({**local_heartbeat(),'account':'810001','writtenAt':int(time.time()*1000),'positionCount':-1}))
         with self.assertRaisesRegex(RuntimeError,'RESET_POSITIONS_OPEN'):self.manager.reset(1)
         self.assertTrue(self.vault.path(1).exists());self.assertTrue(self.manager.configs[1]['paused'])
         self.assertFalse(self.manager.pending)
         self.channel(1);self.manager.reset(1);self.assertFalse(self.vault.path(1).exists())
     def test_same_client_in_two_slots_is_rejected_before_rotating_cloud_token(self):
-        self.manager.pair(1,self.channel(1),'secret')
+        self.manager.pair(1,self.channel(1),'secret','ZCuser '+str(1))
         previous=self.manager.configs[1]['zenCoreUserId']
         class DuplicateApi:
             calls=[]
@@ -96,7 +96,7 @@ class VpsManagerTests(unittest.TestCase):
         self.assertFalse(self.manager.runners[1].stop.is_set())
     def test_empty_slot_reset_does_not_reserve_every_other_mt5_channel(self):
         self.manager.pending[1]={'resetting':True}
-        self.manager.pair(2,self.channel(2),'secret')
+        self.manager.pair(2,self.channel(2),'secret','ZCuser '+str(2))
         self.assertIn(2,self.manager.configs)
         self.manager.pending.clear();self.manager.reset(1)
 

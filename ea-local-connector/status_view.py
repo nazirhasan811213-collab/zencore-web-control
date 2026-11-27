@@ -6,11 +6,18 @@ def status_cards(local=None, cloud=None, now_ms=0, paired=False):
     if fresh and not local.get('terminalConnected',True):mt5=('BROKER OFFLINE','bad')
     heartbeat=cloud.get('lastCloudHeartbeatMs',0)
     cloud_fresh=isinstance(heartbeat,(int,float)) and heartbeat>0 and -30000 <= now_ms-heartbeat <= 12000
-    server=('CLOUD ONLINE','good') if paired and cloud_fresh and cloud.get('consecutiveFailures',0)==0 else ('CLOUD MENUNGGU','warn')
+    failures=cloud.get('consecutiveFailures',0)
+    if paired and cloud_fresh:
+        server=('CLOUD TIDAK STABIL','warn') if failures else ('CLOUD ONLINE','good')
+    elif paired and (heartbeat or failures):
+        server=('CLOUD OFFLINE','bad')
+    else:
+        server=('CLOUD MENUNGGU','warn')
     permission=fresh and all(local.get(k,False) for k in ('terminalTradeAllowed','accountTradeAllowed','expertTradeAllowed'))
     exact=local.get('executorPolicyVersion')=='EXACT_ANALYSIS_V2'
     enabled=cloud.get('desiredState')=='ON' and cloud_fresh and permission and exact and server[1]=='good'
     entry=('ENTRY DIBENARKAN','good') if enabled else ('ENTRY STOPPED','warn')
+    if paired and cloud.get('desiredState')=='ON' and server[1]!='good':entry=('MENUNGGU SAMBUNGAN','warn')
     if enabled and local.get('executionArmed') is False:entry=('MENUNGGU EA READY','warn')
     if paired and fresh and not exact:entry=('KEMAS KINI EA 2.00','bad')
     if cloud.get('entryBlockedReason')=='GLOBAL_ENTRY_PAUSED':entry=('SERVER PAUSED','warn')

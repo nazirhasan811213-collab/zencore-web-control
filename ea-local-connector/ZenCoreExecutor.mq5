@@ -1,15 +1,17 @@
 #property strict
 #ifndef ZENCORE_SPLIT_ROLE
  #define ZENCORE_SPLIT_ROLE 0
- #define ZENCORE_RELEASE "2.51"
- #property version "2.51"
+ #define ZENCORE_RELEASE "2.58"
+ #property version "2.58"
 #else
- #define ZENCORE_RELEASE "2.51"
- #property version "2.51"
+ #define ZENCORE_RELEASE "2.58"
+ #property version "2.58"
 #endif
 #property description "ZenCore local executor: no WebRequest, DLL or Python API. REAL and DEMO."
 #include <Trade/Trade.mqh>
 CTrade trade;
+const string SOLID_SPLIT_LOCK="TF1_XAU_FIXED_STEPLOCK_V7";
+const string SOLID_SPLIT_FILE="pending-solid-m1.tsv";
 const ulong MAGIC=32603231;
 const ulong MAGIC15=32601545;
 input string GoldBrokerSymbol="";
@@ -314,7 +316,7 @@ bool Heartbeat(){
  bool identity=account==(string)AccountInfoInteger(ACCOUNT_LOGIN) && server==AccountInfoString(ACCOUNT_SERVER);
  string mode=AccountMode();
  string text=Row("writtenAt",(string)UtcMs())+Row("account",(string)AccountInfoInteger(ACCOUNT_LOGIN))+Row("server",AccountInfoString(ACCOUNT_SERVER))+
- Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("manualCloseAllVersion","ACCOUNT_POSITIONS_V1")+Row("tf1FixedExitVersion","TF1_XAU_FIXED_STEPLOCK_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
+ Row("manualMarketOrderVersion","MANUAL_MARKET_ORDER_V2")+Row("manualCloseAllVersion","ACCOUNT_POSITIONS_V1")+Row("tf1FixedExitVersion",SOLID_SPLIT_LOCK)+Row("solidSplitVersion","TF1_SOLID_SPLIT_V1")+Row("masterResetVersion","MASTER_RESET_FORCE_V2")+Row("executorPolicyVersion","EXACT_ANALYSIS_V2")+Row("eaVersion",ZENCORE_RELEASE)+Row("splitTerminalMode",ZENCORE_SPLIT_ROLE==CHART_XAUUSD?"XAU_OWNER_V1":"")+Row("directEntryPolicy","PINE_DIRECT_FILL_GAP4_V1")+Row("expandedEntryPolicy","1")+Row("btcUsdChart",IsBtcUsdChart()?"1":"0")+Row("dualPairExecution","1")+Row("entryOwnerChart",(string)primaryChart)+Row("reentryVersion","TF2_POST_CLOSE_HALF_LAYERS_V1")+Row("fillRiskVersion","FILL_PRICE_ATR_V1")+Row("terminalDataPath",TerminalInfoString(TERMINAL_DATA_PATH))+Row("executionArmed",armed?"1":"0")+Row("resumePending",resumePending?"1":"0")+Row("terminalConnected",TerminalInfoInteger(TERMINAL_CONNECTED)?"1":"0")+Row("accountBindingVersion","ACCOUNT_SESSION_V1")+Row("eaSession",eaSession)+Row("accountExecutionVersion","REAL_DEMO_V1")+Row("strategyExecutionVersion","TF2_TF15_V1")+Row("exitPolicyVersion","TF2_TIGHT_SL_3C_V1")+Row("manualExitVersion","MANUAL_PAIR_STEPLOCK_V5")+Row("manualExitEnabled",manualEnabled?"1":"0")+Row("tradeMode",mode)+Row("terminalBuild",(string)TerminalInfoInteger(TERMINAL_BUILD))+
  Row("terminalTradeAllowed",identity && TerminalInfoInteger(TERMINAL_CONNECTED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)?"1":"0")+
  Row("accountTradeAllowed",identity && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)?"1":"0")+
  Row("expertTradeAllowed",identity && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT)?"1":"0");
@@ -507,7 +509,7 @@ bool CashLayerLevels(string symbol,bool buy,double lot,double fill,double &sl,do
  return OrderCalcProfit(type,symbol,lot,fill,sl,loss) && loss<0 && loss>=-CASH_LAYER_SL-1e-7 &&
         OrderCalcProfit(type,symbol,lot,fill,tp,gain) && gain>=CASH_LAYER_TP-1e-7;
 }
-bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion="",string executionTf="",bool directEntry=false,bool cashLayer=false){
+bool Entry(string c,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,bool tightTf2=false,string strategyMode="TF2_SCALPING",bool fillAnchor=false,double riskAtr=0,string exitLockVersion="",string executionTf="",bool directEntry=false,bool cashLayer=false,long commandExpiresAt=0,bool splitContinuation=false){
  lastEntryCode="ENTRY_REJECTED";
  if(cashLayer && (!directEntry || tightTf2 || fillAnchor || !CashLayerAccount()))return RejectEntry("CASH_LAYER_ACCOUNT_OR_POLICY_UNSUPPORTED");
  if(!directEntry && c!="XAUUSD")return RejectEntry("SYMBOL_REJECTED");
@@ -536,7 +538,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  bool buy=side=="BUY";
  bool guardedTf2=strategyMode=="TF2_SCALPING" && (executionTf=="1" || executionTf=="2") && !fillAnchor && !tightTf2 && exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
  bool fillTf15=strategyMode=="TF15_INTRA" && executionTf=="15" && (exitLockVersion=="PINE_STEPLOCK_BE_TF15_V1" || exitLockVersion=="PINE_STEPLOCK_150_TP3_PLUS3_V1");
- bool fixedTf1=exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V1";
+ bool solidRetest=exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V6";
+ if(solidRetest && !directEntry)return RejectEntry("EXIT_POLICY_REJECTED");
+ bool fixedTf1=solidRetest || exitLockVersion==SOLID_SPLIT_LOCK || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V1" || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V2" || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V3" || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V4" || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V5";
  if(fixedTf1 && (c!="XAUUSD" || executionTf!="1" || strategyMode!="TF2_SCALPING" || cashLayer || fillAnchor || tightTf2))
   return RejectEntry("EXIT_POLICY_REJECTED");
  bool fillPlan=directEntry || guardedTf2 || fillTf15 || fixedTf1;
@@ -555,7 +559,14 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  if(cashLayer)orderComment+=":LR";
  long netPositionId=0;
  double netVolume=0,netEntry=0;
- if(netting && PositionSelect(symbol))return RejectEntry("NETTING_POSITION_CONFLICT");
+ if(netting && PositionSelect(symbol)){
+  if(!splitContinuation || !IsOwn(PositionGetInteger(POSITION_TICKET)) ||
+     (ulong)PositionGetInteger(POSITION_MAGIC)!=entryScope || PositionGetString(POSITION_COMMENT)!=orderComment ||
+     (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)!=buy)return RejectEntry("NETTING_POSITION_CONFLICT");
+  netPositionId=PositionGetInteger(POSITION_IDENTIFIER);
+  netEntry=PositionGetDouble(POSITION_PRICE_OPEN);
+  netVolume=PositionGetDouble(POSITION_VOLUME);
+ }
  for(int i=0;i<PositionsTotal();i++){
   ulong ticket=PositionGetTicket(i);if(!directEntry && IsOwn(ticket) && (ulong)PositionGetInteger(POSITION_MAGIC)==entryScope && PositionGetString(POSITION_SYMBOL)==symbol &&
    (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)!=buy)return RejectEntry("OPPOSITE_POSITION_EXISTS");
@@ -575,6 +586,7 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
  for(int i=0;i<layers;i++){
   int quoteRetries=0,brokerRetries=0;
   while(true){
+   if((solidRetest || exitLockVersion==SOLID_SPLIT_LOCK) && commandExpiresAt>0 && UtcMs()>=commandExpiresAt)return RejectEntry(i>0?"SETUP_PARTIAL":"COMMAND_EXPIRED");
    if(IsStopped())return RejectEntry(i>0?"SETUP_PARTIAL":"ENTRY_STOPPED");
    PulseEntryHeartbeat(lastPulse);
    if(!Permissions())return RejectEntry(i>0?"SETUP_PARTIAL":PermissionReason());
@@ -585,6 +597,10 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    }
    if(fillPlan){
     double quote=buy?tick.ask:tick.bid;
+    if(solidRetest && MathAbs(quote-entry)>1e-8){
+     if(i==0 && quoteRetries++<quoteRetryLimit){Sleep(quoteRetryDelayMs);continue;}
+     return RejectEntry(i>0?"SETUP_PARTIAL":"WAIT_SOLID_PRICE");
+    }
     if(directEntry && !PineEntryGapAllowed(c,quote,entry))return RejectEntry(i>0?"PARTIAL_PINE_ENTRY_GAP_4USD":"PINE_ENTRY_GAP_4USD");
     if(!directEntry && guardedTf2 && !Tf2EntryPriceAllowed(buy,quote,tp1))return RejectEntry(i>0?"TF2_PARTIAL_ENTRY_PAST_TP1":"TF2_ENTRY_PAST_TP1");
     if(!cashLayer){
@@ -624,6 +640,15 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    // the position's existing stop, which can be valid even if the new quote-based stop is too close.
    if((cashLayer || !guardedTf2 || fillAnchor) && (buy?initialSl>=tick.bid-distance:initialSl<=tick.ask+distance))
     return RejectEntry(cashLayer?(i>0?"SETUP_PARTIAL":"CASH_LAYER_BROKER_DISTANCE"):"BROKER_STOP_DISTANCE");
+   if(directEntry && !netting){
+    // Only layers from this command can coexist within a strategy and symbol.
+    for(int j=PositionsTotal()-1;j>=0;j--){
+     ulong existing=PositionGetTicket(j);
+     if(IsOwn(existing) && (ulong)PositionGetInteger(POSITION_MAGIC)==entryScope &&
+        PositionGetString(POSITION_SYMBOL)==symbol && ((i==0 && !splitContinuation) || PositionGetString(POSITION_COMMENT)!=orderComment))
+      return RejectEntry(i>0?"SETUP_PARTIAL":"SETUP_POSITION_EXISTS");
+    }
+   }
    bool sent=buy?trade.Buy(lot,symbol,0,initialSl,initialTp,orderComment):trade.Sell(lot,symbol,0,initialSl,initialTp,orderComment);
    if(sent && BrokerDone() && trade.ResultVolume()>0)break;
    uint retcode=trade.ResultRetcode();
@@ -650,9 +675,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
    bool addingNetLayer=netting && netPositionId!=0;
    if(addingNetLayer && MathAbs(PositionGetDouble(POSITION_VOLUME)-netVolume-filledVolume)>1e-8)
     return RejectEntry("NETTING_POSITION_CONFLICT");
-   if(directEntry && !PineEntryGapAllowed(c,dealPrice,entry)){
+   if(directEntry && (!PineEntryGapAllowed(c,dealPrice,entry) || (solidRetest && MathAbs(dealPrice-entry)>1e-8))){
     if(!CloseTicket(filledTicket,filledVolume))Print("ZenCore FILL_GAP_CLOSE_PENDING ticket=",filledTicket);
-    return RejectEntry("FILL_PINE_ENTRY_GAP_4USD");
+    return RejectEntry(solidRetest?"FILL_SOLID_PRICE_MISMATCH":"FILL_PINE_ENTRY_GAP_4USD");
    }
    if(cashLayer){
     double cashSl=0,cashTp=0,volume=PositionGetDouble(POSITION_VOLUME);
@@ -682,8 +707,9 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
      safeSl>0 && fillRisk>0 && fillRisk<=stopDistance+1e-8;
    // Keep the previous plan on disk until the new broker stop is confirmed.
    bool stopChanged=false;
-   if(protectedFill && MathAbs(safeSl-currentSl)>1e-8){
-    stopChanged=trade.PositionModify(filledTicket,safeSl,0) && BrokerDone();
+   double brokerSl=splitContinuation && addingNetLayer && currentSl>0?(buy?MathMax(safeSl,currentSl):MathMin(safeSl,currentSl)):safeSl;
+   if(protectedFill && MathAbs(brokerSl-currentSl)>1e-8){
+    stopChanged=trade.PositionModify(filledTicket,brokerSl,0) && BrokerDone();
     protectedFill=stopChanged;
    }
    if(protectedFill)protectedFill=WriteAtomic("fill-risk-"+(string)identifier+".tsv",Row("version","MT5_FILL_PLAN_V1")+Row("symbol",symbol)+Row("side",side)+Row("entry",Num(fill))+Row("executionTimeframe",executionTf)+Row("exitLockVersion",exitLockVersion)+Row("sl",Num(safeSl))+Row("tp1",Num(t1))+Row("tp2",Num(t2))+Row("tp3",Num(t3))+(btcPip?Row("tp3LockTrigger",Num(lockTrigger)):""));
@@ -719,6 +745,87 @@ bool Entry(string c,string symbol,string side,double lot,int layers,double entry
   }
  }
  return true;
+}
+struct SolidSplitBatch{
+ string id,symbol,side,pod;
+ long bar;
+ double lot,entry;
+ int totalLayers;
+};
+bool LoadSolidSplit(SolidSplitBatch &batch){
+ if(!ReadFields(SOLID_SPLIT_FILE))return false;
+ batch.id=Get("id");batch.symbol=Get("symbol");batch.side=Get("side");batch.pod=Get("pod");
+ batch.bar=StringToInteger(Get("bar"));batch.lot=Val("lot");batch.entry=Val("entry");
+ batch.totalLayers=(int)StringToInteger(Get("layers"));
+ return ValidId(batch.id) && batch.symbol!="" && (batch.side=="BUY" || batch.side=="SELL") &&
+        batch.bar>0 && batch.lot>0 && batch.entry>8 && batch.totalLayers>0;
+}
+bool IsSolidSplitPosition(ulong ticket,const SolidSplitBatch &batch){
+ return IsOwn(ticket) && (ulong)PositionGetInteger(POSITION_MAGIC)==MAGIC &&
+        PositionGetString(POSITION_SYMBOL)==batch.symbol &&
+        PositionGetString(POSITION_COMMENT)=="ZC:"+StringSubstr(batch.id,0,20) &&
+        (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)==(batch.side=="BUY");
+}
+double SolidSplitVolume(const SolidSplitBatch &batch){
+ double volume=0;
+ for(int i=PositionsTotal()-1;i>=0;i--){
+  ulong ticket=PositionGetTicket(i);
+  if(IsSolidSplitPosition(ticket,batch))volume+=PositionGetDouble(POSITION_VOLUME);
+ }
+ return volume;
+}
+bool CancelSolidSplit(const SolidSplitBatch &batch){
+ if(!Permissions())return false;
+ double earlyVolume=(batch.totalLayers/2)*batch.lot;
+ if(SolidSplitVolume(batch)>earlyVolume+1e-8){
+  Print("ZenCore: SOLID_SPLIT_POSITION_CHANGED; check MT5 symbol ",batch.symbol);
+  return false;
+ }
+ for(int i=PositionsTotal()-1;i>=0;i--){
+  ulong ticket=PositionGetTicket(i);
+  if(IsSolidSplitPosition(ticket,batch))CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME));
+ }
+ return SolidSplitVolume(batch)<1e-8 && FileDelete(channel+"\\"+SOLID_SPLIT_FILE,FILE_COMMON);
+}
+void ManageSolidSplit(){
+ if(!FileIsExist(channel+"\\"+SOLID_SPLIT_FILE,FILE_COMMON))return;
+ int dispatchLock=FileOpen(channel+"\\entry-dispatch.lock",FILE_WRITE|FILE_BIN|FILE_COMMON);
+ if(dispatchLock==INVALID_HANDLE)return;
+ SolidSplitBatch batch;
+ if(LoadSolidSplit(batch) && UtcMs()>=batch.bar+75000)CancelSolidSplit(batch);
+ FileClose(dispatchLock);
+}
+bool ExecuteSolidSplit(string phase,long bar,string symbol,string side,double lot,int layers,double entry,double sl,double tp1,double tp2,double tp3,string id,long expiresAt){
+ long now=UtcMs();
+ if(bar<=0 || bar%60000!=0 || symbol=="" || (side!="BUY" && side!="SELL"))
+  return RejectEntry("SOLID_SPLIT_POLICY_REJECTED");
+ SolidSplitBatch batch;
+ bool exists=FileIsExist(channel+"\\"+SOLID_SPLIT_FILE,FILE_COMMON);
+ int earlyLayers=layers/2;
+ if(phase=="EARLY"){
+  if(exists || now<bar || now>=bar+60000 || !armed || !Permissions() ||
+     LeaseReason(ownerPod)!="READY" || layers<1 || !VolumeValid(symbol,lot))
+   return RejectEntry("SOLID_SPLIT_EARLY_NOT_READY");
+  if(!WriteAtomic(SOLID_SPLIT_FILE,Row("id",id)+Row("symbol",symbol)+Row("side",side)+Row("pod",ownerPod)+
+     Row("bar",(string)bar)+Row("lot",Num(lot))+Row("entry",Num(entry))+Row("layers",(string)layers)))
+   return RejectEntry("SOLID_SPLIT_WRITE_FAILED");
+  if(earlyLayers==0)return true;
+  bool opened=Entry("XAUUSD",symbol,side,lot,earlyLayers,entry,sl,tp1,tp2,tp3,id,false,"TF2_SCALPING",false,0,SOLID_SPLIT_LOCK,"1",true,false,expiresAt);
+  if(!opened && LoadSolidSplit(batch))CancelSolidSplit(batch);
+  return opened;
+ }
+ if(!exists || !LoadSolidSplit(batch) || batch.bar!=bar || batch.symbol!=symbol ||
+    batch.side!=side || batch.pod!=ownerPod || MathAbs(batch.entry-entry)>1e-8 || now<bar+60000 || now>=bar+75000)
+  return RejectEntry("SOLID_SPLIT_PARENT_MISSING");
+ if(phase=="ABORT")return CancelSolidSplit(batch);
+ if(phase!="CONFIRM" || !armed || !Permissions() || LeaseReason(ownerPod)!="READY")
+  return RejectEntry("SOLID_SPLIT_CONFIRM_NOT_READY");
+ earlyLayers=batch.totalLayers/2;
+ if(MathAbs(SolidSplitVolume(batch)-earlyLayers*batch.lot)>1e-8)
+  return RejectEntry("SOLID_SPLIT_EARLY_CHANGED");
+ // Consume confirmation durably before sending any remainder, including after restart.
+ if(!FileDelete(channel+"\\"+SOLID_SPLIT_FILE,FILE_COMMON))return RejectEntry("SOLID_SPLIT_WRITE_FAILED");
+ return Entry("XAUUSD",symbol,side,batch.lot,batch.totalLayers-earlyLayers,entry,sl,tp1,tp2,tp3,batch.id,false,"TF2_SCALPING",false,0,SOLID_SPLIT_LOCK,"1",true,false,expiresAt,earlyLayers>0);
 }
 // Persistent per-setup policy. Runs during entry pauses and SYSTEM_STOP as well.
 void ManageTf2Timeout(){
@@ -814,13 +921,17 @@ void ManageLocalStepLock(){
   if(prefix==0 || !LoadOwnRisk(ticket))continue;
   bool fillAnchor=Get("version")=="FILL_PRICE_ATR_V1";
   bool pineLock=Get("exitLockVersion")=="PINE_STEPLOCK_150_TP3_PLUS3_V1";
-  bool fixedTf1=Get("exitLockVersion")=="TF1_XAU_FIXED_STEPLOCK_V1";
+  string exitLockVersion=Get("exitLockVersion");
+  bool lockTp1AtTp2=exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V4" || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V5" || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V6" || exitLockVersion==SOLID_SPLIT_LOCK;
+  bool revisedTargets=lockTp1AtTp2 || Get("exitLockVersion")=="TF1_XAU_FIXED_STEPLOCK_V3";
+  bool fiveTargets=revisedTargets || Get("exitLockVersion")=="TF1_XAU_FIXED_STEPLOCK_V2";
+  bool fixedTf1=fiveTargets || Get("exitLockVersion")=="TF1_XAU_FIXED_STEPLOCK_V1";
   bool tf15Be=prefix==5 && Get("exitLockVersion")=="PINE_STEPLOCK_BE_TF15_V1";double planEntry=Val("entry");
   bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
   if(Get("symbol")!=symbol || Get("side")!=(buy?"BUY":"SELL"))continue;
   double t1=Val("tp1"),t2=Val("tp2"),t3=Val("tp3"),entry=PositionGetDouble(POSITION_PRICE_OPEN);
   bool btcCandleLock=Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1" || Get("exitLockVersion")=="BTC_TF2_CASH_STEPLOCK_V2";
-  string executionTf=Get("executionTimeframe");
+  string executionTf=Get("executionTimeframe"),phase=Get("solidSplitPhase");
   // Older TF1 Pine Direct fills lack a timeframe. Keep legacy risk files on M2.
   bool untaggedTf1=executionTf=="" && prefix==3 && Get("version")=="MT5_FILL_PLAN_V1" &&
                    (pineLock || Get("exitLockVersion")=="BTC_TF2_PIP_STEPLOCK_V1");
@@ -840,7 +951,18 @@ void ManageLocalStepLock(){
   if(ReadFields(stageFile) && Get("symbol")==symbol && Get("side")== (buy?"BUY":"SELL"))stage=(int)Val("stage");
   double decisionQuote=candleLock?ClosedStepLockQuote(symbol,lockTimeframe,(long)PositionGetInteger(POSITION_TIME),btcCandleLock,buy):quote;
   int observed=decisionQuote<=0?0:buy?(decisionQuote>=t3?3:decisionQuote>=t2?2:decisionQuote>=t1?1:0):(decisionQuote<=t3?3:decisionQuote<=t2?2:decisionQuote<=t1?1:0);
-  if(fixedTf1 && (buy?quote>=t3+3.0-1e-8:quote<=t3-3.0+1e-8))observed=4;
+  double sign=buy?1.0:-1.0;
+  // The policy version defines TP4 and TP5 as fixed offsets from this fill.
+  double t4=0,t5=0;
+  if(fiveTargets){
+   t4=Price(symbol,entry+sign*(revisedTargets?6.0:5.0));
+   double tp5Distance=revisedTargets?8.0:7.0;
+   t5=Price(symbol,entry+sign*tp5Distance);
+   double extension=Price(symbol,entry+sign*(tp5Distance+3.0));
+   if(sign*(quote-extension)>=-1e-8)observed=6;
+   else if(sign*(quote-t5)>=-1e-8)observed=5;
+   else if(sign*(quote-t4)>=-1e-8)observed=4;
+  }else if(fixedTf1 && (buy?quote>=t3+3.0-1e-8:quote<=t3-3.0+1e-8))observed=4;
   if(pineLock){
    if(decisionQuote>0 && (buy?decisionQuote>t3+3.0:decisionQuote<t3-3.0))observed=4;
    if(observed==1 && (buy?decisionQuote<=entry+1.50:decisionQuote>=entry-1.50))observed=0;
@@ -859,7 +981,9 @@ void ManageLocalStepLock(){
     if(!IsOwn(ticket))continue;
    }
   }
-  if((candleLock || fixedTf1) && stage>=4)target=t3;else if(stage==3)target=fixedTf1?t1:t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
+  if(fiveTargets){
+   target=stage>=6?t5:stage==5?t4:stage==4?t3:stage==3?t2:stage==2?(lockTp1AtTp2?t1:t2):stage==1?entry:0;
+  }else if((candleLock || fixedTf1) && stage>=4)target=t3;else if(stage==3)target=fixedTf1?t1:t2;else if(stage==2)target=t1;else if(stage==1)target=pineLock?entry+(buy?1.50:-1.50):entry;
   if(pineLock && target>0){
    // A Pine reference reached TP1 before this account filled. Never convert
    // that reference lock into a loss-making stop or a forced market close.
@@ -870,13 +994,21 @@ void ManageLocalStepLock(){
   if(target<=0)continue;
   double old=PositionGetDouble(POSITION_SL),sl=Price(symbol,target);
   if(sl<=0 || (old>0 && (buy?sl<=old:sl>=old)))continue;
-  if(!ProtectionAttemptAllowed(ticket))continue;
+  if(!fiveTargets && !ProtectionAttemptAllowed(ticket))continue;
   // The level was already observed. If broker freeze/delay prevented installing
   // it and price crossed back through it, close this owned position only.
-  bool lockBreached=candleLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
-  if(lockBreached){if(!CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))Print("ZenCore LOCK_EXIT_PENDING retcode=",trade.ResultRetcode());continue;}
+  // TP2 can be touched at the exact requested stop price. Arm the lock
+  // on that tick; an adverse move can trigger a market exit before SL installs.
+  bool sameLevelTrigger=fiveTargets && !lockTp1AtTp2 && (stage==2 || stage==3);
+  bool lockBreached=sameLevelTrigger?sign*(quote-sl)<-1e-8:candleLock?(decisionQuote>0 && (buy?decisionQuote<=sl:decisionQuote>=sl)):(buy?quote<=sl:quote>=sl);
+  if(lockBreached){
+   if((!fiveTargets || ProtectionAttemptAllowed(ticket)) && !CloseTicket(ticket,PositionGetDouble(POSITION_VOLUME)))
+    Print("ZenCore LOCK_EXIT_PENDING retcode=",trade.ResultRetcode());
+   continue;
+  }
   double distance=MathMax(SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL),SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL))*SymbolInfoDouble(symbol,SYMBOL_POINT);
   if(buy?sl>=tick.bid-distance:sl<=tick.ask+distance)continue;
+  if(fiveTargets && !ProtectionAttemptAllowed(ticket))continue;
   if(!trade.PositionModify(ticket,sl,PositionGetDouble(POSITION_TP)) || !BrokerDone())Print("ZenCore local StepLock pending ticket=",ticket," retcode=",trade.ResultRetcode());
  }
 }
@@ -1050,6 +1182,8 @@ void Process(bool chartWorker){
  bool cashLayerMailbox=type=="PLACE_CASH_SETUP";
  string cashPolicy=Get("cashLayerPolicy");
  if(cashLayerMailbox)type="PLACE_SETUP";
+ bool solidSplitMailbox=type=="PLACE_SOLID_SPLIT";
+ if(solidSplitMailbox)type="PLACE_SETUP";
  bool sessionMatches=Get("eaSession")==eaSession && commandPod!="";
  string strategyMode=Get("strategyMode");if(strategyMode=="")strategyMode="TF2_SCALPING";
  ulong scope=strategyMode=="TF15_INTRA"?MAGIC15:MAGIC;
@@ -1086,7 +1220,8 @@ void Process(bool chartWorker){
  if(!sessionMatches || (type!="SYSTEM_ON" && type!="SYSTEM_STOP" && type!="MANUAL_EXIT_CONFIG" && type!="MANUAL_MARKET_ORDER" && type!="MANUAL_CLOSE_ALL" && commandPod!=ownerPod) || Get("protocol")!="1" || Get("account")!=account || Get("server")!=server ||
  account!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || server!=AccountInfoString(ACCOUNT_SERVER) ||
  !SupportedAccount() || Get("tradeMode")!=AccountMode()){armed=false;resumePending=false;Result(id,"REJECTED","ACCOUNT_OR_PROTOCOL_REJECTED");return;}
- if(!directEntry && (long)StringToInteger(Get("expiresAt"))<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
+ long commandExpiresAt=StringToInteger(Get("expiresAt"));
+ if((!directEntry || solidSplitMailbox || exitLockVersion=="TF1_XAU_FIXED_STEPLOCK_V6") && commandExpiresAt<=UtcMs()){Result(id,"REJECTED","COMMAND_EXPIRED");return;}
  if(FileIsExist(channel+"\\"+id+".started",FILE_COMMON)){
   // Existing result is authoritative. Never overwrite it or execute a replay.
   if(!FileIsExist(channel+"\\"+id+".result",FILE_COMMON))Result(id,"REJECTED","REPLAY_OR_INTERRUPTED");
@@ -1097,11 +1232,23 @@ void Process(bool chartWorker){
  bool ok=false;string code="BROKER_REJECTED";
  if(type=="MANUAL_EXIT_CONFIG"){
   // Signed by Connector; fresh lease binds even when auto entry is STOPPED.
-  bool bound=ReadFields("lease.tsv") && Get("podId")==commandPod && Get("eaSession")==eaSession && Get("account")==account && Get("server")==server && Get("tradeMode")==AccountMode() && (long)Val("expiresAt")>UtcMs();
-  ok=bound && layerPolicyValid && ValidManualPairScope(cfgPairScope) && (!configEnabled || (Permissions() && AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING && ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl) && (configVersion=="MANUAL_TF2_EXIT_V3" || (configVersion=="MANUAL_TF2_EXIT_V2" && cfgTp1==2 && cfgTp2==4 && cfgTp3==6 && cfgSl==3))));
+  code=LeaseReason(commandPod,false);
+  if(code=="READY"){
+   if(!layerPolicyValid)code="MANUAL_EXIT_LAYER_POLICY_INVALID";
+   else if(!ValidManualPairScope(cfgPairScope))code="MANUAL_EXIT_PAIR_SCOPE_INVALID";
+   else if(configEnabled){
+    code=PermissionReason();
+    if(code=="READY"){
+     if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)code="MANUAL_EXIT_HEDGING_REQUIRED";
+     else if(!ValidManualDistances(cfgTp1,cfgTp2,cfgTp3,cfgSl))code="MANUAL_EXIT_DISTANCES_INVALID";
+     else if(configVersion!="MANUAL_TF2_EXIT_V3" && (configVersion!="MANUAL_TF2_EXIT_V2" || cfgTp1!=2 || cfgTp2!=4 || cfgTp3!=6 || cfgSl!=3))code="MANUAL_EXIT_VERSION_INVALID";
+    }
+   }
+  }
   bool newlyEnabled=!manualEnabled || ownerPod!=commandPod;
-  if(ok&&configEnabled&&(newlyEnabled||manualPairScope!=cfgPairScope))ok=ExcludeExistingManual(cfgPairScope,newlyEnabled);
-  if(ok){if(ownerPod!=commandPod)resumePending=false;ownerPod=commandPod;manualEnabled=configEnabled;manualPairScope=cfgPairScope;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}else code="MANUAL_EXIT_CONFIG_REJECTED";
+  if(code=="READY" && configEnabled && (newlyEnabled||manualPairScope!=cfgPairScope) && !ExcludeExistingManual(cfgPairScope,newlyEnabled))code="MANUAL_EXIT_EXCLUSION_WRITE_FAILED";
+  ok=code=="READY";
+  if(ok){if(ownerPod!=commandPod)resumePending=false;ownerPod=commandPod;manualEnabled=configEnabled;manualPairScope=cfgPairScope;manualTp1=cfgTp1;manualTp2=cfgTp2;manualTp3=cfgTp3;manualSl=cfgSl;if(configEnabled&&newlyEnabled)manualSince=(long)TimeTradeServer()*1000;if(!SaveManualConfig()){manualEnabled=false;ok=false;}SaveState();code=!ok?"MANUAL_EXIT_SAVE_FAILED":configEnabled?"MANUAL_EXIT_ON":"MANUAL_EXIT_OFF";}
  }
  else if(type=="MANUAL_EXIT_ACTION"){
   // Manual entry uses its own local SL milestones, never Pine close signals.
@@ -1168,12 +1315,18 @@ void Process(bool chartWorker){
  else if(type=="PLACE_SETUP"){
   if(!directEntry && symbol==""){MapSymbols();symbol=EntrySymbol(c);}
   lastEntryCode=directEntry?(armed?"EA_ENTRY_CHART_NOT_ATTACHED":"ENTRY_STOPPED"):"MT5_SYMBOL_UNRESOLVED";
-  string executionTf=Get("executionTimeframe");
+  string executionTf=Get("executionTimeframe"),phase=Get("solidSplitPhase");
   if(executionTf!="" && ((strategyMode=="TF15_INTRA" && executionTf!="15") || (strategyMode=="TF2_SCALPING" && executionTf!="1" && executionTf!="3" && executionTf!="2"))){lastEntryCode="TIMEFRAME_MODE_MISMATCH";}
   else if((tightTf2&&slPolicy!="LEGACY_TIGHT_SL_80")||(!tightTf2&&slPolicy!="EXACT_ANALYSIS_V2")){lastEntryCode="SL_POLICY_REJECTED";}
   else if(cashLayerMailbox ? cashPolicy!="USD_TP050_SL200_V1" : cashPolicy!=""){lastEntryCode="CASH_LAYER_POLICY_UNSUPPORTED";}
-  else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry,cashLayerMailbox);
-  code=ok?"SETUP_OPENED":lastEntryCode;
+  else if(solidSplitMailbox || exitLockVersion==SOLID_SPLIT_LOCK){
+   if(solidSplitMailbox && directEntry && target>=0 && c=="XAUUSD" && executionTf=="1" && strategyMode=="TF2_SCALPING" && exitLockVersion==SOLID_SPLIT_LOCK)
+    ok=ExecuteSolidSplit(phase,StringToInteger(Get("solidSplitBar")),symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,commandExpiresAt);
+   else lastEntryCode="SOLID_SPLIT_POLICY_REJECTED";
+  }
+  else if(c=="XAUUSD" && executionTf=="1" && FileIsExist(channel+"\\"+SOLID_SPLIT_FILE,FILE_COMMON))lastEntryCode="SOLID_SPLIT_PENDING";
+  else if((!directEntry && symbol!="") || (directEntry && target>=0))ok=Entry(c,symbol,side,lot,layers,entry,sl,tp1,tp2,tp3,id,tightTf2,strategyMode,fillAnchor,riskAtr,exitLockVersion,executionTf,directEntry,cashLayerMailbox,commandExpiresAt);
+  code=ok?(solidSplitMailbox && phase=="ABORT"?"SOLID_SPLIT_ABORTED":"SETUP_OPENED"):lastEntryCode;
  }
  else if(type=="MANUAL_CLOSE_ALL"){code=CloseAccountPositions();ok=code=="CLOSED_ALL" || code=="NO_OPEN_POSITIONS";}
  else if(type=="EMERGENCY_CLOSE_ALL"){armed=false;resumePending=false;SaveState();ok=Permissions() && CloseGroup("",100);code=ok?"CLOSED_ALL":"CLOSE_FAILED";}
@@ -1306,7 +1459,7 @@ void OnTimer(){
  // Process commands every 250ms; costly position/tick-history scans stay bounded.
  ProcessMailbox(false);
  if(now-lastHeartbeat>=2000){Heartbeat();lastHeartbeat=now;}
- if(now-lastManagement>=1000){ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
+ if(now-lastManagement>=1000){ManageSolidSplit();ManageLocalStepLock();ManageTf2Timeout();lastManagement=now;}
  ManageManual();
  int manualLayers=ManualLayerCount();if(manualLayers>=10)ManualWarning("MANUAL_LAYER_LIMIT_WARN",0);
  Comment("ZenCore ",ZENCORE_RELEASE," • ",AccountMode()," • ",armed?"ARMED":"STOPPED","\nManual layers: ",manualLayers," / 10",manualLayers>=10?" • HAD DICAPAI (amaran sahaja)":"","\nSetting dan ON/OFF melalui web ZenCore.");

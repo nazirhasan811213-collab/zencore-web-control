@@ -463,6 +463,10 @@
 
   function buildSetupCommand(market = {}, settings = {}, symbolSpec = null, at = Date.now()) {
     const direct=typeof module==='object'&&module.exports?require('./pine-direct-entry').decision(market):null;
+    const solidRetest=market.setupMeta?.exitLockVersion==='TF1_XAU_FIXED_STEPLOCK_V6';
+    if(solidRetest && (!direct || at>=direct.snapshot.entryAuthorizedAt+60000))return null;
+    const split=direct?.snapshot.solidSplit;
+    if(market.setupMeta?.solidSplit!=null&&(!split||at>=split.expiresAt||direct.snapshot.entryAuthorizedAt>at+5000))return null;
     const entryWindow = tradingWindow(settings.tradingSchedule,at);
     if (!entryWindow.allowed) return null;
     if (direct && entryWindow.validUntil !== null &&
@@ -492,7 +496,7 @@
     });
     return {
       signalKey: decision.signalKey,
-      notAfterMs: direct?(entryWindow.validUntil ?? Infinity):snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
+      notAfterMs: direct?Math.min(entryWindow.validUntil ?? Infinity,solidRetest?snapshot.entryAuthorizedAt+60000:split?.expiresAt??Infinity):snapshot.entryDeliveryVersion==='FIXED_EVENT_RETRY_V1'?snapshot.entryAuthorizedAt+60000:observed!==null?observed+(modernEvent?60000:30000):Infinity,
       payload: {
         analysisContractVersion: Contract.CONTRACT_VERSION,
         analysisSnapshot: snapshot,

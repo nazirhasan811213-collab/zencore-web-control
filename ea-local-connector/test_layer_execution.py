@@ -15,11 +15,14 @@ class LayerExecution(unittest.TestCase):
         start = source.index('const double BTC_TF2_PIP=')
         end = source.index('\n}', source.index('\n return true;', source.index('bool Entry(', start))) + 2
         entry = source[start:end].replace('(string)identifier', 'std::to_string(identifier)').replace('(string)TimeCurrent()', 'std::to_string(TimeCurrent())')
+        batch = source[source.index('struct SolidSplitBatch{'):source.index('// Persistent per-setup policy.')].replace('(string)bar', 'std::to_string(bar)').replace('(string)layers', 'std::to_string(layers)')
         mock = r'''
 #include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <string>
+#include <map>
+#include <sstream>
 #include <vector>
 using std::string;
 using ulong = unsigned long;
@@ -33,12 +36,30 @@ using uint = unsigned int;
 #define ZENCORE_SPLIT_ROLE 0
 enum {ACCOUNT_MARGIN_MODE, ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
       POSITION_MAGIC, POSITION_IDENTIFIER, POSITION_TYPE, POSITION_TYPE_BUY,
-      POSITION_SYMBOL, POSITION_PRICE_OPEN, POSITION_SL, POSITION_TP, POSITION_VOLUME,
+      POSITION_SYMBOL, POSITION_TICKET, POSITION_COMMENT, POSITION_PRICE_OPEN, POSITION_SL, POSITION_TP, POSITION_VOLUME,
       SYMBOL_TRADE_TICK_SIZE, SYMBOL_TRADE_STOPS_LEVEL, SYMBOL_POINT,
       DEAL_POSITION_ID, DEAL_PRICE, TRADE_RETCODE_REQUOTE,
       TRADE_RETCODE_PRICE_CHANGED, TRADE_RETCODE_PRICE_OFF,
       TRADE_RETCODE_TOO_MANY_REQUESTS, TRADE_RETCODE_TIMEOUT};
 const ulong MAGIC=100, MAGIC15=150;
+const string SOLID_SPLIT_LOCK="TF1_XAU_FIXED_STEPLOCK_V7", SOLID_SPLIT_FILE="pending-solid-m1.tsv", channel="test";
+constexpr int FILE_COMMON=1, FILE_WRITE=2, FILE_BIN=4, INVALID_HANDLE=-1;
+std::map<string,string> files, fields;
+bool FileIsExist(string path,int){return files.count(path)>0;}
+bool FileDelete(string path,int){return files.erase(path)>0;}
+int FileOpen(string,int){return 1;}
+void FileClose(int){}
+bool ValidId(string id){return !id.empty();}
+long StringToInteger(string n){return n.empty()?0:std::stol(n);}
+string Get(string key){return fields[key];}
+double Val(string key){return fields[key].empty()?0:std::stod(fields[key]);}
+bool ReadFields(string name){
+ if(!files.count(channel+"\\"+name))return false;
+ fields.clear();
+ std::istringstream input(files.at(channel+"\\"+name));string row;
+ while(std::getline(input,row)){auto p=row.find('=');fields[row.substr(0,p)]=row.substr(p+1);}
+ return true;
+}
 enum ENUM_ORDER_TYPE {ORDER_TYPE_BUY, ORDER_TYPE_SELL};
 bool armed=true, netting=false, slip=false;
 double minimumStop=0;
@@ -57,6 +78,8 @@ uint errorCode=TRADE_RETCODE_REQUOTE;
 bool hasOrder=false, moveQuoteAfterReject=false;
 int transientCount=1;
 ulong GetTickCount64(){return now;}
+long UtcMs(){return now;}
+bool exactFill=false;
 bool IsBtcUsdChart(){return false;}
 bool GoldUsdSymbol(string){return true;}
 string EntrySymbol(string){return _Symbol;}
@@ -82,10 +105,11 @@ bool PositionSelect(string){selected=positions.empty()?-1:0;return selected>=0;}
 long PositionGetInteger(int key){
  const auto &p=positions.at(selected);
  if(key==POSITION_IDENTIFIER)return p.id;
+ if(key==POSITION_TICKET)return selected+1;
  if(key==POSITION_MAGIC)return p.magic;
  return p.buy?POSITION_TYPE_BUY:-1;
 }
-string PositionGetString(int){return _Symbol;}
+string PositionGetString(int key){return key==POSITION_COMMENT?positions.at(selected).comment:_Symbol;}
 double PositionGetDouble(int key){
  const auto &p=positions.at(selected);
  return key==POSITION_PRICE_OPEN?p.entry:key==POSITION_SL?p.sl:key==POSITION_TP?p.tp:p.volume;
@@ -105,11 +129,11 @@ bool BrokerDone(){return true;}
 long TimeCurrent(){return 1;}
 string Num(double n){return std::to_string(n);}
 string Row(string key,string val){return key+"="+val+"\n";}
-bool WriteAtomic(string name,string data){lastRisk=data;return true;}
+bool WriteAtomic(string name,string data){if(name==SOLID_SPLIT_FILE)files[channel+"\\"+name]=data;else lastRisk=data;return true;}
 bool HistoryDealSelect(ulong){return true;}
 long HistoryDealGetInteger(ulong,int){return positions.back().id;}
 double HistoryDealGetDouble(ulong,int){return lastDeal;}
-bool CloseTicket(ulong ticket,double volume){positions.at(ticket-1).volume-=volume;return true;}
+bool CloseTicket(ulong ticket,double volume){auto &p=positions.at(ticket-1);p.volume-=volume;if(p.volume<=1e-8)positions.erase(positions.begin()+ticket-1);return true;}
 template<class... Args> void Print(Args...){}
 struct Trade{
  ulong magic=0;
@@ -131,6 +155,7 @@ struct Trade{
   if(calls==partialAt)v*=.5;
   lastDeal=4000+(buy?1:-1)*(.11+calls*.01);
   if(slip&&calls==2)lastDeal=4004.01;
+  if(exactFill)lastDeal=4000;
   ++calls;volume=v;deal=calls;
   if(netting&&!positions.empty()){
    auto &p=positions.back();
@@ -169,6 +194,28 @@ int main(){
   }
   assert(std::abs(sum-layers*.01)<1e-8);
   assert(lastRisk.find("tp1="+Num(Price("XAUUSD",positions.back().entry+(buy?1:-1))))!=string::npos);
+ }
+ for(bool buy:{false,true}){
+  netting=false;calls=0;
+  positions={{99,MAGIC,true,.10,4000,3998,0,"ZC:previous-setup"}};
+  assert(!Run(buy,8)&&calls==0&&PositionsTotal()==1&&lastEntryCode=="SETUP_POSITION_EXISTS");
+  positions.clear();
+  assert(Run(buy,8)&&calls==8&&PositionsTotal()==8);
+ }
+ for(bool buy:{false,true}){
+  netting=false;calls=0;positions.clear();quoteOffset=2.56;
+  int sign=buy?1:-1;
+  auto retest=[&](long expiry){
+   return Entry("XAUUSD",_Symbol,buy?"BUY":"SELL",.01,1,4000,4000-sign*3,4000+sign*1.5,
+    4000+sign*3,4000+sign*4.5,"setup",false,"TF2_SCALPING",false,0,
+    "TF1_XAU_FIXED_STEPLOCK_V6","1",true,false,expiry);
+  };
+  assert(!retest(now+10000)&&calls==0&&lastEntryCode=="WAIT_SOLID_PRICE");
+  assert(!retest(now+300)&&calls==0&&lastEntryCode=="COMMAND_EXPIRED");
+  quoteOffset=buy?-.10:0;exactFill=true;
+  assert(retest(now+10000)&&calls==1&&positions.back().entry==4000);
+  exactFill=false;calls=0;positions.clear();
+  assert(!retest(now+10000)&&calls==1&&lastEntryCode=="FILL_SOLID_PRICE_MISMATCH");
  }
  netting=true;calls=0;positions={{99,0,true,.10,4000,3998}};
  assert(!Run(true,12)&&calls==0&&lastEntryCode=="NETTING_POSITION_CONFLICT");
@@ -246,6 +293,30 @@ int main(){
  assert(!Run(true,8,"XAUUSD",true)&&sends==0&&lastEntryCode=="CASH_LAYER_ACCOUNT_OR_POLICY_UNSUPPORTED");
  netting=false;minimumStop=100;
  assert(!Run(true,8,"XAUUSD",true)&&sends==0&&lastEntryCode=="CASH_LAYER_BROKER_DISTANCE");
+ minimumStop=0;
+ for(bool merged:{false,true})for(bool buy:{false,true})for(int layers:{1,7,8}){
+  netting=merged;calls=0;sends=0;positions.clear();files.clear();now=130000;quoteOffset=0;
+  const int sign=buy?1:-1;
+  auto split=[&](string phase,int count,long bar=120000){
+   return ExecuteSolidSplit(phase,bar,_Symbol,buy?"BUY":"SELL",.01,count,4000,
+    4000-sign*3,4000+sign*1.5,4000+sign*3,4000+sign*4.5,phase,bar+75000);
+  };
+  assert(split("EARLY",layers)&&calls==layers/2);
+  assert(!split("EARLY",layers)&&calls==layers/2);
+  now=180001;
+  assert(!split("CONFIRM",layers,180000)&&calls==layers/2);
+  assert(split("CONFIRM",20)&&calls==layers);
+  assert(!split("CONFIRM",20)&&calls==layers);
+  positions.clear();files.clear();calls=0;now=130000;
+  assert(split("EARLY",layers));
+  now=180001;
+  assert(split("ABORT",layers)&&positions.empty()&&files.empty());
+  now=130000;
+  assert(split("EARLY",layers));
+  now=195000;
+  ManageSolidSplit();
+  assert(positions.empty()&&files.empty());
+ }
  double a,b,c,d;
  assert(BtcPipTargets(_Symbol,true,64000,a,b,c,d));
  assert(a==64150 && b==64250 && c==64400 && d==64700.01);
@@ -256,7 +327,7 @@ int main(){
         with tempfile.TemporaryDirectory() as folder:
             cpp = pathlib.Path(folder) / 'entry.cpp'
             binary = cpp.with_suffix('')
-            cpp.write_text(mock + entry + checks)
+            cpp.write_text(mock + entry + batch + checks)
             result = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(binary)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

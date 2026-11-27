@@ -26,9 +26,15 @@ class AdminFlowTests(unittest.TestCase):
     def run(self):pass
    vault=Vault(root/'vault',lambda data,decrypt=False:data);m=Manager(common,vault,api_factory=Api,runner_factory=Runner)
    h={**local_heartbeat(),'writtenAt':__import__('time').time()*1000};h['writtenAt']=int(h['writtenAt']);channel=expected_channel(common,h);channel.mkdir();atomic_write(channel/'heartbeat.tsv',encode_fields(h))
-   m.login_admin('admin@example.test','fake-password');cfg=m.pair(1,channel,'','ZCuser 11')
+   m.login_admin('admin@example.test','fake-password')
+   with self.assertRaisesRegex(ValueError,'ZENCORE_LOGIN_REQUIRED'):m.pair(7,channel,'','  ')
+   self.assertEqual(len(calls),1)
+   cfg=m.pair(7,channel,'',' trader.custom@example.test ')
+   self.assertEqual(cfg['vpsSlot'],7)
+   self.assertEqual(cfg['zenCoreLogin'],'trader.custom@example.test')
+   self.assertEqual(calls[1][1],{'loginId':'trader.custom@example.test'})
    self.assertEqual(cfg['zenCoreUserId'],user);self.assertEqual(calls[1][0],'/api/admin/vps/resolve');self.assertEqual(calls[2][0],'/api/admin/clients/'+user+'/setup/ea-connect')
-   self.assertEqual(len([x for x in calls if x[0]=='/auth/login']),1);self.assertFalse(any(x[0].endswith('/on') for x in calls));self.assertNotIn('fake-password',vault.path(1).read_text())
+   self.assertEqual(len([x for x in calls if x[0]=='/auth/login']),1);self.assertFalse(any(x[0].endswith('/on') for x in calls));self.assertNotIn('fake-password',vault.path(7).read_text())
  def test_local_slot_clear_after_cloud_receipt_preserves_other_slot(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);vault=Vault(root/'vault',lambda data,decrypt=False:data)

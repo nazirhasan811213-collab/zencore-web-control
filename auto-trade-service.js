@@ -1225,6 +1225,7 @@ function createAutoTradeService(options = {}) {
   }
 
   const directEntryPods=new Set();
+  const solidSplitPods=new Map();
   const fixedTf1Pods=new Map();
   const manualOrderPods=new Map();
   const manualCloseAllPods=new Map();
@@ -1275,6 +1276,8 @@ function createAutoTradeService(options = {}) {
     }
     if(isFixedLock(input.tf1FixedExitVersion))fixedTf1Pods.set(pod.id,{accountFingerprint:updated.accountFingerprint,version:input.tf1FixedExitVersion});
     else fixedTf1Pods.delete(pod.id);
+    if(input.solidSplitVersion===PineDirect.SOLID_SPLIT)solidSplitPods.set(pod.id,updated.accountFingerprint);
+    else solidSplitPods.delete(pod.id);
     if(input.directEntryPolicy===PineDirect.POLICY)directEntryPods.add(pod.id);else directEntryPods.delete(pod.id);
     const cycleBefore=['1','3'].includes(options.scalpingTimeframe)&&isLocalEa(pod)?await store.listPositions(pod.userId):[];
     if (!await store.replacePositions(pod.userId, heartbeatValidation.value.positions, seenAt, {id:pod.id,tokenHash:pod.tokenHash})) throw serviceError('INVALID_POD_TOKEN','Pautan lama telah dibatalkan.',401);
@@ -1411,8 +1414,10 @@ function createAutoTradeService(options = {}) {
     }
     // A queued signal may outlive a heartbeat that reports a fill. Recheck at
     // delivery as well as dispatch; every layer of this TF must be closed.
+    const split=command.payload?.analysisSnapshot?.solidSplit;
+    if(split && (!solidSplitPods.has(command.podId)||solidSplitPods.get(command.podId)!==command.payload.accountFingerprint))return false;
     const deliveryPositions=await store.listPositions(command.userId);
-    if(!Core.permitsPositionEntry({symbol:command.payload?.symbol,
+    if((!split||split.phase==='EARLY')&&!Core.permitsPositionEntry({symbol:command.payload?.symbol,
       timeframe:command.payload?.analysisSnapshot?.executionTimeframe||(mode==='TF15_INTRA'?'15':'1'),
       strategyNormal:{sop:{entryPolicyVersion:command.payload?.analysisSnapshot?.entryPolicyVersion}}},deliveryPositions)){
       Object.assign(diagnostic,{ok:false,reason:'POSITION_STILL_OPEN'});return false;
@@ -1868,7 +1873,7 @@ function createAutoTradeService(options = {}) {
           symbol,timeframe:market.timeframe,
           strategyNormal:{sop:{entryPolicyVersion:market.setupMeta?.entryPolicyVersion}}
         }:market;
-        if(!Core.permitsPositionEntry(positionScope,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
+        if((!market.setupMeta?.solidSplit||market.setupMeta.solidSplit.phase==='EARLY')&&!Core.permitsPositionEntry(positionScope,positions)){await reportEntryBlock(profile,market,'POSITION_STILL_OPEN');continue;}
         const pineCurrent=['PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_FORECAST45_V4','PINE_SOLID_3OF4_FORECAST45_V5','PINE_SOLID_PRICE_WT_HEMA_V6','PINE_NATIVE_SOLID_ENTRY_V7','PINE_3TRIGGERS_3OF4_CHOP50_V3'].includes(market.strategyNormal?.sop?.entryPolicyVersion);
         const cycle=direct?{allowed:true}:await entryCycleReset.check(profile.userId,pod?.id,market);
         if(!cycle.allowed){await reportEntryBlock(profile,market,cycle.reason,{closedAt:cycle.closedAt});continue;}
@@ -1880,6 +1885,10 @@ function createAutoTradeService(options = {}) {
         const symbolSpecs = hostedAccount ? hostedAccount.symbolSpecs : pod.symbolSpecs;
         const setup = Core.buildSetupCommand(market, profile, symbolSpecs?.[symbol],now());
         if (!setup || (!direct&&!isCurrent(market))){const diagnostic=require('./entry-setup-diagnostic').inspect(market,profile,now());await reportEntryBlock(profile,market,!setup?diagnostic.reason:'ENTRY_MARKET_SUPERSEDED',{entryChecks:diagnostic.checks});continue;}
+        if(setup.payload.analysisSnapshot?.solidSplit &&
+           (!solidSplitPods.has(pod.id)||solidSplitPods.get(pod.id)!==pod.accountFingerprint)){
+          await reportEntryBlock(profile,market,'EA_TF1_SOLID_SPLIT_UPGRADE_REQUIRED');continue;
+        }
         if(isFixedLock(setup.payload.analysisSnapshot?.exitLockVersion) &&
            (hostedAccount||!supportsSetupExit(pod,setup.payload))){
           await reportEntryBlock(profile,market,'EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED');continue;

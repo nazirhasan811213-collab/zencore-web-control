@@ -11,8 +11,30 @@ from pathlib import Path
 
 VERSION = '1.4.0-ea-local'
 TF1_FIXED_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V1'
-EA_VERSION = '2.51'
-CONNECTOR_BUILD = '2.1.51'
+TF1_FIVE_TARGETS_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V2'
+TF1_FIVE_TARGETS_V3_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V3'
+TF1_FIVE_TARGETS_V4_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V4'
+TF1_FIVE_TARGETS_V5_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V5'
+TF1_SOLID_RETEST_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V6'
+TF1_SOLID_SPLIT_EXIT = 'TF1_XAU_FIXED_STEPLOCK_V7'
+TF1_SOLID_SPLIT = 'TF1_SOLID_SPLIT_V1'
+TF1_FIXED_EXIT_TARGETS = {
+    TF1_FIXED_EXIT: (2.5, 4, 6),
+    TF1_FIVE_TARGETS_EXIT: (1.5, 2.5, 4),
+    TF1_FIVE_TARGETS_V3_EXIT: (1.5, 3.5, 4.5),
+    TF1_FIVE_TARGETS_V4_EXIT: (1.5, 3.5, 4.5),
+    TF1_FIVE_TARGETS_V5_EXIT: (1.5, 3, 4.5),
+    TF1_SOLID_RETEST_EXIT: (1.5, 3, 4.5),
+    TF1_SOLID_SPLIT_EXIT: (1.5, 3, 4.5),
+}
+
+def supports_tf1_fixed_exit(capability, requested):
+    versions = tuple(TF1_FIXED_EXIT_TARGETS)
+    return (requested not in versions or
+            (capability in versions and versions.index(capability) >= versions.index(requested)))
+
+EA_VERSION = '2.58'
+CONNECTOR_BUILD = '2.1.59'
 CONTRACT = 'ZENCORE_ANALYSIS_EXECUTION_V1'
 STRATEGY = 'NORMAL_3M_SOP_V32'
 SCHEMA = '32.3-EXIT-STEPLOCK'
@@ -95,7 +117,8 @@ def verified_command(command, signing_key, pod_id, now_ms=None):
     if not UUID.fullmatch(str(signed.get('id',''))): raise ValueError('INVALID_COMMAND_ID')
     now_ms = int(time.time()*1000) if now_ms is None else now_ms
     direct = signed.get('type')=='PLACE_SETUP' and signed.get('payload',{}).get('analysisSnapshot',{}).get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
-    if not isinstance(signed.get('expiresAt'), (int,float)) or (not direct and signed['expiresAt'] <= now_ms):
+    split = signed.get('payload',{}).get('analysisSnapshot',{}).get('solidSplit') is not None
+    if not isinstance(signed.get('expiresAt'), (int,float)) or ((not direct or split) and signed['expiresAt'] <= now_ms):
         raise ValueError('COMMAND_EXPIRED')
     if signed.get('createdAt', now_ms+1) > now_ms+30000: raise ValueError('CLOCK_SKEW')
     return signed
@@ -196,20 +219,29 @@ def command_fields(command, identity):
                 if execution_tf!=expected_tf: raise ValueError('TIMEFRAME_MODE_MISMATCH')
                 fields['executionTimeframe']=execution_tf
                 if snap.get('entryPolicyVersion') in ('PINE_3TRIGGERS_4OF5_V2','PINE_3TRIGGERS_3OF4_CHOP50_V3'):
-                    fixed_exit = snap.get('exitLockVersion') == TF1_FIXED_EXIT
-                    if fixed_exit:
+                    fixed_targets = TF1_FIXED_EXIT_TARGETS.get(snap.get('exitLockVersion'))
+                    if fixed_targets:
                         if symbol != 'XAUUSD' or execution_tf != '1' or mode != 'TF2_SCALPING':
                             raise ValueError('EXIT_POLICY_REJECTED')
                         sign = 1 if payload['side'] == 'BUY' else -1
                         entry = float(number(payload['entry']))
-                        for key, distance in (('sl',-3),('tp1',2.5),('tp2',4),('tp3',6)):
+                        for key, distance in zip(('sl','tp1','tp2','tp3'), (-3,*fixed_targets)):
                             if abs(float(number(payload[key]))-(entry+sign*distance)) > 1e-6:
                                 raise ValueError('ANALYSIS_PRICE_MISMATCH')
-                    if not fixed_exit and not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
+                    if not fixed_targets and not (snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1' and snap.get('exitLockVersion')=='MT5_FILL_STEPLOCK') and snap.get('exitLockVersion')!='PINE_STEPLOCK_150_TP3_PLUS3_V1' and not (snap.get('exitLockVersion')=='PINE_STEPLOCK_BE_TF15_V1' and mode=='TF15_INTRA' and execution_tf=='15' and snap.get('analysisSopVersion')=='NORMAL_20261001_TF15_RIBBON_V1'): raise ValueError('EXIT_POLICY_REJECTED')
                     fields['exitLockVersion']=snap['exitLockVersion']
             if snap.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1':
                 if snap.get('maxEntryGap')!=4 or execution_tf not in ('1','2','15'):raise ValueError('DIRECT_POLICY_REJECTED')
                 fields['executionPolicy']='PINE_DIRECT_FILL_GAP4_V1'
+            split = snap.get('solidSplit')
+            if split is not None or snap.get('exitLockVersion') == TF1_SOLID_SPLIT_EXIT:
+                if (not isinstance(split, dict) or split.get('version') != TF1_SOLID_SPLIT or
+                    split.get('phase') not in ('EARLY', 'CONFIRM', 'ABORT') or type(split.get('bar')) is not int or
+                    split['bar'] <= 0 or split['bar'] % 60000 or
+                    fields.get('executionPolicy') != 'PINE_DIRECT_FILL_GAP4_V1' or
+                    fields.get('exitLockVersion') != TF1_SOLID_SPLIT_EXIT):
+                    raise ValueError('SOLID_SPLIT_POLICY_REJECTED')
+                fields.update(type='PLACE_SOLID_SPLIT', solidSplitPhase=split['phase'], solidSplitBar=split['bar'])
             cash_policy = snap.get('cashLayerPolicy')
             if cash_policy is not None:
                 if cash_policy != 'USD_TP050_SL200_V1' or fields.get('executionPolicy') != 'PINE_DIRECT_FILL_GAP4_V1':
@@ -287,7 +319,7 @@ def heartbeat(fields, selected_identity, now_ms=None):
       'connectorBuild':CONNECTOR_BUILD, 'eaVersion':fields.get('eaVersion','UNKNOWN'), 'terminalBuild':fields['terminalBuild'], 'terminalTradeAllowed':fields['terminalTradeAllowed']=='1',
       'accountTradeAllowed':fields['accountTradeAllowed']=='1', 'expertTradeAllowed':fields['expertTradeAllowed']=='1',
       'demoExecutionUnlocked':True, 'manualExitVersion':fields.get('manualExitVersion',''), 'manualExitCustomSupported':fields.get('manualExitVersion') in ('MANUAL_TF2_EXIT_V3','MANUAL_STEPLOCK_V4','MANUAL_PAIR_STEPLOCK_V5'), 'manualExitEnabled':fields.get('manualExitEnabled')=='1', 'positions':[], 'symbolSpecs':[],
-      'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'manualCloseAllVersion':fields.get('manualCloseAllVersion'), 'tf1FixedExitVersion':fields.get('tf1FixedExitVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
+      'solidSplitVersion':fields.get('solidSplitVersion'), 'cashLayerPolicy':fields.get('cashLayerPolicy'), 'manualMarketOrderVersion':fields.get('manualMarketOrderVersion'), 'manualCloseAllVersion':fields.get('manualCloseAllVersion'), 'tf1FixedExitVersion':fields.get('tf1FixedExitVersion'), 'directEntryPolicy':fields.get('directEntryPolicy'), 'expandedEntryPolicy':fields.get('expandedEntryPolicy')=='1', 'btcUsdChart':fields.get('btcUsdChart')=='1', 'dualPairExecution':fields.get('dualPairExecution')=='1', 'terminalConnected':fields.get('terminalConnected')=='1', 'reentryVersion':fields.get('reentryVersion'), 'fillRiskVersion':fields.get('fillRiskVersion')
     }
     if fields.get('accountBindingVersion')=='ACCOUNT_SESSION_V1':
         if not re.fullmatch(r'[0-9a-f]{32}', fields.get('eaSession','')): raise ValueError('EA_SESSION_INVALID')
