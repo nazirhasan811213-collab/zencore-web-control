@@ -8,6 +8,7 @@
   });
   const formatDate = value => value ? dateFormat.format(new Date(value)) : '—';
   const actionLabels = {
+    'admin/ib-access/grant': 'Beri akses IB Partner', 'admin/ib-access/revoke': 'Tarik balik akses IB Partner',
     'auth/login': 'Log masuk', 'admin/grant': 'Beri akses admin', 'admin/revoke': 'Buang akses admin',
     'system/registration': 'Ubah tetapan pendaftaran', 'clients/password': 'Reset kata laluan client',
     'clients/master-reset': 'Master Reset client', 'clients/status': 'Ubah status client',
@@ -16,6 +17,9 @@
   const dialog = byId('revoke-dialog');
   let revokeId = null;
   let nextBefore = null;
+  const ibAccessDialog = byId('ib-access-dialog');
+  const ibAccessForm = byId('ib-access');
+  let ibAccountId = null;
   const roleDialog = byId('role-dialog');
   const roleForm = byId('change-role');
   const roleLabels = { admin: 'System Admin', ib: 'IB', client: 'Client', viewer: 'View Public' };
@@ -93,6 +97,16 @@
     roleDialog.showModal();
   }
 
+  function openIbAccessDialog(account) {
+    ibAccessForm.reset();
+    ibAccountId = account.id;
+    ibAccessForm.elements.access.value = account.ibPartnerAccess ? 'off' : 'on';
+    byId('ib-access-title').textContent = account.ibPartnerAccess ? 'Tarik balik akses IB Partner' : 'Beri akses IB Partner';
+    byId('ib-access-target').textContent = account.displayName + ' · ' + account.ibCode.toUpperCase() + ' · System Admin';
+    byId('ib-access-status').textContent = '';
+    ibAccessDialog.showModal();
+  }
+
   async function loadRoleAccounts(notice = '') {
     const sequence = ++accountRequest;
     const status = byId('role-list-status');
@@ -114,6 +128,13 @@
         button.textContent = 'Tukar peranan';
         button.addEventListener('click', () => openRoleDialog(account));
         row.append(label, button);
+        if (account.role === 'admin' && account.status === 'active' && account.ibCode && account.ibCode !== 'nazir') {
+          const access = document.createElement('button');
+          access.type = 'button';
+          access.textContent = account.ibPartnerAccess ? 'Tarik balik akses IB' : 'Beri akses IB';
+          access.addEventListener('click', () => openIbAccessDialog(account));
+          row.append(access);
+        }
         return row;
       });
       byId('role-accounts').replaceChildren(...rows);
@@ -193,6 +214,11 @@
     roleDialog.close();
     loadRoleAccounts('Peranan akaun dikemas kini.');
   });
+  submit('ib-access', 'ib-access-status', () => '/accounts/' + encodeURIComponent(ibAccountId) + '/ib-access', () => {
+    ibAccessDialog.close();
+  });
+  ibAccessDialog.addEventListener('close', () => ibAccessForm.reset());
+  byId('cancel-ib-access').addEventListener('click', () => ibAccessDialog.close());
   roleForm.elements.role.addEventListener('change', updateRoleFields);
   roleForm.addEventListener('formdata', event => event.formData.set('expectedRole', selectedAccount.role));
   roleDialog.addEventListener('close', () => roleForm.reset());

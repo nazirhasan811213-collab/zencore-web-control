@@ -500,10 +500,16 @@ function landingForRole(role) {
   return '/app';
 }
 
+function ibActor(user) {
+  if (user?.role === 'ib') return user;
+  if (user?.role === 'admin' && user.ibPartnerAccess === true) return { ...user, role: 'ib', adminIbContext: true };
+  return null;
+}
+
 async function requireRole(req, res, role, redirectTo = null) {
   const session = await requireSession(req, res, redirectTo);
   if (!session) return null;
-  if (session.user.role !== role) {
+  if (role === 'ib' ? !ibActor(session.user) : session.user.role !== role) {
     if (redirectTo) {
       redirect(res, landingForRole(session.user.role));
     } else {
@@ -624,15 +630,21 @@ async function handleManagementApi(req, res, pathname, session) {
           search: query.get('search'), offset: query.get('offset')
         }) });
       }
+      const ibAccessUpdate = /^\/api\/admin\/owner\/accounts\/([0-9a-f-]{36})\/ib-access$/i.exec(pathname);
       const roleUpdate = /^\/api\/admin\/owner\/accounts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/role$/i.exec(pathname);
       const revoke = /^\/api\/admin\/owner\/admins\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/revoke$/i.exec(pathname);
-      if (req.method === 'POST' && (pathname === '/api/admin/owner/admins' || revoke || roleUpdate)) {
+      if (req.method === 'POST' && (pathname === '/api/admin/owner/admins' || revoke || roleUpdate || ibAccessUpdate)) {
         if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
         const body = await parseApiJson(req, res);
         if (body === null) return;
         const key = attemptKey(req, '/api/admin/owner/reauth', session.user.id);
         const limit = consumeAttempt(key);
         if (!limit.allowed) return sendJson(res, 429, { ok: false, error: 'Terlalu banyak cubaan. Cuba semula sebentar lagi.' }, { 'Retry-After': String(limit.retryAfter) });
+        if (ibAccessUpdate) {
+          const result = await authState.service.setAdminIbAccess(session.user, ibAccessUpdate[1], body);
+          authAttempts.delete(key);
+          return sendJson(res, 200, { ok: true, ...result });
+        }
         if (roleUpdate) {
           const result = await authState.service.changeAccountRole(session.user, roleUpdate[1], body);
           authAttempts.delete(key);
@@ -646,23 +658,24 @@ async function handleManagementApi(req, res, pathname, session) {
     }
     const promotionMatch = pathname.match(/^\/api\/(admin|ib)\/promotion(?:\/([a-z0-9_-]{1,48}))?$/i);
     if (promotionMatch) {
-      if (session.user.role !== promotionMatch[1]) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
+      const actor = promotionMatch[1] === 'ib' ? ibActor(session.user) : session.user.role === 'admin' ? session.user : null;
+      if (!actor) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
       res.setHeader('Cache-Control', 'no-store');
-      if (req.method === 'GET') return sendJson(res, 200, { ok: true, promotion: await authState.service.promotionForUser(session.user, promotionMatch[2] || '') });
+      if (req.method === 'GET') return sendJson(res, 200, { ok: true, promotion: await authState.service.promotionForUser(actor, promotionMatch[2] || '') });
       if (req.method === 'PATCH') {
         if (!requestOriginAllowed(req)) return sendJson(res, 403, { ok: false, error: 'Origin tidak dibenarkan.' });
         const body = await parseApiJson(req, res);
         if (body === null) return;
-        return sendJson(res, 200, { ok: true, promotion: await authState.service.updatePromotionPhone(session.user, body, promotionMatch[2] || '') });
+        return sendJson(res, 200, { ok: true, promotion: await authState.service.updatePromotionPhone(actor, body, promotionMatch[2] || '') });
       }
       return sendJson(res, 405, { ok: false, error: 'Method tidak dibenarkan.' });
     }
     if (req.method === 'GET' && ['/api/admin/connections', '/api/ib/connections'].includes(pathname)) {
-      const expectedRole = pathname.startsWith('/api/admin/') ? 'admin' : 'ib';
-      if (session.user.role !== expectedRole) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
+      const actor = pathname.startsWith('/api/ib/') ? ibActor(session.user) : session.user.role === 'admin' ? session.user : null;
+      if (!actor) return sendJson(res, 403, { ok: false, code: 'FORBIDDEN' });
       res.setHeader('Cache-Control', 'no-store');
       if (!autoTradeState.ready || !autoTradeState.service) return sendJson(res, 503, { ok: false, error: 'Connection monitor unavailable.' });
-      return sendJson(res, 200, await listConnectionMonitor(session.user, authState.service, autoTradeState.service));
+      return sendJson(res, 200, await listConnectionMonitor(actor, authState.service, autoTradeState.service));
     }
     if (pathname.startsWith('/api/admin/')) {
       if (session.user.role !== 'admin') {
@@ -973,34 +986,35 @@ async function handleManagementApi(req, res, pathname, session) {
     }
 
     if (pathname.startsWith('/api/ib/')) {
-      if (session.user.role !== 'ib') {
+      const actor = ibActor(session.user);
+      if (!actor) {
         return sendJson(res, 403, { ok: false, code: 'FORBIDDEN', error: 'IB access required.' });
       }
       if(pathname.startsWith('/api/ib/telegram/')){
         res.setHeader('Cache-Control','no-store');
         if(!adminTelegram)return sendJson(res,503,{ok:false,error:'Servis mesej admin belum tersedia.'});
         try{
-          if(req.method==='GET'&&pathname==='/api/ib/telegram/recipients')return sendJson(res,200,await adminTelegram.catalog(session.user,true));
-          if(req.method==='GET'&&pathname==='/api/ib/telegram/history')return sendJson(res,200,await adminTelegram.history(session.user,true));
-          if(req.method==='GET'&&/^\/api\/ib\/telegram\/jobs\/[0-9a-f-]{36}$/i.test(pathname))return sendJson(res,200,await adminTelegram.details(session.user,pathname.split('/').pop(),true));
+          if(req.method==='GET'&&pathname==='/api/ib/telegram/recipients')return sendJson(res,200,await adminTelegram.catalog(actor,true));
+          if(req.method==='GET'&&pathname==='/api/ib/telegram/history')return sendJson(res,200,await adminTelegram.history(actor,true));
+          if(req.method==='GET'&&/^\/api\/ib\/telegram\/jobs\/[0-9a-f-]{36}$/i.test(pathname))return sendJson(res,200,await adminTelegram.details(actor,pathname.split('/').pop(),true));
           if(req.method!=='POST')return sendJson(res,405,{ok:false,error:'Method tidak dibenarkan.'});
           if(!requestOriginAllowed(req))return sendJson(res,403,{ok:false,error:'Origin tidak dibenarkan.'});
           const body=await parseApiJson(req,res);if(body===null){if(!res.headersSent)sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});return;}if(typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
           if(!body||typeof body!=='object'||Array.isArray(body))return sendJson(res,400,{ok:false,error:'Permintaan tidak sah.'});
-          if(pathname==='/api/ib/telegram/preview')return sendJson(res,200,await adminTelegram.preview(session.user,body,true));
-          if(pathname==='/api/ib/telegram/send')return sendJson(res,200,await adminTelegram.send(session.user,body.draftId,true));
+          if(pathname==='/api/ib/telegram/preview')return sendJson(res,200,await adminTelegram.preview(actor,body,true));
+          if(pathname==='/api/ib/telegram/send')return sendJson(res,200,await adminTelegram.send(actor,body.draftId,true));
           return sendJson(res,404,{ok:false,error:'Endpoint tidak dijumpai.'});
         }catch(e){return sendJson(res,e.status||503,{ok:false,error:e.status?e.message:'Servis mesej admin tidak tersedia. Cuba lagi.'});}
       }
       if (req.method === 'GET' && pathname === '/api/ib/overview') {
-        return sendJson(res, 200, { ok: true, ...(await authState.service.ibOverview(session.user)) });
+        return sendJson(res, 200, { ok: true, ...(await authState.service.ibOverview(actor)) });
       }
       if (req.method === 'GET' && pathname === '/api/ib/clients') {
-        return sendJson(res, 200, { ok: true, clients: await authState.service.ibClients(session.user) });
+        return sendJson(res, 200, { ok: true, clients: await authState.service.ibClients(actor) });
       }
       const ibClientDetailMatch = pathname.match(/^\/api\/ib\/clients\/([0-9a-f-]{36})$/i);
       if (req.method === 'GET' && ibClientDetailMatch) {
-        const client = await authState.service.ibClientDetail(session.user, ibClientDetailMatch[1]);
+        const client = await authState.service.ibClientDetail(actor, ibClientDetailMatch[1]);
         return sendJson(res, 200, {
           ok: true,
           client,
@@ -1015,7 +1029,7 @@ async function handleManagementApi(req, res, pathname, session) {
         const body = await parseApiJson(req, res);
         if (body === null) return;
         const client = await authState.service.setIbClientActive(
-          session.user, ibClientStatusMatch[1], body.active === true
+          actor, ibClientStatusMatch[1], body.active === true
         );
         return sendJson(res, 200, { ok: true, client });
       }

@@ -24,7 +24,9 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     MemoryAuthStore.prototype.init=async function(){
       for(const account of [
         {email:${JSON.stringify(OWNER_EMAIL)},role:'admin'},
-        {email:${JSON.stringify(clientEmail)},role:'client'}
+        {email:${JSON.stringify(clientEmail)},role:'client'},
+        {email:'assigned@owner.test',role:'client'},
+        {email:'outside@owner.test',role:'client'}
       ]) await this.createUser({...account,displayName:'Seed Account',passwordHash:await hashPassword(account.role==='admin'?${JSON.stringify(ownerPassword)}:${JSON.stringify(clientPassword)})});
     };
   `);
@@ -158,7 +160,41 @@ test('owner alone manages admin access and sees recorded admin activity', { time
     const promoted = await validLogin(clientEmail, clientPassword, 'system_admin');
     assert.equal((await request('/api/admin/overview', { cookie: promoted })).status, 200);
     assert.equal((await request(accounts, { cookie: promoted })).status, 403);
+    const ibAccess = accounts + '/' + matches[0].id + '/ib-access';
+    const grantIb = (access, cookie = owner, secret = ownerPassword) =>
+      request(ibAccess, { cookie, data: { access, ownerPassword: secret } });
+    assert.equal((await request('/api/ib/overview', { cookie: promoted })).status, 403);
+    assert.equal((await grantIb('on', promoted)).status, 403);
+    assert.equal((await grantIb('on', owner, clientPassword)).status, 401);
+    assert.equal((await grantIb('on')).status, 200);
+    assert.equal((await request('/ib', { cookie: promoted })).status, 200);
+    assert.equal((await request('/admin', { cookie: promoted })).status, 200);
+    assert.equal((await request('/api/admin/overview', { cookie: promoted })).status, 200);
+    const own = await (await request('/api/ib/overview', { cookie: promoted })).json();
+    assert.equal(own.referrer.code, 'test-role-ib');
+    assert.equal(own.referrer.active, true);
+    const adminOverview = await (await request('/api/admin/clients', { cookie: promoted })).json();
+    const assigned = adminOverview.clients.find(account => account.email === 'assigned@owner.test').id;
+    const outside = adminOverview.clients.find(account => account.email === 'outside@owner.test').id;
+    assert.equal((await request('/api/admin/clients/' + assigned + '/ib', {
+      cookie: owner, method: 'PATCH', data: { ibCode: own.referrer.code }
+    })).status, 200);
+    const scoped = await (await request('/api/ib/clients', { cookie: promoted })).json();
+    assert.deepEqual(scoped.clients.map(item => item.id), [assigned]);
+    assert.equal((await request('/api/ib/clients/' + assigned, { cookie: promoted })).status, 200);
+    assert.equal((await request('/api/ib/clients/' + outside, { cookie: promoted })).status, 404);
+    assert.equal((await request('/api/ib/promotion/nazir', { cookie: promoted })).status, 403);
+    assert.equal((await request('/api/admin/ibs/' + own.referrer.id + '/status', {
+      cookie: promoted, method: 'PATCH', data: { active: false }
+    })).status, 404);
+    assert.equal((await (await request('/auth/me', { cookie: promoted })).json()).user.role, 'admin');
+    assert.equal((await (await request('/auth/me', { cookie: promoted })).json()).user.ibPartnerAccess, true);
+    assert.equal((await grantIb('off')).status, 200);
+    assert.equal((await request('/api/ib/overview', { cookie: promoted })).status, 403);
+    assert.equal((await request('/api/admin/overview', { cookie: promoted })).status, 200);
     const auditAfter = await (await request(activity, { cookie: owner })).json();
+    assert.ok(auditAfter.events.some(event => event.action === 'admin/ib-access/grant' && event.target === clientEmail));
+    assert.ok(auditAfter.events.some(event => event.action === 'admin/ib-access/revoke' && event.target === clientEmail));
     assert.ok(auditAfter.events.some(event => event.action === 'roles/client/viewer' && event.target === clientEmail));
   } finally {
     child.kill();

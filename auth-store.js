@@ -22,7 +22,8 @@ function publicUser(row) {
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
     ibCode: row.ib_code || null,
-    ibName: row.ib_name || null
+    ibName: row.ib_name || null,
+    ibPartnerAccess: row.role === 'admin' && row.ib_partner_access === true
   };
 }
 
@@ -37,6 +38,10 @@ function publicReferrer(row, requestedCode = '') {
     clientCount: Number(row.client_count || 0),
     fallback: !!requestedCode && requestedCode !== row.code
   };
+}
+
+function adminReferrer(row) {
+  return { ...publicReferrer(row), ownerManagedAccess: row.admin_access === true };
 }
 
 function maskedIc(value) {
@@ -111,7 +116,8 @@ class PostgresAuthStore {
         display_name = EXCLUDED.display_name,
         active = TRUE;
 
-      ALTER TABLE zencore_ib_referrers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(24);
+      ALTER TABLE zencore_ib_referrers ADD COLUMN IF NOT EXISTS whatsapp_phone VARCHAR(24),
+        ADD COLUMN IF NOT EXISTS admin_access BOOLEAN NOT NULL DEFAULT FALSE;
 
       CREATE TABLE IF NOT EXISTS zencore_users (
         id UUID PRIMARY KEY,
@@ -310,7 +316,7 @@ class PostgresAuthStore {
   async listRoleAccounts({ search, offset, limit, reservedEmail }) {
     const result = await this.pool.query(
       `SELECT u.id, u.display_name, u.email, u.role, u.status, u.access_expires_at,
-              u.handover_state, ib.code AS ib_code
+              u.handover_state, ib.code AS ib_code, COALESCE(ib.active AND ib.admin_access,FALSE) AS ib_partner_access
        FROM zencore_users u LEFT JOIN zencore_ib_referrers ib ON ib.user_id=u.id
        WHERE LOWER(u.email)<>ALL($1::text[]) AND u.status IN ('active','disabled')
          AND (strpos(LOWER(u.email), $2)>0 OR strpos(LOWER(u.display_name), $2)>0)
@@ -334,13 +340,13 @@ class PostgresAuthStore {
         throw require('./auth-service').authError('FORBIDDEN', 'Akaun demo umum dilindungi.', 403);
       }
       if (user.role !== role) {
-        const ib = (await db.query('SELECT code FROM zencore_ib_referrers WHERE user_id=$1 FOR UPDATE', [id])).rows[0];
+        const ib = (await db.query('SELECT code,admin_access FROM zencore_ib_referrers WHERE user_id=$1 FOR UPDATE', [id])).rows[0];
         assertIbCode(input, ib?.code);
         if (role === 'ib' && !ib) {
           await db.query(`INSERT INTO zencore_ib_referrers (id,code,display_name,user_id,active)
                           VALUES ($1,$2,$3,$4,$5)`, [crypto.randomUUID(), ibCode, user.display_name, id, user.status === 'active']);
-        } else if (ib && (role === 'ib' || user.role === 'ib')) {
-          await db.query('UPDATE zencore_ib_referrers SET active=$2 WHERE user_id=$1', [id, role === 'ib' && user.status === 'active']);
+        } else if (ib && (role === 'ib' || user.role === 'ib' || ib.admin_access)) {
+          await db.query('UPDATE zencore_ib_referrers SET active=$2, admin_access=FALSE WHERE user_id=$1', [id, role === 'ib' && user.status === 'active']);
         }
         await db.query('UPDATE zencore_users SET role=$2 WHERE id=$1', [id, role]);
         await db.query('DELETE FROM zencore_sessions WHERE user_id=$1', [id]);
@@ -355,6 +361,38 @@ class PostgresAuthStore {
       throw error;
     } finally {
       db.release();
+    }
+  }
+
+  async setAdminIbAccess(actor, id, enabled) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const owner = (await client.query(
+        'SELECT id,email,role,status FROM zencore_users WHERE id=$1 FOR SHARE', [actor.id]
+      )).rows[0];
+      if (systemRole(owner) !== 'owner') throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
+      const user = (await client.query(
+        'SELECT id,email,role,status FROM zencore_users WHERE id=$1 FOR UPDATE', [id]
+      )).rows[0];
+      assertEditableAccount(user, 'admin');
+      if (enabled && user.status !== 'active') throw require('./auth-service').authError('ADMIN_DISABLED', 'Aktifkan akaun System Admin dahulu.', 409);
+      const referrer = (await client.query(
+        'UPDATE zencore_ib_referrers SET active=$2,admin_access=$2 WHERE user_id=$1 AND code<>$3 RETURNING code',
+        [id, enabled, DEFAULT_IB_CODE]
+      )).rows[0];
+      if (!referrer) throw require('./auth-service').authError('IB_PROFILE_NOT_FOUND', 'Akaun admin ini belum dipautkan kepada profil IB.', 404);
+      await client.query(
+        'INSERT INTO zencore_system_admin_activity(actor_id,actor_email,action,target,status) VALUES($1,$2,$3,$4,200)',
+        [owner.id, owner.email, enabled ? 'admin/ib-access/grant' : 'admin/ib-access/revoke', user.email]
+      );
+      await client.query('COMMIT');
+      return { enabled, ibCode: referrer.code };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -417,6 +455,7 @@ class PostgresAuthStore {
       }
       const row = result.rows[0];
       if (row) {
+        if (!input.passwordHash) await client.query('UPDATE zencore_ib_referrers SET active=FALSE,admin_access=FALSE WHERE user_id=$1 AND admin_access', [row.id]);
         await client.query('DELETE FROM zencore_sessions WHERE user_id=$1', [row.id]);
         await client.query(
           'INSERT INTO zencore_system_admin_activity(actor_id,actor_email,action,target,status) VALUES($1,$2,$3,$4,200)',
@@ -614,7 +653,7 @@ class PostgresAuthStore {
       const result = await client.query(
         `UPDATE zencore_ib_referrers
          SET active = $2
-         WHERE id = $1 AND code <> $3
+         WHERE id = $1 AND code <> $3 AND NOT admin_access
          RETURNING id, code, display_name, user_id, active`,
         [referrerId, active === true, DEFAULT_IB_CODE]
       );
@@ -664,7 +703,7 @@ class PostgresAuthStore {
 
   async listIbReferrersWithCounts() {
     const result = await this.pool.query(
-      `SELECT ref.id, ref.code, ref.display_name, ref.user_id, ref.active, ref.created_at,
+      `SELECT ref.id, ref.code, ref.display_name, ref.user_id, ref.active, ref.admin_access, ref.created_at,
               COUNT(u.id)::int AS client_count
        FROM zencore_ib_referrers ref
        LEFT JOIN zencore_users u
@@ -673,7 +712,7 @@ class PostgresAuthStore {
        ORDER BY CASE WHEN ref.code = $1 THEN 0 ELSE 1 END, ref.created_at ASC`,
       [DEFAULT_IB_CODE]
     );
-    return result.rows.map(row => publicReferrer(row));
+    return result.rows.map(adminReferrer);
   }
 
   async listClientsForAdmin({ ibCode = '', limit = 200, offset = 0 } = {}) {
@@ -745,7 +784,7 @@ class PostgresAuthStore {
        FROM zencore_ib_referrers ref
        JOIN zencore_users u
          ON u.ib_referrer_id = ref.id AND u.role = 'client'
-       WHERE ref.user_id = $1
+       WHERE ref.user_id = $1 AND ref.active
        ORDER BY u.created_at DESC, u.id
        LIMIT $2 OFFSET $3`,
       [userId, safeLimit, Math.max(0, Math.floor(Number(offset) || 0))]
@@ -937,7 +976,7 @@ class PostgresAuthStore {
          AND u.role = 'client' AND u.status IN ('active','disabled')
          AND ($3='disabled' OR u.access_expires_at>NOW())
          AND u.ib_referrer_id = ref.id
-         AND ref.user_id = $1
+         AND ref.user_id = $1 AND ref.active
        RETURNING u.id`,
       [ibUserId, clientId, active === true ? 'active' : 'disabled']
     );
@@ -949,7 +988,7 @@ class PostgresAuthStore {
 
   async getIbDetailForAdmin(code) {
     const result = await this.pool.query(
-      `SELECT ref.id, ref.code, ref.display_name, ref.user_id, ref.active, ref.created_at,
+      `SELECT ref.id, ref.code, ref.display_name, ref.user_id, ref.active, ref.admin_access, ref.created_at,
               COUNT(u.id)::int AS client_count
        FROM zencore_ib_referrers ref
        LEFT JOIN zencore_users u
@@ -962,7 +1001,7 @@ class PostgresAuthStore {
     const referrer = result.rows[0];
     if (!referrer) return null;
     const clients = await this.listClientsForAdmin({ ibCode: referrer.code, limit: 500 });
-    return { referrer: publicReferrer(referrer), clients };
+    return { referrer: adminReferrer(referrer), clients };
   }
 
   async getClientForAdmin(clientId) {
@@ -987,7 +1026,7 @@ class PostgresAuthStore {
        FROM zencore_ib_referrers ref
        JOIN zencore_users u
          ON u.ib_referrer_id = ref.id AND u.role = 'client'
-       WHERE ref.user_id = $1 AND u.id = $2
+       WHERE ref.user_id = $1 AND ref.active AND u.id = $2
        LIMIT 1`,
       [ibUserId, clientId]
     );
@@ -1127,7 +1166,8 @@ class PostgresAuthStore {
     const result = await this.pool.query(
       `SELECT s.id AS session_id, s.expires_at,
               u.id, u.display_name, u.email, u.role, u.status, u.handover_state, u.access_activated_at, u.access_expires_at, u.created_at, u.last_login_at,
-              ref.code AS ib_code, ref.display_name AS ib_name
+              ref.code AS ib_code, ref.display_name AS ib_name,
+              EXISTS (SELECT 1 FROM zencore_ib_referrers own WHERE own.user_id=u.id AND own.active AND own.admin_access) AS ib_partner_access
        FROM zencore_sessions s
        JOIN zencore_users u ON u.id = s.user_id
        LEFT JOIN zencore_ib_referrers ref ON ref.id = u.ib_referrer_id
@@ -1212,8 +1252,10 @@ class MemoryAuthStore {
     const rows = [...this.usersById.values()].filter(user => ![OWNER_EMAIL, reservedEmail].includes(user.email.toLowerCase()) &&
       ['active', 'disabled'].includes(user.status) && [user.email, user.display_name].some(value => value.toLowerCase().includes(search)));
     return rows.sort((a, b) => a.display_name.toLowerCase().localeCompare(b.display_name.toLowerCase()) || a.id.localeCompare(b.id))
-      .slice(offset, offset + limit).map(user => ({ ...publicUser(user),
-        ibCode: [...this.referrersByCode.values()].find(ref => ref.user_id === user.id)?.code || null }));
+      .slice(offset, offset + limit).map(user => {
+        const ref = [...this.referrersByCode.values()].find(item => item.user_id === user.id);
+        return publicUser({ ...user, ib_code: ref?.code, ib_partner_access: ref?.active && ref.admin_access });
+      });
   }
 
   async changeAccountRole(actor, id, input) {
@@ -1233,8 +1275,9 @@ class MemoryAuthStore {
       if (this.referrersByCode.has(ibCode)) throw require('./auth-service').authError('IB_CODE_EXISTS', 'Kod IB ini sudah digunakan.', 409);
       this.referrersByCode.set(ibCode, { id: crypto.randomUUID(), code: ibCode,
         display_name: user.display_name, user_id: id, active: user.status === 'active', created_at: new Date() });
-    } else if (ib && (role === 'ib' || oldRole === 'ib')) {
+    } else if (ib && (role === 'ib' || oldRole === 'ib' || ib.admin_access)) {
       ib.active = role === 'ib' && user.status === 'active';
+      ib.admin_access = false;
     }
     user.role = role;
     Access.roleChanged(user, oldRole);
@@ -1242,6 +1285,20 @@ class MemoryAuthStore {
     const auditId = await this.beginAdminActivity(owner, `roles/${oldRole}/${role}`, user.email);
     await this.finishAdminActivity(auditId, 200);
     return { changed: true, role };
+  }
+
+  async setAdminIbAccess(actor, id, enabled) {
+    const owner = this.usersById.get(actor.id);
+    if (systemRole(owner) !== 'owner') throw require('./auth-service').authError('FORBIDDEN', 'System Owner sahaja.', 403);
+    const user = this.usersById.get(id);
+    assertEditableAccount(user, 'admin');
+    if (enabled && user.status !== 'active') throw require('./auth-service').authError('ADMIN_DISABLED', 'Aktifkan akaun System Admin dahulu.', 409);
+    const referrer = [...this.referrersByCode.values()].find(item => item.user_id === id && item.code !== DEFAULT_IB_CODE);
+    if (!referrer) throw require('./auth-service').authError('IB_PROFILE_NOT_FOUND', 'Akaun admin ini belum dipautkan kepada profil IB.', 404);
+    referrer.active = referrer.admin_access = enabled;
+    const auditId = await this.beginAdminActivity(owner, enabled ? 'admin/ib-access/grant' : 'admin/ib-access/revoke', user.email);
+    await this.finishAdminActivity(auditId, 200);
+    return { enabled, ibCode: referrer.code };
   }
 
   async listSystemAdmins() {
@@ -1280,6 +1337,8 @@ class MemoryAuthStore {
     } else {
       if (row?.role !== 'admin' || row.status !== 'active') return null;
       row.status = 'disabled';
+      const ib = [...this.referrersByCode.values()].find(ref => ref.user_id === row.id && ref.admin_access);
+      if (ib) ib.active = ib.admin_access = false;
     }
     for (const [token, session] of this.sessions) {
       if (session.userId === row.id) this.sessions.delete(token);
@@ -1429,7 +1488,7 @@ class MemoryAuthStore {
 
   async setIbActive(referrerId, active) {
     const referrer = [...this.referrersByCode.values()].find(item => item.id === referrerId);
-    if (!referrer || referrer.code === DEFAULT_IB_CODE) return null;
+    if (!referrer || referrer.code === DEFAULT_IB_CODE || referrer.admin_access) return null;
     if (active && referrer.user_id && this.usersById.get(referrer.user_id)?.role !== 'ib') return null;
     referrer.active = active === true;
     if (referrer.user_id) {
@@ -1463,7 +1522,7 @@ class MemoryAuthStore {
       .map(referrer => {
         const clientCount = [...this.usersById.values()]
           .filter(user => user.role === 'client' && user.ib_referrer_id === referrer.id).length;
-        return publicReferrer({ ...referrer, client_count: clientCount });
+        return adminReferrer({ ...referrer, client_count: clientCount });
       })
       .sort((a, b) => {
         if (a.code === DEFAULT_IB_CODE) return -1;
@@ -1500,7 +1559,7 @@ class MemoryAuthStore {
 
   async listClientsForIb(userId, { limit = 200, offset = 0 } = {}) {
     const referrer = [...this.referrersByCode.values()].find(item => item.user_id === userId);
-    if (!referrer) return [];
+    if (!referrer?.active) return [];
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
     return [...this.usersById.values()]
       .filter(row => row.role === 'client' && row.ib_referrer_id === referrer.id)
@@ -1592,7 +1651,7 @@ class MemoryAuthStore {
   async setClientActiveForIb(ibUserId, clientId, active) {
     const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
     const row = this.usersById.get(clientId);
-    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id || !['active','disabled'].includes(row.status)) return null;
+    if (!referrer?.active || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id || !['active','disabled'].includes(row.status)) return null;
     if(active===true&&Access.expired(row))return null;
     row.status = active === true ? 'active' : 'disabled';
     return publicClient(row);
@@ -1604,7 +1663,7 @@ class MemoryAuthStore {
     if (!referrer) return null;
     const clients = await this.listClientsForAdmin({ ibCode: referrer.code, limit: 500 });
     return {
-      referrer: publicReferrer({
+      referrer: adminReferrer({
         ...referrer,
         client_count: clients.length
       }),
@@ -1621,7 +1680,7 @@ class MemoryAuthStore {
   async getClientForIb(ibUserId, clientId) {
     const referrer = [...this.referrersByCode.values()].find(item => item.user_id === ibUserId);
     const row = this.usersById.get(clientId);
-    if (!referrer || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
+    if (!referrer?.active || !row || row.role !== 'client' || row.ib_referrer_id !== referrer.id) return null;
     return publicClient(row);
   }
 
@@ -1729,7 +1788,8 @@ class MemoryAuthStore {
     return {
       sessionId: session.sessionId,
       expiresAt: session.expiresAt,
-      user: publicUser(user)
+      user: publicUser({ ...user, ib_partner_access: user.role === 'admin' &&
+        [...this.referrersByCode.values()].some(ref => ref.user_id === user.id && ref.active && ref.admin_access) })
     };
   }
 

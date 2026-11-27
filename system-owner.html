@@ -99,7 +99,20 @@
       </div>
     </form>
   </dialog>
-  <script src="/system-owner-panel.js?v=20261119-tf1-hema" defer></script>
+  <dialog id="ib-access-dialog" aria-labelledby="ib-access-title">
+    <form id="ib-access" method="post" class="owner-dialog-form">
+      <h2 id="ib-access-title">Akses IB Partner</h2>
+      <p id="ib-access-target"></p>
+      <input name="access" type="hidden">
+      <label>Kata laluan System Owner<input name="ownerPassword" type="password" maxlength="128" autocomplete="current-password" required></label>
+      <p id="ib-access-status" role="status"></p>
+      <div class="review-actions">
+        <button id="cancel-ib-access" type="button">Batal</button>
+        <button class="registration-approve" type="submit">Simpan akses</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/system-owner-panel.js?v=20261127-ib-partner" defer></script>
   <script src="/admin-auto-entry.js?v=1" defer></script>
 </body>
 </html>
