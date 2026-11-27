@@ -38,7 +38,8 @@ function safeUser(user) {
     createdAt: user.createdAt || user.created_at,
     lastLoginAt: user.lastLoginAt || user.last_login_at || null,
     ibCode: user.ibCode || user.ib_code || null,
-    ibName: user.ibName || user.ib_name || null
+    ibName: user.ibName || user.ib_name || null,
+    ibPartnerAccess: user.role === ROLE_ADMIN && user.ibPartnerAccess === true
   };
 }
 
@@ -214,6 +215,12 @@ function createAuthService(options = {}) {
       throw authError('INVALID_IB', 'Kod IB mesti 2–48 aksara dan hanya menggunakan huruf, nombor, sempang atau garis bawah.');
     }
     return store.changeAccountRole(user, id, { role, expectedRole, ibCode, defaultIbCode, reservedEmail });
+  }
+
+  async function setAdminIbAccess(user, id, input) {
+    await reauthenticateOwner(user, input);
+    if (!['on', 'off'].includes(input?.access)) throw authError('INVALID_IB_ACCESS', 'Pilih status akses IB yang sah.');
+    return store.setAdminIbAccess(user, id, input.access === 'on');
   }
 
   async function changeSystemAdmin(user, input, id = null) {
@@ -660,6 +667,7 @@ function createAuthService(options = {}) {
     promotionForUser,
     updatePromotionPhone,
     listRoleAccounts,
+    setAdminIbAccess,
     changeAccountRole,
     systemAdmins,
     systemAdminActivity,

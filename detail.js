@@ -96,6 +96,10 @@
       button.disabled = true;
       button.dataset.referrerId = '';
       button.dataset.active = 'true';
+    } else if (ref.ownerManagedAccess) {
+      button.textContent = 'SYSTEM OWNER SAHAJA';
+      button.disabled = true;
+      button.dataset.referrerId = '';
     } else {
       button.textContent = ref.active ? 'DISABLE IB' : 'ACTIVATE IB';
       button.className = `table-action ${ref.active ? 'danger' : 'good'}`;
@@ -141,7 +145,7 @@
       window.location.replace(currentUser?.role === 'ib' ? '/ib' : '/app');
       return;
     }
-    if (ibView && currentUser?.role !== 'ib') {
+    if (ibView && currentUser?.role !== 'ib' && currentUser?.ibPartnerAccess !== true) {
       window.location.replace(currentUser?.role === 'admin' ? '/admin' : '/app');
       return;
     }

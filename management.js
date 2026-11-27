@@ -75,12 +75,17 @@
   async function loadUser() {
     const body = await api('/auth/me');
     currentUser = body.user;
-    if (currentUser.role !== role) {
+    if (currentUser.role !== role && !(role === 'ib' && currentUser.ibPartnerAccess === true)) {
       window.location.replace(landing(currentUser.role));
       throw new Error('ROLE_REDIRECT');
     }
     if (byId('accountName')) byId('accountName').textContent = currentUser.displayName || role.toUpperCase();
     if (byId('accountEmail')) byId('accountEmail').textContent = currentUser.email || '';
+    const accessLink = byId(role === 'ib' ? 'adminPanelLink' : 'ibPartnerLink');
+    if (accessLink) {
+      accessLink.hidden = currentUser.ibPartnerAccess !== true;
+      accessLink.style.display = accessLink.hidden ? 'none' : '';
+    }
     if (role === 'admin') {
       const owner = currentUser.systemRole === 'owner';
       const link = byId('systemOwnerLink');
@@ -147,7 +152,7 @@
         <td><span class="link-code">${esc(item.code.toUpperCase())}</span><small>${esc(link)} <button class="copy-inline" type="button" data-copy-link="${esc(link)}" title="Copy registration link">⧉</button></small><small><a href="${esc(promoLink)}" target="_blank" rel="noopener">Landing page ↗</a> <button class="copy-inline" type="button" data-copy-link="${esc(promoLink)}" title="Copy landing page IB">⧉</button></small></td>
         <td><strong>${esc(item.clientCount)}</strong><small>clients</small></td>
         <td>${statusPill(item.active ? 'active' : 'disabled')}</td>
-        <td>${isAdmin ? '<span class="status-pill active">SYSTEM</span>' : `<button class="table-action ${item.active ? 'danger' : 'good'}" type="button" data-ib-status="${esc(item.id)}" data-active="${item.active ? 'false' : 'true'}">${item.active ? 'DISABLE' : 'ACTIVATE'}</button>`}</td>
+        <td>${isAdmin ? '<span class="status-pill active">SYSTEM</span>' : item.ownerManagedAccess ? '<span class="status-pill active">SYSTEM OWNER SAHAJA</span>' : `<button class="table-action ${item.active ? 'danger' : 'good'}" type="button" data-ib-status="${esc(item.id)}" data-active="${item.active ? 'false' : 'true'}">${item.active ? 'DISABLE' : 'ACTIVATE'}</button>`}</td>
       </tr>`;
     }).join('');
   }

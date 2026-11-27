@@ -17,3 +17,13 @@ test('invalid or empty selection never expands to all; message text is bounded a
 test('only an active admin can use catalog, preview, send or history',async()=>{
  const s=new M.AdminTelegram({pool:{query:()=>{throw Error('must not query');}},alerts:{}});for(const actor of [{role:'client',status:'active'},{role:'ib',status:'active'},{role:'admin',status:'disabled'}])for(const fn of [()=>s.catalog(actor),()=>s.preview(actor,{}),()=>s.send(actor,id(1)),()=>s.history(actor)])await a.rejects(fn,e=>e.status===403);
 });
+test('a dual-role IB draft cannot be delivered after the owner revokes the linked IB grant',()=>{
+ const account={id:id(1),role:'admin',status:'active'};
+ const own={...ibs[0],active:true,admin_access:true};
+ const selection=M.ibSelection({...account,role:'ib',adminIbContext:true},[own]);
+ a.equal(selection.adminIbContext,true);
+ a.equal(M.senderScope(account,{selection},[own]),true);
+ a.equal(M.senderScope(account,{selection},[{...own,admin_access:false}]),false);
+ a.equal(M.senderScope(account,{selection},[{...own,active:false}]),false);
+ a.equal(M.senderScope(account,{selection:{...selection,ibId:id(20)}},[own,...ibs]),false);
+});

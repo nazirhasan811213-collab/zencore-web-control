@@ -88,6 +88,15 @@ test('Postgres preserves admin revocation and audit across store initialization'
     assert.equal((await store.ibOverview(member.id)).referrer.active, true);
     await change('admin', 'ib');
     assert.equal((await auth.login({ email: member.email, password })).user.systemRole, 'system_admin');
+    const promoted = await auth.login({ email: member.email, password });
+    const current = { headers: { cookie: auth.createCookie(promoted.token) } };
+    assert.equal((await auth.sessionFromRequest(current)).user.ibPartnerAccess, false);
+    await auth.setAdminIbAccess(owner, member.id, { access: 'on', ownerPassword });
+    assert.equal((await auth.sessionFromRequest(current)).user.ibPartnerAccess, true);
+    assert.equal(await store.setIbActive(promotion.referrer.id, false), null);
+    await auth.setAdminIbAccess(owner, member.id, { access: 'off', ownerPassword });
+    assert.equal((await auth.sessionFromRequest(current)).user.ibPartnerAccess, false);
+    assert.equal((await auth.sessionFromRequest(current)).user.role, 'admin');
   } finally {
     await store.close();
     await db.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE');
