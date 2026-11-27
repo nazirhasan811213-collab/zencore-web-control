@@ -31,7 +31,7 @@ function createRealtimeDispatcher({dispatch,fetchMarkets,onError=()=>{}}){
   if(!executionInput(m))return;
   if(!m||(!PineDirect.isEvent(m)&&!['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','EURJPY','GBPJPY','EURGBP','BTCUSD'].includes(m.symbol))||!['1','3','15'].includes(String(m.timeframe)))return;
   // A confirmed close is an event. A later HOLD snapshot cannot supersede it.
-  if(m.feedChannel==='EXECUTION'&&m.confirmed===true&&(m.nativeChartExitAll===true||yellowExitSide(m))){
+  if(!m.setupMeta?.solidSplit&&m.feedChannel==='EXECUTION'&&m.confirmed===true&&(m.nativeChartExitAll===true||yellowExitSide(m))){
    closePending.set([key(m),m.sourceBarTime??m.time??m.signalObservedAt,m.setupKey].join('|'),m);
    return tick();
   }

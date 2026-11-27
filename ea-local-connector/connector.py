@@ -26,7 +26,7 @@ import urllib.request
 import webbrowser
 import uuid
 from status_view import status_cards
-from protocol import VERSION, EA_VERSION, CONNECTOR_BUILD, validation_code, command_server_time, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat, broker_metadata
+from protocol import VERSION, EA_VERSION, CONNECTOR_BUILD, validation_code, command_server_time, atomic_write, read_fields, encode_fields, verified_command, command_fields, heartbeat, broker_metadata, supports_tf1_fixed_exit, TF1_SOLID_RETEST_EXIT, TF1_SOLID_SPLIT
 
 BASE = 'https://zencore-precision-entry.onrender.com'
 INSTALL = Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZenCore' / 'Connector'
@@ -119,6 +119,7 @@ def network_cause(error):
     if isinstance(error, (ConnectionResetError, ConnectionAbortedError, http.client.RemoteDisconnected, http.client.IncompleteRead)):
         return 'CONNECTION_INTERRUPTED'
     if isinstance(error, ConnectionRefusedError): return 'CONNECTION_REFUSED'
+    if isinstance(error, http.client.HTTPException): return 'HTTP_RESPONSE_INTERRUPTED'
     return 'TRANSPORT'
 
 class Api:
@@ -138,7 +139,7 @@ class Api:
             # The command long poll waits up to 500 ms on the server.
             timeout = 4 if stage != 'CLOUD_REQUEST' else 10
             with self.opener.open(req, timeout=timeout) as result:
-                value = json.loads(result.read(200000))
+                raw = result.read(200000)
         except urllib.error.HTTPError as error:
             if error.code in TRANSIENT_HTTP_STATUS:
                 error.close()
@@ -147,8 +148,15 @@ class Api:
             except Exception: code = 'HTTP_'+str(error.code)
             finally: error.close()
             raise RuntimeError(code) from None
-        except (OSError, http.client.IncompleteRead) as error:
+        except (OSError, http.client.HTTPException) as error:
             raise ConnectionRequestError('NETWORK_UNAVAILABLE', stage, network_cause(error)) from None
+        try:
+            value = json.loads(raw)
+            if not isinstance(value, dict): raise ValueError('Expected response object')
+        except ValueError:
+            # An interrupted or intermediary response does not revoke the saved link
+            # and can never grant or extend a lease.
+            raise ConnectionRequestError('NETWORK_UNAVAILABLE', stage, 'INVALID_RESPONSE') from None
         if value.get('ok') is False: raise RuntimeError(value.get('code','REQUEST_REJECTED'))
         return value
 
@@ -277,12 +285,21 @@ def readiness_message(code):
         'ENTRY_OUTSIDE_PLAN':'Harga sudah di luar julat entry hingga TP1. Order tidak dikejar.',
         'SETUP_PARTIAL':'Sebahagian layer mungkin sudah dibuka. Semak posisi sebenar MT5.',
         'EA_ALGO_DISABLED':'EA > Properties > Allow Algo Trading mesti ON.',
+        'MANUAL_EXIT_HEDGING_REQUIRED':'Manual Auto Exit memerlukan akaun MT5 hedging.',
+        'MANUAL_EXIT_DISTANCES_INVALID':'Semak TP1 < TP2 < TP3 dan jarak SL melebihi 0.',
+        'MANUAL_EXIT_VERSION_INVALID':'Versi konfigurasi Manual Auto Exit tidak sepadan dengan EA.',
+        'MANUAL_EXIT_LAYER_POLICY_INVALID':'Polisi layer Manual Auto Exit tidak sepadan dengan EA.',
+        'MANUAL_EXIT_PAIR_SCOPE_INVALID':'Pilihan pair Manual Auto Exit tidak disokong oleh EA.',
+        'MANUAL_EXIT_EXCLUSION_WRITE_FAILED':'EA tidak dapat menyimpan pengecualian posisi manual sedia ada. Semak akses folder Common MT5.',
+        'MANUAL_EXIT_SAVE_FAILED':'EA tidak dapat menyimpan tetapan Manual Auto Exit. Semak akses folder Common MT5.',
         'ACCOUNT_TRADE_DISABLED':'Broker tidak memberi permission trading pada akaun ini.',
         'ACCOUNT_EXPERT_DISABLED':'Broker tidak memberi permission Expert Advisor pada akaun ini.',
         'NETTING_POSITION_EXISTS':'Akaun netting masih ada posisi simbol ini. Entry baharu tidak ditambah.',
         'SETUP_POSITION_EXISTS':'Setup TF yang sama masih terbuka. Tunggu semua posisi tutup.',
         'ENTRY_PLAN_INVALID':'Susunan harga entry, SL dan TP tidak sah. Semak pelan Pine.',
         'QUOTE_NOT_READY':'Harga broker belum tersedia. Tunggu quote MT5.',
+        'WAIT_SOLID_PRICE':'Harga MT5 tidak sepadan dengan paras SOLID. Tiada entry baharu dihantar.',
+        'FILL_SOLID_PRICE_MISMATCH':'Broker mengisi pada harga berbeza. EA cuba menutup layer tersebut. Semak posisi MT5.',
         'RISK_FILE_WRITE_FAILED':'Fail pelan risiko tidak boleh ditulis. Semak permission folder Common MT5.',
         'BROKER_ENTRY_REJECTED':'Broker menolak order. Semak retcode dan Experts MT5.',
         'LEASE_NOT_READY':'Kebenaran EA belum sah. Semak Cloud, akaun dan sesi MT5; tunggu sambungan pulih. Jangan reset pautan atau ulang order lama.',
@@ -300,6 +317,8 @@ def reconnect_delay(failures, code):
     # Spread retries across VPS slots and give rate-limited requests more time.
     if code == 'HTTP_429':
         cap = min(10, 2**min(failures, 4))
+    elif code == 'NETWORK_UNAVAILABLE' and failures == 1:
+        cap = .35
     else:
         cap = 1 if failures <= 1 else 2
     return cap * random.uniform(.8, 1.0)
@@ -366,7 +385,7 @@ class Runner:
         if self.stop.is_set(): return
         # Poll commands quickly without multiplying database heartbeat writes.
         if time.monotonic()>=self.next_heartbeat:
-            if not self.renew_lease(local): return
+            if not self.renew_lease(local, due_only=True): return
 
         if (self.channel/'command.tsv').exists():
             self.status('Menunggu pengesahan EA — tiada order dihantar semula.')
@@ -395,7 +414,9 @@ class Runner:
                         raise ValueError('EA_MANUAL_ORDER_UPGRADE_REQUIRED')
                 if signed['type']=='MANUAL_CLOSE_ALL' and local.get('manualCloseAllVersion')!='ACCOUNT_POSITIONS_V1':
                     raise ValueError('EA_CLOSE_ALL_UPGRADE_REQUIRED')
-                if fields.get('exitLockVersion')=='TF1_XAU_FIXED_STEPLOCK_V1' and local.get('tf1FixedExitVersion')!=fields['exitLockVersion']:
+                if fields.get('type')=='PLACE_SOLID_SPLIT' and local.get('solidSplitVersion')!=TF1_SOLID_SPLIT:
+                    raise ValueError('EA_TF1_SOLID_SPLIT_UPGRADE_REQUIRED')
+                if not supports_tf1_fixed_exit(local.get('tf1FixedExitVersion'), fields.get('exitLockVersion')):
                     raise ValueError('EA_TF1_FIXED_EXIT_UPGRADE_REQUIRED')
                 if fields.get('cashLayerPolicy') and local.get('cashLayerPolicy') != fields['cashLayerPolicy']:
                     raise ValueError('EA_CASH_LAYER_UPGRADE_REQUIRED')
@@ -412,7 +433,8 @@ class Runner:
                 remaining_ms=signed['expiresAt']-server_now-(time.monotonic()-fetch_started)*1000+fetch_ms
                 direct=fields.get('executionPolicy')=='PINE_DIRECT_FILL_GAP4_V1'
                 if direct and local.get('directEntryPolicy')!='PINE_DIRECT_FILL_GAP4_V1':raise ValueError('EA_DIRECT_POLICY_UPGRADE_REQUIRED')
-                if remaining_ms <= 0 and not direct: raise ValueError('COMMAND_EXPIRED')
+                if remaining_ms <= 0 and (not direct or fields.get('type')=='PLACE_SOLID_SPLIT' or fields.get('exitLockVersion')==TF1_SOLID_RETEST_EXIT):
+                    raise ValueError('COMMAND_EXPIRED')
                 fields['expiresAt']=int(time.time()*1000+remaining_ms)
             except (ValueError,KeyError,TypeError) as error:
                 code=validation_code(error)
@@ -465,9 +487,11 @@ class Runner:
         self.lease_request_error=error if isinstance(error, ConnectionRequestError) else None
         self.lease_error=self.connection_health(raw,self.lease_request_error)
         self.status(connection_label(self.lease_error,self.lease_request_error)+' — Menyambung semula ke ZenCore.')
-    def renew_lease(self, local=None, api=None):
+    def renew_lease(self, local=None, api=None, *, due_only=False):
         with self.lease_lock:
-            if self.stop.is_set() or time.monotonic()<self.lease_retry_at:return False
+            now=time.monotonic()
+            if self.stop.is_set() or now<self.lease_retry_at:return False
+            if due_only and now<self.next_heartbeat:return True
             try:
                 local=read_fields(self.channel/'heartbeat.tsv')
                 heartbeat(local,self.config)
@@ -540,6 +564,7 @@ class Runner:
             threading.Thread(target=self.monitor_broker_metadata,daemon=True).start()
         while not self.stop.is_set():
             delay=.5
+            heartbeat_due=self.next_heartbeat
             try:
                 self.command_fetch_seconds=0
                 self.cycle()
@@ -547,9 +572,14 @@ class Runner:
                 self.failure_count=0
                 if not self.stop.is_set():self.connection_health(self.lease_error or ('CONNECTED' if self.next_heartbeat else 'CONNECTION_PENDING'),self.lease_request_error)
             except Exception as error:
-                if str(error) not in TRANSIENT_NETWORK_ERRORS:
-                    self.invalidate_lease()
-                self.next_heartbeat=0
+                with self.lease_lock:
+                    if str(error) not in TRANSIENT_NETWORK_ERRORS:
+                        self.invalidate_lease()
+                        self.next_heartbeat=0
+                    elif self.next_heartbeat==heartbeat_due:
+                        # Refresh before resuming if the independent heartbeat did
+                        # not already recover while the command channel was failing.
+                        self.next_heartbeat=0
                 self.failure_count+=1
                 raw='LOCAL_FILE_LOCKED' if isinstance(error,PermissionError) else 'EA_HEARTBEAT_MISSING' if isinstance(error,FileNotFoundError) and self.connection_stage=='EA_HEARTBEAT' else str(error)
                 # Even with no local EA heartbeat, a web reset must release the

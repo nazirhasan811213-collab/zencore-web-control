@@ -52,9 +52,21 @@ for(const tf of ['1','15'])test(`V7 TF${tf}: Dashboard cannot replace or revoke 
  const first=d.onMarket(m);await d.onMarket({...m,feedChannel:'DASHBOARD',signalObservedAt:f.now+1,entryEvent:false,strategyNormal:{...m.strategyNormal,state:'WAIT',plan:null}});
  a.equal(d.getLatestMarket('XAUUSD',tf),m);release();await first;a.equal(valid,true);a.equal(batches.length,1);
 });
+test('XAUUSD M1 initial entry uses the original confirmed native SOLID pulse and the fill-tolerant route',()=>{
+ const script=fs.readFileSync(__dirname+'/../ZenCore_TF1_SOP_V7.pine','utf8');
+ a.match(script,/bool zc_gold_solid_now = zc_gold_initial and zc_hold_new_source and zc_entry_hema_pass/);
+ a.match(script,/bool zc_gold_immediate = zc_gold_solid_now and zs_pass and barstate.isconfirmed/);
+ a.match(script,/bool zc_hold_qualify = zc_gold_initial \? zc_gold_immediate : zc_sop_qualified/);
+ a.match(script,/float draft_entry = zc_fixed_gold and zc_cycle_kind == "INITIAL" \? zc_seq_source : close/);
+ a.match(script,/TF1_XAU_FIXED_STEPLOCK_V5/);
+ a.doesNotMatch(script,/zc_retest_|TF1_XAU_FIXED_STEPLOCK_V6/);
+ a.match(script,/bool zc_split_open = .*not barstate.isconfirmed/);
+ a.match(script,/bool zc_split_close = .*barstate.isconfirmed.*zc_split_bar == time/);
+ a.match(script,/bool zc_split_abort = .*not zc_split_close/);
+});
 test('Native SOLID cannot be cancelled by the removed HEMA entry filter; follow-up HEMA remains required',()=>{
  for(const tf of ['1','15']){
-  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'7':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
+  const s=fs.readFileSync(`${__dirname}/../ZenCore_TF${tf}_SOP_V7.pine`,'utf8');a.match(s,/bool zc_held_colour_end = false/);a.match(s,new RegExp(`TF${tf}-NATIVE-SOLID-V7\\.${tf==='1'?'10':'1'}`));if(tf==='1')a.match(s,/and zc_entry_hema_pass/);else a.match(s,/bool zn_entry = zc_cycle_kind == "INITIAL" \?[^\n]+: \(zn_data and zc24_price_past and zn_wt and zn_hema/);
  }
 });
 for(const side of ['BUY','SELL'])test(`V7 ${side} delivery skips removed initial colour veto but preserves FOLLOWUP candle rule`,()=>{

@@ -17,20 +17,24 @@ const FIVE_TARGETS_RISK='TF1_XAU_FIXED_300_150_250_400_500_700_V2',FIVE_TARGETS_
 const FIVE_TARGETS_V3_RISK='TF1_XAU_FIXED_300_150_350_450_600_800_V3',FIVE_TARGETS_V3_LOCK='TF1_XAU_FIXED_STEPLOCK_V3';
 const FIVE_TARGETS_V4_RISK='TF1_XAU_FIXED_300_150_350_450_600_800_V4',FIVE_TARGETS_V4_LOCK='TF1_XAU_FIXED_STEPLOCK_V4';
 const FIVE_TARGETS_V5_RISK='TF1_XAU_FIXED_300_150_300_450_600_800_V5',FIVE_TARGETS_V5_LOCK='TF1_XAU_FIXED_STEPLOCK_V5';
+const SOLID_RETEST_RISK='TF1_XAU_FIXED_300_150_300_450_600_800_V6',SOLID_RETEST_LOCK='TF1_XAU_FIXED_STEPLOCK_V6';
+const SOLID_SPLIT_LOCK='TF1_XAU_FIXED_STEPLOCK_V7';
 const fixedPlanByLock={
  [FIXED_LOCK]:{sl:-3,tp1:2.5,tp2:4,tp3:6},
  [FIVE_TARGETS_LOCK]:{sl:-3,tp1:1.5,tp2:2.5,tp3:4},
  [FIVE_TARGETS_V3_LOCK]:{sl:-3,tp1:1.5,tp2:3.5,tp3:4.5},
  [FIVE_TARGETS_V4_LOCK]:{sl:-3,tp1:1.5,tp2:3.5,tp3:4.5},
  [FIVE_TARGETS_V5_LOCK]:{sl:-3,tp1:1.5,tp2:3,tp3:4.5},
+ [SOLID_RETEST_LOCK]:{sl:-3,tp1:1.5,tp2:3,tp3:4.5},
+ [SOLID_SPLIT_LOCK]:{sl:-3,tp1:1.5,tp2:3,tp3:4.5},
 };
-const fixedLockOrder=[FIXED_LOCK,FIVE_TARGETS_LOCK,FIVE_TARGETS_V3_LOCK,FIVE_TARGETS_V4_LOCK,FIVE_TARGETS_V5_LOCK];
+const fixedLockOrder=[FIXED_LOCK,FIVE_TARGETS_LOCK,FIVE_TARGETS_V3_LOCK,FIVE_TARGETS_V4_LOCK,FIVE_TARGETS_V5_LOCK,SOLID_RETEST_LOCK,SOLID_SPLIT_LOCK];
 function supportsFixedLock(capability,requested){
  const requestedIndex=fixedLockOrder.indexOf(requested);
  return requestedIndex>=0&&fixedLockOrder.indexOf(capability)>=requestedIndex;
 }
 function fixedLockForRisk(risk){
- return risk===FIXED_RISK?FIXED_LOCK:risk===FIVE_TARGETS_RISK?FIVE_TARGETS_LOCK:risk===FIVE_TARGETS_V3_RISK?FIVE_TARGETS_V3_LOCK:risk===FIVE_TARGETS_V4_RISK?FIVE_TARGETS_V4_LOCK:risk===FIVE_TARGETS_V5_RISK?FIVE_TARGETS_V5_LOCK:null;
+ return risk===FIXED_RISK?FIXED_LOCK:risk===FIVE_TARGETS_RISK?FIVE_TARGETS_LOCK:risk===FIVE_TARGETS_V3_RISK?FIVE_TARGETS_V3_LOCK:risk===FIVE_TARGETS_V4_RISK?FIVE_TARGETS_V4_LOCK:risk===FIVE_TARGETS_V5_RISK?FIVE_TARGETS_V5_LOCK:risk===SOLID_RETEST_RISK?SOLID_RETEST_LOCK:null;
 }
 function isFixedLock(version){return fixedLockOrder.includes(version);}
 function fixedPlanPass(side,p={},lock=FIXED_LOCK){
@@ -146,5 +150,5 @@ function entryDecision(m={},now=Date.now()){
  const snapshot={decisionTimingVersion:s.decisionTimingVersion||null,decisionBarCloseAt:s.decisionBarCloseAt||null,contractVersion:'ZENCORE_ANALYSIS_EXECUTION_V1',decision:'ENTRY_AUTHORIZED',decisionOwner:'ZENCORE_ANALYSIS',strategy:'NORMAL_3M_SOP_V32',schemaVersion:'32.3-EXIT-STEPLOCK',symbol:m.symbol,side:n.side,executionTimeframe:'1',entry:p.entry,sl:p.sl,tp1:p.tp1,tp2:p.tp2,tp3:p.tp3,setupKey:m.setupKey,signalObservedAt:m.signalObservedAt,sourceReceivedAt:m.receivedAt,lifecycleVersion:s.lifecycleVersion||null,cycleKind:s.cycleKind||'INITIAL',sourceSetupAt:s.sourceSetupAt||null,triggerAt:s.triggerAt,qualifiedAt:s.qualifiedAt,entryAuthorizedAt:a,entryDeliveryVersion:m.entryDeliveryVersion||null,analysisSopVersion:VERSION,...([FORECAST_POLICY,SOLID_POLICY,NEW_POLICY,NATIVE_POLICY].includes(s.entryPolicyVersion)?{qualificationPolicyVersion:s.entryPolicyVersion}:{}),entryPolicyVersion:POLICY.entryPolicyVersion,planMode:s.planMode,exitLockVersion:fixedLockForRisk(s.riskPlanVersion)||POLICY.exitLockVersion,confirmationEvidence:{...(s.entryCandle?{entryCandle:JSON.parse(JSON.stringify(s.entryCandle))}:{}),...(s.entrySafety?{entrySafety:JSON.parse(JSON.stringify(s.entrySafety))}:{}),signalObservedAt:m.signalObservedAt,triggerAt:s.triggerAt,qualifiedAt:s.qualifiedAt,sopGreen:s.sopGreen,chopIndex:s.chopIndex,chopIndexExclusiveMaximum:[FORECAST_POLICY,SOLID_POLICY,NEW_POLICY,NATIVE_POLICY].includes(s.entryPolicyVersion)?null:50,forecast:s.forecast,marketPower:s.marketPower,hemaOwn:s.hema1.mode,mtfScore:s.mtfScore,atrPeriod:isAtr8Risk(s.riskPlanVersion)?8:10,...(isAtr8Risk(s.riskPlanVersion)?{riskPlanVersion:s.riskPlanVersion,...(isCapped(s.riskPlanVersion)?{tp1MaximumPrice:1.5,tp2MaximumPrice:[RISK8_CAPS3,RISK8_CAPS4].includes(s.riskPlanVersion)?2.5:2.3,tp3MaximumPrice:3.5,slMaximumPrice:s.riskPlanVersion===RISK8_CAPS4?4:s.riskPlanVersion===RISK8_CAPS3?3:2}:{tp1MaximumPrice:3})}:{}),riskAtrReference:s.riskAtrReference,riskStructure:s.riskStructure,riskTick:s.riskTick,gates:c.gates.map(g=>({key:g.key,passed:g.pass}))}};
  return {signalKey:['ZENCORE_ANALYSIS_EXECUTION_V1','1',m.symbol,n.side,p.entry,m.setupKey].join('|'),snapshot};
 }
-return {FIXED_RISK,FIXED_LOCK,FIVE_TARGETS_RISK,FIVE_TARGETS_LOCK,FIVE_TARGETS_V3_RISK,FIVE_TARGETS_V3_LOCK,FIVE_TARGETS_V4_RISK,FIVE_TARGETS_V4_LOCK,FIVE_TARGETS_V5_RISK,FIVE_TARGETS_V5_LOCK,supportsFixedLock,fixedLockForRisk,isFixedLock,fixedPlanPass,NATIVE_POLICY,RULE,VERSION,RISK,RISK8,RISK8_CAPS,RISK8_CAPS3,RISK8_CAPS4,POLICY,FORECAST_POLICY,SOLID_POLICY,NEW_POLICY,CANDLE_VERSION,entryCandleProof,candlePass,confirmations,planPass,strategy,entryDecision};
+return {FIXED_RISK,FIXED_LOCK,FIVE_TARGETS_RISK,FIVE_TARGETS_LOCK,FIVE_TARGETS_V3_RISK,FIVE_TARGETS_V3_LOCK,FIVE_TARGETS_V4_RISK,FIVE_TARGETS_V4_LOCK,FIVE_TARGETS_V5_RISK,FIVE_TARGETS_V5_LOCK,SOLID_RETEST_RISK,SOLID_RETEST_LOCK,SOLID_SPLIT_LOCK,supportsFixedLock,fixedLockForRisk,isFixedLock,fixedPlanPass,NATIVE_POLICY,RULE,VERSION,RISK,RISK8,RISK8_CAPS,RISK8_CAPS3,RISK8_CAPS4,POLICY,FORECAST_POLICY,SOLID_POLICY,NEW_POLICY,CANDLE_VERSION,entryCandleProof,candlePass,confirmations,planPass,strategy,entryDecision};
 });

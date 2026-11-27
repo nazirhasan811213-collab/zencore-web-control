@@ -58,6 +58,31 @@ class RecoveryTests(unittest.TestCase):
      api.request('/api/execution/heartbeat',token='secret')
     self.assertEqual(request.call_args.kwargs['timeout'],4)
 
+ def test_truncated_cloud_response_has_recoverable_transport_status(self):
+  api=Api()
+  for body in (b'{"ok":', b'<html>temporary gateway</html>', b'[]'):
+   with patch.object(api.opener,'open',return_value=io.BytesIO(body)):
+    with self.assertRaises(ConnectionRequestError) as caught:
+     api.request('/api/execution/heartbeat',token='test-only')
+   self.assertEqual((str(caught.exception),caught.exception.stage,caught.exception.cause),
+                    ('NETWORK_UNAVAILABLE','CLOUD_HEARTBEAT','INVALID_RESPONSE'))
+
+ def test_first_network_retry_is_quick_and_subsequent_failures_back_off(self):
+  with patch('connector.random.uniform',return_value=1):
+   self.assertEqual([reconnect_delay(n,'NETWORK_UNAVAILABLE') for n in range(1,5)],[.35,2,2,2])
+
+ def test_background_refresh_during_failed_poll_preserves_next_heartbeat(self):
+  with tempfile.TemporaryDirectory() as folder:
+   runner=Runner({'channel':folder},lambda _:None,background_lease=False)
+   runner.next_heartbeat=100
+   def failed_poll():
+    runner.next_heartbeat=102
+    raise ConnectionRequestError('NETWORK_UNAVAILABLE','COMMAND_FETCH','CONNECTION_INTERRUPTED')
+   def wait(delay):
+    self.assertEqual(runner.next_heartbeat,102)
+    runner.stop.set()
+   with patch.object(runner,'cycle',side_effect=failed_poll),patch.object(runner.stop,'wait',side_effect=wait):runner.run()
+
  def test_lost_ack_keeps_same_result_for_retry(self):
   with tempfile.TemporaryDirectory() as folder:
    runner=Runner({'channel':folder,'podToken':'secret'},lambda _:None,background_lease=False)

@@ -52,6 +52,10 @@ class V2ConnectorTests(unittest.TestCase):
   local={'writtenAt':NOW,'terminalConnected':True,'terminalTradeAllowed':True,'accountTradeAllowed':True,'expertTradeAllowed':True,'executorPolicyVersion':'EXACT_ANALYSIS_V2'}
   cloud={'lastCloudHeartbeatMs':NOW,'desiredState':'ON','consecutiveFailures':0}
   self.assertEqual(status_cards(local,cloud,NOW,True)['entry'][0],'ENTRY DIBENARKAN')
+  degraded=status_cards(local,{**cloud,'consecutiveFailures':1},NOW+1000,True)
+  self.assertEqual(degraded['cloud'][0],'CLOUD TIDAK STABIL')
+  self.assertEqual(degraded['entry'][0],'MENUNGGU SAMBUNGAN')
+  self.assertEqual(status_cards(local,cloud,NOW+16000,True)['cloud'][0],'CLOUD OFFLINE')
   self.assertEqual(status_cards(local,{**cloud,'entryBlockedReason':'GLOBAL_ENTRY_PAUSED'},NOW,True)['entry'][0],'SERVER PAUSED')
   self.assertNotEqual(status_cards(local,cloud,NOW+16000,True)['entry'][1],'good')
   self.assertNotEqual(status_cards({**local,'terminalTradeAllowed':False},cloud,NOW,True)['entry'][1],'good')

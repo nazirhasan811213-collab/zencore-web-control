@@ -1,18 +1,20 @@
-ZENCORE VPS MANAGER 1.1.27
-VPS Manager 1.1.27 / Connector 2.1.43 / EA 2.42
+ZENCORE VPS MANAGER 1.1.43
+VPS Manager 1.1.43 / Connector 2.1.59 / EA 2.58
 Status Auto Trade dikawal dari ZenCore web.
 BTCUSD: tiada had beza harga Pine dengan harga MT5 sebelum order atau selepas fill.
 
 ALIRAN ADMIN
 0. Isi ID + password ADMIN, klik Sahkan Admin. Password tidak disimpan.
-1. Pada slot yang betul, klik 1 Pasang EA dan tampal alamat MT5 > File > Open Data Folder.
-   Folder yang sudah disimpan akan diisi semula. Kosongkan kotak untuk membuka senarai terminal.
+1. Pada slot yang betul, klik 1 Pasang EA dan pilih terus daripada senarai terminal.
+   Jika terminal portable tidak tersenarai, pilih Folder lain dan gunakan MT5 > File > Open Data Folder.
    Manager menyalin ZenCoreExecutor.ex5 yang sudah dikompil. MetaEditor tidak diperlukan.
 2. Dalam MT5, Refresh Navigator dan attach ZenCoreExecutor pada carta pair yang dipilih. Untuk kedua-dua pair, attach pada kedua-dua carta dalam terminal yang sama. Pilih EntryChartRole CHART_BTCUSD pada carta Bitcoin dan CHART_XAUUSD pada carta Gold.
    Login broker dibuat dalam MT5; password broker tidak diberikan kepada Manager.
    Hidupkan Algo Trading dan pastikan akaun/server betul.
-   Klik Cari semua MT5. EA 2.22 membolehkan padanan folder dibuat secara automatik.
-   Isi ID ZenCore client pada slot, kemudian klik 2 Sambung EA.
+   Klik Cari semua MT5 untuk melihat status carian. Senarai akaun disegarkan setiap 5 saat.
+   Terminal boleh dikesan sebelum EA aktif. Akaun boleh dipilih selepas EA menghantar status.
+   Manager memilih akaun secara automatik jika satu akaun sepadan dengan folder yang ditetapkan pada slot.
+   Isi ID login atau e-mel berdaftar ZenCore client pada mana-mana slot kosong, kemudian klik 2 Sambung EA. Nombor slot merujuk terminal MT5. Client perlu aktif dan dalam Admin Setup.
    Admin tidak perlu password client untuk laluan ini.
 3. Klik 3 Buka Web. Browser membuka halaman setup admin untuk client tepat.
    Login admin di browser jika diminta; simpan lot/layer/TF, waktu dan pilihan exit.
