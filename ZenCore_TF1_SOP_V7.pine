@@ -1961,7 +1961,10 @@ bool zc24_retry_due = zc24_entry_attempts == 0 or (zc24_entry_attempts == 1 ? ti
 bool zc24_normal_event = barstate.isconfirmed and zc24_ready and zc24_entry_window and not zc24_bootstrap and not na(zc24_setup_at) and (na(zc24_suppressed_setup) or zc24_suppressed_setup != zc24_setup_at) and zc24_entry_attempts < 3 and zc24_retry_due
 bool zc_split_open = zc_fixed_gold and barstate.isrealtime and not barstate.isconfirmed and not zc24_bootstrap and zc_split_bar == time and zc_split_preview and not zc_split_sent and not na(zc_split_entry)
 bool zc_split_close = zc_fixed_gold and barstate.isconfirmed and zc_split_bar == time and zc_split_sent and zc24_normal_event and zc24_buy == zc_split_buy and (zc_split_buy ? close > open and close > zc_split_entry : close < open and close < zc_split_entry)
-bool zc24_event = zc24_normal_event and (not zc_gold_initial or zc_split_close)
+// A SOLID may first appear on the closing tick, with no early tranche sent.
+// Route that fresh trigger through the normal full-layer entry path.
+bool zc_closed_solid_entry = zc_gold_solid_now and not zc_split_sent
+bool zc24_event = zc24_normal_event and (not zc_gold_initial or zc_split_close or zc_closed_solid_entry)
 bool zc_split_abort = zc_fixed_gold and barstate.isconfirmed and zc_split_bar == time and zc_split_sent and not zc_split_close
 string zc_split_meta = zc_split_open or zc_split_close or zc_split_abort ? "{\"phase\":" + f_quote(zc_split_open ? "EARLY" : zc_split_close ? "CONFIRM" : "ABORT") + ",\"bar\":" + f_int(time) + ",\"side\":" + f_quote(zc_split_buy ? "BUY" : "SELL") + ",\"entry\":" + f_num(zc_split_entry) + "}" : "null"
 string zc24_protection = str.tostring(zc24_setup_at) + "|" + zc24_exit_stage + "|" + zc24_exit_action + "|" + str.tostring(zc24_lock_stage) + "|" + str.tostring(xc_half_bar) + "|" + f_bool(zc_hold_active)
